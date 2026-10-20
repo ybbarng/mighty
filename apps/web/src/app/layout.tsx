@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { BRAND } from "@/components/brand/brand";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { StoreHydration } from "@/components/StoreHydration";
 
 import "./globals.css";
 
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
       <body className="min-h-dvh antialiased">
+        <StoreHydration />
         {children}
         <ServiceWorker />
       </body>

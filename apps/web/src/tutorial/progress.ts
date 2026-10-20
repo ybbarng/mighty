@@ -23,7 +23,12 @@ export const useTutorialProgress = create<TutorialProgress>()(
         })),
       reset: () => set({ completed: [] }),
     }),
-    { name: "mighty-tutorial", storage: createJSONStorage(() => localStorage) },
+    {
+      name: "mighty-tutorial",
+      storage: createJSONStorage(() => localStorage),
+      // 미리 그려 둔 HTML과 첫 화면이 같아야 하므로 저장값은 첫 그리기 뒤에 읽는다(StoreHydration).
+      skipHydration: true,
+    },
   ),
 );
 

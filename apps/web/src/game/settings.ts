@@ -82,6 +82,8 @@ export const useSettings = create<Settings>()(
     {
       name: "mighty-settings",
       storage: createJSONStorage(() => localStorage),
+      // 미리 그려 둔 HTML과 첫 화면이 같아야 하므로 저장값은 첫 그리기 뒤에 읽는다(StoreHydration).
+      skipHydration: true,
       // 저장해 둔 음량을 소리 출력에도 알려 준다.
       onRehydrateStorage: () => (state) => {
         if (state) setSoundVolume(state.volume);
