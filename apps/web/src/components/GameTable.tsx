@@ -316,6 +316,32 @@ export function GameTable({
       setSelected(null);
       return;
     }
+    // 판 가운데 패널: 숫자 키로 n번째 선택지, ↑↓·+−로 숫자, Enter로 주 단추.
+    const panel = stage.ref.current?.querySelector(".panel-area");
+    if (panel && !(e.target instanceof HTMLButtonElement)) {
+      const press = (selector: string, index = 0) => {
+        const button = panel.querySelectorAll<HTMLButtonElement>(
+          `${selector}:not([disabled])`,
+        )[index];
+        if (!button) return false;
+        e.preventDefault();
+        button.click();
+        return true;
+      };
+      if (/^[1-9]$/.test(e.key) && press("[data-choice]", Number(e.key) - 1))
+        return;
+      if (
+        (e.key === "ArrowUp" || e.key === "+" || e.key === "=") &&
+        press('[data-step="up"]')
+      )
+        return;
+      if (
+        (e.key === "ArrowDown" || e.key === "-") &&
+        press('[data-step="down"]')
+      )
+        return;
+      if (e.key === "Enter" && !selected && press("[data-primary]")) return;
+    }
     if (decision?.kind !== "play" || leadChoice) return;
     const options = hand.filter((c) => playable?.has(c));
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {

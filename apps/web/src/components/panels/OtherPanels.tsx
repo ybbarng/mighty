@@ -86,6 +86,7 @@ export function PickPanel({
           ] as const
         ).map(([index, card, label]) => (
           <button
+            data-choice
             key={index}
             type="button"
             onClick={() => onSubmit({ type: "pick", index })}
@@ -128,6 +129,7 @@ export function LeadChoicePanel({
         <div className="flex justify-center gap-2">
           {SUITS.map((s) => (
             <button
+              data-choice
               key={s}
               type="button"
               title={SUIT_NAME[s]}

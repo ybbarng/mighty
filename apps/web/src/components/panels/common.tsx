@@ -46,6 +46,8 @@ export function ActionButton({
   return (
     <button
       type="button"
+      // 패널 키보드: Enter는 첫 번째 주 단추를 누른다(GameTable).
+      data-primary={variant === "primary" ? "" : undefined}
       className={cn(
         "action-button rounded-xl px-4 py-2 font-semibold text-sm transition disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary" && "bg-amber-400 text-black hover:bg-amber-300",
@@ -74,6 +76,7 @@ export function KirudaPicker({
         <button
           key={k}
           type="button"
+          data-choice
           title={kirudaName(k)}
           disabled={!enabled(k)}
           onClick={() => onChange(k)}
@@ -108,6 +111,7 @@ export function ScoreStepper({
       <button
         type="button"
         aria-label="낮추기"
+        data-step="down"
         disabled={index <= 0}
         onClick={() => onChange(options[index - 1] as number)}
         className="h-10 w-10 rounded-full bg-white/15 text-xl disabled:opacity-25"
@@ -120,6 +124,7 @@ export function ScoreStepper({
       <button
         type="button"
         aria-label="올리기"
+        data-step="up"
         disabled={index < 0 || index >= options.length - 1}
         onClick={() => onChange(options[index + 1] as number)}
         className="h-10 w-10 rounded-full bg-white/15 text-xl disabled:opacity-25"

@@ -64,6 +64,7 @@ export function FriendPanel({
       <div className="flex flex-wrap justify-center gap-1.5">
         {quick.map((q) => (
           <button
+            data-choice
             key={q.label}
             type="button"
             onClick={() => setChoice(q.friend)}
@@ -82,6 +83,7 @@ export function FriendPanel({
         <div className="flex flex-wrap justify-center gap-1.5">
           {players.map((p) => (
             <button
+              data-choice
               key={p.seat}
               type="button"
               onClick={() => setChoice(p)}
