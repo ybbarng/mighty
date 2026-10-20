@@ -1,5 +1,59 @@
 import type { Suit } from "@mighty/engine";
 
+export type BackPattern = "diamond" | "stripe" | "dots" | "spades";
+
+/** 카드 뒷면. 무늬와 색, 가운데 문장 */
+export interface CardBack {
+  base: string;
+  stripe: string;
+  accent: string;
+  pattern?: BackPattern;
+}
+
+/** 고를 수 있는 뒷면. 원작의 "카드 뒷그림" 고르기 */
+export const CARD_BACKS: readonly (CardBack & { id: string; name: string })[] =
+  [
+    {
+      id: "navy",
+      name: "남색",
+      base: "#1d3557",
+      stripe: "#24426b",
+      accent: "#e9c46a",
+    },
+    {
+      id: "wine",
+      name: "자주",
+      base: "#5a1426",
+      stripe: "#6d1a30",
+      accent: "#f0c987",
+      pattern: "diamond",
+    },
+    {
+      id: "felt",
+      name: "초록",
+      base: "#0f4d33",
+      stripe: "#13603f",
+      accent: "#e8d9a8",
+      pattern: "stripe",
+    },
+    {
+      id: "night",
+      name: "검정",
+      base: "#15171c",
+      stripe: "#2a2e37",
+      accent: "#d4af37",
+      pattern: "dots",
+    },
+    {
+      id: "spade",
+      name: "스페이드",
+      base: "#f4ede0",
+      stripe: "#d9cdb4",
+      accent: "#1c1f24",
+      pattern: "spades",
+    },
+  ];
+
 /** 카드 디자인 테마. 그림을 그리는 코드는 같고 색과 장식만 바꾼다 */
 export interface CardTheme {
   id: string;
@@ -9,7 +63,7 @@ export interface CardTheme {
   faceTint: Record<Suit, string>;
   paper: string;
   edge: string;
-  back: { base: string; stripe: string; accent: string };
+  back: CardBack;
   joker: { field: string; disc: string; star: string };
   /** 모서리 숫자·무늬를 크게. 손패가 겹쳐 왼쪽 띠만 보일 때 읽기 쉽다 */
   largeIndex?: boolean;

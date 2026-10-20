@@ -25,6 +25,8 @@ export interface HostRoomOptions {
   revealTimeoutMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
   bot?: Bot;
+  /** 빈자리 컴퓨터 이름(1번 자리부터). 비면 "컴퓨터 n" */
+  botNames?: readonly string[];
   /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
   pace?: (next: () => void) => void;
 }
@@ -53,6 +55,7 @@ export class HostRoom {
   private readonly revealTimeoutMs: number;
   private readonly bot: Bot | null;
   private readonly pace: ((next: () => void) => void) | null;
+  private readonly botNames: readonly string[];
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private commitments: Commitment[] = [];
   /** 내보낸 사람. 같은 기기로 다시 들어오려 하면 막는다 */
@@ -68,6 +71,7 @@ export class HostRoom {
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
     this.bot = options.bot ?? null;
     this.pace = options.pace ?? null;
+    this.botNames = options.botNames ?? [];
     void commit(this.hostSecret).then((hash) => {
       this.hostCommit = hash;
     });
@@ -93,7 +97,12 @@ export class HostRoom {
             kind: "guest",
             connected: guest.peerId !== null,
           };
-        return { seat, name: `컴퓨터 ${seat}`, kind: "bot", connected: true };
+        return {
+          seat,
+          name: this.botNames[seat - 1]?.trim() || `컴퓨터 ${seat}`,
+          kind: "bot",
+          connected: true,
+        };
       },
     );
     return {

@@ -12,7 +12,8 @@ import { SPEEDS, useSettings } from "@/game/settings";
 import { play as playCue } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
-import { CARD_THEMES } from "./card-art/themes";
+import { CardArt } from "./card-art/CardArt";
+import { CARD_BACKS, CARD_THEMES } from "./card-art/themes";
 import { ActionButton } from "./panels/common";
 import { RuleEditor } from "./rules/RuleEditor";
 
@@ -176,8 +177,43 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
             </div>
           </Section>
 
+          <Section title="카드 뒷면">
+            <div className="flex flex-wrap gap-2">
+              {[{ id: "theme", name: "테마대로" }, ...CARD_BACKS].map((b) => {
+                const theme =
+                  CARD_THEMES.find((t) => t.id === settings.cardThemeId) ??
+                  CARD_THEMES[0];
+                const back = "base" in b ? b : theme?.back;
+                const selected = settings.cardBackId === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => settings.setCardBack(b.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-lg p-1 text-[11px]",
+                      selected
+                        ? "bg-white/20 ring-2 ring-amber-300"
+                        : "bg-white/5",
+                    )}
+                  >
+                    <span className="block aspect-[5/7] w-10">
+                      {theme && back && (
+                        <CardArt
+                          card={null}
+                          theme={{ ...theme, id: `preview-${b.id}`, back }}
+                        />
+                      )}
+                    </span>
+                    {b.name}
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
           <Section title="카드 툴팁">
-            <div className="flex items-center gap-1.5">
+            <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => settings.setCardTip(true)}
@@ -192,11 +228,31 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
               >
                 끄기
               </button>
-              <span className="ml-2 text-xs opacity-60">
-                손패 카드에 그 무늬에서 아직 안 나온 높은 카드를 보여 준다.
-                친구와 할 때는 꺼진다
-              </span>
             </div>
+            <p className="text-xs opacity-60">
+              손패 카드에 그 무늬에서 아직 안 나온 높은 카드를 보여 줍니다. 예:
+              ♥9 (A K J). 친구와 할 때는 꺼집니다.
+            </p>
+          </Section>
+
+          <Section title="컴퓨터 이름">
+            <div className="grid grid-cols-3 gap-1.5">
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <input
+                  key={n}
+                  aria-label={`컴퓨터 ${n} 이름`}
+                  value={settings.botNames[n - 1] ?? ""}
+                  onChange={(e) => settings.setBotName(n, e.target.value)}
+                  placeholder={`컴퓨터 ${n}`}
+                  maxLength={8}
+                  className="min-w-0 rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+                />
+              ))}
+            </div>
+            <p className="text-xs opacity-60">
+              내 다음 차례부터 1번. 친구와 할 때는 방장이 정한 이름이 빈자리에
+              쓰입니다.
+            </p>
           </Section>
 
           <Section title="컴퓨터 실력">

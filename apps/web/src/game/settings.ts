@@ -4,10 +4,12 @@ import {
   RULE_PRESETS,
   type RuleSet,
 } from "@mighty/engine";
+import { useMemo } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
+  CARD_BACKS,
   CARD_THEMES,
   type CardTheme,
   CLASSIC,
@@ -31,6 +33,9 @@ export const SPEEDS = [
 
 interface Settings {
   cardThemeId: string;
+  /** 카드 뒷면. "theme"이면 카드 테마의 뒷면 */
+  cardBackId: string;
+  setCardBack(id: string): void;
   /** 온라인 대전에서 쓰는 내 이름 */
   playerName: string;
   setPlayerName(name: string): void;
@@ -40,6 +45,9 @@ interface Settings {
   /** 효과음 */
   sound: boolean;
   setSound(on: boolean): void;
+  /** 컴퓨터 이름(내 다음 차례가 1번). 비워 두면 "컴퓨터 n" */
+  botNames: string[];
+  setBotName(index: number, name: string): void;
   /** 카드 툴팁: 손패 카드에 그 무늬에서 아직 안 나온 더 높은 카드를 보여 준다(원작 `bCardTip`) */
   cardTip: boolean;
   setCardTip(on: boolean): void;
@@ -63,12 +71,22 @@ export const useSettings = create<Settings>()(
   persist(
     (set) => ({
       cardThemeId: CLASSIC.id,
+      cardBackId: "theme",
+      setCardBack: (cardBackId) => set({ cardBackId }),
       playerName: "",
       setPlayerName: (playerName) => set({ playerName }),
       speed: 1,
       setSpeed: (speed) => set({ speed }),
       sound: true,
       setSound: (sound) => set({ sound }),
+      botNames: [],
+      setBotName: (index, name) =>
+        set((s) => {
+          const botNames = [...s.botNames];
+          while (botNames.length < index) botNames.push("");
+          botNames[index - 1] = name.slice(0, 8);
+          return { botNames };
+        }),
       cardTip: false,
       setCardTip: (cardTip) => set({ cardTip }),
       volume: 0.8,
@@ -110,7 +128,13 @@ export const useSettings = create<Settings>()(
 
 export function useCardTheme(): CardTheme {
   const id = useSettings((s) => s.cardThemeId);
-  return CARD_THEMES.find((t) => t.id === id) ?? CLASSIC;
+  const backId = useSettings((s) => s.cardBackId);
+  // 카드 그림은 테마 객체로 캐시하므로 같은 선택이면 같은 객체를 돌려준다.
+  return useMemo(() => {
+    const theme = CARD_THEMES.find((t) => t.id === id) ?? CLASSIC;
+    const back = CARD_BACKS.find((b) => b.id === backId);
+    return back ? { ...theme, id: `${theme.id}+${back.id}`, back } : theme;
+  }, [id, backId]);
 }
 
 /** 고른 규칙. 문자열이 깨졌으면 표준 5마 */
@@ -123,4 +147,9 @@ export function chosenRules(code: string): RuleSet {
 export function ruleLabel(code: string, custom: readonly CustomRule[]): string {
   const named = [...RULE_PRESETS, ...custom].find((r) => r.code === code);
   return named?.name ?? `직접 정한 ${chosenRules(code).playerCount}마`;
+}
+
+/** n번째 컴퓨터의 이름(1부터). 정해 두지 않았으면 "컴퓨터 n" */
+export function botName(names: readonly string[], index: number): string {
+  return names[index - 1]?.trim() || `컴퓨터 ${index}`;
 }

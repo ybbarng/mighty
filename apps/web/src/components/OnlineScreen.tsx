@@ -79,6 +79,7 @@ export function OnlineScreen({
           hostName: trimmed,
           rules,
           bot: botFor(useSettings.getState().botLevel),
+          botNames: useSettings.getState().botNames,
           pace: browserPace,
         });
         onlineSession.host = host;

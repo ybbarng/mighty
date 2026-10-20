@@ -15,7 +15,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { effectFor } from "@/game/effects";
-import { useCardTheme, useSettings } from "@/game/settings";
+import { botName, useCardTheme, useSettings } from "@/game/settings";
 import { play as playCue } from "@/game/sound";
 import { canAct, useGame } from "@/game/store";
 import {
@@ -125,6 +125,7 @@ export function GameTable({
   const [selected, setSelected] = useState<Card | null>(null);
   const [hovered, setHovered] = useState<Card | null>(null);
   const cardTipOn = useSettings((s) => s.cardTip);
+  const botNames = useSettings((s) => s.botNames);
   const network = useGame((s) => s.network);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -179,7 +180,7 @@ export function GameTable({
   const seatName = (seat: number) =>
     seat === view.seat
       ? "나"
-      : (seatNames?.[seat] ?? `컴퓨터 ${offsetOf(seat)}`);
+      : (seatNames?.[seat] ?? botName(botNames, offsetOf(seat)));
   const kiruda = view.goal?.kiruda ?? null;
   const hand = sortHand(view.hand, rules, kiruda);
   const freshCards =

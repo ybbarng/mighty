@@ -8,6 +8,7 @@ import {
 } from "@mighty/engine";
 import { memo, type ReactNode } from "react";
 
+import { SPADE_PATH } from "../brand/brand";
 import { SuitShape } from "./suits";
 import { type CardTheme, CLASSIC } from "./themes";
 
@@ -259,21 +260,56 @@ function Joker({ theme }: { theme: CardTheme }) {
 }
 
 function Back({ theme }: { theme: CardTheme }) {
-  const { base, stripe, accent } = theme.back;
-  const id = `back-${theme.id}`;
+  const { base, stripe, accent, pattern = "diamond" } = theme.back;
+  const id = `back-${theme.id}-${base.slice(1)}-${pattern}`;
   return (
     <g>
       <defs>
-        <pattern
-          id={id}
-          width={20}
-          height={20}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <rect width={20} height={20} fill={base} />
-          <rect width={10} height={10} fill={stripe} />
-        </pattern>
+        {pattern === "diamond" && (
+          <pattern
+            id={id}
+            width={20}
+            height={20}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width={20} height={20} fill={base} />
+            <rect width={10} height={10} fill={stripe} />
+          </pattern>
+        )}
+        {pattern === "stripe" && (
+          <pattern
+            id={id}
+            width={16}
+            height={16}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(-30)"
+          >
+            <rect width={16} height={16} fill={base} />
+            <rect width={6} height={16} fill={stripe} />
+          </pattern>
+        )}
+        {pattern === "dots" && (
+          <pattern id={id} width={18} height={18} patternUnits="userSpaceOnUse">
+            <rect width={18} height={18} fill={base} />
+            <circle cx={9} cy={9} r={3.5} fill={stripe} />
+          </pattern>
+        )}
+        {pattern === "spades" && (
+          <pattern id={id} width={36} height={36} patternUnits="userSpaceOnUse">
+            <rect width={36} height={36} fill={base} />
+            <path
+              d={SPADE_PATH}
+              transform="translate(1 1) scale(0.16)"
+              fill={stripe}
+            />
+            <path
+              d={SPADE_PATH}
+              transform="translate(19 19) scale(0.16)"
+              fill={stripe}
+            />
+          </pattern>
+        )}
       </defs>
       <rect
         x={12}
