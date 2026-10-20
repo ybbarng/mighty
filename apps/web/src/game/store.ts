@@ -15,7 +15,7 @@ import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
 import { play as playCue } from "./sound";
-import { dealTiming } from "./timing";
+import { dealTiming, prefersReducedMotion } from "./timing";
 
 /** 화면에 붙일 수 있는 대국. 처음 쌓인 진행을 넘겨 줄 수 있어야 한다 */
 export type AttachableHost = MatchHost & { drain(): Snapshot[] };
@@ -127,7 +127,7 @@ export const useGame = create<GameStore>((set, get) => {
     }
 
     const dealt = next.events.find((e) => e.type === "dealt");
-    if (dealt && next.view.rules.playerCount !== 2) {
+    if (dealt && next.view.rules.playerCount !== 2 && !prefersReducedMotion()) {
       const others = next.events.filter(
         (e) => e.type !== "dealt" && e.type !== "roundStarted",
       );

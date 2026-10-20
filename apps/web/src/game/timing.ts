@@ -11,3 +11,11 @@ export function dealTiming(total: number): {
   const perCard = Math.min(30, Math.max(14, 1100 / Math.max(1, total)));
   return { perCard, duration: SHUFFLE_MS + total * perCard + FLIGHT_MS };
 }
+
+/** 기기에서 움직임 줄이기를 켰는가. 켜져 있으면 섞고 나눠 주는 연출을 건너뛴다 */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}

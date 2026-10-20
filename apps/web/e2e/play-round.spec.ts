@@ -117,3 +117,16 @@ for (const preset of ["표준 5마", "표준 7마"]) {
     });
   });
 }
+
+test("움직임 줄이기를 켜면 섞고 나눠 주는 연출 없이 바로 공약을 정한다", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await prepare(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /^컴퓨터와/ }).click();
+  // 연출이 있으면 2초 넘게 걸린다.
+  await expect(page.getByText("공약을 정하세요")).toBeVisible({
+    timeout: 1500,
+  });
+});
