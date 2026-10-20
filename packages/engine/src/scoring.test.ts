@@ -111,6 +111,19 @@ describe("배수", () => {
 });
 
 describe("분배", () => {
+  it("초구 프렌드인데 주공이 첫 트릭을 이기면 주공이 다 받지만 노프렌드 2배는 없다", () => {
+    const rules = { ...standard, doubleForNoFriend: true };
+    const failedFirstTrick = scoreRound(
+      input({ rules, friend: null, ruling: 19 }),
+    );
+    expect(failedFirstTrick.multipliers).toEqual([]);
+    expect(failedFirstTrick.money).toEqual([132, 92, 92, 92, 92]);
+    const declared = scoreRound(
+      input({ rules, friend: null, noFriendDeclared: true, ruling: 19 }),
+    );
+    expect(declared.multipliers).toEqual(["noFriend"]);
+  });
+
   it("노프렌드면 주공이 야당 4명분을 모두 받는다", () => {
     const result = scoreRound(
       input({ friend: null, noFriendDeclared: true, ruling: 19 }),
