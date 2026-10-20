@@ -206,7 +206,11 @@ export class LocalMatch implements MatchHost {
     for (let guard = 0; guard < 10_000; guard++) {
       const seat = this.nextBotSeat();
       if (seat === null) return;
-      const action = this.bot.decide(viewOf(this.state, seat), this.rng);
+      const view = viewOf(this.state, seat);
+      // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
+      if (view.decision?.kind === "play" && view.decision.cards.length === 0)
+        return;
+      const action = this.bot.decide(view, this.rng);
       const result = this.apply(seat, action);
       if (!result.ok)
         throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);
