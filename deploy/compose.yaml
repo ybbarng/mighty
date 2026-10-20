@@ -1,0 +1,52 @@
+# mighty.byb.kr 배포. 서버에서 이미 돌고 있는 Traefik 뒤에 붙인다.
+#   docker compose -f deploy/compose.yaml up -d --build
+#
+# Traefik 쪽 이름(네트워크, 진입점, 인증서 발급기)은 서버 설정에 맞춰 .env 로 바꾼다.
+
+name: mighty
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: https://${MIGHTY_HOST:-mighty.byb.kr}
+        NEXT_PUBLIC_RELAY_URLS: wss://${MIGHTY_HOST:-mighty.byb.kr}/relay
+    restart: unless-stopped
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.mighty.rule=Host(`${MIGHTY_HOST:-mighty.byb.kr}`)
+      - traefik.http.routers.mighty.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.mighty.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.mighty.loadbalancer.server.port=80
+
+  # 온라인 대전에서 서로를 찾는 단계(시그널링)만 거치는 Nostr 릴레이.
+  # 한 번 연결할 때 몇 KB가 오가고, 게임 진행은 기기끼리 바로 주고받는다.
+  relay:
+    # 배포할 때 확인한 버전으로 고정한다.
+    image: scsibug/nostr-rs-relay:latest
+    restart: unless-stopped
+    networks: [traefik]
+    volumes:
+      - ./relay.toml:/usr/src/app/config.toml:ro
+      - relay-data:/usr/src/app/db
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.mighty-relay.rule=Host(`${MIGHTY_HOST:-mighty.byb.kr}`) && PathPrefix(`/relay`)
+      - traefik.http.routers.mighty-relay.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.mighty-relay.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.routers.mighty-relay.middlewares=mighty-relay-strip
+      - traefik.http.middlewares.mighty-relay-strip.stripprefix.prefixes=/relay
+      - traefik.http.services.mighty-relay.loadbalancer.server.port=8080
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+
+volumes:
+  relay-data:

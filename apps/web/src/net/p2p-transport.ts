@@ -1,4 +1,4 @@
-import { joinRoom, selfId } from "trystero/nostr";
+import { defaultRelayUrls, joinRoom, selfId } from "trystero/nostr";
 
 import type { Transport } from "./transport";
 
@@ -6,11 +6,33 @@ import type { Transport } from "./transport";
 const APP_ID = "mighty-card-game-v1";
 
 /**
- * 인터넷 대전: WebRTC로 기기끼리 바로 잇는다. 서로를 찾는 단계(시그널링)는 공개 Nostr 릴레이를 거치므로
- * 우리가 운영하는 서버가 없다. 방 코드를 비밀번호로도 써서 릴레이를 지나는 연결 정보를 암호화한다.
+ * 직접 운영하는 Nostr 릴레이(빌드할 때 `NEXT_PUBLIC_RELAY_URLS`, 쉼표로 여럿).
+ * 있으면 그것과 공개 릴레이 두 곳을 예비로 쓴다. 없으면 공개 릴레이만 쓴다.
+ */
+const OWN_RELAYS = (process.env.NEXT_PUBLIC_RELAY_URLS ?? "")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+
+/**
+ * 인터넷 대전: WebRTC로 기기끼리 바로 잇는다. 서로를 찾는 단계(시그널링)만 Nostr 릴레이를 거친다. 방 코드를 비밀번호로도 써서 릴레이를 지나는 연결 정보를 암호화한다.
  */
 export function joinP2P(roomId: string): Transport {
-  const room = joinRoom({ appId: APP_ID, password: roomId }, roomId);
+  const room = joinRoom(
+    {
+      appId: APP_ID,
+      password: roomId,
+      ...(OWN_RELAYS.length > 0
+        ? {
+            // urls를 주면 목록 전부에 붙는다. 같은 빌드끼리는 목록이 같아 늘 같은 릴레이에서 만난다.
+            relayConfig: {
+              urls: [...OWN_RELAYS, ...defaultRelayUrls.slice(0, 2)],
+            },
+          }
+        : {}),
+    },
+    roomId,
+  );
   const channel = room.makeAction<string>("m");
   const messageHandlers: ((message: unknown, from: string) => void)[] = [];
   const joinHandlers: ((peerId: string) => void)[] = [];

@@ -1,0 +1,7 @@
+**/node_modules
+**/.next
+apps/web/out
+apps/web/test-results
+apps/web/playwright-report
+legacy
+.git

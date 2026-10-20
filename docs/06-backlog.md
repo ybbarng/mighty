@@ -5,8 +5,10 @@
 ## 정해야 할 것
 
 - [x] `revival`을 합치고 기본 브랜치를 `main`으로 바꾸기. CI는 `main` push와 PR에서 돈다
-- [ ] 배포: `mighty.byb.kr`(사용자 개인 서버). 서버를 nginx에서 Traefik으로 바꾸는 중이라 그 뒤에 한다. Traefik 라벨을 단 Docker Compose(정적 사이트 컨테이너 + Nostr 릴레이)로 준비한다
-- [ ] 방 중개를 직접 할지: 같은 서버에 Nostr 릴레이(strfry 등) 하나를 두고 `NEXT_PUBLIC_RELAY_URLS`로 주소를 받게 한다(공개 릴레이는 예비). 부하는 연결할 때 수 KB뿐이라 아주 작다. 공개 방 목록이 필요해지면 작은 WebSocket 중개 서버로. 방화벽 대비 TURN(coturn)도 같이 검토
+- [x] 배포 준비: `deploy/`에 Traefik 라벨을 단 Docker Compose(nginx 정적 사이트 + nostr-rs-relay), 설명은 [deploy/README.md](../deploy/README.md)
+- [ ] 배포: `mighty.byb.kr`(사용자 개인 서버). 서버를 nginx에서 Traefik으로 바꾸는 중이라 그 뒤에 한다. 이미지 빌드는 아직 실제로 해 보지 않았다
+- [x] 방 중개: 같은 서버의 Nostr 릴레이를 `NEXT_PUBLIC_RELAY_URLS`(빌드 때)로 받아 먼저 쓰고, 공개 릴레이 두 곳을 예비로 쓴다
+- [ ] 방화벽 대비 TURN(coturn). 공개 방 목록이 필요해지면 작은 WebSocket 중개 서버
 - [ ] 학교 규칙 리뷰(사용자): 2019년 코드에서 읽은 추정 — 기루다 ♣일 때 조커콜 ♥3, 첫·막 트릭 조커는 낼 수 있지만 효력 없음, 조커콜에 마이티로 대신 내기 허용, 선거 중 노기루다는 같은 숫자면 이김, 다음 판 선은 프렌드. 확정되면 내 규칙/기본 규칙으로 넣는다
 - [ ] `legacy/` 폴더를 지울 시점. 저장소를 공개하기 전에는 원작 효과음이 들어 있는 `legacy/src/components/Sound/resources/`를 반드시 빼야 한다
 - [ ] 원작과 다르게 정한 6가지([04-original-game-flow.md](./04-original-game-flow.md) 14.4절)를 이대로 둘지
