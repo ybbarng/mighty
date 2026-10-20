@@ -24,13 +24,17 @@ function decideOnce(): boolean {
 
 /** 처음 열었을 때 로고가 펼쳐지는 화면. 한 번 연 뒤 같은 탭에서는 다시 보이지 않고, 누르면 바로 넘긴다 */
 export function Splash() {
-  const [stage, setStage] = useState<"show" | "fade" | "done">("show");
+  // 볼지 정하기 전에는 그리지 않는다. 다시 연 탭에서 스플래시가 잠깐 번쩍이지 않게 한다.
+  const [stage, setStage] = useState<"pending" | "show" | "fade" | "done">(
+    "pending",
+  );
 
   useEffect(() => {
     if (!decideOnce()) {
       setStage("done");
       return;
     }
+    setStage("show");
     const fade = setTimeout(() => setStage("fade"), DURATION);
     const done = setTimeout(() => setStage("done"), DURATION + 400);
     return () => {
@@ -39,7 +43,7 @@ export function Splash() {
     };
   }, []);
 
-  if (stage === "done") return null;
+  if (stage === "done" || stage === "pending") return null;
   return (
     <button
       type="button"
