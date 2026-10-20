@@ -1,0 +1,43 @@
+import { heuristicBot } from "@mighty/ai";
+import { presetRules } from "@mighty/engine";
+import { describe, expect, it } from "vitest";
+
+import type { Snapshot } from "./host";
+import { LocalMatch } from "./local-match";
+
+const rules = presetRules("standard5");
+
+describe("LocalMatch", () => {
+  it("사람 차례가 올 때까지 봇을 돌리고, 사람 차례에 멈춘다", () => {
+    const match = new LocalMatch({ rules, seed: 11 });
+    const view = match.current();
+    expect(view.decision).not.toBeNull();
+    expect(match.drain().length).toBeGreaterThan(0);
+  });
+
+  it("사람이 봇과 같은 수를 두면 판 끝까지 간다", () => {
+    const match = new LocalMatch({ rules, seed: 12 });
+    const snapshots: Snapshot[] = [...match.drain()];
+    match.subscribe((s) => snapshots.push(s));
+    for (let i = 0; i < 500; i++) {
+      const view = match.current();
+      if (view.phase === "roundEnd" && view.decision === null) break;
+      if (view.decision === null) break;
+      const result = match.submit(heuristicBot.decide(view, { seed: i }));
+      expect(result).toEqual({ ok: true });
+      if (snapshots.some((s) => s.events.some((e) => e.type === "roundScored")))
+        break;
+    }
+    expect(
+      snapshots.some((s) => s.events.some((e) => e.type === "roundScored")),
+    ).toBe(true);
+  });
+
+  it("잘못된 행동은 거절하고 상태를 바꾸지 않는다", () => {
+    const match = new LocalMatch({ rules, seed: 13 });
+    const before = match.serialize();
+    const result = match.submit({ type: "play", card: "SA" });
+    expect(result.ok).toBe(false);
+    expect(match.serialize()).toBe(before);
+  });
+});
