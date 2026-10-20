@@ -20,6 +20,7 @@ export type Cue =
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let volume = 0.8;
 
 function audio(): { ctx: AudioContext; out: GainNode } | null {
   if (
@@ -30,13 +31,16 @@ function audio(): { ctx: AudioContext; out: GainNode } | null {
   if (!ctx) {
     ctx = new window.AudioContext();
     master = ctx.createGain();
+    master.gain.value = volume;
     master.connect(ctx.destination);
   }
   if (ctx.state === "suspended") void ctx.resume();
   return master ? { ctx, out: master } : null;
 }
 
-export function setVolume(volume: number): void {
+/** 전체 음량(0~1). 아직 소리를 낸 적이 없으면 첫 소리부터 적용된다 */
+export function setVolume(next: number): void {
+  volume = Math.min(1, Math.max(0, next));
   if (master) master.gain.value = volume;
 }
 

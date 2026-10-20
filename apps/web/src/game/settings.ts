@@ -8,6 +8,7 @@ import {
 } from "@/components/card-art/themes";
 
 import type { BotLevel } from "./bots";
+import { setVolume as setSoundVolume } from "./sound";
 
 /** 원작의 rule.txt처럼 이름을 붙여 둔 내 규칙 */
 export interface CustomRule {
@@ -33,6 +34,9 @@ interface Settings {
   /** 효과음 */
   sound: boolean;
   setSound(on: boolean): void;
+  /** 효과음 크기 0~1 */
+  volume: number;
+  setVolume(volume: number): void;
   /** 컴퓨터 실력. 새 게임부터 적용된다 */
   botLevel: BotLevel;
   setBotLevel(level: BotLevel): void;
@@ -53,6 +57,11 @@ export const useSettings = create<Settings>()(
       setSpeed: (speed) => set({ speed }),
       sound: true,
       setSound: (sound) => set({ sound }),
+      volume: 0.8,
+      setVolume: (volume) => {
+        setSoundVolume(volume);
+        set({ volume });
+      },
       botLevel: 2,
       setBotLevel: (botLevel) => set({ botLevel }),
       customRules: [],
@@ -70,7 +79,14 @@ export const useSettings = create<Settings>()(
           customRules: s.customRules.filter((r) => r.name !== name),
         })),
     }),
-    { name: "mighty-settings", storage: createJSONStorage(() => localStorage) },
+    {
+      name: "mighty-settings",
+      storage: createJSONStorage(() => localStorage),
+      // 저장해 둔 음량을 소리 출력에도 알려 준다.
+      onRehydrateStorage: () => (state) => {
+        if (state) setSoundVolume(state.volume);
+      },
+    },
   ),
 );
 

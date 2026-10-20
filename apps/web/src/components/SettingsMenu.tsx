@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
 import { SPEEDS, useSettings } from "@/game/settings";
+import { play as playCue } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { CARD_THEMES } from "./card-art/themes";
@@ -44,6 +45,8 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
   const speed = useSettings((s) => s.speed);
   const setSpeed = useSettings((s) => s.setSpeed);
   const sound = useSettings((s) => s.sound);
+  const volume = useSettings((s) => s.volume);
+  const setVolume = useSettings((s) => s.setVolume);
   const setSound = useSettings((s) => s.setSound);
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
@@ -71,6 +74,21 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
             value={sound ? "on" : "off"}
             onChange={(v) => setSound(v === "on")}
           />
+          {sound && (
+            <input
+              type="range"
+              aria-label="효과음 크기"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(volume * 100)}
+              onChange={(e) => setVolume(Number(e.target.value) / 100)}
+              // 손을 뗄 때 바뀐 크기로 한 번 들려준다.
+              onPointerUp={() => playCue("card")}
+              onKeyUp={() => playCue("card")}
+              className="w-full accent-amber-400"
+            />
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs opacity-70">카드</span>
@@ -89,7 +107,7 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
           onClick={() => setGlossary(true)}
           className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm hover:bg-white/15"
         >
-          📖 용어 사전 — 기루다, 주공, 조커콜…
+          📖 용어 사전
         </button>
         <p className="text-[11px] leading-relaxed opacity-50">
           키보드: ← → 로 카드 고르기, Enter 로 내기, Esc 로 선택 취소
