@@ -180,4 +180,34 @@ describe("딜미스", () => {
     expect(isDealMiss(rules, jokerAndKing, "NT")).toBe(true);
     expect(isDealMiss(standard, jokerAndKing, "NT")).toBe(false);
   });
+
+  it("관악컴반: 마이티 0·조커 −1을 뺀 뒤 0장이거나 애꾸눈 J 한 장이면 딜미스, 3.2의 '2장 이하' 버그는 없다", () => {
+    const comban = presetRules("comban5");
+    const hand = (...points: Card[]): Card[] => {
+      const filler: Card[] = [
+        "S2",
+        "S3",
+        "S4",
+        "D5",
+        "D6",
+        "H7",
+        "H8",
+        "C9",
+        "C2",
+        "D3",
+      ];
+      return [...points, ...filler].slice(0, 10);
+    };
+    // 3.2 버그였다면 딜미스였을 점수 카드 2장 패는 딜미스가 아니다.
+    expect(isDealMiss(comban, hand("SK", "HQ"), "NT")).toBe(false);
+    expect(isDealMiss(comban, hand("D10", "C10"), "NT")).toBe(false);
+    // 10 한 장은 딜미스가 아니다.
+    expect(isDealMiss(comban, hand("H10"), "NT")).toBe(false);
+    // 애꾸눈 J 한 장, 마이티 한 장, 조커 + 점수 카드 한 장은 딜미스다.
+    expect(isDealMiss(comban, hand("HJ"), "NT")).toBe(true);
+    expect(isDealMiss(comban, hand("SA"), "NT")).toBe(true);
+    expect(isDealMiss(comban, hand("JK", "DK"), "NT")).toBe(true);
+    // 조커 + 점수 카드 두 장은 아니다.
+    expect(isDealMiss(comban, hand("JK", "DK", "CQ"), "NT")).toBe(false);
+  });
 });
