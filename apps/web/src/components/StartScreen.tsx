@@ -15,6 +15,7 @@ import { Logo } from "./brand/Logo";
 import { CARD_THEMES } from "./card-art/themes";
 
 import { ActionButton } from "./panels/common";
+import { RuleEditor } from "./rules/RuleEditor";
 
 /** 게임 시작 화면: 기본 규칙 고르기, 원작 규칙 문자열 붙여넣기 */
 export function StartScreen({
@@ -27,11 +28,23 @@ export function StartScreen({
 }) {
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
-  const [presetId, setPresetId] = useState<string>("standard5");
-  const [ruleText, setRuleText] = useState("");
+  const customRules = useSettings((s) => s.customRules);
+  const saveCustomRule = useSettings((s) => s.saveCustomRule);
+  const removeCustomRule = useSettings((s) => s.removeCustomRule);
+  // 고른 규칙은 늘 규칙 문자열 하나로 들고 있다. 기본 규칙·내 규칙·자세히 고치기가 모두 이 문자열을 바꾼다.
+  const [ruleText, setRuleText] = useState(RULE_PRESETS[0]?.code ?? "");
+  const [editing, setEditing] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const decoded = ruleText.trim() ? decodeRuleString(ruleText) : null;
-  const preset = RULE_PRESETS.find((p) => p.id === presetId) ?? RULE_PRESETS[0];
-  const rules = decoded?.ok ? decoded.rules : preset?.rules;
+  const rules = decoded?.ok ? decoded.rules : null;
+  const code = rules ? encodeRuleString(rules) : null;
+  const chip = (selected: boolean) =>
+    cn(
+      "rounded-lg border px-2 py-1.5 text-xs",
+      selected
+        ? "border-amber-300 bg-white text-black"
+        : "border-white/15 bg-white/5",
+    );
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
@@ -52,20 +65,47 @@ export function StartScreen({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => {
-                  setPresetId(p.id);
-                  setRuleText("");
-                }}
-                className={cn(
-                  "rounded-lg border px-2 py-1.5 text-xs",
-                  p.id === presetId && !decoded?.ok
-                    ? "border-amber-300 bg-white text-black"
-                    : "border-white/15 bg-white/5",
-                )}
+                onClick={() => setRuleText(p.code)}
+                className={chip(p.code === code)}
               >
                 {p.name}
               </button>
             ))}
+            {customRules.map((r) => (
+              <span
+                key={r.name}
+                className={cn(
+                  chip(r.code === code),
+                  "flex items-center justify-between gap-1",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => setRuleText(r.code)}
+                  className="truncate"
+                >
+                  {r.name}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${r.name} 지우기`}
+                  onClick={() => removeCustomRule(r.name)}
+                  className="opacity-50 hover:opacity-100"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <ActionButton
+              variant="secondary"
+              className="flex-1 py-1.5 text-xs"
+              disabled={!rules}
+              onClick={() => setEditing(true)}
+            >
+              규칙 자세히 보기·고치기
+            </ActionButton>
           </div>
         </section>
 
@@ -75,7 +115,7 @@ export function StartScreen({
           </label>
           <input
             id="rule-string"
-            value={ruleText || (rules ? encodeRuleString(rules) : "")}
+            value={ruleText}
             onChange={(e) => setRuleText(e.target.value)}
             spellCheck={false}
             className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 font-mono text-sm"
@@ -90,6 +130,29 @@ export function StartScreen({
               ? decoded.reason
               : "친구에게 이 문자열을 보내면 같은 규칙으로 할 수 있습니다."}
           </p>
+          {rules &&
+            ![...RULE_PRESETS, ...customRules].some((r) => r.code === code) && (
+              <div className="flex gap-2">
+                <input
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="이 규칙의 이름 (예: 우리 학교 5마)"
+                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs"
+                />
+                <ActionButton
+                  variant="secondary"
+                  className="px-3 py-1.5 text-xs"
+                  disabled={!saveName.trim() || !code}
+                  onClick={() => {
+                    if (!code) return;
+                    saveCustomRule({ name: saveName.trim(), code });
+                    setSaveName("");
+                  }}
+                >
+                  내 규칙으로 저장
+                </ActionButton>
+              </div>
+            )}
         </section>
 
         <section className="flex items-center gap-2">
@@ -137,6 +200,16 @@ export function StartScreen({
           </ActionButton>
         )}
       </div>
+      {editing && rules && (
+        <RuleEditor
+          initial={rules}
+          onClose={() => setEditing(false)}
+          onApply={(next) => {
+            setRuleText(encodeRuleString(next));
+            setEditing(false);
+          }}
+        />
+      )}
     </main>
   );
 }
