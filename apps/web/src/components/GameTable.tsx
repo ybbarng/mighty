@@ -160,6 +160,8 @@ export function GameTable({
 
   // 바닥 카드를 받기 전 손패를 기억해 두었다가 새로 들어온 카드에 표를 단다.
   const beforeKitty = useRef<{ round: number; hand: Card[] } | null>(null);
+  // 바닥 카드를 고르는 동안 손패 카드 자리를 기억했다가, 버린 카드가 그 자리에서 빠져나가게 한다.
+  const exchangeSlots = useRef(new Map<Card, Point>());
   if (view && view.phase !== "exchange" && view.phase !== "play")
     beforeKitty.current = { round: view.roundNumber, hand: view.hand };
 
@@ -386,6 +388,11 @@ export function GameTable({
     };
   };
   // 이번에 받은 진행에서 누가 손패 몇 번째 카드를 냈는가
+  if (view.phase === "exchange" && layout) {
+    exchangeSlots.current = new Map(
+      hand.map((card, i) => [card, layout.hand.slots[i] as Point]),
+    );
+  }
   const playedSlots = new Map<Card, number>();
   for (const e of events)
     if (e.type === "played" && e.slot !== null) playedSlots.set(e.card, e.slot);
@@ -586,6 +593,48 @@ export function GameTable({
                 나가기
               </button>
             </div>
+
+            {/* 버린 카드: 주공 손패에서 빠져 주공 자리로 빨려 들어간다 */}
+            {events.flatMap((e) => {
+              if (e.type !== "exchanged") return [];
+              if (e.seat === view.seat) {
+                return [...exchangeSlots.current]
+                  .filter(([card]) => !view.hand.includes(card))
+                  .map(([card, from], i) => (
+                    <PlayingCard
+                      key={`discard-${seq}-${card}`}
+                      card={card}
+                      width={layout.hand.card.w}
+                      height={layout.hand.card.h}
+                      from={{ ...from, y: from.y - layout.hand.card.h * 0.2 }}
+                      at={{ ...myPile, scale: 0.4, opacity: 0 }}
+                      delay={i * 90}
+                      duration={600}
+                      z={60 + i}
+                    />
+                  ));
+              }
+              const count = view.handCounts[e.seat] ?? 0;
+              const discarded = floorMemo.current.count;
+              return Array.from({ length: discarded }, (_, i) => {
+                const from = fanSlot(e.seat, count + i, count + discarded);
+                return (
+                  <PlayingCard
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 뒷면 카드는 순서가 곧 정체다
+                    key={`discard-${seq}-${i}`}
+                    card={null}
+                    width={fanCard.w}
+                    height={fanCard.h}
+                    from={{ x: from.x, y: from.y }}
+                    at={{ ...plateCenter(e.seat), scale: 0.4, opacity: 0 }}
+                    rotate={from.rotate}
+                    delay={i * 90}
+                    duration={600}
+                    z={15 + i}
+                  />
+                );
+              });
+            })}
 
             {/* 다른 사람 손패(뒷면) */}
             {!dealing &&
