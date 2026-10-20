@@ -301,7 +301,8 @@ export function RoundResultPanel({
         </div>
       ) : (
         view.decision?.kind === "continue" && (
-          <div className="flex justify-center">
+          // 낮은 화면에서 표가 길어 스크롤되어도 단추는 패널 아래에 붙어 늘 보인다.
+          <div className="sticky -bottom-4 -mx-4 -mb-4 flex justify-center bg-gradient-to-t from-black via-black/90 to-transparent px-4 pt-3 pb-4">
             <ActionButton onClick={() => onSubmit({ type: "continue" })}>
               다음 판
             </ActionButton>

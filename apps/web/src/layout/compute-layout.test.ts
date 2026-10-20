@@ -9,6 +9,8 @@ const SCREENS = [
   [844, 390],
   [390, 844],
   [360, 740],
+  [915, 412],
+  [412, 915],
 ] as const;
 
 const cases = SCREENS.flatMap(([width, height]) =>

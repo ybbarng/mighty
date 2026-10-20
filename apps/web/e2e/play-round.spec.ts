@@ -39,7 +39,8 @@ async function stepOnce(page: Page): Promise<boolean> {
   for (const c of candidates) {
     const label = await c.getAttribute("aria-label");
     if (label && label !== "뒷면 카드" && /^[♠♥◆♣]|조커/.test(label)) {
-      await c.click();
+      // 겹친 손패는 카드의 보이는 왼쪽 위를 누른다.
+      await c.click({ position: { x: 8, y: 8 } });
       return false;
     }
   }

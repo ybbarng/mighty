@@ -238,11 +238,17 @@ export const useGame = create<GameStore>((set, get) => {
   };
 });
 
-/** 사람이 지금 고를 수 있는가. 재생이 밀려 있거나 트릭을 보여 주는 중이면 기다린다 */
+/**
+ * 사람이 지금 고를 수 있는가. 재생할 장면이 남아 있거나 트릭·나눠 주기를 보여 주는 중이면 기다린다.
+ * 마지막 장면의 남은 연출 시간(키티 들어오기 등)은 기다리지 않는다. 그 사이 누른 것이 사라지지 않게 하려고.
+ */
 export function canAct(
-  state: Pick<GameStore, "busy" | "view" | "shownTrick">,
+  state: Pick<GameStore, "queue" | "view" | "shownTrick" | "dealing">,
 ): boolean {
   return (
-    !state.busy && state.shownTrick === null && state.view?.decision != null
+    state.queue.length === 0 &&
+    state.shownTrick === null &&
+    state.dealing === null &&
+    state.view?.decision != null
   );
 }

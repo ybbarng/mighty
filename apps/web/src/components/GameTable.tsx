@@ -94,6 +94,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const shownTrick = useGame((s) => s.shownTrick);
   const collecting = useGame((s) => s.collecting);
   const dealing = useGame((s) => s.dealing);
+  const queue = useGame((s) => s.queue);
   const events = useGame((s) => s.events);
   const seq = useGame((s) => s.seq);
   const busy = useGame((s) => s.busy);
@@ -163,7 +164,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
         })
       : null;
 
-  const acting = canAct({ busy, view, shownTrick });
+  const acting = canAct({ queue, view, shownTrick, dealing });
   const decision: Decision | null = acting ? view.decision : null;
   const playable = decision?.kind === "play" ? new Set(decision.cards) : null;
   const exchanging = decision?.kind === "exchange";
@@ -272,10 +273,30 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   // 세로 화면은 패널이 양옆 자리 판을 가리지 않게 자리 판 아래부터 손패 위까지 쓴다.
   const panelArea = (() => {
     if (!layout) return { top: 0, bottom: 0 };
+    // 판이 끝나 손패가 비면 손패 자리까지 패널이 쓴다.
+    const handTop = hand.length === 0 ? stage.height : layout.hand.top;
     if (layout.orientation === "landscape") {
-      return { top: layout.table.y, bottom: layout.center.y + layout.center.h };
+      // 가로 화면도 패널이 맞은편 자리 판을 덮지 않게 그 아래에서 시작하고, 아래로는 손패 위까지 쓴다.
+      const cx = layout.center.x + layout.center.w / 2;
+      const half =
+        Math.min(
+          Math.max(layout.center.w, 340),
+          stage.width - 2 * layout.gutter,
+        ) / 2;
+      const above = layout.seats
+        .slice(1)
+        .map((s) => s.plate)
+        .filter(
+          (p) =>
+            p.x < cx + half && cx - half < p.x + p.w && p.y < layout.center.y,
+        );
+      const top = Math.max(
+        layout.table.y,
+        ...above.map((p) => p.y + p.h + layout.gutter),
+      );
+      return { top, bottom: handTop - layout.gutter };
     }
-    const bottom = layout.hand.top - layout.gutter;
+    const bottom = handTop - layout.gutter;
     const platesBottom = Math.max(
       ...layout.seats.slice(1).map((s) => s.plate.y + s.plate.h + 24),
     );
@@ -540,7 +561,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                 height: panelArea.bottom - panelArea.top,
               }}
             >
-              <div className="w-full">
+              <div className="flex max-h-full w-full flex-col justify-end">
                 {leadChoice ? (
                   <LeadChoicePanel
                     card={leadChoice.card}
@@ -591,12 +612,6 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                   />
                 ) : waiting ? (
                   <p className="text-center text-sm opacity-80">{waiting}</p>
-                ) : decision?.kind === "play" ? (
-                  <p className="text-center text-sm opacity-80">
-                    {decision.leading
-                      ? "선입니다. 낼 카드를 고르세요"
-                      : "낼 카드를 고르세요"}
-                  </p>
                 ) : null}
               </div>
             </div>
@@ -616,7 +631,12 @@ export function GameTable({ onExit }: { onExit: () => void }) {
               )}
               style={{
                 left: tableCenter.x,
-                top: layout.center.y + layout.center.h * 0.3,
+                top: showPanel
+                  ? Math.max(
+                      layout.hud.y + layout.hud.h + 24,
+                      panelArea.top - 24,
+                    )
+                  : layout.center.y + layout.center.h * 0.3,
               }}
             >
               {effect.text}
@@ -632,6 +652,18 @@ export function GameTable({ onExit }: { onExit: () => void }) {
               seatName={seatName}
               onClose={() => setShowScoreboard(false)}
             />
+          )}
+
+          {/* 트릭 중간에 내 차례가 오면 손패 위에 알린다 */}
+          {acting && decision?.kind === "play" && !leadChoice && !notice && (
+            <div
+              className="pointer-events-none absolute z-[240] -translate-x-1/2 animate-pulse rounded-full bg-amber-400 px-3 py-1 font-bold text-black text-xs shadow"
+              style={{ left: stage.width / 2, top: layout.hand.top - 30 }}
+            >
+              {decision.leading
+                ? "내가 선입니다 — 낼 카드를 고르세요"
+                : "내 차례 — 낼 카드를 고르세요"}
+            </div>
           )}
 
           {/* 알림 */}

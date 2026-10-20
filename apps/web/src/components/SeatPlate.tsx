@@ -2,7 +2,7 @@
 
 import type { Card } from "@mighty/engine";
 import { cardLabel } from "@/game/terms";
-import type { Rect } from "@/layout/compute-layout";
+import { PLATE_COMPACT_H, type Rect } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 
 interface SeatPlateProps {
@@ -31,10 +31,12 @@ function isRed(card: Card): boolean {
 /** 다른 사람 자리. 손패는 펼치지 않고 장수·딴 점수 카드·상태만 보여 준다 (docs/05-layout.md 3.5절). */
 export function SeatPlate(props: SeatPlateProps) {
   const { rect } = props;
+  // 낮은 화면에서는 점수 카드 줄을 접어 한 줄로 보여 준다.
+  const compact = rect.h < PLATE_COMPACT_H;
   return (
     <div
       className={cn(
-        "absolute flex flex-col gap-1 rounded-xl border px-2 py-1.5 text-xs shadow-lg backdrop-blur-sm transition-[box-shadow,background-color,opacity] duration-300",
+        "absolute flex flex-col justify-between overflow-visible rounded-xl border px-2 py-1 text-xs shadow-lg backdrop-blur-sm transition-[box-shadow,background-color,opacity] duration-300",
         props.ruling
           ? "border-amber-300/70 bg-amber-950/70"
           : "border-white/15 bg-black/45",
@@ -42,7 +44,7 @@ export function SeatPlate(props: SeatPlateProps) {
           "shadow-[0_0_0_2px_#fde68a,0_0_20px_2px_rgba(253,230,138,0.55)]",
         props.dead && "opacity-40",
       )}
-      style={{ left: rect.x, top: rect.y, width: rect.w, minHeight: rect.h }}
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       <div className="flex items-center gap-1">
         <span className="min-w-0 truncate font-semibold">{props.name}</span>
@@ -68,26 +70,37 @@ export function SeatPlate(props: SeatPlateProps) {
           {props.dead ? "탈락" : `${props.handCount}장`}
         </span>
       </div>
-      <div className="flex min-h-4 flex-wrap items-center gap-0.5">
-        {props.points === null || props.compact
-          ? props.pointCount > 0 && (
-              <span className="opacity-80">점수 {props.pointCount}장</span>
-            )
-          : props.points.map((card) => (
-              <span
-                key={card}
-                className={cn(
-                  "rounded bg-white px-0.5 text-[10px] leading-4 font-semibold",
-                  isRed(card) ? "text-red-600" : "text-black",
-                )}
-              >
-                {cardLabel(card)}
-              </span>
-            ))}
-      </div>
-      <div className="text-[10px] tabular-nums opacity-60">
-        {props.money * 10}
-      </div>
+      {compact ? (
+        <div className="flex items-center justify-between text-[10px] tabular-nums opacity-70">
+          <span>
+            {props.pointCount > 0 ? `점수 ${props.pointCount}장` : ""}
+          </span>
+          <span>{props.money * 10}</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex h-4 flex-nowrap items-center gap-0.5 overflow-hidden">
+            {props.points === null || props.compact
+              ? props.pointCount > 0 && (
+                  <span className="opacity-80">점수 {props.pointCount}장</span>
+                )
+              : props.points.map((card) => (
+                  <span
+                    key={card}
+                    className={cn(
+                      "rounded bg-white px-0.5 text-[10px] leading-4 font-semibold",
+                      isRed(card) ? "text-red-600" : "text-black",
+                    )}
+                  >
+                    {cardLabel(card)}
+                  </span>
+                ))}
+          </div>
+          <div className="text-[10px] tabular-nums opacity-60">
+            {props.money * 10}
+          </div>
+        </>
+      )}
       {props.bubble && (
         <div
           className={cn(

@@ -49,6 +49,11 @@ export interface Layout {
   trick: { card: Size; slots: Point[] };
 }
 
+/** 자리 판의 가장 낮은 높이. 이보다 낮아지면 한 줄짜리 간단한 판(이름·장수·점수)으로 그린다 */
+export const PLATE_MIN_H = 44;
+/** 이 높이보다 낮으면 자리 판을 한 줄로 줄여 그린다 */
+export const PLATE_COMPACT_H = 58;
+
 /** 카드 그림(250×350)의 높이/폭 */
 export const CARD_RATIO = 350 / 250;
 
@@ -129,7 +134,10 @@ export function computeLayout(input: LayoutInput): Layout {
   const angles = [90, ...(SEAT_ANGLES[playerCount] ?? [])];
   let plate: Size = portrait
     ? { w: clamp(W * 0.24, 76, 112), h: 64 }
-    : { w: clamp(W * 0.12, 120, 180), h: 64 };
+    : {
+        w: clamp(W * 0.12, 120, 180),
+        h: clamp(table.h * 0.22, PLATE_MIN_H, 64),
+      };
   // 세로 화면은 자리 판을 위쪽에 모으고 그 아래를 바닥으로 쓴다.
   const C: Point = portrait
     ? { x: table.x + table.w / 2, y: table.y + table.h * 0.27 }
@@ -170,7 +178,7 @@ export function computeLayout(input: LayoutInput): Layout {
       others.some((b, j) => i < j && rectsOverlap(a, b)),
     );
     if (!overlapping) break;
-    plate = { w: plate.w * 0.85, h: plate.h * 0.9 };
+    plate = { w: plate.w * 0.85, h: Math.max(PLATE_MIN_H, plate.h * 0.9) };
   }
 
   // 바닥

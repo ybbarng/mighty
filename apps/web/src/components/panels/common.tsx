@@ -21,7 +21,7 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="flex max-h-full w-full flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-black/70 p-4 shadow-2xl backdrop-blur">
+    <div className="flex max-h-full min-h-0 w-full flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-white/15 bg-black/70 p-4 shadow-2xl backdrop-blur">
       <h2 className="text-center font-bold text-base">{title}</h2>
       {children}
     </div>
@@ -135,7 +135,9 @@ export function CardPicker({
   allowJoker: boolean;
 }) {
   const suit: Suit | null = value && value !== "JK" ? (value[0] as Suit) : null;
+  // 아직 아무것도 안 골랐으면 ♠를 고른 것으로 보여 준다(숫자 단추가 ♠ 기준으로 동작한다).
   const currentSuit = suit ?? "S";
+  const shownSuit = value === "JK" ? null : currentSuit;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex justify-center gap-1">
@@ -150,10 +152,10 @@ export function CardPicker({
             }}
             className={cn(
               "h-8 w-9 rounded-md border text-base",
-              suit === s
+              shownSuit === s
                 ? "border-amber-300 bg-white"
                 : "border-white/20 bg-white/10",
-              suit === s && (isRedSuit(s) ? "text-red-600" : "text-black"),
+              shownSuit === s && (isRedSuit(s) ? "text-red-600" : "text-black"),
             )}
           >
             {SUIT_SYMBOL[s]}
