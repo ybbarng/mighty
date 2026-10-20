@@ -267,7 +267,7 @@ export function GameTable({
       setLeadChoice({ card, kind: "jokerCall" });
       return;
     }
-    act({ type: "play", card });
+    act({ type: "play", card, slot: hand.indexOf(card) });
   };
 
   const onCardActivate = (card: Card, pointerType: string) => {
@@ -351,6 +351,42 @@ export function GameTable({
       ? s.anchor
       : { x: s.plate.x + s.plate.w / 2, y: s.plate.y + s.plate.h / 2 };
   };
+
+  // 다른 사람 손패는 자리 판 뒤에 뒷면으로 펼쳐 둔다. 마주 앉아 보므로 그 사람의 왼쪽 끝이 내 쪽에서는 오른쪽 끝이다.
+  const fanCard = layout
+    ? (() => {
+        const h = Math.min(
+          56,
+          Math.max(30, (layout.seats[1]?.plate.h ?? 40) * 1.05),
+        );
+        return { w: (h * 5) / 7, h };
+      })()
+    : { w: 0, h: 0 };
+  const fanSlot = (seat: number, index: number, count: number) => {
+    const p = layout?.seats[offsetOf(seat)]?.plate;
+    if (!p) return { x: 0, y: 0, rotate: 0 };
+    const mirrored = count - 1 - index;
+    const centered = mirrored - (count - 1) / 2;
+    const step =
+      count > 1
+        ? Math.min(fanCard.w * 0.42, (p.w * 0.85 - fanCard.w) / (count - 1))
+        : 0;
+    // 손에 든 카드는 판 쪽을 향한다. 판 가운데보다 위에 앉은 사람은 자리 판 아래로, 아래에 앉은 사람은 위로 펼친다.
+    const towardTable =
+      p.y + p.h / 2 < (layout ? layout.center.y + layout.center.h / 2 : 0)
+        ? 1
+        : -1;
+    const edge = towardTable === 1 ? p.y + p.h : p.y;
+    return {
+      x: p.x + p.w / 2 + centered * step,
+      y: edge + towardTable * (fanCard.h * 0.22 - Math.abs(centered) * 0.6),
+      rotate: centered * 2.5 * -towardTable,
+    };
+  };
+  // 이번에 받은 진행에서 누가 손패 몇 번째 카드를 냈는가
+  const playedSlots = new Map<Card, number>();
+  for (const e of events)
+    if (e.type === "played" && e.slot !== null) playedSlots.set(e.card, e.slot);
 
   const effect = effectFor(view, events, seatName);
   const effectCards = effect?.cards ?? null;
@@ -436,12 +472,16 @@ export function GameTable({
   const myPile: Point = layout
     ? { x: stage.width / 2, y: layout.hand.slots[0]?.y ?? layout.hand.top }
     : { x: 0, y: 0 };
-  // 선부터 차례로 카드를 받는 곳
+  // 선부터 차례로 카드를 받는 곳. 다른 사람은 손패 뒷면이 펼쳐질 자리에 쌓인다.
   const beginnerIndex = view.players.indexOf(view.beginner);
   const dealTargets = [
     ...view.players.slice(beginnerIndex),
     ...view.players.slice(0, beginnerIndex),
-  ].map((seat) => (seat === view.seat ? myPile : plateCenter(seat)));
+  ].map((seat) => {
+    if (seat === view.seat) return myPile;
+    const { x, y } = fanSlot(seat, 0, 1);
+    return { x, y };
+  });
 
   const compactHud = layout?.orientation === "portrait";
 
@@ -545,6 +585,33 @@ export function GameTable({
               </button>
             </div>
 
+            {/* 다른 사람 손패(뒷면) */}
+            {!dealing &&
+              view.phase !== "roundEnd" &&
+              view.phase !== "gameOver" &&
+              layout.seats.slice(1).flatMap((seatLayout) => {
+                const seat = view.order[
+                  (myIndex + seatLayout.offset) % n
+                ] as number;
+                if (view.dead.includes(seat)) return [];
+                const count = view.handCounts[seat] ?? 0;
+                return Array.from({ length: count }, (_, i) => {
+                  const at = fanSlot(seat, i, count);
+                  return (
+                    <PlayingCard
+                      // biome-ignore lint/suspicious/noArrayIndexKey: 뒷면 카드는 자리 순서가 곧 정체다
+                      key={`fan-${seat}-${i}`}
+                      card={null}
+                      width={fanCard.w}
+                      height={fanCard.h}
+                      at={{ x: at.x, y: at.y }}
+                      rotate={at.rotate}
+                      z={1 + i}
+                    />
+                  );
+                });
+              })}
+
             {/* 자리 판 */}
             {layout.seats.slice(1).map((seatLayout) => {
               const seat = view.order[
@@ -557,7 +624,8 @@ export function GameTable({
                   key={seat}
                   rect={seatLayout.plate}
                   name={seatName(seat)}
-                  handCount={view.handCounts[seat] ?? 0}
+                  // 나눠 주는 동안은 아직 받지 않은 것으로 센다.
+                  handCount={dealing ? 0 : (view.handCounts[seat] ?? 0)}
                   points={view.pointPiles?.[seat] ?? null}
                   pointCount={view.pointCounts[seat] ?? 0}
                   money={view.money[seat] ?? 0}
@@ -684,9 +752,23 @@ export function GameTable({
                       scale: collecting ? 0.3 : 1,
                       opacity: collecting ? 0 : 1,
                     }}
+                    // 다른 사람 카드는 그 사람 손패에서 실제로 뽑은 자리에서 날아온다.
                     {...(offset === 0
                       ? {}
-                      : { from: { ...plateCenter(play.seat), scale: 0.5 } })}
+                      : {
+                          from: (() => {
+                            const slot = playedSlots.get(play.card);
+                            if (slot === undefined)
+                              return { ...plateCenter(play.seat), scale: 0.5 };
+                            const count = (view.handCounts[play.seat] ?? 0) + 1;
+                            const at = fanSlot(play.seat, slot, count);
+                            return {
+                              x: at.x,
+                              y: at.y,
+                              scale: fanCard.w / layout.trick.card.w,
+                            };
+                          })(),
+                        })}
                     rotate={tilt(play.card)}
                     z={100 + order}
                     highlight={
@@ -747,7 +829,12 @@ export function GameTable({
                       kiruda={kiruda ?? "NT"}
                       onCancel={() => setLeadChoice(null)}
                       onChoose={(choice) =>
-                        act({ type: "play", card: leadChoice.card, ...choice })
+                        act({
+                          type: "play",
+                          card: leadChoice.card,
+                          slot: hand.indexOf(leadChoice.card),
+                          ...choice,
+                        })
                       }
                     />
                   ) : decision?.kind === "election" ? (

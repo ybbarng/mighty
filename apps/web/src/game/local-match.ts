@@ -16,6 +16,7 @@ import {
 } from "@mighty/engine";
 
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
+import { sortHand } from "./terms";
 
 export interface LocalMatchOptions {
   rules: RuleSet;
@@ -241,7 +242,19 @@ export class LocalMatch implements MatchHost {
     // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
     if (view.decision?.kind === "play" && view.decision.cards.length === 0)
       return false;
-    const action = this.bot.decide(view, this.rng);
+    const decided = this.bot.decide(view, this.rng);
+    // 봇도 사람처럼 손패를 기본 순서로 펼쳐 들었다고 치고, 낸 카드의 위치를 알린다.
+    const action: Action =
+      decided.type === "play" && decided.slot === undefined
+        ? {
+            ...decided,
+            slot: sortHand(
+              view.hand,
+              view.rules,
+              view.goal?.kiruda ?? null,
+            ).indexOf(decided.card),
+          }
+        : decided;
     const result = this.apply(seat, action);
     if (!result.ok)
       throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);

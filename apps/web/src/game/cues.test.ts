@@ -15,7 +15,14 @@ describe("효과음 고르기", () => {
   it("카드 종류에 따라 다른 소리", () => {
     const play = (card: "SA" | "JK" | "C3" | "H7", jokerCall = false) =>
       cuesFor(view, [
-        { type: "played", seat: 1, card, jokerSuit: null, jokerCall },
+        {
+          type: "played",
+          seat: 1,
+          card,
+          jokerSuit: null,
+          jokerCall,
+          slot: null,
+        },
       ]);
     expect(play("SA")).toEqual(["mighty"]);
     expect(play("JK")).toEqual(["joker"]);

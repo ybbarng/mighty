@@ -46,6 +46,7 @@ describe("효과 글자", () => {
         card: "DA",
         jokerSuit: null,
         jokerCall: false,
+        slot: null,
       })?.text,
     ).toBe("마이티!");
     expect(
@@ -55,6 +56,7 @@ describe("효과 글자", () => {
         card: "SA",
         jokerSuit: null,
         jokerCall: false,
+        slot: null,
       }),
     ).toBeNull();
   });
@@ -67,6 +69,7 @@ describe("효과 글자", () => {
         card: "C3",
         jokerSuit: null,
         jokerCall: true,
+        slot: null,
       })?.text,
     ).toBe("조커콜!");
     expect(
@@ -76,6 +79,7 @@ describe("효과 글자", () => {
         card: "JK",
         jokerSuit: "H",
         jokerCall: false,
+        slot: null,
       })?.text,
     ).toBe("조커!");
   });
@@ -139,6 +143,7 @@ describe("효과 글자", () => {
         card: "H7",
         jokerSuit: null,
         jokerCall: false,
+        slot: null,
       }),
     ).toBeNull();
   });

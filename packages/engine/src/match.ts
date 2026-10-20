@@ -580,6 +580,13 @@ export function step(
       if (jokerCall && decision.jokerCallCard !== card)
         return fail("조커콜을 선언할 수 없다");
 
+      const handSize = handOf(round, seat).length;
+      const slot =
+        Number.isInteger(action.slot) &&
+        (action.slot as number) >= 0 &&
+        (action.slot as number) < handSize
+          ? (action.slot as number)
+          : null;
       round.hands[seat] = handOf(round, seat).filter((c) => c !== card);
       round.trick.plays.push({ seat, card });
       if (leadingJoker) round.trick.jokerSuit = action.jokerSuit ?? null;
@@ -591,6 +598,7 @@ export function step(
         card,
         jokerSuit: leadingJoker ? (action.jokerSuit ?? null) : null,
         jokerCall,
+        slot,
       });
       const declaration = round.friendDeclaration;
       if (

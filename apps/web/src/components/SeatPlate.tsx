@@ -30,7 +30,7 @@ function isRed(card: Card): boolean {
   return card.startsWith("H") || card.startsWith("D");
 }
 
-/** 다른 사람 자리. 손패는 펼치지 않고 장수·딴 점수 카드·상태만 보여 준다 (docs/05-layout.md 3.5절). */
+/** 다른 사람 자리. 장수·딴 점수 카드·상태를 보여 준다. 손패 뒷면은 GameTable이 판 뒤에 펼친다. */
 export function SeatPlate(props: SeatPlateProps) {
   const { rect } = props;
   // 낮은 화면에서는 점수 카드 줄을 접어 한 줄로 보여 준다.
@@ -46,10 +46,19 @@ export function SeatPlate(props: SeatPlateProps) {
           "shadow-[0_0_0_2px_#fde68a,0_0_20px_2px_rgba(253,230,138,0.55)]",
         props.dead && "opacity-40",
       )}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      // 손패 뒷면(z 1~13)보다 위, 카드 무대(손패 10~, 바닥 100~)와는 겹치지 않는다.
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.w,
+        height: rect.h,
+        zIndex: 20,
+      }}
     >
       <div className="flex items-center gap-1">
-        <span className="min-w-0 truncate font-semibold">{props.name}</span>
+        <span className="min-w-[3.5em] truncate font-semibold">
+          {props.name}
+        </span>
         {props.declarer && (
           <Term
             id="declarer"

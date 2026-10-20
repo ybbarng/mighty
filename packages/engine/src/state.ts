@@ -29,6 +29,11 @@ export type Action =
       jokerSuit?: Suit;
       /** 선이 조커콜 카드를 낼 때 조커콜을 선언하는가 */
       jokerCall?: boolean;
+      /**
+       * 손패를 펼쳐 놓은 순서에서 몇 번째 카드였는가(0부터). 규칙과 상관없는 연출용이다.
+       * 다른 사람 화면에서 그 자리 손패의 같은 위치에서 카드가 나간다.
+       */
+      slot?: number;
     }
   /** 판이 끝난 뒤 다음 판으로 */
   | { type: "continue" }
@@ -160,6 +165,8 @@ export type GameEvent =
       card: Card;
       jokerSuit: Suit | null;
       jokerCall: boolean;
+      /** 손패 몇 번째에서 냈는가. 알려 주지 않았으면 `null` */
+      slot: number | null;
     }
   | { type: "trickWon"; seat: number; trickIndex: number; points: number }
   | { type: "friendRevealed"; seat: number | null }
