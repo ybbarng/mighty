@@ -22,6 +22,7 @@ import {
 } from "@/game/terms";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
+import { DealAnimation } from "./DealAnimation";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
 import { ExchangePanel } from "./panels/ExchangePanel";
@@ -87,6 +88,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const view = useGame((s) => s.view);
   const shownTrick = useGame((s) => s.shownTrick);
   const collecting = useGame((s) => s.collecting);
+  const dealing = useGame((s) => s.dealing);
   const busy = useGame((s) => s.busy);
   const startMoney = useGame((s) => s.roundStartMoney);
   const notice = useGame((s) => s.notice);
@@ -233,8 +235,27 @@ export function GameTable({ onExit }: { onExit: () => void }) {
     return { top: Math.min(platesBottom, bottom - 280), bottom };
   })();
 
+  const tableCenter: Point = layout
+    ? {
+        x: layout.center.x + layout.center.w / 2,
+        y: layout.center.y + layout.center.h / 2,
+      }
+    : { x: 0, y: 0 };
+  const myPile: Point = layout
+    ? { x: stage.width / 2, y: layout.hand.slots[0]?.y ?? layout.hand.top }
+    : { x: 0, y: 0 };
+  // 선부터 차례로 카드를 받는 곳
+  const beginnerIndex = view.players.indexOf(view.beginner);
+  const dealTargets = [
+    ...view.players.slice(beginnerIndex),
+    ...view.players.slice(0, beginnerIndex),
+  ].map((seat) => (seat === view.seat ? myPile : plateCenter(seat)));
+
   const showPanel =
-    layout !== null && shownTrick === null && trickPlays.length === 0;
+    layout !== null &&
+    dealing === null &&
+    shownTrick === null &&
+    trickPlays.length === 0;
   const waiting = waitingText(view, seatName);
 
   return (
@@ -317,8 +338,19 @@ export function GameTable({ onExit }: { onExit: () => void }) {
           })}
 
           {/* 카드 무대: 손패와 바닥을 한 배열로 그려야 같은 카드가 손패에서 바닥으로 날아간다 */}
+          {dealing && (
+            <DealAnimation
+              key={dealing.key}
+              center={tableCenter}
+              card={layout.trick.card}
+              targets={dealTargets}
+              handSize={dealing.handSize}
+              kittyCount={view.kittyCount}
+              startDelay={dealing.startDelay}
+            />
+          )}
           {[
-            ...hand.map((card, i) => {
+            ...(dealing ? [] : hand).map((card, i) => {
               const slot = layout.hand.slots[i] as Point;
               const lifted = discards.includes(card) || selected === card;
               const canPlay = playable?.has(card) ?? false;
@@ -338,12 +370,12 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                           ? 0
                           : -layout.hand.card.h * 0.04),
                   }}
-                  from={{
-                    x: layout.center.x + layout.center.w / 2,
-                    y: layout.center.y + layout.center.h / 2,
-                    scale: 0.6,
-                    opacity: 0,
-                  }}
+                  // 키티는 가운데에서, 처음 받은 패는 나눠 받은 더미(손패 가운데)에서 펼쳐진다.
+                  from={
+                    view.phase === "exchange"
+                      ? { ...tableCenter, scale: 0.6, opacity: 0 }
+                      : { ...myPile, scale: 0.55, opacity: 0.6 }
+                  }
                   delay={Math.min(i * 25, 300)}
                   z={10 + i}
                   dim={

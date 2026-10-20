@@ -11,6 +11,7 @@ import { create } from "zustand";
 import type { Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
+import { dealTiming } from "./timing";
 
 /** 이벤트마다 화면이 머무는 시간(ms). docs/05-layout.md 3.9절 */
 const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
@@ -50,6 +51,8 @@ interface GameStore {
   /** 끝난 트릭을 잠시 바닥에 남겨 둔다 */
   shownTrick: CompletedTrick | null;
   collecting: boolean;
+  /** 판 시작 섞기·나눠 주기 연출 중. `key`가 바뀌면 연출을 새로 시작한다 */
+  dealing: { key: number; handSize: number; startDelay: number } | null;
   /** 판 시작 때의 돈. 결과 화면에서 변화를 보여 준다 */
   roundStartMoney: number[];
   /** 재생 속도 배율. 클수록 빠르다 */
@@ -73,15 +76,17 @@ function clearTimer(): void {
 }
 
 export const useGame = create<GameStore>((set, get) => {
-  const wait = (ms: number, then: () => void) => {
+  /** `scaled`가 거짓이면 속도 설정과 빨리 감기를 무시한다(실제 시간으로 도는 연출용) */
+  const wait = (ms: number, then: () => void, scaled = true) => {
     // 밀린 진행이 많으면 빨리 감는다.
-    const backlog = get().queue.length > 3 ? 1.8 : 1;
+    const backlog = scaled && get().queue.length > 3 ? 1.8 : 1;
+    const speed = scaled ? get().speed : 1;
     timer = setTimeout(
       () => {
         timer = null;
         then();
       },
-      ms / (get().speed * backlog),
+      ms / (speed * backlog),
     );
   };
 
@@ -100,6 +105,35 @@ export const useGame = create<GameStore>((set, get) => {
       busy: true,
       ...(started ? { roundStartMoney: [...next.view.money] } : {}),
     });
+
+    const dealt = next.events.find((e) => e.type === "dealt");
+    if (dealt && next.view.rules.playerCount !== 2) {
+      const others = next.events.filter(
+        (e) => e.type !== "dealt" && e.type !== "roundStarted",
+      );
+      const startDelay = Math.max(
+        0,
+        ...others.map((e) => EVENT_DELAY[e.type] ?? 150),
+      );
+      const total = dealt.handSize * next.view.players.length;
+      set({
+        dealing: {
+          key: (get().dealing?.key ?? 0) + 1,
+          handSize: dealt.handSize,
+          startDelay,
+        },
+      });
+      // 연출 컴포넌트가 실제 시간으로 돌기 때문에 빨리 감지 않는다.
+      wait(
+        startDelay + dealTiming(total).duration,
+        () => {
+          set({ dealing: null });
+          advance();
+        },
+        false,
+      );
+      return;
+    }
 
     if (next.events.some((e) => e.type === "trickWon")) {
       const shownTrick = next.view.tricks.at(-1) ?? null;
@@ -138,6 +172,7 @@ export const useGame = create<GameStore>((set, get) => {
       queue: [],
       shownTrick: null,
       collecting: false,
+      dealing: null,
       busy: false,
       roundStartMoney: [...current.money],
     });
@@ -156,6 +191,7 @@ export const useGame = create<GameStore>((set, get) => {
     queue: [],
     shownTrick: null,
     collecting: false,
+    dealing: null,
     roundStartMoney: [],
     speed: 1,
     busy: false,
