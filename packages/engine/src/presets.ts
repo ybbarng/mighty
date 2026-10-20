@@ -9,7 +9,7 @@ export interface RulePreset {
   rules: RuleSet;
 }
 
-/** 원작 Mighty Network 4.0의 기본 규칙(`asPreset`, Rule.cpp) 14종과, 만든 사람의 학교 규칙. */
+/** 원작 Mighty Network 4.0의 기본 규칙(`asPreset`, Rule.cpp) 14종과, 만든 사람의 학교 규칙(관악컴반). */
 const PRESET_CODES = [
   ["standard5", "표준 5마", "(0$1M&))2O%,C5%"],
   ["standard4", "표준 4마", "'1$1M&%)2K%,C5%"],
@@ -25,9 +25,10 @@ const PRESET_CODES = [
   ["daejeon6", "대전 6마", ")0$1M&I7BKU.C=%"],
   ["gwangju5", "광주 5마", "(/$1M&*9P-%,C=%"],
   ["jeju3", "제주 3마", "&/$1M&#%BK].C=%"],
-  // 만든 사람이 학창 시절에 하던 규칙(2026-10-20 확인). 기루다가 ♣이면 조커콜은 ♥3,
-  // 첫·막 트릭 조커는 효력 없음, 조커콜에 마이티로 대신 내기, 노기루다 1 적게, 다음 판 선은 프렌드.
-  ["school5", "우리 학교 5마", "(0$1M@IYb]5,C55"],
+  // 서울대 컴퓨터공학부(관악 컴반) 규칙. 2005년 무렵 과 커뮤니티 글의 "컴반에서는" 8가지를
+  // 표준 5마에 더했다: 노기루다 12부터·노기로 바꿀 때 +1, 다음 판 선은 프렌드,
+  // 조커콜에 마이티로 대신 내기, 딜미스는 마이티 0점·조커 −1점, 10 한 장은 아님, 애꾸눈 J 한 장은 딜미스.
+  ["comban5", "관악컴반", "(0$1M&I9BOU-C5%"],
 ] as const;
 
 export const RULE_PRESETS: readonly RulePreset[] = PRESET_CODES.map(
