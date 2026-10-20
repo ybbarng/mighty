@@ -36,6 +36,7 @@ import {
 } from "./panels/OtherPanels";
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
+import { SettingsMenu } from "./SettingsMenu";
 
 function useStageSize() {
   const ref = useRef<HTMLDivElement>(null);
@@ -102,6 +103,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const [discards, setDiscards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
   const [showScoreboard, setShowScoreboard] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [leadChoice, setLeadChoice] = useState<{
     card: Card;
     kind: "jokerSuit" | "jokerCall";
@@ -121,6 +123,21 @@ export function GameTable({ onExit }: { onExit: () => void }) {
     const id = setTimeout(clearNotice, 1800);
     return () => clearTimeout(id);
   }, [notice, clearNotice]);
+
+  // 키보드 처리는 렌더할 때마다 최신 손패·선택지를 보도록 ref에 담아 둔다.
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 카드 단추가 Enter를 이미 처리했으면 두 번 내지 않는다.
+      if (e.defaultPrevented) return;
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
+        return;
+      keyHandler.current(e);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   if (!view) return <div ref={stage.ref} className="h-dvh w-full" />;
 
@@ -203,6 +220,26 @@ export function GameTable({ onExit }: { onExit: () => void }) {
       return;
     }
     playCard(card);
+  };
+
+  keyHandler.current = (e) => {
+    if (e.key === "Escape") {
+      setLeadChoice(null);
+      setSelected(null);
+      return;
+    }
+    if (decision?.kind !== "play" || leadChoice) return;
+    const options = hand.filter((c) => playable?.has(c));
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const i = selected ? options.indexOf(selected) : -1;
+      const step = e.key === "ArrowRight" ? 1 : -1;
+      const next = options[(i + step + options.length) % options.length];
+      if (next) setSelected(next);
+    } else if (e.key === "Enter" && selected && playable?.has(selected)) {
+      e.preventDefault();
+      playCard(selected);
+    }
   };
 
   const trick = shownTrick ?? view.trick;
@@ -308,6 +345,13 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                 ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
                 : `${view.roundNumber}판`}
             </span>
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+            >
+              설정
+            </button>
             <button
               type="button"
               onClick={() => setShowScoreboard(true)}
@@ -567,6 +611,9 @@ export function GameTable({ onExit }: { onExit: () => void }) {
             </div>
           )}
 
+          {showSettings && (
+            <SettingsMenu onClose={() => setShowSettings(false)} />
+          )}
           {showScoreboard && (
             <Scoreboard
               view={view}

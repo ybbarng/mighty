@@ -12,6 +12,7 @@ import { create } from "zustand";
 import type { Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
+import { useSettings } from "./settings";
 import { dealTiming } from "./timing";
 
 /** 이벤트마다 화면이 머무는 시간(ms). docs/05-layout.md 3.9절 */
@@ -58,15 +59,12 @@ interface GameStore {
   dealing: { key: number; handSize: number; startDelay: number } | null;
   /** 판 시작 때의 돈. 결과 화면에서 변화를 보여 준다 */
   roundStartMoney: number[];
-  /** 재생 속도 배율. 클수록 빠르다 */
-  speed: number;
   busy: boolean;
   notice: string | null;
   newGame(options: NewGameOptions): void;
   /** 저장해 둔 대국을 이어서 한다 */
   resume(saved: SavedMatch): void;
   submit(action: Action): SubmitResult;
-  setSpeed(speed: number): void;
   clearNotice(): void;
 }
 
@@ -83,7 +81,7 @@ export const useGame = create<GameStore>((set, get) => {
   const wait = (ms: number, then: () => void, scaled = true) => {
     // 밀린 진행이 많으면 빨리 감는다.
     const backlog = scaled && get().queue.length > 3 ? 1.8 : 1;
-    const speed = scaled ? get().speed : 1;
+    const speed = scaled ? useSettings.getState().speed : 1;
     timer = setTimeout(
       () => {
         timer = null;
@@ -205,7 +203,6 @@ export const useGame = create<GameStore>((set, get) => {
     collecting: false,
     dealing: null,
     roundStartMoney: [],
-    speed: 1,
     busy: false,
     notice: null,
 
@@ -228,10 +225,6 @@ export const useGame = create<GameStore>((set, get) => {
       const result = host.submit(action);
       if (!result.ok) set({ notice: result.error });
       return result;
-    },
-
-    setSpeed(speed) {
-      set({ speed });
     },
 
     clearNotice() {

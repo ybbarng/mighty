@@ -14,8 +14,17 @@ export interface CustomRule {
   code: string;
 }
 
+export const SPEEDS = [
+  { value: 0.7, label: "느리게" },
+  { value: 1, label: "보통" },
+  { value: 1.6, label: "빠르게" },
+] as const;
+
 interface Settings {
   cardThemeId: string;
+  /** 재생 속도 배율. 클수록 빠르다 */
+  speed: number;
+  setSpeed(speed: number): void;
   customRules: CustomRule[];
   setCardTheme(id: string): void;
   saveCustomRule(rule: CustomRule): void;
@@ -27,6 +36,8 @@ export const useSettings = create<Settings>()(
   persist(
     (set) => ({
       cardThemeId: CLASSIC.id,
+      speed: 1,
+      setSpeed: (speed) => set({ speed }),
       customRules: [],
       setCardTheme: (id) => set({ cardThemeId: id }),
       // 같은 이름이면 덮어쓴다.
