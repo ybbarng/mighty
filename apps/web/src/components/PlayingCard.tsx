@@ -96,6 +96,8 @@ export function PlayingCard({
     opacity: position.opacity ?? 1,
     transitionDelay: `${delay}ms`,
     ...(duration ? { transitionDuration: `${duration}ms` } : {}),
+    // 손패를 손가락으로 훑고 끌 때 브라우저가 화면을 움직이지 않게 한다.
+    ...(interactive ? { touchAction: "none" } : {}),
   };
 
   const handlePointerUp = (e: PointerEvent<HTMLButtonElement>) => {
@@ -108,6 +110,7 @@ export function PlayingCard({
     <button
       type="button"
       aria-label={card ? cardLabel(card) : "뒷면 카드"}
+      data-card={card ?? undefined}
       disabled={!interactive}
       onPointerUp={handlePointerUp}
       onPointerEnter={(e) => {

@@ -128,6 +128,15 @@ export function GameTable({
 
   const [discards, setDiscards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
+  // 터치로 손패를 훑거나 위로 끄는 중. 손을 떼기 전까지 카드 단추의 누르기를 대신한다.
+  const touchGesture = useRef<{
+    x: number;
+    y: number;
+    moved: boolean;
+    /** 처음 짚은 카드 */
+    card: Card;
+  } | null>(null);
+  const [dragArmed, setDragArmed] = useState(false);
   const [hovered, setHovered] = useState<Card | null>(null);
   const cardTipOn = useSettings((s) => s.cardTip);
   const speedSetting = useSettings((s) => s.speed);
@@ -274,7 +283,50 @@ export function GameTable({
     act({ type: "play", card, slot: hand.indexOf(card) });
   };
 
+  /** 손가락 아래 손패 카드 */
+  const cardAt = (x: number, y: number): Card | null => {
+    const el = document
+      .elementFromPoint(x, y)
+      ?.closest<HTMLElement>("[data-card]");
+    const card = el?.dataset.card as Card | undefined;
+    return card && hand.includes(card) ? card : null;
+  };
+  const touchPlaying =
+    decision?.kind === "play" && leadChoice === null && layout !== null;
+  const onHandPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" || !touchPlaying) return;
+    const card = cardAt(e.clientX, e.clientY);
+    if (!card) return;
+    touchGesture.current = { x: e.clientX, y: e.clientY, moved: false, card };
+  };
+  const onHandPointerMove = (e: React.PointerEvent) => {
+    const g = touchGesture.current;
+    if (!g || !layout) return;
+    if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < 10) return;
+    g.moved = true;
+    // 고른 카드 없이 바로 끌면 처음 짚은 카드를 낸다.
+    const held = selected ?? (playable?.has(g.card) ? g.card : null);
+    if (held !== selected) setSelected(held);
+    const top = stage.ref.current?.getBoundingClientRect().top ?? 0;
+    // 손패 위쪽 끝보다 카드 반 장 넘게 올라가면 낼 준비
+    const armed = e.clientY - top < layout.hand.top - layout.hand.card.h * 0.5;
+    setDragArmed(armed && held !== null);
+    if (armed) return;
+    // 손패 위를 훑으면 손가락 아래의 낼 수 있는 카드를 고른다.
+    const under = cardAt(e.clientX, e.clientY);
+    if (under && playable?.has(under) && under !== selected) setSelected(under);
+  };
+  const onHandPointerUp = () => {
+    const g = touchGesture.current;
+    touchGesture.current = null;
+    if (!g?.moved) return;
+    if (dragArmed && selected && playable?.has(selected)) playCard(selected);
+    setDragArmed(false);
+  };
+
   const onCardActivate = (card: Card, pointerType: string) => {
+    // 훑거나 끈 것은 손을 뗄 때 따로 처리한다(onHandPointerUp).
+    if (touchGesture.current?.moved) return;
     if (exchanging && decision?.kind === "exchange") {
       setDiscards((d) =>
         d.includes(card)
@@ -532,6 +584,13 @@ export function GameTable({
       <div
         ref={stage.ref}
         className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]"
+        onPointerDown={onHandPointerDown}
+        onPointerMove={onHandPointerMove}
+        onPointerUp={onHandPointerUp}
+        onPointerCancel={() => {
+          touchGesture.current = null;
+          setDragArmed(false);
+        }}
       >
         {layout && (
           <>
@@ -780,7 +839,8 @@ export function GameTable({
                       y:
                         slot.y -
                         (lifted
-                          ? layout.hand.card.h * 0.2
+                          ? layout.hand.card.h *
+                            (dragArmed && selected === card ? 0.6 : 0.2)
                           : acting
                             ? 0
                             : -layout.hand.card.h * 0.04),
