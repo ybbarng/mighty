@@ -28,7 +28,7 @@ const PRESET_CODES = [
   // 서울대 컴퓨터공학부(관악 컴반) 규칙. 2005년 무렵 과 커뮤니티 글의 "컴반에서는" 8가지를
   // 표준 5마에 더했다: 노기루다 12부터·노기로 바꿀 때 +1, 다음 판 선은 프렌드,
   // 조커콜에 마이티로 대신 내기, 딜미스는 마이티 0점·조커 −1점, 10 한 장은 아님, 애꾸눈 J 한 장은 딜미스.
-  ["comban5", "관악컴반", "(0$1M&I9BOU-C5%"],
+  ["comban5", "관악컴반", "(0$1M&I9bMU-C5%"],
 ] as const;
 
 export const RULE_PRESETS: readonly RulePreset[] = PRESET_CODES.map(

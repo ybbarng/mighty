@@ -211,3 +211,15 @@ describe("딜미스", () => {
     expect(isDealMiss(comban, hand("JK", "DK", "CQ"), "NT")).toBe(false);
   });
 });
+
+describe("관악컴반 트릭 규칙", () => {
+  it("첫·막 트릭에 조커를 낼 수는 있지만 효력이 없고, 첫 트릭 선은 기루다를 못 낸다", () => {
+    const comban = presetRules("comban5");
+    expect(comban.jokerInFirstTrick).toBe(true);
+    expect(comban.jokerInLastTrick).toBe(true);
+    expect(comban.jokerEffectInFirstTrick).toBe(false);
+    expect(comban.jokerEffectInLastTrick).toBe(false);
+    expect(comban.leaderKirudaInFirstTrick).toBe(false);
+    expect(comban.kirudaInFirstTrick).toBe(true);
+  });
+});
