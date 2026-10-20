@@ -24,24 +24,26 @@ export type AttachableHost = MatchHost & { drain(): Snapshot[] };
 const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
   roundStarted: 300,
   dealt: 700,
-  picked: 250,
-  bid: 550,
-  passed: 450,
+  picked: 600,
+  // 컴퓨터가 생각하는 시간처럼 보이게 원작(공약 1.5초, 카드 0.5초)에 가깝게 둔다.
+  bid: 1300,
+  passed: 1000,
   // 딜미스한 사람의 패를 보여 주므로 오래 머문다.
   dealMiss: 2800,
-  allPassed: 1200,
-  elected: 1000,
-  killAttempt: 900,
-  redealtForDead: 700,
-  kittyTaken: 500,
-  exchanged: 500,
-  friendDeclared: 700,
-  played: 380,
-  friendRevealed: 700,
+  allPassed: 1500,
+  // 당선·공약 변경·프렌드 선언은 가운데 발표 상자를 읽을 시간을 준다(원작 2.5~4초).
+  elected: 2600,
+  killAttempt: 1400,
+  redealtForDead: 900,
+  kittyTaken: 900,
+  exchanged: 1200,
+  friendDeclared: 3000,
+  played: 650,
+  friendRevealed: 2200,
   roundScored: 300,
 };
 /** 트릭이 끝나고 이긴 카드를 보여 주는 시간과, 이긴 사람에게 모으는 시간 */
-const TRICK_HOLD = 900;
+const TRICK_HOLD = 1100;
 const TRICK_COLLECT = 380;
 
 export interface NewGameOptions {
@@ -103,7 +105,7 @@ export const useGame = create<GameStore>((set, get) => {
   /** `scaled`가 거짓이면 속도 설정과 빨리 감기를 무시한다(실제 시간으로 도는 연출용) */
   const wait = (ms: number, then: () => void, scaled = true) => {
     // 밀린 진행이 많으면 빨리 감는다.
-    const backlog = scaled && get().queue.length > 3 ? 1.8 : 1;
+    const backlog = scaled && get().queue.length > 10 ? 1.4 : 1;
     const speed = scaled ? useSettings.getState().speed : 1;
     timer = setTimeout(
       () => {

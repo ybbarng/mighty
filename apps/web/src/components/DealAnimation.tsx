@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { dealPlan, FLIGHT_MS, SETTLE_MS, SHUFFLE_MS } from "@/game/timing";
+import { dealPlan, FLIGHT_MS, SHUFFLE_MS } from "@/game/timing";
 import type { Point, Size } from "@/layout/compute-layout";
 
 import { PlayingCard } from "./PlayingCard";
@@ -77,9 +77,8 @@ export function DealAnimation({
           : {
               x: center.x + (split ? half * card.w * 0.62 : 0),
               y: center.y - stack,
-              // 다 나눈 뒤 남은 키티는 제자리에서 흐려진다.
-              scale: stage === "settle" ? 0.85 : 1,
-              opacity: stage === "settle" ? 0 : 1,
+              // 다 나눈 뒤 남은 바닥 카드는 덱 자리에 그대로 둔다(게임 화면이 이어받는다).
+              scale: 1,
             };
         return (
           <PlayingCard
@@ -90,9 +89,10 @@ export function DealAnimation({
             height={card.h}
             at={at}
             rotate={split ? half * 6 : 0}
-            z={dealt ? 100 + order : 10 + i}
+            // 덱에서는 맨 위 카드가 맨 위에 보이고 먼저 나간다.
+            z={dealt ? 100 + (total - order) : 10 + i}
             delay={dealt ? (flight?.delay ?? 0) : 0}
-            duration={dealt ? FLIGHT_MS : stage === "settle" ? SETTLE_MS : 400}
+            duration={dealt ? FLIGHT_MS : 400}
           />
         );
       })}

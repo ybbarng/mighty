@@ -128,6 +128,7 @@ export function GameTable({
   const [selected, setSelected] = useState<Card | null>(null);
   const [hovered, setHovered] = useState<Card | null>(null);
   const cardTipOn = useSettings((s) => s.cardTip);
+  const speedSetting = useSettings((s) => s.speed);
   const botNames = useSettings((s) => s.botNames);
   const network = useGame((s) => s.network);
   const invalid = useGame((s) => s.invalid);
@@ -149,6 +150,11 @@ export function GameTable({
     card: Card;
     kind: "jokerSuit" | "jokerCall";
   } | null>(null);
+
+  // 나눠 주고 남은 바닥 카드 수. 주공이 가져가면 0이 되므로 이번 판에 마지막으로 본 수를 기억한다.
+  const floorMemo = useRef({ round: -1, count: 0 });
+  if (view && view.kittyCount > 0)
+    floorMemo.current = { round: view.roundNumber, count: view.kittyCount };
 
   // 키티를 받기 전 손패를 기억해 두었다가 새로 들어온 카드에 표를 단다.
   const beforeKitty = useRef<{ round: number; hand: Card[] } | null>(null);
@@ -336,6 +342,7 @@ export function GameTable({
 
   const effect = effectFor(view, events, seatName);
   const effectCards = effect?.cards ?? null;
+  const bigEffect = Boolean(effect?.cards || effect?.lines);
 
   /** 4초 안에 그 자리에서 한 말 */
   const chatBubble = (seat: number): string | null => {
@@ -406,6 +413,8 @@ export function GameTable({
     };
   })();
 
+  const floorPile =
+    floorMemo.current.round === view.roundNumber ? floorMemo.current.count : 0;
   const tableCenter: Point = layout
     ? {
         x: layout.center.x + layout.center.w / 2,
@@ -567,6 +576,36 @@ export function GameTable({
                 startDelay={dealing.startDelay}
               />
             )}
+            {/* 바닥 카드: 공약 동안 덱 자리에 두었다가 당선되면 주공에게 간다(원작 OnDeal 10) */}
+            {!dealing &&
+              floorPile > 0 &&
+              (view.phase === "election" ||
+                view.phase === "kill" ||
+                view.phase === "exchange") &&
+              Array.from({ length: floorPile }, (_, i) => (
+                <PlayingCard
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 뒷면 카드는 순서가 곧 정체다
+                  key={`floor-${view.roundNumber}-${i}`}
+                  card={null}
+                  width={layout.trick.card.w}
+                  height={layout.trick.card.h}
+                  at={
+                    view.phase === "exchange"
+                      ? {
+                          ...(view.declarer === view.seat ||
+                          view.declarer === null
+                            ? myPile
+                            : plateCenter(view.declarer)),
+                          scale: 0.5,
+                          opacity: 0,
+                        }
+                      : { x: tableCenter.x, y: tableCenter.y - i * 0.35 }
+                  }
+                  z={10 + i}
+                  delay={view.phase === "exchange" ? i * 80 : 0}
+                  duration={view.phase === "exchange" ? 650 : 300}
+                />
+              ))}
             {[
               ...(dealing ? [] : hand).map((card, i) => {
                 const slot = layout.hand.slots[i] as Point;
@@ -747,7 +786,8 @@ export function GameTable({
                 key={seq}
                 className={cn(
                   "pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
-                  effect.cards ? "effect-pop-long" : "effect-pop",
+                  bigEffect ? "effect-pop-long" : "effect-pop",
+                  effect.lines && "px-7 py-3 text-center",
                   effect.tone === "gold" &&
                     "bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950",
                   effect.tone === "red" &&
@@ -756,7 +796,11 @@ export function GameTable({
                 )}
                 style={{
                   left: tableCenter.x,
-                  top: effect.cards
+                  // 큰 발표는 진행 속도 설정에 맞춰 머문다.
+                  ...(bigEffect
+                    ? { animationDuration: `${2800 / speedSetting}ms` }
+                    : {}),
+                  top: bigEffect
                     ? tableCenter.y
                     : showPanel
                       ? Math.max(
@@ -767,6 +811,11 @@ export function GameTable({
                 }}
               >
                 {effect.text}
+                {effect.lines?.map((line) => (
+                  <div key={line} className="mt-1 font-bold text-base">
+                    {line}
+                  </div>
+                ))}
                 {effectCards && (
                   <div className="mt-2 flex justify-center gap-0.5">
                     {sortHand(effectCards, rules, null).map((card) => (

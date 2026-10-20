@@ -1,12 +1,17 @@
 import {
   type Card,
   type GameEvent,
+  type Goal,
   isJoker,
   mightyOf,
   type PlayerView,
 } from "@mighty/engine";
 
-import { cardLabel, goalLabel } from "./terms";
+import { cardLabel, friendLabel, goalLabel } from "./terms";
+
+function sameGoal(a: Goal, b: Goal): boolean {
+  return a.kiruda === b.kiruda && a.score === b.score;
+}
 
 export type EffectTone = "gold" | "red" | "info";
 
@@ -15,6 +20,8 @@ export interface Effect {
   tone: EffectTone;
   /** 함께 보여 줄 카드(딜미스한 사람의 패) */
   cards?: Card[];
+  /** 큰 발표 상자로 띄울 때 아래에 적는 줄(당선, 공약 변경, 프렌드 선언) */
+  lines?: string[];
 }
 
 /** 짧게 띄울 효과 글자. 한 스냅숏에서 가장 눈에 띄어야 할 것 하나만 고른다 */
@@ -38,8 +45,24 @@ export function effectFor(
         return { text: "모두 포기 — 다시 섞습니다", tone: "info" };
       case "elected":
         return {
-          text: `${seatName(event.seat)} 당선 · ${goalLabel(event.goal)}`,
+          text: `${seatName(event.seat)} 당선`,
           tone: "gold",
+          lines: [`공약 ${goalLabel(event.goal)}`, "바닥 카드를 가져갑니다"],
+        };
+      case "exchanged": {
+        const before = view.election.goal;
+        if (!before || sameGoal(before, event.goal)) break;
+        return {
+          text: "공약 변경",
+          tone: "gold",
+          lines: [`${goalLabel(before)} → ${goalLabel(event.goal)}`],
+        };
+      }
+      case "friendDeclared":
+        return {
+          text: "프렌드 선언",
+          tone: "info",
+          lines: [friendLabel(event.friend, seatName)],
         };
       case "killAttempt":
         return event.killed === null
