@@ -1,6 +1,6 @@
 "use client";
 
-import { type Card, isJoker, rankOf, type Suit, suitOf } from "@mighty/engine";
+import { type Card, isJoker, rankOf, suitOf } from "@mighty/engine";
 import {
   type CSSProperties,
   type PointerEvent,
@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import { cardLabel, SUIT_SYMBOL } from "@/game/terms";
+import { cardLabel } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
 export interface CardPosition {
@@ -36,29 +36,22 @@ interface PlayingCardProps {
   onActivate?: (pointerType: string) => void;
 }
 
-/** 카드 그림에는 모서리 숫자가 없어서 겹친 손패에서도 읽히도록 덧그린다 */
-function CornerIndex({ card, height }: { card: Card; height: number }) {
-  const joker = isJoker(card);
+/**
+ * 카드 그림에는 왼쪽 위에 작은 무늬만 있고 숫자가 없다. 그 무늬 바로 위 빈 칸(높이 2~15%)에
+ * 숫자를 덧그려 겹친 손패에서도 읽히게 한다. 조커 그림은 글자가 들어 있어 덧그리지 않는다.
+ */
+function CornerRank({ card, height }: { card: Card; height: number }) {
+  if (isJoker(card)) return null;
   const suit = suitOf(card);
-  const red = joker || suit === "H" || suit === "D";
   return (
     <span
       className={cn(
-        "pointer-events-none absolute top-[3%] left-[4%] flex flex-col items-center font-bold leading-none",
-        red ? "text-red-600" : "text-neutral-900",
+        "pointer-events-none absolute top-[2%] left-[8%] -translate-x-1/2 font-bold leading-none tracking-tighter",
+        suit === "H" || suit === "D" ? "text-red-600" : "text-neutral-900",
       )}
-      style={{ fontSize: Math.max(10, height * 0.13) }}
+      style={{ fontSize: Math.max(9, height * 0.12) }}
     >
-      {joker ? (
-        <span style={{ writingMode: "vertical-rl", fontSize: "0.7em" }}>
-          JOKER
-        </span>
-      ) : (
-        <>
-          <span>{rankOf(card)}</span>
-          <span>{SUIT_SYMBOL[suit as Suit]}</span>
-        </>
-      )}
+      {rankOf(card)}
     </span>
   );
 }
@@ -146,7 +139,7 @@ export function PlayingCard({
         draggable={false}
         className="pointer-events-none h-full w-full rounded-[6%] object-cover"
       />
-      {card && <CornerIndex card={card} height={height} />}
+      {card && <CornerRank card={card} height={height} />}
     </button>
   );
 }
