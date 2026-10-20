@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dealPackets, dealPlan } from "./timing";
+import { dealPackets, dealPlan, FLIGHT_MS } from "./timing";
 
 describe("나눠 주기 순서", () => {
   it("원작처럼 5마는 2·3·3·2, 6마는 2·3·3, 7마는 2·3·2장씩 묶어 준다", () => {
@@ -24,5 +24,13 @@ describe("나눠 주기 순서", () => {
       expect(flights[k]?.delay).toBeGreaterThanOrEqual(
         flights[k - 1]?.delay ?? 0,
       );
+  });
+
+  it("원작처럼 앞 묶음이 도착한 뒤에 다음 묶음이 출발한다", () => {
+    const { flights } = dealPlan(10, 5);
+    // 0번의 2장 묶음 다음 1번 묶음의 첫 장
+    const firstPacketLast = flights[1]?.delay ?? 0;
+    const nextPacket = flights[2]?.delay ?? 0;
+    expect(nextPacket).toBeGreaterThanOrEqual(firstPacketLast + FLIGHT_MS);
   });
 });

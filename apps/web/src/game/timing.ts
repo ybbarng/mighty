@@ -1,7 +1,7 @@
 /** 덱 섞기 두 번(갈라졌다 합치기)에 걸리는 시간 */
 export const SHUFFLE_MS = 1600;
-/** 나눠 주는 카드 한 장이 날아가는 시간 */
-export const FLIGHT_MS = 450;
+/** 나눠 주는 카드(묶음)가 덱에서 손까지 날아가는 시간 */
+export const FLIGHT_MS = 320;
 /** 다 나눈 뒤 잠시 쉬는 시간 */
 export const SETTLE_MS = 400;
 
@@ -20,8 +20,10 @@ export function dealPackets(handSize: number): number[] {
   return packets;
 }
 
-/** 묶음 안에서 카드 사이 간격 */
-const IN_PACKET_MS = 70;
+/** 묶음 안에서 카드 사이 간격. 짧게 두어 한 묶음이 겹쳐 날아가는 것처럼 보이게 한다 */
+const IN_PACKET_MS = 35;
+/** 묶음이 도착하고 다음 묶음이 출발하기까지 */
+const PACKET_PAUSE_MS = 40;
 
 /**
  * 나눠 주기 순서와 시간. 선부터 한 사람씩 묶음을 주고, 한 바퀴 돌면 다음 묶음으로 간다.
@@ -32,19 +34,14 @@ export function dealPlan(
   players: number,
 ): { flights: { player: number; delay: number }[]; duration: number } {
   const packets = dealPackets(handSize);
-  // 손으로 나눠 주듯 차분하게. 묶음이 많으면(7마) 간격을 조금 줄여 3초 남짓에 끝낸다.
-  const gap = Math.min(
-    220,
-    Math.max(120, 2800 / Math.max(1, packets.length * players)),
-  );
+  // 원작(MFSM_Server, PlayerHuman::OnDeal)은 묶음 하나를 날리고 도착할 때까지 기다린 뒤 다음 묶음을 날린다.
   const flights: { player: number; delay: number }[] = [];
   let at = 0;
   for (const size of packets) {
     for (let player = 0; player < players; player++) {
       for (let c = 0; c < size; c++)
         flights.push({ player, delay: at + c * IN_PACKET_MS });
-      // 다음 묶음은 이 묶음의 마지막 카드가 나간 뒤에 출발한다.
-      at += Math.max(gap, (size - 1) * IN_PACKET_MS + 60);
+      at += (size - 1) * IN_PACKET_MS + FLIGHT_MS + PACKET_PAUSE_MS;
     }
   }
   const last = flights.at(-1)?.delay ?? 0;
