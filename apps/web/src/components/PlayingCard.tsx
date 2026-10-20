@@ -1,6 +1,6 @@
 "use client";
 
-import { type Card, isJoker, rankOf, suitOf } from "@mighty/engine";
+import type { Card } from "@mighty/engine";
 import {
   type CSSProperties,
   type PointerEvent,
@@ -8,8 +8,11 @@ import {
   useState,
 } from "react";
 
+import { useCardTheme } from "@/game/settings";
 import { cardLabel } from "@/game/terms";
 import { cn } from "@/lib/cn";
+
+import { CardArt } from "./card-art/CardArt";
 
 export interface CardPosition {
   x: number;
@@ -36,26 +39,6 @@ interface PlayingCardProps {
   onActivate?: (pointerType: string) => void;
 }
 
-/**
- * 카드 그림에는 왼쪽 위에 작은 무늬만 있고 숫자가 없다. 그 무늬 바로 위 빈 칸(높이 2~15%)에
- * 숫자를 덧그려 겹친 손패에서도 읽히게 한다. 조커 그림은 글자가 들어 있어 덧그리지 않는다.
- */
-function CornerRank({ card, height }: { card: Card; height: number }) {
-  if (isJoker(card)) return null;
-  const suit = suitOf(card);
-  return (
-    <span
-      className={cn(
-        "pointer-events-none absolute top-[2%] left-[8%] -translate-x-1/2 font-bold leading-none tracking-tighter",
-        suit === "H" || suit === "D" ? "text-red-600" : "text-neutral-900",
-      )}
-      style={{ fontSize: Math.max(9, height * 0.12) }}
-    >
-      {rankOf(card)}
-    </span>
-  );
-}
-
 function transform(
   p: CardPosition,
   w: number,
@@ -80,6 +63,7 @@ export function PlayingCard({
   interactive = false,
   onActivate,
 }: PlayingCardProps) {
+  const theme = useCardTheme();
   const [arrived, setArrived] = useState(from === undefined);
 
   useEffect(() => {
@@ -120,7 +104,7 @@ export function PlayingCard({
         }
       }}
       className={cn(
-        "absolute top-0 left-0 select-none rounded-[6%] bg-white p-0 shadow-md",
+        "absolute top-0 left-0 select-none rounded-[6.4%] bg-transparent p-0 shadow-md",
         "transition-[transform,translate,opacity,filter] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         "motion-reduce:transition-none",
         interactive
@@ -132,14 +116,7 @@ export function PlayingCard({
       )}
       style={style}
     >
-      {/* biome-ignore lint/performance/noImgElement: 정적 내보내기라 next/image 최적화를 쓰지 않는다 */}
-      <img
-        src={card ? `/cards/${card}.svg` : "/cards/back.png"}
-        alt=""
-        draggable={false}
-        className="pointer-events-none h-full w-full rounded-[6%] object-cover"
-      />
-      {card && <CornerRank card={card} height={height} />}
+      <CardArt card={card} theme={theme} />
     </button>
   );
 }

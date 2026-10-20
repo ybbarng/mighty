@@ -8,7 +8,10 @@ import {
 } from "@mighty/engine";
 import { useState } from "react";
 
+import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
+
+import { CARD_THEMES } from "./card-art/themes";
 
 import { ActionButton } from "./panels/common";
 
@@ -18,6 +21,8 @@ export function StartScreen({
 }: {
   onStart: (rules: RuleSet) => void;
 }) {
+  const cardThemeId = useSettings((s) => s.cardThemeId);
+  const setCardTheme = useSettings((s) => s.setCardTheme);
   const [presetId, setPresetId] = useState<string>("standard5");
   const [ruleText, setRuleText] = useState("");
   const decoded = ruleText.trim() ? decodeRuleString(ruleText) : null;
@@ -77,6 +82,28 @@ export function StartScreen({
               ? decoded.reason
               : "친구에게 이 문자열을 보내면 같은 규칙으로 할 수 있습니다."}
           </p>
+        </section>
+
+        <section className="flex items-center gap-2">
+          <h2 className="font-semibold text-sm">카드</h2>
+          {CARD_THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setCardTheme(t.id)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs",
+                t.id === cardThemeId
+                  ? "border-amber-300 bg-white text-black"
+                  : "border-white/15 bg-white/5",
+              )}
+            >
+              {t.name}
+            </button>
+          ))}
+          <a href="/cards" className="ml-auto text-xs underline opacity-70">
+            모든 카드 보기
+          </a>
         </section>
 
         <ActionButton

@@ -36,4 +36,4 @@ pnpm build      # 정적 빌드 (apps/web/out)
 ## Thanks to
 
 - [Mighty Network](https://github.com/skyser2003/mighty40) by 장문성 (sw6ueyz@hitel.net), UPnL — 규칙과 진행 방식의 기준
-- [deck-of-cards](https://github.com/pakastin/deck-of-cards) — 카드 이미지
+

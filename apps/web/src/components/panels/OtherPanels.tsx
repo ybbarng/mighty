@@ -9,7 +9,7 @@ import {
   type Suit,
 } from "@mighty/engine";
 import { useState } from "react";
-
+import { useCardTheme } from "@/game/settings";
 import {
   cardLabel,
   goalLabel,
@@ -18,6 +18,8 @@ import {
   SUIT_SYMBOL,
 } from "@/game/terms";
 import { cn } from "@/lib/cn";
+
+import { CardArt } from "../card-art/CardArt";
 
 import { ActionButton, CardPicker, Panel } from "./common";
 
@@ -70,6 +72,7 @@ export function PickPanel({
   faceUp: Card;
   onSubmit: (action: Action) => void;
 }) {
+  const theme = useCardTheme();
   return (
     <Panel title="한 장을 고르세요">
       <p className="text-center text-xs opacity-70">
@@ -78,22 +81,19 @@ export function PickPanel({
       <div className="flex justify-center gap-4">
         {(
           [
-            [0, `/cards/${faceUp}.svg`, cardLabel(faceUp)],
-            [1, "/cards/back.png", "안 보이는 카드"],
+            [0, faceUp, cardLabel(faceUp)],
+            [1, null, "안 보이는 카드"],
           ] as const
-        ).map(([index, src, label]) => (
+        ).map(([index, card, label]) => (
           <button
             key={index}
             type="button"
             onClick={() => onSubmit({ type: "pick", index })}
             className="flex flex-col items-center gap-1"
           >
-            {/* biome-ignore lint/performance/noImgElement: 정적 내보내기 */}
-            <img
-              src={src}
-              alt={label}
-              className="h-28 rounded-md shadow-lg transition hover:-translate-y-1"
-            />
+            <span className="block h-28 w-20 rounded-md shadow-lg transition hover:-translate-y-1">
+              <CardArt card={card} theme={theme} />
+            </span>
             <span className="text-xs">{label}</span>
           </button>
         ))}

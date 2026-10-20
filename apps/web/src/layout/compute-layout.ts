@@ -49,8 +49,8 @@ export interface Layout {
   trick: { card: Size; slots: Point[] };
 }
 
-/** 카드 그림(227×315)의 높이/폭 */
-export const CARD_RATIO = 315 / 227;
+/** 카드 그림(250×350)의 높이/폭 */
+export const CARD_RATIO = 350 / 250;
 
 /** 나부터 차례 순서로 k번째 사람의 각도(0° = 오른쪽, 90° = 아래). docs/05-layout.md 3.6절 */
 const SEAT_ANGLES: Record<number, number[]> = {
