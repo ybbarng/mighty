@@ -108,26 +108,35 @@ function Corner({
   rank,
   suit,
   color,
+  large = false,
 }: {
   rank: string;
   suit: Suit;
   color: string;
+  large?: boolean;
 }) {
+  const scale = large ? 1.4 : 1;
   return (
     <g>
       <text
-        x={34}
-        y={58}
+        x={34 * scale}
+        y={58 * scale}
         textAnchor="middle"
         fontFamily={FONT}
         fontWeight={800}
-        fontSize={rank === "10" ? 46 : 54}
-        letterSpacing={rank === "10" ? -4 : 0}
+        fontSize={(rank === "10" ? 46 : 54) * scale}
+        letterSpacing={rank === "10" ? -4 * scale : 0}
         fill={color}
       >
         {rank}
       </text>
-      <SuitShape suit={suit} x={34} y={86} size={34} fill={color} />
+      <SuitShape
+        suit={suit}
+        x={34 * scale}
+        y={86 * scale}
+        size={34 * scale}
+        fill={color}
+      />
     </g>
   );
 }
@@ -316,40 +325,50 @@ export const CardArt = memo(function CardArt({
     const suit = suitOf(card);
     const rank = rankOf(card);
     const color = theme.suitColor[suit];
+    const large = theme.largeIndex ?? false;
     body = (
       <g>
-        <Corner rank={rank} suit={suit} color={color} />
+        <Corner rank={rank} suit={suit} color={color} large={large} />
         <g transform={`rotate(180 ${C} ${MID})`}>
-          <Corner rank={rank} suit={suit} color={color} />
+          <Corner rank={rank} suit={suit} color={color} large={large} />
         </g>
-        {rank === "A" ? (
-          <SuitShape
-            suit={suit}
-            x={C}
-            y={MID}
-            size={suit === "S" ? 130 : 110}
-            fill={color}
-          />
-        ) : rank === "J" || rank === "Q" || rank === "K" ? (
-          <Face
-            rank={rank}
-            suit={suit}
-            color={color}
-            tint={theme.faceTint[suit]}
-          />
-        ) : (
-          (PIPS[rank] ?? []).map(([x, y]) => (
+        {/* 큰 글자 테마는 모서리와 겹치지 않게 가운데 그림을 줄인다. */}
+        <g
+          transform={
+            large
+              ? `translate(${C} ${MID}) scale(0.7) translate(${-C} ${-MID})`
+              : undefined
+          }
+        >
+          {rank === "A" ? (
             <SuitShape
-              key={`${x}-${y}`}
               suit={suit}
-              x={x}
-              y={y}
-              size={46}
-              flip={y > MID}
+              x={C}
+              y={MID}
+              size={suit === "S" ? 130 : 110}
               fill={color}
             />
-          ))
-        )}
+          ) : rank === "J" || rank === "Q" || rank === "K" ? (
+            <Face
+              rank={rank}
+              suit={suit}
+              color={color}
+              tint={theme.faceTint[suit]}
+            />
+          ) : (
+            (PIPS[rank] ?? []).map(([x, y]) => (
+              <SuitShape
+                key={`${x}-${y}`}
+                suit={suit}
+                x={x}
+                y={y}
+                size={46}
+                flip={y > MID}
+                fill={color}
+              />
+            ))
+          )}
+        </g>
       </g>
     );
   }

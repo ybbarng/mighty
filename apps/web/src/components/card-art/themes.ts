@@ -11,6 +11,8 @@ export interface CardTheme {
   edge: string;
   back: { base: string; stripe: string; accent: string };
   joker: { field: string; disc: string; star: string };
+  /** 모서리 숫자·무늬를 크게. 손패가 겹쳐 왼쪽 띠만 보일 때 읽기 쉽다 */
+  largeIndex?: boolean;
 }
 
 const RED = "#d42a2a";
@@ -36,4 +38,29 @@ export const FOUR_COLOR: CardTheme = {
   faceTint: { S: "#eef1f6", H: "#fdecec", D: "#e8f0fd", C: "#e7f6ec" },
 };
 
-export const CARD_THEMES: readonly CardTheme[] = [CLASSIC, FOUR_COLOR];
+/** 모서리 글자를 키운 4색. 작은 화면이나 눈이 침침할 때 */
+export const LARGE_PRINT: CardTheme = {
+  ...FOUR_COLOR,
+  id: "large-print",
+  name: "큰 글자",
+  largeIndex: true,
+};
+
+/** 어두운 종이. 밤에 눈부시지 않다 */
+export const DARK: CardTheme = {
+  id: "dark",
+  name: "어두운",
+  suitColor: { S: "#e6e8eb", C: "#7ee2a0", H: "#ff7b7b", D: "#7db3ff" },
+  faceTint: { S: "#2c313a", C: "#24352c", H: "#3a2a2c", D: "#26303f" },
+  paper: "#1b1f26",
+  edge: "#3b4250",
+  back: { base: "#0f1a2b", stripe: "#16243a", accent: "#c9a648" },
+  joker: { field: "#221d2b", disc: "#7b4bb0", star: "#f2c230" },
+};
+
+export const CARD_THEMES: readonly CardTheme[] = [
+  CLASSIC,
+  FOUR_COLOR,
+  LARGE_PRINT,
+  DARK,
+];
