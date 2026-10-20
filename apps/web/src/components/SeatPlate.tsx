@@ -45,22 +45,24 @@ export function SeatPlate(props: SeatPlateProps) {
       style={{ left: rect.x, top: rect.y, width: rect.w, minHeight: rect.h }}
     >
       <div className="flex items-center gap-1">
-        <span className="truncate font-semibold">{props.name}</span>
+        <span className="min-w-0 truncate font-semibold">{props.name}</span>
         {props.declarer && (
-          <span className="rounded bg-amber-400 px-1 text-[10px] text-black">
+          <span className="shrink-0 whitespace-nowrap rounded bg-amber-400 px-1 text-[10px] text-black">
             주공
           </span>
         )}
         {props.friend && (
-          <span className="rounded bg-sky-300 px-1 text-[10px] text-black">
+          <span className="shrink-0 whitespace-nowrap rounded bg-sky-300 px-1 text-[10px] text-black">
             프렌드
           </span>
         )}
         {props.leader && (
-          <span className="rounded bg-white/20 px-1 text-[10px]">선</span>
+          <span className="shrink-0 whitespace-nowrap rounded bg-white/20 px-1 text-[10px]">
+            선
+          </span>
         )}
         <span
-          className="ml-auto shrink-0 tabular-nums opacity-80"
+          className="ml-auto shrink-0 whitespace-nowrap tabular-nums opacity-80"
           title="남은 손패"
         >
           {props.dead ? "탈락" : `${props.handCount}장`}

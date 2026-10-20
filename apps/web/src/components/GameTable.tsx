@@ -298,6 +298,8 @@ export function GameTable({ onExit }: { onExit: () => void }) {
     ...view.players.slice(0, beginnerIndex),
   ].map((seat) => (seat === view.seat ? myPile : plateCenter(seat)));
 
+  const compactHud = layout?.orientation === "portrait";
+
   const showPanel =
     layout !== null &&
     dealing === null &&
@@ -314,7 +316,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
         <>
           {/* HUD */}
           <div
-            className="absolute flex items-center gap-3 rounded-xl bg-black/35 px-3 text-sm"
+            className="absolute flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-xl bg-black/35 px-3 text-sm"
             style={{
               left: layout.hud.x,
               top: layout.hud.y,
@@ -324,48 +326,55 @@ export function GameTable({ onExit }: { onExit: () => void }) {
           >
             {view.goal ? (
               <span
-                className="font-bold text-base"
+                className="shrink-0 font-bold text-base"
                 title={kirudaName(view.goal.kiruda)}
               >
                 {goalLabel(view.goal)}
               </span>
             ) : (
-              <span className="opacity-70">공약 전</span>
+              <span className="shrink-0 opacity-70">공약 전</span>
             )}
-            {view.declarer !== null && (
-              <span className="opacity-80">주공 {seatName(view.declarer)}</span>
-            )}
-            {view.friendDeclaration && (
-              <span className="truncate opacity-80">
-                {friendLabel(view.friendDeclaration, seatName)}
-                {view.friend !== null &&
-                  view.friendRevealed &&
-                  ` → ${seatName(view.friend)}`}
-              </span>
-            )}
-            <span className="ml-auto shrink-0 tabular-nums opacity-80">
+            <span className="min-w-0 flex-1 truncate opacity-80">
+              {[
+                view.declarer !== null && `주공 ${seatName(view.declarer)}`,
+                view.friendDeclaration &&
+                  `${friendLabel(view.friendDeclaration, seatName)}${
+                    view.friend !== null && view.friendRevealed
+                      ? ` → ${seatName(view.friend)}`
+                      : ""
+                  }`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+            <span
+              className="shrink-0 tabular-nums opacity-80"
+              title="트릭 진행과 아직 나오지 않은 점수 카드 수"
+            >
               {view.phase === "play"
-                ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
+                ? compactHud
+                  ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
+                  : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
                 : `${view.roundNumber}판`}
             </span>
             <button
               type="button"
               onClick={() => setShowSettings(true)}
-              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
             >
               설정
             </button>
             <button
               type="button"
               onClick={() => setShowScoreboard(true)}
-              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
             >
               점수판
             </button>
             <button
               type="button"
               onClick={onExit}
-              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
             >
               나가기
             </button>

@@ -115,3 +115,22 @@ it("세로 폰에서 13장이면 두 줄로 놓는다", () => {
       .hand.rows,
   ).toBe(1);
 });
+
+describe.each(cases)(
+  "$width×$height / 인원 $playerCount / 손패 $handCount — 바닥",
+  (input) => {
+    it("자리 판은 바닥 카드와 겹치지 않는다", () => {
+      const layout = computeLayout(input);
+      const { card, slots } = layout.trick;
+      const cards = slots.map((s) => ({
+        x: s.x - card.w / 2,
+        y: s.y - card.h / 2,
+        w: card.w,
+        h: card.h,
+      }));
+      for (const seat of layout.seats.slice(1)) {
+        for (const c of cards) expect(rectsOverlap(seat.plate, c)).toBe(false);
+      }
+    });
+  },
+);

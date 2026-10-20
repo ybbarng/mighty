@@ -125,38 +125,20 @@ export function computeLayout(input: LayoutInput): Layout {
     h: hand.top - g - (g + hudH),
   };
 
-  // 바닥
-  let center: Rect;
-  let trickCard: Size;
-  if (portrait) {
-    const side = Math.min(table.w * 0.8, table.h * 0.45);
-    const cy = table.y + table.h * 0.62;
-    center = { x: W / 2 - side / 2, y: cy - side / 2, w: side, h: side };
-    const tw = Math.min(side * 0.28, hand.card.w);
-    trickCard = { w: tw, h: tw * CARD_RATIO };
-  } else {
-    const tw = hand.card.w * 0.85;
-    trickCard = { w: tw, h: tw * CARD_RATIO };
-    const w = Math.min(tw * 3.4, table.w * 0.42);
-    const h = Math.min(trickCard.h * 2.4, table.h * 0.62);
-    const cx = table.x + table.w / 2;
-    const cy = table.y + table.h / 2 + table.h * 0.06;
-    center = { x: cx - w / 2, y: cy - h / 2, w, h };
-  }
-
   // 자리 판
   const angles = [90, ...(SEAT_ANGLES[playerCount] ?? [])];
   let plate: Size = portrait
     ? { w: clamp(W * 0.24, 76, 112), h: 64 }
     : { w: clamp(W * 0.12, 120, 180), h: 64 };
+  // 세로 화면은 자리 판을 위쪽에 모으고 그 아래를 바닥으로 쓴다.
   const C: Point = portrait
-    ? { x: table.x + table.w / 2, y: table.y + table.h * 0.42 }
+    ? { x: table.x + table.w / 2, y: table.y + table.h * 0.27 }
     : { x: table.x + table.w / 2, y: table.y + table.h / 2 };
 
   let seats: SeatLayout[] = [];
   for (let attempt = 0; attempt < 4; attempt++) {
     const Rx = table.w / 2 - plate.w / 2;
-    const Ry = portrait ? table.h * 0.36 : table.h / 2 - plate.h / 2;
+    const Ry = portrait ? table.h * 0.23 : table.h / 2 - plate.h / 2;
     seats = angles.map((angle, offset) => {
       if (offset === 0) {
         const anchor = { x: W / 2, y: hand.top };
@@ -189,6 +171,53 @@ export function computeLayout(input: LayoutInput): Layout {
     );
     if (!overlapping) break;
     plate = { w: plate.w * 0.85, h: plate.h * 0.9 };
+  }
+
+  // 바닥
+  let center: Rect;
+  let trickCard: Size;
+  if (portrait) {
+    const platesBottom = Math.max(
+      ...seats.slice(1).map((s) => s.plate.y + s.plate.h),
+    );
+    const top = platesBottom + g;
+    const room = table.y + table.h - top;
+    // 자리 판 아래 공간이 너무 좁으면(아주 낮은 화면) 겹치더라도 일정 크기를 지킨다.
+    const side = Math.min(table.w * 0.8, Math.max(room, table.h * 0.4));
+    const cy = room >= side ? top + room / 2 : table.y + table.h - side / 2;
+    center = { x: W / 2 - side / 2, y: cy - side / 2, w: side, h: side };
+    const tw = Math.min(side * 0.28, hand.card.w);
+    trickCard = { w: tw, h: tw * CARD_RATIO };
+  } else {
+    const tw = hand.card.w * 0.85;
+    trickCard = { w: tw, h: tw * CARD_RATIO };
+    const w = Math.min(tw * 3.4, table.w * 0.42);
+    const h = Math.min(trickCard.h * 2.4, table.h * 0.62);
+    const cx = table.x + table.w / 2;
+    const cy = table.y + table.h / 2 + table.h * 0.06;
+    center = { x: cx - w / 2, y: cy - h / 2, w, h };
+    // 맞은편 자리 판(위쪽 가운데)이 바닥 위로 내려와 있으면 바닥을 그 아래로 줄인다.
+    const above = seats
+      .slice(1)
+      .map((s) => s.plate)
+      .filter(
+        (p) =>
+          p.x < center.x + center.w &&
+          center.x < p.x + p.w &&
+          p.y < center.y + center.h / 2,
+      );
+    const top = Math.max(center.y, ...above.map((p) => p.y + p.h + g / 2));
+    if (top > center.y) {
+      const bottom = Math.min(
+        table.y + table.h,
+        center.y + center.h + (top - center.y) / 2,
+      );
+      center = { ...center, y: top, h: bottom - top };
+      if (trickCard.h > center.h * 0.75) {
+        const th = center.h * 0.75;
+        trickCard = { w: th / CARD_RATIO, h: th };
+      }
+    }
   }
 
   // 바닥 칸: 자리와 같은 각도로 바닥 안 작은 타원 위에
