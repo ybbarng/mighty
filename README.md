@@ -45,4 +45,5 @@ pnpm build      # 정적 빌드 (apps/web/out)
   - 2006 puzzlet
   - 2011 Yoshi-TS4
   - 2026 ybbarng (웹으로 다시 만듦)
+- 전통 그림 카드(J·Q·K) 인물: [Dmitry Fomin, English pattern playing cards](https://commons.wikimedia.org/wiki/File:English_pattern_playing_cards_deck.svg), 위키미디어 공용, CC0. `apps/web/public/cards/traditional/`
 

@@ -9,7 +9,7 @@ import { CardArt } from "./CardArt";
 import {
   type CardTheme,
   CLASSIC,
-  FACE_DEMO_THEMES,
+  FACE_STYLES,
   FOUR_COLOR,
   INDEX_FONTS,
 } from "./themes";
@@ -54,12 +54,11 @@ export function FaceComparison() {
 
   const rows: CardTheme[] = useMemo(() => {
     const colors = fourColor ? FOUR_COLOR : CLASSIC;
-    return [CLASSIC, ...FACE_DEMO_THEMES].map((t) => ({
-      ...t,
-      suitColor: colors.suitColor,
-      faceTint: colors.faceTint,
-      id: `${t.id}-${fontId}-${fourColor ? 4 : 2}`,
-      name: t.name,
+    return FACE_STYLES.map((style) => ({
+      ...colors,
+      id: `${style.id}-${fontId}-${fourColor ? 4 : 2}`,
+      name: style.name,
+      ...(style.faces ? { faces: style.faces } : {}),
       ...(font ? { indexFont: font } : {}),
     }));
   }, [font, fontId, fourColor]);
@@ -74,7 +73,7 @@ export function FaceComparison() {
 
   return (
     <main className="min-h-dvh bg-[#0a3622] p-4">
-      <h1 className="mb-1 font-bold text-lg">그림 카드 시안</h1>
+      <h1 className="mb-1 font-bold text-lg">그림 카드</h1>
       <p className="mb-3 text-sm opacity-70">
         J·Q·K 그리는 방법 세 가지를 지금 모양과 나란히 놓았다. 모서리 글씨
         폰트와 크기를 바꿔 가며 본다.
@@ -120,12 +119,11 @@ export function FaceComparison() {
       </div>
       <div className="flex flex-col gap-6">
         {rows.map((theme) => {
-          const baseId = theme.id.split("-").slice(0, 2).join("-");
-          const noteKey = baseId.startsWith("classic") ? "classic" : baseId;
+          const noteKey = theme.id.split("-")[0] ?? "";
           return (
             <section key={theme.id} className="flex flex-col gap-2">
               <h2 className="font-semibold">
-                {noteKey === "classic" ? "지금" : theme.name}
+                {theme.name}
                 <span className="ml-2 font-normal text-xs opacity-60">
                   {NOTES[noteKey]}
                 </span>

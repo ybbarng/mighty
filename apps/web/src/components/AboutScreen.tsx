@@ -72,8 +72,9 @@ export function AboutScreen({
           </dl>
         </section>
 
-        <p className="text-center text-[11px] opacity-50">
-          © 2026 ybbarng · MIT License
+        <p className="text-center text-[11px] leading-relaxed opacity-50">
+          전통 그림 카드 인물: Dmitry Fomin, 위키미디어 공용(CC0)
+          <br />© 2026 ybbarng · MIT License
         </p>
 
         <button

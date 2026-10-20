@@ -393,7 +393,7 @@ const SUIT_WORD: Record<Suit, string> = {
 };
 const RANK_WORD = { J: "jack", Q: "queen", K: "king" } as const;
 
-/** public/cards/traditional 에 있는 그림. 아직 받지 못한 것은 직접 그린 그림으로 대신한다 */
+/** public/cards/traditional 에 있는 그림. 없는 것은 직접 그린 그림으로 대신한다 */
 const TRADITIONAL_AVAILABLE = new Set([
   "jack_spades",
   "jack_hearts",
@@ -405,6 +405,8 @@ const TRADITIONAL_AVAILABLE = new Set([
   "queen_clubs",
   "king_spades",
   "king_hearts",
+  "king_diamonds",
+  "king_clubs",
 ]);
 
 /**

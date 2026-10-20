@@ -13,7 +13,13 @@ import { play as playCue } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { CardArt } from "./card-art/CardArt";
-import { CARD_BACKS, CARD_THEMES } from "./card-art/themes";
+import {
+  CARD_BACKS,
+  CARD_THEMES,
+  CLASSIC,
+  DEFAULT_INDEX_FONT,
+  FACE_STYLES,
+} from "./card-art/themes";
 import { ActionButton } from "./panels/common";
 import { RuleEditor } from "./rules/RuleEditor";
 
@@ -175,6 +181,46 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
                 모든 카드 보기
               </a>
             </div>
+          </Section>
+
+          <Section title="그림 카드 (J·Q·K)">
+            <div className="flex flex-wrap gap-2">
+              {FACE_STYLES.map((f) => {
+                const selected = settings.faceStyle === f.id;
+                const theme = {
+                  ...(CARD_THEMES.find((t) => t.id === settings.cardThemeId) ??
+                    CLASSIC),
+                  id: `preview-face-${f.id}`,
+                  indexFont: DEFAULT_INDEX_FONT,
+                  ...(f.faces ? { faces: f.faces } : {}),
+                };
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => settings.setFaceStyle(f.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-lg p-1.5 text-[11px]",
+                      selected
+                        ? "bg-white/20 ring-2 ring-amber-300"
+                        : "bg-white/5",
+                    )}
+                  >
+                    <span className="flex gap-0.5">
+                      {(["SK", "HQ"] as const).map((card) => (
+                        <span key={card} className="block aspect-[5/7] w-12">
+                          <CardArt card={card} theme={theme} />
+                        </span>
+                      ))}
+                    </span>
+                    {f.name}
+                  </button>
+                );
+              })}
+            </div>
+            <a href="/cards/faces" className="text-xs underline opacity-70">
+              그림 카드 크게 보기
+            </a>
           </Section>
 
           <Section title="카드 뒷면">

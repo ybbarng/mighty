@@ -141,24 +141,18 @@ export const INDEX_FONTS = [
   },
 ] as const;
 
-/** 그림 카드 시안. 고르면 설정에 넣는다 */
-export const FACE_DEMO_THEMES: readonly CardTheme[] = [
-  {
-    ...CLASSIC,
-    id: "demo-a",
-    name: "시안 A · 전통 인물 + 우리 틀",
-    faces: { kind: "traditional" },
-  },
-  {
-    ...CLASSIC,
-    id: "demo-b",
-    name: "시안 B · 직접 그림(크게)",
-    faces: { kind: "court" },
-  },
-  {
-    ...CLASSIC,
-    id: "demo-c",
-    name: "시안 C · 전통 인물, 굵은 선",
-    faces: { kind: "traditional", bold: true },
-  },
-];
+/** 그림 카드(J·Q·K) 고르기. 카드 색 테마와 따로 고른다 */
+export const FACE_STYLES = [
+  { id: "letter", name: "글자형", faces: undefined },
+  { id: "traditional", name: "전통", faces: { kind: "traditional" } },
+  { id: "claude", name: "클로드 코드 버전", faces: { kind: "court" } },
+] as const satisfies readonly {
+  id: string;
+  name: string;
+  faces: CardTheme["faces"];
+}[];
+
+export type FaceStyleId = (typeof FACE_STYLES)[number]["id"];
+
+/** 모서리 글씨 기본 폰트: 좁고 또렷한 고딕 */
+export const DEFAULT_INDEX_FONT = INDEX_FONTS[1].value;

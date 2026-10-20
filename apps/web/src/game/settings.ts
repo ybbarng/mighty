@@ -13,6 +13,9 @@ import {
   CARD_THEMES,
   type CardTheme,
   CLASSIC,
+  DEFAULT_INDEX_FONT,
+  FACE_STYLES,
+  type FaceStyleId,
 } from "@/components/card-art/themes";
 
 import type { BotLevel } from "./bots";
@@ -33,6 +36,9 @@ export const SPEEDS = [
 
 interface Settings {
   cardThemeId: string;
+  /** 그림 카드(J·Q·K) 그리는 방법 */
+  faceStyle: FaceStyleId;
+  setFaceStyle(id: FaceStyleId): void;
   /** 카드 뒷면. "theme"이면 카드 테마의 뒷면 */
   cardBackId: string;
   setCardBack(id: string): void;
@@ -71,6 +77,8 @@ export const useSettings = create<Settings>()(
   persist(
     (set) => ({
       cardThemeId: CLASSIC.id,
+      faceStyle: "traditional",
+      setFaceStyle: (faceStyle) => set({ faceStyle }),
       cardBackId: "theme",
       setCardBack: (cardBackId) => set({ cardBackId }),
       playerName: "",
@@ -129,12 +137,20 @@ export const useSettings = create<Settings>()(
 export function useCardTheme(): CardTheme {
   const id = useSettings((s) => s.cardThemeId);
   const backId = useSettings((s) => s.cardBackId);
+  const faceStyle = useSettings((s) => s.faceStyle);
   // 카드 그림은 테마 객체로 캐시하므로 같은 선택이면 같은 객체를 돌려준다.
   return useMemo(() => {
     const theme = CARD_THEMES.find((t) => t.id === id) ?? CLASSIC;
     const back = CARD_BACKS.find((b) => b.id === backId);
-    return back ? { ...theme, id: `${theme.id}+${back.id}`, back } : theme;
-  }, [id, backId]);
+    const faces = FACE_STYLES.find((f) => f.id === faceStyle)?.faces;
+    return {
+      ...theme,
+      id: `${theme.id}+${back?.id ?? "theme"}+${faceStyle}`,
+      ...(back ? { back } : {}),
+      ...(faces ? { faces } : {}),
+      indexFont: theme.indexFont ?? DEFAULT_INDEX_FONT,
+    };
+  }, [id, backId, faceStyle]);
 }
 
 /** 고른 규칙. 문자열이 깨졌으면 표준 5마 */
