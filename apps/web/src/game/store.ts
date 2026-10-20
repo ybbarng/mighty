@@ -8,6 +8,7 @@ import type {
 } from "@mighty/engine";
 import { isJoker, mightyOf } from "@mighty/engine";
 import { create } from "zustand";
+import { botFor } from "./bots";
 import { cuesFor } from "./cues";
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
@@ -240,13 +241,20 @@ export const useGame = create<GameStore>((set, get) => {
       const host = new LocalMatch({
         rules: options.rules,
         seed: options.seed ?? Math.floor(Math.random() * 2 ** 31),
+        bot: botFor(useSettings.getState().botLevel),
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
       attach(host, { save: true, seatNames: null });
     },
 
     resume(saved) {
-      attach(LocalMatch.restore(saved), { save: true, seatNames: null });
+      attach(
+        LocalMatch.restore(saved, botFor(useSettings.getState().botLevel)),
+        {
+          save: true,
+          seatNames: null,
+        },
+      );
     },
 
     attachOnline(host, seatNames) {

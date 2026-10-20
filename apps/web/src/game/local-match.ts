@@ -94,12 +94,13 @@ export class LocalMatch implements MatchHost {
     this.runBots();
   }
 
-  static restore(saved: SavedMatch): LocalMatch {
+  static restore(saved: SavedMatch, bot?: Bot): LocalMatch {
     return new LocalMatch(
       {
         rules: saved.rules,
         seed: saved.seed,
         humanSeat: saved.humanSeat,
+        ...(bot ? { bot } : {}),
         ...(saved.presetDeal ? { presetDeal: saved.presetDeal } : {}),
       },
       saved.log,

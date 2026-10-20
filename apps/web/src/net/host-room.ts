@@ -1,3 +1,4 @@
+import type { Bot } from "@mighty/ai";
 import { encodeRuleString, type RuleSet } from "@mighty/engine";
 
 import { LocalMatch } from "@/game/local-match";
@@ -22,6 +23,8 @@ export interface HostRoomOptions {
   standInDelayMs?: number;
   /** 시작할 때 참가자의 비밀 값을 기다리는 시간 */
   revealTimeoutMs?: number;
+  /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
+  bot?: Bot;
 }
 
 interface GuestSeat {
@@ -46,6 +49,7 @@ export class HostRoom {
   private hostCommit: string | null = null;
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
+  private readonly bot: Bot | null;
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private commitments: Commitment[] = [];
   match: LocalMatch | null = null;
@@ -56,6 +60,7 @@ export class HostRoom {
     this.hostName = options.hostName;
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
+    this.bot = options.bot ?? null;
     void commit(this.hostSecret).then((hash) => {
       this.hostCommit = hash;
     });
@@ -139,6 +144,7 @@ export class HostRoom {
       seed: derived.seed,
       humanSeat: 0,
       humanSeats: [0, ...this.guests.keys()],
+      ...(this.bot ? { bot: this.bot } : {}),
     });
     this.match = match;
     const first = match.viewFor(0);

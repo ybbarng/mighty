@@ -7,6 +7,8 @@ import {
   CLASSIC,
 } from "@/components/card-art/themes";
 
+import type { BotLevel } from "./bots";
+
 /** 원작의 rule.txt처럼 이름을 붙여 둔 내 규칙 */
 export interface CustomRule {
   name: string;
@@ -31,6 +33,9 @@ interface Settings {
   /** 효과음 */
   sound: boolean;
   setSound(on: boolean): void;
+  /** 컴퓨터 실력. 새 게임부터 적용된다 */
+  botLevel: BotLevel;
+  setBotLevel(level: BotLevel): void;
   customRules: CustomRule[];
   setCardTheme(id: string): void;
   saveCustomRule(rule: CustomRule): void;
@@ -48,6 +53,8 @@ export const useSettings = create<Settings>()(
       setSpeed: (speed) => set({ speed }),
       sound: true,
       setSound: (sound) => set({ sound }),
+      botLevel: 2,
+      setBotLevel: (botLevel) => set({ botLevel }),
       customRules: [],
       setCardTheme: (id) => set({ cardThemeId: id }),
       // 같은 이름이면 덮어쓴다.

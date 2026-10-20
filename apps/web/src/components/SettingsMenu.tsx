@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { BOT_LEVELS } from "@/game/bots";
 import { SPEEDS, useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 
@@ -46,6 +47,8 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
   const setSound = useSettings((s) => s.setSound);
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
+  const botLevel = useSettings((s) => s.botLevel);
+  const setBotLevel = useSettings((s) => s.setBotLevel);
   const [glossary, setGlossary] = useState(false);
   if (glossary) return <GlossarySheet onClose={onClose} />;
   return (
@@ -76,6 +79,10 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
             value={cardThemeId}
             onChange={setCardTheme}
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs opacity-70">컴퓨터 실력 (새 게임부터)</span>
+          <Chips options={BOT_LEVELS} value={botLevel} onChange={setBotLevel} />
         </div>
         <button
           type="button"

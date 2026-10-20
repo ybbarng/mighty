@@ -8,6 +8,7 @@ import {
 } from "@mighty/engine";
 import { useState } from "react";
 
+import { BOT_LEVELS } from "@/game/bots";
 import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 
@@ -33,6 +34,8 @@ export function StartScreen({
   onResume?: () => void;
 }) {
   const cardThemeId = useSettings((s) => s.cardThemeId);
+  const botLevel = useSettings((s) => s.botLevel);
+  const setBotLevel = useSettings((s) => s.setBotLevel);
   const setCardTheme = useSettings((s) => s.setCardTheme);
   const customRules = useSettings((s) => s.customRules);
   const saveCustomRule = useSettings((s) => s.saveCustomRule);
@@ -196,6 +199,30 @@ export function StartScreen({
           <a href="/cards" className="ml-auto text-xs underline opacity-70">
             모든 카드 보기
           </a>
+        </section>
+
+        <section className="flex items-center gap-2">
+          <h2 className="font-semibold text-sm">컴퓨터 실력</h2>
+          {BOT_LEVELS.map((level) => (
+            <button
+              key={level.value}
+              type="button"
+              onClick={() => setBotLevel(level.value)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs",
+                level.value === botLevel
+                  ? "border-amber-300 bg-white text-black"
+                  : "border-white/15 bg-white/5",
+              )}
+            >
+              {level.label}
+            </button>
+          ))}
+          <span className="ml-auto text-xs opacity-60">
+            {botLevel === 2
+              ? "남의 패를 추측해 수를 읽는다"
+              : "정해진 요령대로 둔다"}
+          </span>
         </section>
 
         <ActionButton
