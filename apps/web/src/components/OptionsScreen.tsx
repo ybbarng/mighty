@@ -8,7 +8,7 @@ import {
 import { type ReactNode, useState } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
-import { SPEEDS, useSettings } from "@/game/settings";
+import { botName, SPEEDS, useSettings } from "@/game/settings";
 import { play as playCue } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
@@ -289,7 +289,7 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
                   aria-label={`컴퓨터 ${n} 이름`}
                   value={settings.botNames[n - 1] ?? ""}
                   onChange={(e) => settings.setBotName(n, e.target.value)}
-                  placeholder={`컴퓨터 ${n}`}
+                  placeholder={botName([], n)}
                   maxLength={8}
                   className="min-w-0 rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
                 />

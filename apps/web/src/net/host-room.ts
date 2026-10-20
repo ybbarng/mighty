@@ -1,8 +1,7 @@
 import type { Bot } from "@mighty/ai";
 import { encodeRuleString, type RuleSet } from "@mighty/engine";
-
+import { botName } from "@/game/bot-names";
 import { LocalMatch } from "@/game/local-match";
-
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
   type AuditReport,
@@ -28,7 +27,7 @@ export interface HostRoomOptions {
   revealTimeoutMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
   bot?: Bot;
-  /** 빈자리 컴퓨터 이름(1번 자리부터). 비면 "컴퓨터 n" */
+  /** 빈자리 컴퓨터 이름(1번 자리부터). 비면 기본 이름 */
   botNames?: readonly string[];
   /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
   pace?: (next: () => void) => void;
@@ -106,7 +105,7 @@ export class HostRoom {
           };
         return {
           seat,
-          name: this.botNames[seat - 1]?.trim() || `컴퓨터 ${seat}`,
+          name: botName(this.botNames, seat),
           kind: "bot",
           connected: true,
         };

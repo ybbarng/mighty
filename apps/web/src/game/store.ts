@@ -54,7 +54,7 @@ export interface NewGameOptions {
 
 interface GameStore {
   host: AttachableHost | null;
-  /** 온라인 대전에서 자리별 이름. 혼자 할 때는 `null`(나·컴퓨터 n) */
+  /** 온라인 대전에서 자리별 이름. 혼자 할 때는 `null`(나·컴퓨터 이름) */
   seatNames: string[] | null;
   /** 지금 화면에 보이는 정보. 엔진보다 늦게 따라간다 */
   view: PlayerView | null;

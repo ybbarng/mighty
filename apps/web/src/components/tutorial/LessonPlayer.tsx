@@ -2,7 +2,7 @@
 
 import { type Card, createScenario, type GameEvent } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
-
+import { DEFAULT_BOT_NAMES } from "@/game/bot-names";
 import { LocalMatch } from "@/game/local-match";
 import { useCardTheme } from "@/game/settings";
 import { useGame } from "@/game/store";
@@ -20,7 +20,7 @@ import { GameTable } from "../GameTable";
 import { ActionButton } from "../panels/common";
 import { RichText } from "./RichText";
 
-const NAMES = ["나", "컴퓨터 1", "컴퓨터 2", "컴퓨터 3", "컴퓨터 4"];
+const NAMES = ["나", ...DEFAULT_BOT_NAMES.slice(0, 4)];
 
 /** 한 단원: 설명 → 퀴즈 → 미션을 차례로 진행한다 */
 export function LessonPlayer({

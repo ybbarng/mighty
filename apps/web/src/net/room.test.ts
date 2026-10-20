@@ -71,8 +71,8 @@ describe("온라인 방", () => {
       ["방장", "host"],
       ["철수", "guest"],
       ["영희", "guest"],
-      ["컴퓨터 3", "bot"],
-      ["컴퓨터 4", "bot"],
+      ["지호", "bot"],
+      ["하린", "bot"],
     ]);
     expect(host.lobby().started).toBe(false);
   });

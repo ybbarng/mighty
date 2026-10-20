@@ -210,7 +210,7 @@ export function GameTable({
   const myIndex = view.order.indexOf(view.seat);
   const offsetOf = (seat: number) =>
     (view.order.indexOf(seat) - myIndex + n) % n;
-  // 온라인 대전은 대기실 이름을, 혼자 할 때는 앉은 순서대로 "컴퓨터 n"을 쓴다.
+  // 온라인 대전은 대기실 이름을, 혼자 할 때는 앉은 순서대로 컴퓨터 이름(설정 또는 기본)을 쓴다.
   const seatName = (seat: number) =>
     seat === view.seat
       ? "나"

@@ -51,7 +51,7 @@ interface Settings {
   /** 효과음 */
   sound: boolean;
   setSound(on: boolean): void;
-  /** 컴퓨터 이름(내 다음 차례가 1번). 비워 두면 "컴퓨터 n" */
+  /** 컴퓨터 이름(내 다음 차례가 1번). 비워 두면 기본 이름(`DEFAULT_BOT_NAMES`) */
   botNames: string[];
   setBotName(index: number, name: string): void;
   /** 카드 툴팁: 손패 카드에 그 무늬에서 아직 안 나온 더 높은 카드를 보여 준다(원작 `bCardTip`) */
@@ -165,7 +165,4 @@ export function ruleLabel(code: string, custom: readonly CustomRule[]): string {
   return named?.name ?? `직접 정한 ${chosenRules(code).playerCount}마`;
 }
 
-/** n번째 컴퓨터의 이름(1부터). 정해 두지 않았으면 "컴퓨터 n" */
-export function botName(names: readonly string[], index: number): string {
-  return names[index - 1]?.trim() || `컴퓨터 ${index}`;
-}
+export { botName, DEFAULT_BOT_NAMES } from "./bot-names";
