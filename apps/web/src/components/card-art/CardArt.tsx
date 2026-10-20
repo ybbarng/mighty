@@ -9,7 +9,7 @@ import {
 import { memo, type ReactNode } from "react";
 
 import { SPADE_PATH } from "../brand/brand";
-import { CourtFigure } from "./court";
+import { CourtFigure, TraditionalFigure } from "./court";
 import { SuitShape } from "./suits";
 import { type CardTheme, CLASSIC } from "./themes";
 
@@ -111,11 +111,14 @@ function Corner({
   suit,
   color,
   large = false,
+  font = FONT,
 }: {
   rank: string;
   suit: Suit;
   color: string;
   large?: boolean;
+  /** 모서리 글씨 폰트(CSS font-family) */
+  font?: string;
 }) {
   const scale = large ? 1.4 : 1;
   return (
@@ -124,7 +127,7 @@ function Corner({
         x={34 * scale}
         y={58 * scale}
         textAnchor="middle"
-        fontFamily={FONT}
+        style={{ fontFamily: font }}
         fontWeight={800}
         fontSize={(rank === "10" ? 46 : 54) * scale}
         letterSpacing={rank === "10" ? -4 * scale : 0}
@@ -363,40 +366,25 @@ export const CardArt = memo(function CardArt({
     const rank = rankOf(card);
     const faces = theme.faces;
     const isFace = rank === "J" || rank === "Q" || rank === "K";
-    if (isFace && faces?.kind === "image") {
-      // 카드 한 장 전체가 그림 파일이다(모서리 숫자까지 들어 있다).
-      return (
-        <svg
-          viewBox={`0 0 ${CARD_W} ${CARD_H}`}
-          className="block h-full w-full"
-          aria-hidden="true"
-        >
-          <rect
-            x={1}
-            y={1}
-            width={CARD_W - 2}
-            height={CARD_H - 2}
-            rx={16}
-            fill={theme.paper}
-          />
-          <image
-            href={faces.href(suit, rank)}
-            x={0}
-            y={0}
-            width={CARD_W}
-            height={CARD_H}
-            preserveAspectRatio="none"
-          />
-        </svg>
-      );
-    }
     const color = theme.suitColor[suit];
     const large = theme.largeIndex ?? false;
     body = (
       <g>
-        <Corner rank={rank} suit={suit} color={color} large={large} />
+        <Corner
+          rank={rank}
+          suit={suit}
+          color={color}
+          large={large}
+          font={theme.indexFont ?? FONT}
+        />
         <g transform={`rotate(180 ${C} ${MID})`}>
-          <Corner rank={rank} suit={suit} color={color} large={large} />
+          <Corner
+            rank={rank}
+            suit={suit}
+            color={color}
+            large={large}
+            font={theme.indexFont ?? FONT}
+          />
         </g>
         {/* 큰 글자 테마는 모서리와 겹치지 않게 가운데 그림을 줄인다. */}
         <g
@@ -413,6 +401,13 @@ export const CardArt = memo(function CardArt({
               y={MID}
               size={suit === "S" ? 130 : 110}
               fill={color}
+            />
+          ) : isFace && faces?.kind === "traditional" ? (
+            <TraditionalFigure
+              rank={rank}
+              suit={suit}
+              color={color}
+              bold={faces.bold ?? false}
             />
           ) : isFace && faces?.kind === "court" ? (
             <CourtFigure rank={rank} suit={suit} color={color} />

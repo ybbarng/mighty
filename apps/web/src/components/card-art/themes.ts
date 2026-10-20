@@ -69,11 +69,11 @@ export interface CardTheme {
   largeIndex?: boolean;
   /**
    * 그림 카드(J·Q·K) 그리는 방법. 없으면 큰 글자와 장식.
-   * `court`는 직접 그린 전통풍 인물, `image`는 카드 한 장 전체를 그림 파일로 쓴다.
+   * `court`는 직접 그린 전통풍 인물, `traditional`은 공개 저작물 전통 그림의 인물만 떼어 쓴다.
    */
-  faces?:
-    | { kind: "court" }
-    | { kind: "image"; href: (suit: Suit, rank: "J" | "Q" | "K") => string };
+  faces?: { kind: "court" } | { kind: "traditional"; bold?: boolean };
+  /** 모서리 숫자 글씨 폰트(CSS font-family). 없으면 시스템 고딕 */
+  indexFont?: string;
 }
 
 const RED = "#d42a2a";
@@ -126,39 +126,39 @@ export const CARD_THEMES: readonly CardTheme[] = [
   DARK,
 ];
 
-const SUIT_WORD: Record<Suit, string> = {
-  S: "spades",
-  H: "hearts",
-  D: "diamonds",
-  C: "clubs",
-};
-const RANK_WORD = { J: "jack", Q: "queen", K: "king" } as const;
+/** 카드 모서리 글씨 폰트 후보 */
+export const INDEX_FONTS = [
+  { id: "system", name: "시스템 고딕", value: undefined },
+  {
+    id: "condensed",
+    name: "좁은 고딕(Roboto Condensed)",
+    value: "var(--font-card-condensed), ui-sans-serif, sans-serif",
+  },
+  {
+    id: "serif",
+    name: "굵은 세리프(Playfair Display)",
+    value: "var(--font-card-serif), ui-serif, Georgia, serif",
+  },
+] as const;
 
-/** 그림 카드 비교 데모용 테마. 고르면 설정에 넣는다 */
+/** 그림 카드 시안. 고르면 설정에 넣는다 */
 export const FACE_DEMO_THEMES: readonly CardTheme[] = [
   {
     ...CLASSIC,
-    id: "demo-court",
-    name: "② 직접 그림",
+    id: "demo-a",
+    name: "시안 A · 전통 인물 + 우리 틀",
+    faces: { kind: "traditional" },
+  },
+  {
+    ...CLASSIC,
+    id: "demo-b",
+    name: "시안 B · 직접 그림(크게)",
     faces: { kind: "court" },
   },
   {
     ...CLASSIC,
-    id: "demo-traditional",
-    name: "① 전통(공개 저작물)",
-    faces: {
-      kind: "image",
-      href: (suit, rank) =>
-        `/cards/traditional/${RANK_WORD[rank]}_${SUIT_WORD[suit]}.svg`,
-    },
-  },
-  {
-    ...CLASSIC,
-    id: "demo-original",
-    name: "③ 원작 고화질",
-    faces: {
-      kind: "image",
-      href: (suit, rank) => `/cards-local/original/${suit}${rank}.png`,
-    },
+    id: "demo-c",
+    name: "시안 C · 전통 인물, 굵은 선",
+    faces: { kind: "traditional", bold: true },
   },
 ];

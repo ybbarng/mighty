@@ -323,6 +323,12 @@ function JackTop({ suit, color }: { suit: Suit; color: string }) {
   );
 }
 
+/** 그림 틀: 전통 카드처럼 크게 쓴다(모서리 글씨 자리는 비운다) */
+const FX = 54;
+const FY = 58;
+const FW = 142;
+const FH = 234;
+
 /** 직접 그린 그림 카드의 가운데 그림(틀 포함) */
 export function CourtFigure({
   rank,
@@ -335,33 +341,142 @@ export function CourtFigure({
 }) {
   const Top = rank === "K" ? KingTop : rank === "Q" ? QueenTop : JackTop;
   const clipId = `court-${rank}-${suit}`;
+  // 위 절반 그림(가로 62~188)을 넓어진 틀에 맞게 키운다.
+  const grow = `translate(${C} ${MID}) scale(1.13 1.08) translate(${-C} ${-MID})`;
   return (
     <g>
       <defs>
         <clipPath id={clipId}>
-          <rect x={62} y={66} width={126} height={MID - 66} />
+          <rect x={FX} y={FY} width={FW} height={MID - FY} />
         </clipPath>
       </defs>
-      <rect x={62} y={66} width={126} height={218} rx={6} fill="#fbf7ee" />
+      <rect x={FX} y={FY} width={FW} height={FH} rx={6} fill="#fbf7ee" />
       <g clipPath={`url(#${clipId})`}>
-        <Top suit={suit} color={color} />
-      </g>
-      <g transform={`rotate(180 ${C} ${MID})`}>
-        <g clipPath={`url(#${clipId})`}>
+        <g transform={grow}>
           <Top suit={suit} color={color} />
         </g>
       </g>
-      <line x1={62} y1={MID} x2={188} y2={MID} stroke={INK} strokeWidth={1.4} />
+      <g transform={`rotate(180 ${C} ${MID})`}>
+        <g clipPath={`url(#${clipId})`}>
+          <g transform={grow}>
+            <Top suit={suit} color={color} />
+          </g>
+        </g>
+      </g>
+      <line
+        x1={FX}
+        y1={MID}
+        x2={FX + FW}
+        y2={MID}
+        stroke={INK}
+        strokeWidth={1.4}
+      />
       <rect
-        x={62}
-        y={66}
-        width={126}
-        height={218}
+        x={FX}
+        y={FY}
+        width={FW}
+        height={FH}
         rx={6}
         fill="none"
         stroke={INK}
         strokeWidth={2}
       />
     </g>
+  );
+}
+
+const SUIT_WORD: Record<Suit, string> = {
+  S: "spades",
+  H: "hearts",
+  D: "diamonds",
+  C: "clubs",
+};
+const RANK_WORD = { J: "jack", Q: "queen", K: "king" } as const;
+
+/** public/cards/traditional 에 있는 그림. 아직 받지 못한 것은 직접 그린 그림으로 대신한다 */
+const TRADITIONAL_AVAILABLE = new Set([
+  "jack_spades",
+  "jack_hearts",
+  "jack_diamonds",
+  "jack_clubs",
+  "queen_spades",
+  "queen_hearts",
+  "queen_diamonds",
+  "queen_clubs",
+  "king_spades",
+  "king_hearts",
+]);
+
+/**
+ * 전통 그림 카드(Dmitry Fomin, 위키미디어 공용, CC0)에서 인물 그림만 떼어 우리 카드 틀에 넣는다.
+ * 원본(360×540)은 인물을 어긋난 두 직사각형 (60,30)–(330,390)과 (30,150)–(300,510)에 그리고
+ * 빈 모서리에 글씨를 둔다. 두 직사각형을 합친 모양으로 잘라 원본 글씨는 빼고, 비율은 그대로 둔다.
+ */
+const TRAD_FRAME = "M60 30 H330 V390 H300 V510 H30 V150 H60 Z";
+
+export function TraditionalFigure({
+  rank,
+  suit,
+  color,
+  bold = false,
+}: {
+  rank: "J" | "Q" | "K";
+  suit: Suit;
+  color: string;
+  /** 선을 굵게 해 작은 화면에서도 또렷하게 */
+  bold?: boolean;
+}) {
+  const name = `${RANK_WORD[rank]}_${SUIT_WORD[suit]}`;
+  if (!TRADITIONAL_AVAILABLE.has(name))
+    return <CourtFigure rank={rank} suit={suit} color={color} />;
+  return (
+    <svg
+      x={52}
+      y={58}
+      width={146}
+      height={234}
+      viewBox="30 30 300 480"
+      aria-hidden="true"
+    >
+      <defs>
+        <clipPath id="trad-frame">
+          <path d={TRAD_FRAME} />
+        </clipPath>
+        {bold && (
+          <filter id="trad-bold" x="0" y="0" width="1" height="1">
+            {/* 어두운 선만 골라(밝기 → 투명도, 뒤집어 문턱) 굵게 한 뒤 원래 그림 위에 다시 그린다 */}
+            <feColorMatrix
+              in="SourceGraphic"
+              type="luminanceToAlpha"
+              result="lum"
+            />
+            <feComponentTransfer in="lum" result="dark">
+              <feFuncA type="discrete" tableValues="1 0 0 0 0 0 0 0 0 0 0 0" />
+            </feComponentTransfer>
+            <feMorphology
+              in="dark"
+              operator="dilate"
+              radius="0.9"
+              result="thick"
+            />
+            <feFlood floodColor="#111111" result="ink" />
+            <feComposite in="ink" in2="thick" operator="in" result="lines" />
+            <feMerge>
+              <feMergeNode in="SourceGraphic" />
+              <feMergeNode in="lines" />
+            </feMerge>
+          </filter>
+        )}
+      </defs>
+      <g clipPath="url(#trad-frame)">
+        <image
+          href={`/cards/traditional/${name}.svg`}
+          width={360}
+          height={540}
+          {...(bold ? { filter: "url(#trad-bold)" } : {})}
+        />
+      </g>
+      <path d={TRAD_FRAME} fill="none" stroke={INK} strokeWidth={3} />
+    </svg>
   );
 }

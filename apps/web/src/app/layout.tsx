@@ -5,6 +5,7 @@ import { BRAND } from "@/components/brand/brand";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { StoreHydration } from "@/components/StoreHydration";
 
+import { cardCondensed, cardSerif } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -50,7 +51,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko">
+    <html
+      lang="ko"
+      className={`${cardCondensed.variable} ${cardSerif.variable}`}
+    >
       <body className="min-h-dvh antialiased">
         <StoreHydration />
         {children}
