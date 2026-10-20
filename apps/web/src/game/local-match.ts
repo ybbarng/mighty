@@ -26,6 +26,8 @@ export interface LocalMatchOptions {
   humanSeats?: number[];
   bot?: Bot;
   presetDeal?: PresetDeal;
+  /** 튜토리얼 미션처럼 정해진 장면(`createScenario`)에서 시작한다. 이런 대국은 저장하지 않는다 */
+  initialState?: MatchState;
 }
 
 /** 브라우저에 남기는 저장 내용. 상태 대신 시작 조건과 행동 기록만 남기고 `replay`로 되살린다 */
@@ -78,6 +80,9 @@ export class LocalMatch implements MatchHost {
         throw new Error(`저장한 대국을 되살릴 수 없다: ${replayed.error}`);
       this.state = replayed.state;
       this.log.push(...savedLog);
+    } else if (options.initialState) {
+      this.state = options.initialState;
+      this.pending.push({ view: viewOf(this.state, this.seat), events: [] });
     } else {
       const created = createMatch(this.createOptions);
       this.state = created.state;

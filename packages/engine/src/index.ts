@@ -8,6 +8,7 @@ export * from "./replay";
 export * from "./rng";
 export * from "./rule-string";
 export * from "./rules";
+export * from "./scenario";
 export * from "./scoring";
 export * from "./state";
 export * from "./trick";
