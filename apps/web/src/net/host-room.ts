@@ -244,6 +244,8 @@ export class HostRoom {
   }
 
   close(): void {
+    // 연결이 잠깐 끊긴 것과 구별하도록 닫는다고 먼저 알린다.
+    this.send({ t: "closed" });
     this.transport.leave();
   }
 

@@ -20,6 +20,8 @@ interface SeatPlateProps {
   active: boolean;
   leader: boolean;
   dead: boolean;
+  /** 온라인 대전에서 연결이 끊겨 컴퓨터가 대신 두는 중 */
+  offline?: boolean;
   bubble: string | null;
   /** 포기했거나 다른 사람에게 밀린 공약 */
   bubbleDim?: boolean;
@@ -90,6 +92,14 @@ export function SeatPlate(props: SeatPlateProps) {
           {props.dead ? "탈락" : `${props.handCount}장`}
         </span>
       </div>
+      {props.offline && (
+        <div
+          className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-[10px] shadow"
+          title="연결이 끊겨 컴퓨터가 대신 둡니다"
+        >
+          연결 끊김 · 컴퓨터가 대신
+        </div>
+      )}
       {compact ? (
         <div className="flex items-center justify-between text-[10px] tabular-nums opacity-70">
           <span>

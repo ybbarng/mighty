@@ -103,6 +103,68 @@ describe("온라인 방", () => {
     expect(beforeAudit.some((m) => m.includes(a.secret))).toBe(false);
   });
 
+  it("방장과 잠깐 끊겨도 다시 연결되면 같은 자리로 이어서 한다", async () => {
+    const { net, host, a } = await setup();
+    const states: string[] = [];
+    let left = false;
+    a.on("connection", (s) => states.push(s));
+    a.on("hostLeft", () => {
+      left = true;
+    });
+    await host.start();
+    await until(() => a.match !== null);
+    const seat = a.seat;
+
+    net.disconnect("a");
+    await until(() => states.length === 1);
+    expect(states).toEqual(["reconnecting"]);
+
+    net.reconnect("a");
+    await until(() => states.length === 2);
+    expect(states).toEqual(["reconnecting", "connected"]);
+    expect(a.seat).toBe(seat);
+    expect(left).toBe(false);
+    host.close();
+  });
+
+  it("다시 연결되지 않으면 정한 시간 뒤 방장이 나간 것으로 본다", async () => {
+    const net = new MemoryNetwork();
+    const host = new HostRoom({
+      transport: net.join("host"),
+      hostName: "방장",
+      rules,
+      revealTimeoutMs: 500,
+    });
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+      reconnectTimeoutMs: 20,
+    });
+    await until(() => a.seat !== null);
+    let left = false;
+    a.on("hostLeft", () => {
+      left = true;
+    });
+    net.disconnect("a");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(left).toBe(true);
+    host.close();
+  });
+
+  it("방장이 방을 닫으면 기다리지 않고 바로 끝난다", async () => {
+    const { host, a } = await setup();
+    let left = false;
+    const states: string[] = [];
+    a.on("connection", (s) => states.push(s));
+    a.on("hostLeft", () => {
+      left = true;
+    });
+    host.close();
+    await until(() => left);
+    expect(states).toEqual([]);
+  });
+
   it("연결이 끊기면 컴퓨터가 대신 두고, 같은 토큰으로 돌아오면 같은 자리를 받는다", async () => {
     const { net, host, a, b } = await setup();
     await host.start();

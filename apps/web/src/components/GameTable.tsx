@@ -115,6 +115,8 @@ export function GameTable({
   const dealing = useGame((s) => s.dealing);
   const seatNames = useGame((s) => s.seatNames);
   const hostLeft = useGame((s) => s.hostLeft);
+  const reconnecting = useGame((s) => s.reconnecting);
+  const offlineSeats = useGame((s) => s.offlineSeats);
   const queue = useGame((s) => s.queue);
   const events = useGame((s) => s.events);
   const seq = useGame((s) => s.seq);
@@ -635,6 +637,7 @@ export function GameTable({
                   active={view.turn === seat && view.phase !== "roundEnd"}
                   leader={view.phase === "play" && trick?.leader === seat}
                   dead={view.dead.includes(seat)}
+                  offline={offlineSeats.includes(seat)}
                   bubble={chatBubble(seat) ?? lastBid(seat)}
                   bubbleDim={
                     view.phase === "election" && view.election.bidder !== seat
@@ -992,6 +995,15 @@ export function GameTable({
                 style={{ top: layout.hud.y + layout.hud.h + 6 }}
               >
                 ⚠ 공정성 검증 실패 — 이 게임은 무효입니다 ({invalid})
+              </div>
+            )}
+            {reconnecting && !hostLeft && (
+              <div
+                role="status"
+                className="absolute inset-x-0 top-16 z-[350] mx-auto flex w-fit max-w-[92%] items-center gap-2 rounded-2xl bg-black/85 px-4 py-3 text-sm shadow-2xl"
+              >
+                <span className="inline-block size-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                방장과 연결이 끊겼습니다. 다시 연결하는 중…
               </div>
             )}
             {hostLeft && (

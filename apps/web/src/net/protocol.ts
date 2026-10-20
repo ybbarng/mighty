@@ -69,6 +69,8 @@ export type HostMessage =
   | { t: "full" }
   /** 방장이 대기실에서 내보냈다. 같은 방에는 다시 들어올 수 없다 */
   | { t: "kicked" }
+  /** 방장이 방을 닫는다. 이 메시지 없이 연결이 끊기면 참가자는 잠시 다시 연결을 기다린다 */
+  | { t: "closed" }
   | { t: "lobby"; lobby: LobbyState }
   /** 게임 시작: 방장 것까지 모든 약속(해시)을 먼저 알린다. 참가자는 이걸 받은 뒤 비밀 값을 방장에게만 보낸다 */
   | { t: "started"; commitments: Commitment[] }

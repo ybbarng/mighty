@@ -50,7 +50,13 @@ export function MightyApp() {
 
   const backToStart = () => {
     endOnlineSession();
-    useGame.setState({ seatNames: null, audit: null, hostLeft: false });
+    useGame.setState({
+      seatNames: null,
+      audit: null,
+      hostLeft: false,
+      reconnecting: false,
+      offlineSeats: [],
+    });
     // 초대 링크로 들어왔다면 주소의 방 코드를 지워 처음 화면으로 돌아간다.
     if (window.location.search.includes("room=")) {
       const url = new URL(window.location.href);

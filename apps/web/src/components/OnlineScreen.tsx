@@ -36,6 +36,13 @@ function ruleName(code: string): string {
   return RULE_PRESETS.find((p) => p.code === code)?.name ?? "직접 정한 규칙";
 }
 
+/** 연결이 끊긴 사람 자리 */
+function offlineSeatsOf(lobby: LobbyState): number[] {
+  return lobby.seats
+    .filter((s) => s.kind === "guest" && !s.connected)
+    .map((s) => s.seat);
+}
+
 function seatNamesOf(lobby: LobbyState): string[] {
   return lobby.seats.map((s) => s.name);
 }
@@ -60,6 +67,8 @@ export function OnlineScreen({
   const setPlayerName = useSettings((s) => s.setPlayerName);
   const attachOnline = useGame((s) => s.attachOnline);
   const setSeatNames = useGame((s) => s.setSeatNames);
+  const reconnecting = useGame((s) => s.reconnecting);
+  const hostLeft = useGame((s) => s.hostLeft);
   const [name, setName] = useState(savedName);
   const [phase, setPhase] = useState<Phase>("name");
   const [lobby, setLobby] = useState<LobbyState | null>(null);
@@ -113,6 +122,7 @@ export function OnlineScreen({
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));
+          useGame.setState({ offlineSeats: offlineSeatsOf(l) });
         });
         setPhase("lobby");
       } else {
@@ -134,10 +144,16 @@ export function OnlineScreen({
           setLobby(l);
           setPhase("lobby");
           setSeatNames(seatNamesOf(l));
+          useGame.setState({ offlineSeats: offlineSeatsOf(l) });
         });
         guest.on("full", () => setPhase("full"));
         guest.on("kicked", () => setPhase("kicked"));
-        guest.on("hostLeft", () => useGame.setState({ hostLeft: true }));
+        guest.on("hostLeft", () =>
+          useGame.setState({ hostLeft: true, reconnecting: false }),
+        );
+        guest.on("connection", (state) =>
+          useGame.setState({ reconnecting: state === "reconnecting" }),
+        );
         guest.on("rejected", (e) => useGame.setState({ notice: e }));
         guest.on("audit", (result) => {
           useGame.setState({
@@ -268,6 +284,16 @@ export function OnlineScreen({
 
         {phase === "lobby" && lobby && (
           <>
+            {(reconnecting || hostLeft) && (
+              <p
+                role="status"
+                className="rounded-xl bg-rose-700/80 px-3 py-2 text-center text-sm"
+              >
+                {hostLeft
+                  ? "방장이 방을 나갔습니다"
+                  : "방장과 연결이 끊겼습니다. 다시 연결하는 중…"}
+              </p>
+            )}
             {isHost && (
               <div className="flex flex-col gap-2 rounded-2xl bg-white/5 p-3">
                 <p className="text-sm">친구에게 이 링크를 보내세요</p>

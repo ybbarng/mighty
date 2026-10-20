@@ -75,6 +75,10 @@ interface GameStore {
   audit: { ok: true } | { ok: false; reason: string } | null;
   /** 온라인 대전에서 방장이 나가 더 진행할 수 없음 */
   hostLeft: boolean;
+  /** 온라인 대전에서 방장과 잠깐 끊겨 다시 연결을 기다리는 중(참가자) */
+  reconnecting: boolean;
+  /** 온라인 대전에서 연결이 끊긴 사람 자리. 그동안 컴퓨터가 대신 둔다 */
+  offlineSeats: number[];
   /** 판 끝 검증에서 누군가 문제를 찾았다. 이 게임은 무효로 본다 */
   invalid: string | null;
   /** 다른 사람과 하는 온라인 대전인가. 카드 툴팁 같은 도움 기능을 끈다(원작 `bUseHintInNetwork`) */
@@ -249,6 +253,8 @@ export const useGame = create<GameStore>((set, get) => {
     notice: null,
     audit: null,
     hostLeft: false,
+    reconnecting: false,
+    offlineSeats: [],
     network: false,
     invalid: null,
 

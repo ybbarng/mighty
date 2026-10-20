@@ -33,6 +33,35 @@ function emptyHandlers(): Handlers {
 /** 테스트용: 같은 프로세스 안의 여러 참가자를 메모리로 잇는다. 메시지는 비동기로 전달한다(실제 네트워크처럼) */
 export class MemoryNetwork {
   private readonly peers = new Map<string, Handlers>();
+  /** 연결이 잠시 끊긴 참가자. 메시지가 오가지 않는다 */
+  private readonly down = new Set<string>();
+
+  /** 연결이 잠깐 끊긴 것처럼 서로에게 나갔다고 알린다(처리기는 그대로 둔다) */
+  disconnect(id: string): void {
+    const self = this.peers.get(id);
+    if (!self || this.down.has(id)) return;
+    this.down.add(id);
+    for (const [otherId, other] of this.peers) {
+      if (otherId === id) continue;
+      queueMicrotask(() => {
+        for (const h of other.leave) h(id);
+        for (const h of self.leave) h(otherId);
+      });
+    }
+  }
+
+  /** 끊겼던 참가자가 다시 보인다 */
+  reconnect(id: string): void {
+    const self = this.peers.get(id);
+    if (!self || !this.down.delete(id)) return;
+    for (const [otherId, other] of this.peers) {
+      if (otherId === id || this.down.has(otherId)) continue;
+      queueMicrotask(() => {
+        for (const h of other.join) h(id);
+        for (const h of self.join) h(otherId);
+      });
+    }
+  }
 
   join(selfId = randomId()): Transport {
     const handlers = emptyHandlers();
@@ -49,8 +78,10 @@ export class MemoryNetwork {
       send: (message, to) => {
         // 실제 네트워크처럼 받는 쪽이 고쳐 쓰지 못하게 복사해서 보낸다.
         const copy = JSON.parse(JSON.stringify(message)) as unknown;
+        if (this.down.has(selfId)) return;
         for (const [id, other] of this.peers) {
           if (id === selfId || (to !== undefined && id !== to)) continue;
+          if (this.down.has(id)) continue;
           deliver(() => {
             for (const h of other.message) h(copy, selfId);
           });

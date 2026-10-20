@@ -123,3 +123,38 @@ test("방장이 방을 만들고 친구가 링크로 들어와 한 판을 끝까
   ).toBeVisible({ timeout: 10_000 });
   expect(errors).toEqual([]);
 });
+
+test("게임 중에 참가자가 새로고침해도 같은 자리로 돌아온다", async ({
+  context,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  for (const p of [host, guest]) await prepare(p);
+
+  await host.goto("/?net=local");
+  await host.getByRole("button", { name: /다함께 마이티/ }).click();
+  await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
+  await host.getByRole("button", { name: "방 만들기", exact: true }).click();
+  const link = await host.locator("input[readonly]").inputValue();
+
+  await guest.goto(link);
+  await guest.getByPlaceholder("친구들에게 보일 이름").fill("철수");
+  await guest.getByRole("button", { name: "들어가기" }).click();
+  await expect(host.getByText("철수")).toBeVisible();
+  await host.getByRole("button", { name: "시작하기" }).click();
+  await expect(guest.getByRole("button", { name: "점수판" })).toBeVisible();
+
+  // 새로고침하면 방장 화면에 연결이 끊겼다고 보인다.
+  await guest.reload();
+  await expect(host.getByText("연결 끊김 · 컴퓨터가 대신")).toBeVisible();
+  await host.screenshot({
+    path: test.info().outputPath("online-4-host-offline.png"),
+  });
+
+  // 같은 탭이라 토큰이 남아 있어, 다시 들어가면 같은 자리로 게임을 이어 간다.
+  const join = guest.getByRole("button", { name: "들어가기" });
+  if (await join.isVisible()) await join.click();
+  await expect(guest.getByRole("button", { name: "점수판" })).toBeVisible();
+  await expect(host.getByText("연결 끊김 · 컴퓨터가 대신")).toBeHidden();
+});

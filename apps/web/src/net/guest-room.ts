@@ -74,7 +74,12 @@ export interface GuestRoomOptions {
   token: string | null;
   /** 재접속할 때 처음 약속한 비밀 값을 그대로 쓴다 */
   secret?: string;
+  /** 방장과 연결이 끊긴 뒤 다시 연결되기를 기다리는 시간. 지나면 방장이 나간 것으로 본다 */
+  reconnectTimeoutMs?: number;
 }
+
+/** 방장과의 연결 상태 */
+export type ConnectionState = "connected" | "reconnecting";
 
 /**
  * 참가자 기기의 방. 방장을 찾아 들어가고, 대기실 정보와 대국 스냅숏을 받는다.
@@ -93,6 +98,10 @@ export class GuestRoom {
   private commitHash: Promise<string>;
   /** 방장이 내보냈으면 그 뒤 메시지는 받지 않는다 */
   private kicked = false;
+  /** 방장이 방을 닫는다고 알렸다 */
+  private hostClosed = false;
+  private readonly reconnectTimeoutMs: number;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly listeners = {
     lobby: new Set<(lobby: LobbyState) => void>(),
     seat: new Set<(seat: number, token: string) => void>(),
@@ -103,6 +112,7 @@ export class GuestRoom {
     chat: new Set<(message: ChatMessage) => void>(),
     report: new Set<(report: AuditReport) => void>(),
     hostLeft: new Set<() => void>(),
+    connection: new Set<(state: ConnectionState) => void>(),
     audit: new Set<(result: AuditResult) => void>(),
   };
 
@@ -112,16 +122,28 @@ export class GuestRoom {
     this.token = options.token;
     this.secret = options.secret ?? newSecret();
     this.commitHash = commit(this.secret);
+    this.reconnectTimeoutMs = options.reconnectTimeoutMs ?? 60_000;
 
     this.transport.onPeerJoin((peerId) => {
       // 누가 방장인지 모르므로 새로 보이는 상대에게 들어가겠다고 알린다. 방장만 답한다.
-      if (this.seat === null || this.hostId === peerId)
+      // 방장과 끊긴 뒤라면 다시 보이는 상대에게 토큰으로 들어가 같은 자리를 받는다.
+      if (this.seat === null || this.hostId === null || this.hostId === peerId)
         void this.sendJoin(peerId);
     });
     this.transport.onPeerLeave((peerId) => {
       if (peerId !== this.hostId) return;
       this.hostId = null;
-      for (const l of this.listeners.hostLeft) l();
+      if (this.hostClosed) {
+        this.emitHostLeft();
+        return;
+      }
+      // 잠깐 끊겼을 수 있으니 바로 끝내지 않고 다시 연결되기를 기다린다.
+      for (const l of this.listeners.connection) l("reconnecting");
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = setTimeout(
+        () => this.emitHostLeft(),
+        this.reconnectTimeoutMs,
+      );
     });
     this.transport.onMessage((message, from) => {
       if (isHostMessage(message)) void this.onMessage(message, from);
@@ -143,8 +165,16 @@ export class GuestRoom {
   }
 
   leave(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     if (this.hostId) this.send({ t: "leave" }, this.hostId);
     this.transport.leave();
+  }
+
+  private emitHostLeft(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    for (const l of this.listeners.hostLeft) l();
   }
 
   private async sendJoin(peerId: string): Promise<void> {
@@ -166,11 +196,21 @@ export class GuestRoom {
   private async onMessage(message: HostMessage, from: string): Promise<void> {
     if (this.kicked) return;
     switch (message.t) {
-      case "welcome":
+      case "welcome": {
+        const reconnected = this.reconnectTimer !== null;
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
         this.hostId = from;
         this.seat = message.seat;
         this.token = message.token;
         for (const l of this.listeners.seat) l(message.seat, message.token);
+        if (reconnected)
+          for (const l of this.listeners.connection) l("connected");
+        break;
+      }
+      case "closed":
+        if (from !== this.hostId) return;
+        this.hostClosed = true;
         break;
       case "full":
         for (const l of this.listeners.full) l();
