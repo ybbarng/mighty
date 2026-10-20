@@ -94,6 +94,8 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const shownTrick = useGame((s) => s.shownTrick);
   const collecting = useGame((s) => s.collecting);
   const dealing = useGame((s) => s.dealing);
+  const seatNames = useGame((s) => s.seatNames);
+  const hostLeft = useGame((s) => s.hostLeft);
   const queue = useGame((s) => s.queue);
   const events = useGame((s) => s.events);
   const seq = useGame((s) => s.seq);
@@ -149,8 +151,11 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const myIndex = view.order.indexOf(view.seat);
   const offsetOf = (seat: number) =>
     (view.order.indexOf(seat) - myIndex + n) % n;
+  // 온라인 대전은 대기실 이름을, 혼자 할 때는 앉은 순서대로 "컴퓨터 n"을 쓴다.
   const seatName = (seat: number) =>
-    seat === view.seat ? "나" : `컴퓨터 ${offsetOf(seat)}`;
+    seat === view.seat
+      ? "나"
+      : (seatNames?.[seat] ?? `컴퓨터 ${offsetOf(seat)}`);
   const kiruda = view.goal?.kiruda ?? null;
   const hand = sortHand(view.hand, rules, kiruda);
 
@@ -663,6 +668,19 @@ export function GameTable({ onExit }: { onExit: () => void }) {
               {decision.leading
                 ? "내가 선입니다 — 낼 카드를 고르세요"
                 : "내 차례 — 낼 카드를 고르세요"}
+            </div>
+          )}
+
+          {hostLeft && (
+            <div className="absolute inset-x-0 top-16 z-[350] mx-auto flex w-fit items-center gap-3 rounded-2xl bg-black/85 px-4 py-3 text-sm shadow-2xl">
+              방장이 방을 나가 게임이 끝났습니다
+              <button
+                type="button"
+                onClick={onExit}
+                className="rounded-lg bg-amber-400 px-3 py-1 font-semibold text-black"
+              >
+                처음으로
+              </button>
             </div>
           )}
 

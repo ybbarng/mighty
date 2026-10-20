@@ -20,9 +20,12 @@ import { RuleEditor } from "./rules/RuleEditor";
 /** 게임 시작 화면: 기본 규칙 고르기, 원작 규칙 문자열 붙여넣기 */
 export function StartScreen({
   onStart,
+  onOnline,
   onResume,
 }: {
   onStart: (rules: RuleSet) => void;
+  /** 친구와 하기: 고른 규칙으로 방을 만든다 */
+  onOnline: (rules: RuleSet) => void;
   /** 저장한 대국이 있을 때만 */
   onResume?: () => void;
 }) {
@@ -182,14 +185,24 @@ export function StartScreen({
           className="py-3 text-base"
           onClick={() => rules && onStart(rules)}
         >
-          {rules ? `${rules.playerCount}마로 시작` : "규칙을 고르세요"}
+          {rules ? `컴퓨터와 ${rules.playerCount}마` : "규칙을 고르세요"}
         </ActionButton>
         {rules && (
           <p className="-mt-3 text-center text-xs opacity-60">
-            나와 컴퓨터 {rules.playerCount - 1}명이 함께합니다. 친구와 하는
-            대전은 준비 중이에요
+            나와 컴퓨터 {rules.playerCount - 1}명이 함께합니다
           </p>
         )}
+        <ActionButton
+          variant="secondary"
+          disabled={!rules}
+          className="py-3 text-base"
+          onClick={() => rules && onOnline(rules)}
+        >
+          친구와 하기
+        </ActionButton>
+        <p className="-mt-3 text-center text-xs opacity-60">
+          방을 만들어 링크를 보내면 됩니다. 빈자리는 컴퓨터가 채웁니다
+        </p>
         {onResume && (
           <ActionButton
             variant="secondary"

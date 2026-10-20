@@ -22,6 +22,9 @@ export const SPEEDS = [
 
 interface Settings {
   cardThemeId: string;
+  /** 온라인 대전에서 쓰는 내 이름 */
+  playerName: string;
+  setPlayerName(name: string): void;
   /** 재생 속도 배율. 클수록 빠르다 */
   speed: number;
   setSpeed(speed: number): void;
@@ -39,6 +42,8 @@ export const useSettings = create<Settings>()(
   persist(
     (set) => ({
       cardThemeId: CLASSIC.id,
+      playerName: "",
+      setPlayerName: (playerName) => set({ playerName }),
       speed: 1,
       setSpeed: (speed) => set({ speed }),
       sound: true,

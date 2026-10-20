@@ -95,6 +95,7 @@ export class GuestRoom {
     match: new Set<(match: RemoteMatch) => void>(),
     rejected: new Set<(error: string) => void>(),
     full: new Set<() => void>(),
+    hostLeft: new Set<() => void>(),
     audit: new Set<(result: AuditResult) => void>(),
   };
 
@@ -111,7 +112,9 @@ export class GuestRoom {
         void this.sendJoin(peerId);
     });
     this.transport.onPeerLeave((peerId) => {
-      if (peerId === this.hostId) this.hostId = null;
+      if (peerId !== this.hostId) return;
+      this.hostId = null;
+      for (const l of this.listeners.hostLeft) l();
     });
     this.transport.onMessage((message, from) => {
       if (isHostMessage(message)) void this.onMessage(message, from);

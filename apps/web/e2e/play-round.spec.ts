@@ -60,7 +60,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
   await expect(page.getByRole("img", { name: /마이티/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("1-start.png") });
 
-  await page.getByRole("button", { name: "5마로 시작" }).click();
+  await page.getByRole("button", { name: "컴퓨터와 5마" }).click();
   await expect(page.getByRole("button", { name: "포기" })).toBeVisible({
     timeout: 15_000,
   });

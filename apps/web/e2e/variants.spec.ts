@@ -56,7 +56,7 @@ for (const variant of VARIANTS) {
     await page
       .getByRole("button", { name: variant.preset, exact: true })
       .click();
-    await page.getByRole("button", { name: /마로 시작/ }).click();
+    await page.getByRole("button", { name: /^컴퓨터와 \d마$/ }).click();
 
     const shots = new Set<string>();
     const shot = async (key: string) => {

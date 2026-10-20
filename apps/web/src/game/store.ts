@@ -9,12 +9,15 @@ import type {
 import { isJoker, mightyOf } from "@mighty/engine";
 import { create } from "zustand";
 import { cuesFor } from "./cues";
-import type { Snapshot, SubmitResult } from "./host";
+import type { MatchHost, Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
 import { play as playCue } from "./sound";
 import { dealTiming } from "./timing";
+
+/** 화면에 붙일 수 있는 대국. 처음 쌓인 진행을 넘겨 줄 수 있어야 한다 */
+export type AttachableHost = MatchHost & { drain(): Snapshot[] };
 
 /** 이벤트마다 화면이 머무는 시간(ms). docs/05-layout.md 3.9절 */
 const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
@@ -46,7 +49,9 @@ export interface NewGameOptions {
 }
 
 interface GameStore {
-  host: LocalMatch | null;
+  host: AttachableHost | null;
+  /** 온라인 대전에서 자리별 이름. 혼자 할 때는 `null`(나·컴퓨터 n) */
+  seatNames: string[] | null;
   /** 지금 화면에 보이는 정보. 엔진보다 늦게 따라간다 */
   view: PlayerView | null;
   events: GameEvent[];
@@ -62,9 +67,16 @@ interface GameStore {
   roundStartMoney: number[];
   busy: boolean;
   notice: string | null;
+  /** 온라인 대전이 끝난 뒤 공정성 확인 결과(참가자) */
+  audit: { ok: true } | { ok: false; reason: string } | null;
+  /** 온라인 대전에서 방장이 나가 더 진행할 수 없음 */
+  hostLeft: boolean;
   newGame(options: NewGameOptions): void;
   /** 저장해 둔 대국을 이어서 한다 */
   resume(saved: SavedMatch): void;
+  /** 온라인 대국(방장의 LocalMatch나 참가자의 RemoteMatch)을 붙인다 */
+  attachOnline(host: AttachableHost, seatNames: string[]): void;
+  setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
   clearNotice(): void;
 }
@@ -173,8 +185,14 @@ export const useGame = create<GameStore>((set, get) => {
     advance();
   };
 
-  /** 새 대국이나 되살린 대국을 화면에 붙인다. 진행될 때마다 저장한다 */
-  const attach = (host: LocalMatch) => {
+  /**
+   * 대국을 화면에 붙인다. 혼자 하는 대국(LocalMatch)은 진행될 때마다 저장하고,
+   * 온라인 대국은 저장하지 않는다(방장 기기가 기록을 들고 있다).
+   */
+  const attach = (
+    host: AttachableHost,
+    options: { save: boolean; seatNames: string[] | null },
+  ) => {
     clearTimer();
     unsubscribe?.();
     const current = host.current();
@@ -189,10 +207,14 @@ export const useGame = create<GameStore>((set, get) => {
       dealing: null,
       busy: false,
       roundStartMoney: [...current.money],
+      seatNames: options.seatNames,
     });
-    saveGame(host.save());
+    const persist = () => {
+      if (options.save && host instanceof LocalMatch) saveGame(host.save());
+    };
+    persist();
     unsubscribe = host.subscribe((snapshot) => {
-      saveGame(host.save());
+      persist();
       enqueue([snapshot]);
     });
     enqueue(pending);
@@ -200,6 +222,7 @@ export const useGame = create<GameStore>((set, get) => {
 
   return {
     host: null,
+    seatNames: null,
     view: null,
     events: [],
     seq: 0,
@@ -210,6 +233,8 @@ export const useGame = create<GameStore>((set, get) => {
     roundStartMoney: [],
     busy: false,
     notice: null,
+    audit: null,
+    hostLeft: false,
 
     newGame(options) {
       const host = new LocalMatch({
@@ -217,11 +242,19 @@ export const useGame = create<GameStore>((set, get) => {
         seed: options.seed ?? Math.floor(Math.random() * 2 ** 31),
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
-      attach(host);
+      attach(host, { save: true, seatNames: null });
     },
 
     resume(saved) {
-      attach(LocalMatch.restore(saved));
+      attach(LocalMatch.restore(saved), { save: true, seatNames: null });
+    },
+
+    attachOnline(host, seatNames) {
+      attach(host, { save: false, seatNames });
+    },
+
+    setSeatNames(seatNames) {
+      set({ seatNames });
     },
 
     submit(action) {
