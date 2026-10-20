@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import { SPEEDS, useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 
 import { CARD_THEMES } from "./card-art/themes";
+import { GlossarySheet } from "./tutorial/GlossarySheet";
 
 function Chips<T extends string | number>({
   options,
@@ -43,6 +46,8 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
   const setSound = useSettings((s) => s.setSound);
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
+  const [glossary, setGlossary] = useState(false);
+  if (glossary) return <GlossarySheet onClose={onClose} />;
   return (
     <div className="fixed inset-0 z-[400]" onPointerDown={onClose}>
       <div
@@ -72,6 +77,13 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
             onChange={setCardTheme}
           />
         </div>
+        <button
+          type="button"
+          onClick={() => setGlossary(true)}
+          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm hover:bg-white/15"
+        >
+          📖 용어 사전 — 기루다, 주공, 조커콜…
+        </button>
         <p className="text-[11px] leading-relaxed opacity-50">
           키보드: ← → 로 카드 고르기, Enter 로 내기, Esc 로 선택 취소
         </p>

@@ -186,11 +186,18 @@ export function GameTable({
   const decision: Decision | null = acting ? view.decision : null;
   const playable = decision?.kind === "play" ? new Set(decision.cards) : null;
   const exchanging = decision?.kind === "exchange";
+  // 튜토리얼 실전에서는 컴퓨터가 같은 자리라면 낼 카드·버릴 카드를 알려 준다.
   const hintAction =
-    hints && decision?.kind === "play"
+    hints && (decision?.kind === "play" || decision?.kind === "exchange")
       ? heuristicBot.decide(view, createRng(view.trickIndex))
       : null;
-  const hintCard = hintAction?.type === "play" ? hintAction.card : null;
+  const hintCards = new Set<Card>(
+    hintAction?.type === "play"
+      ? [hintAction.card]
+      : hintAction?.type === "exchange"
+        ? hintAction.discard
+        : [],
+  );
 
   const act = (action: Parameters<typeof submit>[0]) => {
     const result = submit(action);
@@ -499,7 +506,8 @@ export function GameTable({
                     (playable !== null && !canPlay) ||
                     (!acting && view.phase === "play")
                   }
-                  highlight={discards.includes(card) || card === hintCard}
+                  highlight={discards.includes(card)}
+                  hint={hintCards.has(card)}
                   interactive={acting && (exchanging || playable !== null)}
                   onActivate={(pointer) => onCardActivate(card, pointer)}
                 />

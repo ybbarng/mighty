@@ -40,6 +40,22 @@ export function TutorialHome({
             {doneCount}/{LESSONS.length}
           </span>
         </div>
+        {doneCount === LESSONS.length && (
+          <div className="pop-in flex flex-col gap-2 rounded-2xl border border-emerald-300/50 bg-emerald-500/15 p-4">
+            <p className="font-bold">모든 단원을 마쳤어요! 🎉</p>
+            <p className="text-sm opacity-80">
+              이제 컴퓨터와 한 판, 친구와 한 판 해 보세요. 단원은 언제든 다시 볼
+              수 있어요.
+            </p>
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-xl bg-amber-400 px-4 py-2 font-semibold text-black"
+            >
+              게임하러 가기
+            </button>
+          </div>
+        )}
         <ol className="flex flex-col gap-2">
           {LESSONS.map((lesson, i) => {
             const state = states[i];

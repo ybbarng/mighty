@@ -117,7 +117,7 @@ export function LessonPlayer({
   }
 
   return (
-    <main className="flex min-h-dvh justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
+    <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
       <div className="flex w-full max-w-lg flex-col gap-4 py-4">
         <div className="flex items-center gap-3">
           <button

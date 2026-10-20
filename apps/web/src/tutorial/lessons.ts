@@ -63,7 +63,7 @@ export interface Lesson {
 /** 트릭을 하나 끝냈을 때 내가 이겼는가 */
 function wonFirstTrick({ events, view }: MissionContext): MissionStatus {
   const won = events.find((e) => e.type === "trickWon");
-  if (!won || won.type !== "trickWon") return null;
+  if (won?.type !== "trickWon") return null;
   return won.seat === view.seat ? "success" : "fail";
 }
 
@@ -511,7 +511,7 @@ export const LESSONS: readonly Lesson[] = [
         },
         check: ({ events }) => {
           const declared = events.find((e) => e.type === "friendDeclared");
-          if (!declared || declared.type !== "friendDeclared") return null;
+          if (declared?.type !== "friendDeclared") return null;
           const f = declared.friend;
           return f.kind === "card" && (f.card === "SA" || f.card === "JK")
             ? "success"

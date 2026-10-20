@@ -35,6 +35,8 @@ interface PlayingCardProps {
   delay?: number;
   dim?: boolean;
   highlight?: boolean;
+  /** 튜토리얼 추천 카드: 강조와 다른 색으로 깜빡이고 "추천" 표를 단다 */
+  hint?: boolean;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
 }
@@ -60,6 +62,7 @@ export function PlayingCard({
   delay = 0,
   dim = false,
   highlight = false,
+  hint = false,
   interactive = false,
   onActivate,
 }: PlayingCardProps) {
@@ -113,10 +116,16 @@ export function PlayingCard({
         dim && "brightness-[0.55] saturate-50",
         highlight &&
           "shadow-[0_0_0_3px_#fbbf24,0_0_18px_4px_rgba(251,191,36,0.6)]",
+        hint && !highlight && "hint-glow",
       )}
       style={style}
     >
       <CardArt card={card} theme={theme} />
+      {hint && (
+        <span className="pointer-events-none absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-sky-400 px-1.5 py-px font-bold text-[10px] text-black shadow">
+          추천
+        </span>
+      )}
     </button>
   );
 }

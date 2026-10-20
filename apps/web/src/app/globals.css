@@ -108,8 +108,48 @@ button {
   }
 }
 
+/* 나타난 뒤 그대로 머무는 안내 상자 */
+.pop-in {
+  animation: pop-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+/* 튜토리얼에서 컴퓨터가 추천하는 카드 */
+.hint-glow {
+  animation: hint-glow 1.4s ease-in-out infinite;
+}
+
+@keyframes hint-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px #38bdf8,
+      0 0 10px 2px rgba(56, 189, 248, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px #7dd3fc,
+      0 0 26px 8px rgba(125, 211, 252, 0.8);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .effect-pop {
+  .effect-pop,
+  .pop-in,
+  .hint-glow {
     animation-name: none;
+  }
+  .hint-glow {
+    box-shadow: 0 0 0 3px #38bdf8;
   }
 }

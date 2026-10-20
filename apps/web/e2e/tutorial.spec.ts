@@ -56,6 +56,15 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   await page.getByRole("button", { name: "미션 시작" }).click();
 
   await expect(page.getByText("이 트릭을 가져오세요")).toBeVisible();
+  // 게임 중에도 용어 사전을 열 수 있다.
+  await page.getByRole("button", { name: "설정" }).click();
+  await page.getByRole("button", { name: /용어 사전/ }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "용어 사전" })
+      .getByText("기루다", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "닫기" }).click();
   await playCard(page, "♥5");
   await expect(page.getByRole("dialog", { name: "미션 실패" })).toBeVisible({
     timeout: 10_000,
@@ -66,6 +75,11 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
     timeout: 10_000,
   });
+  // 안내 상자는 사라지지 않고 머문다.
+  await page.waitForTimeout(1500);
+  await expect(
+    page.getByRole("button", { name: "다음", exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: `test-results/tutorial-${info.project.name}.png`,
   });
