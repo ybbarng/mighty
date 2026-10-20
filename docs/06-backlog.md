@@ -6,7 +6,7 @@
 
 - [x] `revival`을 합치고 기본 브랜치를 `main`으로 바꾸기. CI는 `main` push와 PR에서 돈다
 - [x] 배포 준비: byb.kr 서버 규칙대로 `Dockerfile`(정적 빌드 → nginx)과 `.github/workflows/image.yml`(빌드 → GHCR → SSH 배포). 서버 쪽 compose 초안은 [deploy/README.md](../deploy/README.md)
-- [ ] 배포: servers 저장소에 `byb.kr/apps/mighty/`(compose.yaml, deploy.sh), 서버에 배포 키, 이 저장소에 시크릿(`SERVER_HOST`·`SERVER_USER`·`SERVER_SSH_KEY`)
+- [x] 배포: servers 저장소의 `byb.kr/apps/mighty/`, 배포 키, 시크릿 — mighty.byb.kr에서 돌아간다(2026-10-20)
 - [x] 방 중개: 같은 서버의 Nostr 릴레이를 `NEXT_PUBLIC_RELAY_URLS`(빌드 때)로 받아 먼저 쓰고, 공개 릴레이 두 곳을 예비로 쓴다
 - [ ] 방화벽 대비 TURN: 설정 초안(deploy/turnserver.conf)과 앱 쪽 빌드 값은 있다. UDP 포트를 열어야 해서 서버 규칙("포트를 열지 않는다")과 맞지 않아 보류
 - [ ] 공개 방 목록이 필요해지면 작은 WebSocket 중개 서버
@@ -73,9 +73,9 @@
 
 ### 배포
 
-- [ ] 정적 빌드 배포, CI에서 자동 배포
+- [x] 정적 빌드 배포, CI에서 자동 배포 — main에 푸시하면 Image 워크플로가 빌드·배포(2026-10-20)
 - [x] 로고, 페이지 제목·설명·공유 미리보기 이미지, 홈 화면 아이콘(안드로이드·iOS), manifest, 스플래시, 오프라인 실행(서비스 워커)
-- [ ] 배포 주소가 정해지면 `NEXT_PUBLIC_SITE_URL`로 공유 이미지 주소 맞추기
+- [x] `NEXT_PUBLIC_SITE_URL`=https://mighty.byb.kr 로 공유 이미지 주소 맞추기(이미지 빌드 인자)
 - [ ] iOS 전용 시작 이미지(apple-touch-startup-image). 지금은 앱 안 스플래시로 대신한다
 
 ## M4.5 튜토리얼
