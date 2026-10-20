@@ -15,6 +15,26 @@ const OWN_RELAYS = (process.env.NEXT_PUBLIC_RELAY_URLS ?? "")
   .filter(Boolean);
 
 /**
+ * 기기끼리 바로 이어지지 않는 네트워크(회사·학교 방화벽, 일부 모바일망)를 위한 TURN 중계 서버.
+ * 빌드할 때 `NEXT_PUBLIC_TURN_URLS`(쉼표로 여럿)·`_USERNAME`·`_CREDENTIAL`로 받는다.
+ * 정적 사이트라 계정이 번들에 들어가므로, 서버 쪽에서 사용량을 제한한다(deploy/turnserver.conf).
+ */
+const TURN_URLS = (process.env.NEXT_PUBLIC_TURN_URLS ?? "")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const TURN_CONFIG =
+  TURN_URLS.length > 0
+    ? [
+        {
+          urls: TURN_URLS,
+          username: process.env.NEXT_PUBLIC_TURN_USERNAME ?? "",
+          credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL ?? "",
+        },
+      ]
+    : null;
+
+/**
  * 인터넷 대전: WebRTC로 기기끼리 바로 잇는다. 서로를 찾는 단계(시그널링)만 Nostr 릴레이를 거친다. 방 코드를 비밀번호로도 써서 릴레이를 지나는 연결 정보를 암호화한다.
  */
 export function joinP2P(roomId: string): Transport {
@@ -22,6 +42,7 @@ export function joinP2P(roomId: string): Transport {
     {
       appId: APP_ID,
       password: roomId,
+      ...(TURN_CONFIG ? { turnConfig: TURN_CONFIG } : {}),
       ...(OWN_RELAYS.length > 0
         ? {
             // urls를 주면 목록 전부에 붙는다. 같은 빌드끼리는 목록이 같아 늘 같은 릴레이에서 만난다.

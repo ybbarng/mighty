@@ -13,6 +13,10 @@ services:
       args:
         NEXT_PUBLIC_SITE_URL: https://${MIGHTY_HOST:-mighty.byb.kr}
         NEXT_PUBLIC_RELAY_URLS: wss://${MIGHTY_HOST:-mighty.byb.kr}/relay
+        # TURN 계정은 웹 번들에 들어간다. turnserver.conf의 사용량 제한으로 남용을 막는다.
+        NEXT_PUBLIC_TURN_URLS: turn:${MIGHTY_HOST:-mighty.byb.kr}:3478?transport=udp,turn:${MIGHTY_HOST:-mighty.byb.kr}:3478?transport=tcp
+        NEXT_PUBLIC_TURN_USERNAME: ${TURN_USERNAME:-mighty}
+        NEXT_PUBLIC_TURN_CREDENTIAL: ${TURN_PASSWORD:?TURN_PASSWORD를 .env에 정하세요}
     restart: unless-stopped
     networks: [traefik]
     labels:
@@ -42,6 +46,20 @@ services:
       - traefik.http.routers.mighty-relay.middlewares=mighty-relay-strip
       - traefik.http.middlewares.mighty-relay-strip.stripprefix.prefixes=/relay
       - traefik.http.services.mighty-relay.loadbalancer.server.port=8080
+
+  # 기기끼리 바로 이어지지 않는 네트워크를 위한 TURN 중계. UDP라 Traefik을 거치지 않고 호스트 포트를 바로 쓴다.
+  turn:
+    # 배포할 때 확인한 버전으로 고정한다.
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --user=${TURN_USERNAME:-mighty}:${TURN_PASSWORD:?TURN_PASSWORD를 .env에 정하세요}
+      - --external-ip=${TURN_EXTERNAL_IP:?서버의 공인 IP를 TURN_EXTERNAL_IP로 정하세요}
 
 networks:
   traefik:
