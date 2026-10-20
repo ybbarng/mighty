@@ -55,6 +55,9 @@ export class HostRoom {
   private readonly pace: ((next: () => void) => void) | null;
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private commitments: Commitment[] = [];
+  /** 내보낸 사람. 같은 기기로 다시 들어오려 하면 막는다 */
+  private readonly kickedPeers = new Set<string>();
+  private readonly kickedTokens = new Set<string>();
   match: LocalMatch | null = null;
 
   constructor(options: HostRoomOptions) {
@@ -118,6 +121,21 @@ export class HostRoom {
         this.names.delete(seat);
       }
     }
+    this.broadcastLobby();
+  }
+
+  /** 대기실에서 참가자를 내보낸다. 시작한 뒤에는 할 수 없다 */
+  kick(seat: number): void {
+    if (this.match) return;
+    const guest = this.guests.get(seat);
+    if (!guest) return;
+    this.kickedTokens.add(guest.token);
+    if (guest.peerId) {
+      this.kickedPeers.add(guest.peerId);
+      this.send({ t: "kicked" }, guest.peerId);
+    }
+    this.guests.delete(seat);
+    this.names.delete(seat);
     this.broadcastLobby();
   }
 
@@ -265,6 +283,13 @@ export class HostRoom {
     token: string | null,
     commitHash: string,
   ): void {
+    if (
+      this.kickedPeers.has(peerId) ||
+      (token !== null && this.kickedTokens.has(token))
+    ) {
+      this.send({ t: "kicked" }, peerId);
+      return;
+    }
     // 재접속: 같은 토큰이면 같은 자리로 돌려보낸다.
     for (const [seat, guest] of this.guests) {
       if (token !== null && guest.token === token) {

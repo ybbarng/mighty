@@ -23,7 +23,7 @@ import { Logo } from "./brand/Logo";
 import { InviteQr } from "./InviteQr";
 import { ActionButton } from "./panels/common";
 
-type Phase = "name" | "connecting" | "lobby" | "full" | "error";
+type Phase = "name" | "connecting" | "lobby" | "full" | "kicked" | "error";
 
 function ruleName(code: string): string {
   return RULE_PRESETS.find((p) => p.code === code)?.name ?? "직접 정한 규칙";
@@ -105,6 +105,7 @@ export function OnlineScreen({
           setSeatNames(seatNamesOf(l));
         });
         guest.on("full", () => setPhase("full"));
+        guest.on("kicked", () => setPhase("kicked"));
         guest.on("hostLeft", () => useGame.setState({ hostLeft: true }));
         guest.on("rejected", (e) => useGame.setState({ notice: e }));
         guest.on("audit", (result) =>
@@ -236,9 +237,29 @@ export function OnlineScreen({
               </div>
             )}
             <div className="flex flex-col gap-1">
-              <p className="text-xs opacity-60">
-                {ruleName(lobby.ruleCode)} · {lobby.seats.length}명
-              </p>
+              {isHost ? (
+                <div className="flex flex-wrap gap-1">
+                  {RULE_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onlineSession.host?.setRules(p.rules)}
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[11px]",
+                        p.code === lobby.ruleCode
+                          ? "border-amber-300 bg-white text-black"
+                          : "border-white/15 bg-white/5",
+                      )}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs opacity-60">
+                  {ruleName(lobby.ruleCode)} · {lobby.seats.length}명
+                </p>
+              )}
               {lobby.seats.map((s) => (
                 <div
                   key={s.seat}
@@ -255,12 +276,21 @@ export function OnlineScreen({
                       </span>
                     )}
                   </span>
-                  <span className="text-xs opacity-70">
+                  <span className="flex items-center gap-2 text-xs opacity-70">
                     {s.kind === "bot"
                       ? "빈자리 · 컴퓨터"
                       : s.connected
                         ? "들어옴"
                         : "연결 끊김"}
+                    {isHost && s.kind === "guest" && (
+                      <button
+                        type="button"
+                        onClick={() => onlineSession.host?.kick(s.seat)}
+                        className="rounded bg-white/10 px-1.5 py-0.5 hover:bg-red-500/60"
+                      >
+                        내보내기
+                      </button>
+                    )}
                   </span>
                 </div>
               ))}
@@ -281,6 +311,9 @@ export function OnlineScreen({
           </>
         )}
 
+        {phase === "kicked" && (
+          <p className="text-center text-sm">방장이 대기실에서 내보냈습니다.</p>
+        )}
         {phase === "full" && (
           <p className="text-center text-sm">
             자리가 다 찼거나 이미 시작한 방입니다.

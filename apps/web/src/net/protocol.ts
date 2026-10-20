@@ -42,6 +42,8 @@ export type GuestMessage =
 export type HostMessage =
   | { t: "welcome"; seat: number; token: string }
   | { t: "full" }
+  /** 방장이 대기실에서 내보냈다. 같은 방에는 다시 들어올 수 없다 */
+  | { t: "kicked" }
   | { t: "lobby"; lobby: LobbyState }
   /** 게임 시작: 방장 것까지 모든 약속(해시)을 먼저 알린다. 참가자는 이걸 받은 뒤 비밀 값을 방장에게만 보낸다 */
   | { t: "started"; commitments: Commitment[] }

@@ -89,12 +89,15 @@ export class GuestRoom {
   private commitments: Commitment[] = [];
   private readonly name: string;
   private commitHash: Promise<string>;
+  /** 방장이 내보냈으면 그 뒤 메시지는 받지 않는다 */
+  private kicked = false;
   private readonly listeners = {
     lobby: new Set<(lobby: LobbyState) => void>(),
     seat: new Set<(seat: number, token: string) => void>(),
     match: new Set<(match: RemoteMatch) => void>(),
     rejected: new Set<(error: string) => void>(),
     full: new Set<() => void>(),
+    kicked: new Set<() => void>(),
     hostLeft: new Set<() => void>(),
     audit: new Set<(result: AuditResult) => void>(),
   };
@@ -152,6 +155,7 @@ export class GuestRoom {
   }
 
   private async onMessage(message: HostMessage, from: string): Promise<void> {
+    if (this.kicked) return;
     switch (message.t) {
       case "welcome":
         this.hostId = from;
@@ -161,6 +165,12 @@ export class GuestRoom {
         break;
       case "full":
         for (const l of this.listeners.full) l();
+        break;
+      case "kicked":
+        if (this.hostId !== null && from !== this.hostId) return;
+        this.kicked = true;
+        this.transport.leave();
+        for (const l of this.listeners.kicked) l();
         break;
       case "lobby":
         if (this.hostId !== null && from !== this.hostId) return;

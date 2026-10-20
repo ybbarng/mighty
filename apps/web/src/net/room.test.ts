@@ -170,3 +170,45 @@ describe("온라인 방", () => {
     expect(errors[0]).toBe("지금은 이 자리의 차례가 아니다");
   });
 });
+
+describe("대기실 관리", () => {
+  it("방장이 내보낸 참가자는 자리를 잃고, 같은 토큰으로 다시 들어올 수 없다", async () => {
+    const { net, host, a } = await setup();
+    let kicked = false;
+    let lobbyAfterKick = 0;
+    a.on("kicked", () => {
+      kicked = true;
+    });
+    a.on("lobby", () => {
+      if (kicked) lobbyAfterKick++;
+    });
+    const seat = a.seat as number;
+    host.kick(seat);
+    await until(() => kicked);
+    host.setRules(rules); // 대기실 알림을 한 번 더 보낸다
+    await flush();
+    expect(host.lobby().seats[seat]?.kind).toBe("bot");
+    // 내보낸 뒤의 대기실 알림 때문에 화면이 대기실로 돌아가면 안 된다.
+    expect(lobbyAfterKick).toBe(0);
+
+    const again = new GuestRoom({
+      transport: net.join("a2"),
+      name: "철수",
+      token: a.token,
+    });
+    let kickedAgain = false;
+    again.on("kicked", () => {
+      kickedAgain = true;
+    });
+    await until(() => kickedAgain);
+    expect(again.seat).toBeNull();
+  });
+
+  it("방장이 대기실에서 규칙을 바꾸면 참가자도 새 규칙을 받는다", async () => {
+    const { host, a } = await setup();
+    const six = presetRules("standard6");
+    host.setRules(six);
+    await until(() => a.lobby?.seats.length === 6);
+    expect(host.lobby().seats).toHaveLength(6);
+  });
+});
