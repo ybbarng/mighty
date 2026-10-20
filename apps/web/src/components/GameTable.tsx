@@ -12,6 +12,7 @@ import {
 } from "@mighty/engine";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { effectFor } from "@/game/effects";
 import { canAct, useGame } from "@/game/store";
 import {
   friendLabel,
@@ -89,6 +90,8 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const shownTrick = useGame((s) => s.shownTrick);
   const collecting = useGame((s) => s.collecting);
   const dealing = useGame((s) => s.dealing);
+  const events = useGame((s) => s.events);
+  const seq = useGame((s) => s.seq);
   const busy = useGame((s) => s.busy);
   const startMoney = useGame((s) => s.roundStartMoney);
   const notice = useGame((s) => s.notice);
@@ -215,6 +218,8 @@ export function GameTable({ onExit }: { onExit: () => void }) {
       : { x: s.plate.x + s.plate.w / 2, y: s.plate.y + s.plate.h / 2 };
   };
 
+  const effect = effectFor(view, events, seatName);
+
   const lastBid = (seat: number): string | null => {
     if (view.phase !== "election") return null;
     const entry = [...view.election.log].reverse().find((e) => e.seat === seat);
@@ -332,6 +337,9 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                 leader={view.phase === "play" && trick?.leader === seat}
                 dead={view.dead.includes(seat)}
                 bubble={lastBid(seat)}
+                bubbleDim={
+                  view.phase === "election" && view.election.bidder !== seat
+                }
                 compact={layout.orientation === "portrait" && n >= 6}
               />
             );
@@ -525,6 +533,27 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                   </p>
                 ) : null}
               </div>
+            </div>
+          )}
+
+          {/* 효과 글자: 당선, 마이티, 조커콜, 프렌드 공개 등 */}
+          {effect && (
+            <div
+              key={seq}
+              className={cn(
+                "effect-pop pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
+                effect.tone === "gold" &&
+                  "bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950",
+                effect.tone === "red" &&
+                  "bg-gradient-to-b from-rose-400 to-rose-600 text-white",
+                effect.tone === "info" && "bg-black/75 text-white",
+              )}
+              style={{
+                left: tableCenter.x,
+                top: layout.center.y + layout.center.h * 0.3,
+              }}
+            >
+              {effect.text}
             </div>
           )}
 

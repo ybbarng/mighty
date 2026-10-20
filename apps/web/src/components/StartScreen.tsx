@@ -40,7 +40,9 @@ export function StartScreen({
           <h1 className="flex justify-center">
             <Logo size={240} animated />
           </h1>
-          <p className="mt-1 text-sm opacity-70">빈자리는 컴퓨터가 채웁니다</p>
+          <p className="mt-2 font-medium text-sm text-white/85">
+            공약을 걸고, 프렌드를 찾고, 마이티로 뒤집어라
+          </p>
         </div>
 
         <section className="flex flex-col gap-2">
@@ -119,6 +121,12 @@ export function StartScreen({
         >
           {rules ? `${rules.playerCount}마로 시작` : "규칙을 고르세요"}
         </ActionButton>
+        {rules && (
+          <p className="-mt-3 text-center text-xs opacity-60">
+            나와 컴퓨터 {rules.playerCount - 1}명이 함께합니다. 친구와 하는
+            대전은 준비 중이에요
+          </p>
+        )}
         {onResume && (
           <ActionButton
             variant="secondary"

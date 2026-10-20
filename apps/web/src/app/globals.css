@@ -81,3 +81,35 @@ button {
     animation-delay: 0s;
   }
 }
+
+/* 효과 글자: 튀어나왔다가 잠시 머물고 사라진다 */
+.effect-pop {
+  animation: effect-pop 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes effect-pop {
+  0% {
+    opacity: 0;
+    scale: 0.6;
+  }
+  18% {
+    opacity: 1;
+    scale: 1.08;
+  }
+  30% {
+    scale: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effect-pop {
+    animation-name: none;
+  }
+}

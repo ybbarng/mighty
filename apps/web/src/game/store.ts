@@ -6,6 +6,7 @@ import type {
   PresetDeal,
   RuleSet,
 } from "@mighty/engine";
+import { isJoker, mightyOf } from "@mighty/engine";
 import { create } from "zustand";
 
 import type { Snapshot, SubmitResult } from "./host";
@@ -47,6 +48,8 @@ interface GameStore {
   /** 지금 화면에 보이는 정보. 엔진보다 늦게 따라간다 */
   view: PlayerView | null;
   events: GameEvent[];
+  /** 스냅숏을 하나 재생할 때마다 1씩 늘어난다. 효과 연출을 다시 시작하는 데 쓴다 */
+  seq: number;
   queue: Snapshot[];
   /** 끝난 트릭을 잠시 바닥에 남겨 둔다 */
   shownTrick: CompletedTrick | null;
@@ -102,6 +105,7 @@ export const useGame = create<GameStore>((set, get) => {
       queue: rest,
       view: next.view,
       events: next.events,
+      seq: get().seq + 1,
       busy: true,
       ...(started ? { roundStartMoney: [...next.view.money] } : {}),
     });
@@ -147,8 +151,15 @@ export const useGame = create<GameStore>((set, get) => {
       });
       return;
     }
+    const mighty = mightyOf(next.view.rules, next.view.goal?.kiruda ?? "NT");
+    // 마이티·조커·조커콜은 효과 글자를 읽을 시간을 더 준다.
+    const bigPlay = next.events.some(
+      (e) =>
+        e.type === "played" &&
+        (e.jokerCall || e.card === mighty || isJoker(e.card)),
+    );
     const delay = Math.max(
-      0,
+      bigPlay ? 950 : 0,
       ...next.events.map((e) => EVENT_DELAY[e.type] ?? 150),
     );
     wait(delay, advance);
@@ -188,6 +199,7 @@ export const useGame = create<GameStore>((set, get) => {
     host: null,
     view: null,
     events: [],
+    seq: 0,
     queue: [],
     shownTrick: null,
     collecting: false,

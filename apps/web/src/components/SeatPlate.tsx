@@ -19,6 +19,8 @@ interface SeatPlateProps {
   leader: boolean;
   dead: boolean;
   bubble: string | null;
+  /** 포기했거나 다른 사람에게 밀린 공약 */
+  bubbleDim?: boolean;
   compact: boolean;
 }
 
@@ -85,7 +87,14 @@ export function SeatPlate(props: SeatPlateProps) {
         {props.money * 10}
       </div>
       {props.bubble && (
-        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 translate-y-full whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-xs font-bold text-black shadow">
+        <div
+          className={cn(
+            "absolute -bottom-3 left-1/2 -translate-x-1/2 translate-y-full whitespace-nowrap rounded-full px-2 py-0.5 font-bold text-xs shadow transition-opacity",
+            props.bubbleDim
+              ? "bg-white/60 text-black/60"
+              : "bg-white text-black",
+          )}
+        >
           {props.bubble}
         </div>
       )}
