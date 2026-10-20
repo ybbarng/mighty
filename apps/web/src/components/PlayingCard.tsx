@@ -37,6 +37,8 @@ interface PlayingCardProps {
   highlight?: boolean;
   /** 튜토리얼 추천 카드: 강조와 다른 색으로 깜빡이고 "추천" 표를 단다 */
   hint?: boolean;
+  /** 키티에서 막 들어온 카드: "새" 표를 단다 */
+  fresh?: boolean;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
 }
@@ -63,6 +65,7 @@ export function PlayingCard({
   dim = false,
   highlight = false,
   hint = false,
+  fresh = false,
   interactive = false,
   onActivate,
 }: PlayingCardProps) {
@@ -121,9 +124,25 @@ export function PlayingCard({
       style={style}
     >
       <CardArt card={card} theme={theme} />
-      {hint && (
-        <span className="pointer-events-none absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-sky-400 px-1.5 py-px font-bold text-[10px] text-black shadow">
-          추천
+      {(hint || fresh) && (
+        // 손패는 오른쪽 카드가 왼쪽 카드를 덮으므로 표는 왼쪽 위에 단다.
+        <span
+          className="pointer-events-none absolute left-0.5 flex gap-0.5 font-bold leading-none"
+          style={{
+            fontSize: Math.max(10, Math.round(width * 0.12)),
+            top: `-${Math.max(10, Math.round(width * 0.12)) * 0.8}px`,
+          }}
+        >
+          {fresh && (
+            <span className="rounded-full bg-emerald-400 px-[0.5em] py-[0.25em] text-black shadow">
+              새
+            </span>
+          )}
+          {hint && (
+            <span className="whitespace-nowrap rounded-full bg-sky-400 px-[0.5em] py-[0.25em] text-black shadow">
+              추천
+            </span>
+          )}
         </span>
       )}
     </button>

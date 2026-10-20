@@ -127,6 +127,11 @@ export function GameTable({
     kind: "jokerSuit" | "jokerCall";
   } | null>(null);
 
+  // 키티를 받기 전 손패를 기억해 두었다가 새로 들어온 카드에 표를 단다.
+  const beforeKitty = useRef<{ round: number; hand: Card[] } | null>(null);
+  if (view && view.phase !== "exchange" && view.phase !== "play")
+    beforeKitty.current = { round: view.roundNumber, hand: view.hand };
+
   // 단계가 바뀌면 손패에서 고르던 것을 비운다.
   const phaseKey = `${view?.roundNumber}-${view?.phase}-${view?.trickIndex}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: 단계가 바뀔 때만 비운다
@@ -171,6 +176,10 @@ export function GameTable({
       : (seatNames?.[seat] ?? `컴퓨터 ${offsetOf(seat)}`);
   const kiruda = view.goal?.kiruda ?? null;
   const hand = sortHand(view.hand, rules, kiruda);
+  const freshCards =
+    view.phase === "exchange" && beforeKitty.current?.round === view.roundNumber
+      ? new Set(hand.filter((c) => !beforeKitty.current?.hand.includes(c)))
+      : null;
 
   const layout =
     stage.width > 0
@@ -528,6 +537,7 @@ export function GameTable({
                   }
                   highlight={discards.includes(card)}
                   hint={hintCards.has(card)}
+                  fresh={freshCards?.has(card) ?? false}
                   interactive={acting && (exchanging || playable !== null)}
                   onActivate={(pointer) => onCardActivate(card, pointer)}
                 />
