@@ -28,6 +28,8 @@ import {
 } from "@/game/terms";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
+import { useChat } from "@/net/chat";
+import { ChatBox } from "./ChatBox";
 import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
 import { PlayingCard } from "./PlayingCard";
@@ -128,6 +130,18 @@ export function GameTable({
   const cardTipOn = useSettings((s) => s.cardTip);
   const botNames = useSettings((s) => s.botNames);
   const network = useGame((s) => s.network);
+  const chatMessages = useChat((s) => s.messages);
+  const chatUnread = useChat((s) => s.unread);
+  const chatOpen = useChat((s) => s.open);
+  const setChatOpen = useChat((s) => s.setOpen);
+  // 말풍선이 4초 뒤 사라지도록 화면을 다시 그린다.
+  const [, setChatTick] = useState(0);
+  const lastChatAt = chatMessages.at(-1)?.at ?? 0;
+  useEffect(() => {
+    if (!lastChatAt) return;
+    const timer = setTimeout(() => setChatTick((t) => t + 1), 4100);
+    return () => clearTimeout(timer);
+  }, [lastChatAt]);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [leadChoice, setLeadChoice] = useState<{
@@ -322,6 +336,15 @@ export function GameTable({
   const effect = effectFor(view, events, seatName);
   const effectCards = effect?.cards ?? null;
 
+  /** 4초 안에 그 자리에서 한 말 */
+  const chatBubble = (seat: number): string | null => {
+    if (!network) return null;
+    const recent = [...chatMessages]
+      .reverse()
+      .find((m) => m.seat === seat && Date.now() - m.at < 4000);
+    return recent ? `💬 ${recent.text}` : null;
+  };
+
   const lastBid = (seat: number): string | null => {
     if (view.phase !== "election") return null;
     const entry = [...view.election.log].reverse().find((e) => e.seat === seat);
@@ -463,6 +486,20 @@ export function GameTable({
                     : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
                   : `${view.roundNumber}판`}
               </span>
+              {network && (
+                <button
+                  type="button"
+                  onClick={() => setChatOpen(!chatOpen)}
+                  className="relative shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
+                >
+                  채팅
+                  {chatUnread > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] leading-4">
+                      {chatUnread}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowSettings(true)}
@@ -508,7 +545,7 @@ export function GameTable({
                   active={view.turn === seat && view.phase !== "roundEnd"}
                   leader={view.phase === "play" && trick?.leader === seat}
                   dead={view.dead.includes(seat)}
-                  bubble={lastBid(seat)}
+                  bubble={chatBubble(seat) ?? lastBid(seat)}
                   bubbleDim={
                     view.phase === "election" && view.election.bidder !== seat
                   }
@@ -750,6 +787,21 @@ export function GameTable({
               </div>
             )}
 
+            {network && chatOpen && (
+              <div className="absolute top-14 right-3 z-[380] w-[min(92%,22rem)] rounded-2xl border border-white/15 bg-felt-dark/95 p-3 shadow-2xl backdrop-blur">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold text-sm">채팅</span>
+                  <button
+                    type="button"
+                    onClick={() => setChatOpen(false)}
+                    className="rounded bg-white/10 px-2 text-xs"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <ChatBox mySeat={view.seat} />
+              </div>
+            )}
             {showSettings && (
               <SettingsMenu onClose={() => setShowSettings(false)} />
             )}

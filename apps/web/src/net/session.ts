@@ -1,3 +1,4 @@
+import { useChat } from "./chat";
 import type { GuestRoom } from "./guest-room";
 import type { HostRoom } from "./host-room";
 import { joinBroadcast, type Transport } from "./transport";
@@ -40,6 +41,7 @@ export function endOnlineSession(): void {
   onlineSession.guest?.leave();
   onlineSession.host = null;
   onlineSession.guest = null;
+  useChat.getState().reset();
 }
 
 const tokenKey = (room: string) => `mighty-room-${room}`;

@@ -21,6 +21,17 @@ export interface LobbyState {
   started: boolean;
 }
 
+/** 채팅 한 줄 */
+export interface ChatMessage {
+  id: string;
+  seat: number;
+  name: string;
+  text: string;
+}
+
+/** 채팅 한 줄의 최대 길이 */
+export const CHAT_MAX_LENGTH = 80;
+
 /** 공정한 섞기: 처음에는 해시만, 시작할 때 원래 값을 낸다 (docs/07-security.md 5절) */
 export interface Commitment {
   seat: number;
@@ -36,6 +47,7 @@ export type GuestMessage =
   | { t: "join"; name: string; token: string | null; commit: string }
   | { t: "action"; action: Action }
   | { t: "reveal"; secret: string }
+  | { t: "chat"; text: string }
   | { t: "leave" };
 
 /** 방장 → 참가자 */
@@ -50,7 +62,9 @@ export type HostMessage =
   | { t: "snapshot"; view: PlayerView; events: GameEvent[] }
   | { t: "rejected"; error: string }
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
-  | { t: "audit"; reveals: Reveal[]; log: LoggedAction[] };
+  | { t: "audit"; reveals: Reveal[]; log: LoggedAction[] }
+  /** 채팅. 방장이 받은 말을 모두에게 다시 보낸다(이름은 방장이 붙인다) */
+  | { t: "chat"; message: ChatMessage };
 
 function hasTag(value: unknown): boolean {
   return (

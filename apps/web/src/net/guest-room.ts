@@ -11,6 +11,7 @@ import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
+  type ChatMessage,
   type Commitment,
   type GuestMessage,
   type HostMessage,
@@ -98,6 +99,7 @@ export class GuestRoom {
     rejected: new Set<(error: string) => void>(),
     full: new Set<() => void>(),
     kicked: new Set<() => void>(),
+    chat: new Set<(message: ChatMessage) => void>(),
     hostLeft: new Set<() => void>(),
     audit: new Set<(result: AuditResult) => void>(),
   };
@@ -131,6 +133,11 @@ export class GuestRoom {
     const set = this.listeners[event] as Set<typeof listener>;
     set.add(listener);
     return () => set.delete(listener);
+  }
+
+  /** 말한다. 방장이 이름을 붙여 모두에게 다시 보낸다 */
+  chat(text: string): void {
+    if (this.hostId) this.send({ t: "chat", text }, this.hostId);
   }
 
   leave(): void {
@@ -196,6 +203,10 @@ export class GuestRoom {
         }
         break;
       }
+      case "chat":
+        if (from !== this.hostId) return;
+        for (const l of this.listeners.chat) l(message.message);
+        break;
       case "rejected":
         for (const l of this.listeners.rejected) l(message.error);
         break;

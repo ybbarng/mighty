@@ -212,3 +212,33 @@ describe("대기실 관리", () => {
     expect(host.lobby().seats).toHaveLength(6);
   });
 });
+
+describe("채팅", () => {
+  it("참가자의 말은 방장이 이름을 붙여 모두에게 보낸다", async () => {
+    const { host, a, b } = await setup();
+    const heardByHost: string[] = [];
+    const heardByB: string[] = [];
+    host.onChat((m) => heardByHost.push(`${m.name}:${m.text}`));
+    b.on("chat", (m) => heardByB.push(`${m.name}:${m.text}`));
+    a.chat("  안녕하세요  ");
+    await until(() => heardByB.length === 1);
+    expect(heardByHost).toEqual(["철수:안녕하세요"]);
+    expect(heardByB).toEqual(["철수:안녕하세요"]);
+
+    host.chat("시작할게요");
+    await until(() => heardByB.length === 2);
+    expect(heardByB[1]).toBe("방장:시작할게요");
+  });
+
+  it("빈 말과 너무 잦은 말은 버리고, 긴 말은 자른다", async () => {
+    const { host, a } = await setup();
+    const heard: string[] = [];
+    host.onChat((m) => heard.push(m.text));
+    a.chat("   ");
+    a.chat("x".repeat(200));
+    a.chat("곧바로 또");
+    await until(() => heard.length >= 1);
+    await flush();
+    expect(heard).toEqual(["x".repeat(80)]);
+  });
+});

@@ -7,6 +7,7 @@ import { botFor, browserPace } from "@/game/bots";
 import { useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
+import { useChat } from "@/net/chat";
 import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
 import type { LobbyState } from "@/net/protocol";
@@ -20,6 +21,7 @@ import {
 import { randomId } from "@/net/transport";
 
 import { Logo } from "./brand/Logo";
+import { ChatBox } from "./ChatBox";
 import { InviteQr } from "./InviteQr";
 import { ActionButton } from "./panels/common";
 
@@ -83,6 +85,9 @@ export function OnlineScreen({
           pace: browserPace,
         });
         onlineSession.host = host;
+        useChat.getState().reset();
+        useChat.setState({ send: (text) => host.chat(text) });
+        host.onChat((m) => useChat.getState().receive(m));
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));
@@ -97,6 +102,9 @@ export function OnlineScreen({
           ...(saved ? { secret: saved.secret } : {}),
         });
         onlineSession.guest = guest;
+        useChat.getState().reset();
+        useChat.setState({ send: (text) => guest.chat(text) });
+        guest.on("chat", (m) => useChat.getState().receive(m));
         guest.on("seat", (_seat, token) =>
           saveSeatToken(roomCode, { token, secret: guest.secret }),
         );
@@ -297,6 +305,9 @@ export function OnlineScreen({
                 </div>
               ))}
             </div>
+            <ChatBox
+              mySeat={isHost ? 0 : (onlineSession.guest?.seat ?? null)}
+            />
             {isHost ? (
               <ActionButton
                 className="py-3 text-base"

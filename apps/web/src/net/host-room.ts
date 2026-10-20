@@ -5,6 +5,8 @@ import { LocalMatch } from "@/game/local-match";
 
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
+  CHAT_MAX_LENGTH,
+  type ChatMessage,
   type Commitment,
   type GuestMessage,
   type HostMessage,
@@ -57,6 +59,9 @@ export class HostRoom {
   private readonly pace: ((next: () => void) => void) | null;
   private readonly botNames: readonly string[];
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
+  private chatListeners = new Set<(message: ChatMessage) => void>();
+  /** 자리별 마지막 채팅 시각. 도배를 막는다 */
+  private readonly lastChat = new Map<number, number>();
   private commitments: Commitment[] = [];
   /** 내보낸 사람. 같은 기기로 다시 들어오려 하면 막는다 */
   private readonly kickedPeers = new Set<string>();
@@ -131,6 +136,28 @@ export class HostRoom {
       }
     }
     this.broadcastLobby();
+  }
+
+  onChat(listener: (message: ChatMessage) => void): () => void {
+    this.chatListeners.add(listener);
+    return () => this.chatListeners.delete(listener);
+  }
+
+  /** 방장이 말한다 */
+  chat(text: string): void {
+    this.relayChat(0, this.hostName, text);
+  }
+
+  /** 받은 말을 다듬어 모두에게 보낸다. 0.5초 안에 다시 말하면 버린다 */
+  private relayChat(seat: number, name: string, text: string): void {
+    const trimmed = text.trim().slice(0, CHAT_MAX_LENGTH);
+    if (!trimmed) return;
+    const now = Date.now();
+    if (now - (this.lastChat.get(seat) ?? 0) < 500) return;
+    this.lastChat.set(seat, now);
+    const message: ChatMessage = { id: randomId(8), seat, name, text: trimmed };
+    this.send({ t: "chat", message });
+    for (const l of this.chatListeners) l(message);
   }
 
   /** 대기실에서 참가자를 내보낸다. 시작한 뒤에는 할 수 없다 */
@@ -278,6 +305,12 @@ export class HostRoom {
         if (seat === null || !this.match) return;
         const result = this.match.submitAs(seat, message.action);
         if (!result.ok) this.send({ t: "rejected", error: result.error }, from);
+        break;
+      }
+      case "chat": {
+        const seat = this.seatOf(from);
+        if (seat === null || typeof message.text !== "string") return;
+        this.relayChat(seat, this.names.get(seat) ?? "손님", message.text);
         break;
       }
       case "leave":
