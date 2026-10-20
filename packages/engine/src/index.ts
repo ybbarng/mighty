@@ -4,6 +4,7 @@ export * from "./deck";
 export * from "./goal";
 export * from "./match";
 export * from "./presets";
+export * from "./replay";
 export * from "./rng";
 export * from "./rule-string";
 export * from "./rules";
