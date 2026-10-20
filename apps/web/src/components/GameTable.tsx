@@ -8,11 +8,18 @@ import {
   lastTrickIndex,
   type PlayerView,
   type Suit,
+  unplayableReason,
 } from "@mighty/engine";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { canAct, useGame } from "@/game/store";
-import { friendLabel, goalLabel, kirudaName, sortHand } from "@/game/terms";
+import {
+  friendLabel,
+  goalLabel,
+  kirudaName,
+  sortHand,
+  unplayableText,
+} from "@/game/terms";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 import { PlayingCard } from "./PlayingCard";
@@ -168,7 +175,19 @@ export function GameTable({ onExit }: { onExit: () => void }) {
       return;
     }
     if (!playable?.has(card)) {
-      useGame.setState({ notice: "지금 낼 수 없는 카드입니다" });
+      const reason = unplayableReason(
+        { rules, kiruda: kiruda ?? "NT", trickIndex: view.trickIndex },
+        view.hand,
+        {
+          cards: view.trick?.plays.map((p) => p.card) ?? [],
+          jokerSuit: view.trick?.jokerSuit ?? null,
+          jokerCalled: view.trick?.jokerCalled ?? false,
+        },
+        card,
+      );
+      useGame.setState({
+        notice: reason ? unplayableText(reason) : "지금 낼 수 없는 카드입니다",
+      });
       return;
     }
     // 터치는 두 단계: 골라서 들어 올린 뒤 다시 눌러 낸다.

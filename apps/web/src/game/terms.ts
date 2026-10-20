@@ -10,6 +10,7 @@ import {
   rankPower,
   type Suit,
   suitOf,
+  type UnplayableReason,
 } from "@mighty/engine";
 
 export const SUIT_SYMBOL: Record<Suit, string> = {
@@ -81,4 +82,29 @@ export function sortHand(
   return [...cards].sort(
     (a, b) => group(a) - group(b) || rankPower(b) - rankPower(a),
   );
+}
+
+export function unplayableText(reason: UnplayableReason): string {
+  switch (reason.kind) {
+    case "notInHand":
+      return "손에 없는 카드입니다";
+    case "jokerCalled":
+      return "조커콜! 조커를 내야 합니다";
+    case "mustPlayMightyOrJoker":
+      return "마지막 트릭에는 낼 수 없어서 지금 마이티나 조커를 내야 합니다";
+    case "mightyFirstTrick":
+      return "첫 트릭에는 마이티를 낼 수 없습니다";
+    case "mightyLastTrick":
+      return "마지막 트릭에는 마이티를 낼 수 없습니다";
+    case "jokerFirstTrick":
+      return "첫 트릭에는 조커를 낼 수 없습니다";
+    case "jokerLastTrick":
+      return "마지막 트릭에는 조커를 낼 수 없습니다";
+    case "followSuit":
+      return `${SUIT_SYMBOL[reason.suit]} ${SUIT_NAME[reason.suit]}를 따라 내야 합니다`;
+    case "kirudaFirstTrick":
+      return reason.leading
+        ? "첫 트릭 선은 기루다를 낼 수 없습니다"
+        : "첫 트릭에는 기루다를 낼 수 없습니다";
+  }
 }

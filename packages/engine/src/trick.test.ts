@@ -11,6 +11,7 @@ import {
   type TrickCards,
   type TrickContext,
   trickWinnerIndex,
+  unplayableReason,
 } from "./trick";
 
 const standard = presetRules("standard5");
@@ -205,5 +206,68 @@ describe("조커콜 선언", () => {
     expect(
       canDeclareJokerCall(ctx("H", 0, presetRules("sinchon5")), false),
     ).toBe(false);
+  });
+});
+
+describe("낼 수 없는 이유", () => {
+  it("낼 수 있으면 이유가 없다", () => {
+    expect(
+      unplayableReason(ctx("C"), ["H2", "D5"], trick(["HK"]), "H2"),
+    ).toBeNull();
+  });
+
+  it("선 무늬를 따라 내야 한다", () => {
+    expect(
+      unplayableReason(ctx("C"), ["H2", "D5"], trick(["HK"]), "D5"),
+    ).toEqual({
+      kind: "followSuit",
+      suit: "H",
+    });
+  });
+
+  it("조커를 선으로 낸 트릭에서는 지정한 무늬를 따라 내야 한다", () => {
+    const t = trick(["JK"], { jokerSuit: "D" });
+    expect(unplayableReason(ctx("C"), ["H2", "D5"], t, "H2")).toEqual({
+      kind: "followSuit",
+      suit: "D",
+    });
+  });
+
+  it("조커콜을 당하면 조커를 내야 한다", () => {
+    const t = trick(["C3"], { jokerCalled: true });
+    expect(unplayableReason(ctx("H"), ["C5", "JK"], t, "C5")).toEqual({
+      kind: "jokerCalled",
+    });
+  });
+
+  it("첫 트릭에는 조커를 낼 수 없다", () => {
+    expect(
+      unplayableReason(ctx("H", 0), ["JK", "D5"], trick(["C9"]), "JK"),
+    ).toEqual({
+      kind: "jokerFirstTrick",
+    });
+  });
+
+  it("첫 트릭 선(주공)은 기루다를 낼 수 없다", () => {
+    expect(
+      unplayableReason(ctx("H", 0), ["H2", "D5"], trick([]), "H2"),
+    ).toEqual({
+      kind: "kirudaFirstTrick",
+      leading: true,
+    });
+  });
+
+  it("막 트릭 전에는 조커를 먼저 내야 한다", () => {
+    expect(
+      unplayableReason(ctx("H", 8), ["JK", "D5"], trick(["D9"]), "D5"),
+    ).toEqual({
+      kind: "mustPlayMightyOrJoker",
+    });
+  });
+
+  it("손에 없는 카드", () => {
+    expect(unplayableReason(ctx("H"), ["D5"], trick([]), "SA")).toEqual({
+      kind: "notInHand",
+    });
   });
 });

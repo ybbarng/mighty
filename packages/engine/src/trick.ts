@@ -221,3 +221,53 @@ export function playableCards(
   // 낼 카드가 하나도 없으면(예: 첫 트릭 선인데 모두 기루다) 아무 카드나 낼 수 있다.
   return result.length === 0 ? [...hand] : result;
 }
+
+/** 카드를 낼 수 없는 이유. 화면은 이 코드를 문장으로 바꿔 보여 준다 */
+export type UnplayableReason =
+  | { kind: "notInHand" }
+  | { kind: "jokerCalled" }
+  | { kind: "mustPlayMightyOrJoker" }
+  | { kind: "mightyFirstTrick" }
+  | { kind: "mightyLastTrick" }
+  | { kind: "jokerFirstTrick" }
+  | { kind: "jokerLastTrick" }
+  | { kind: "followSuit"; suit: Suit }
+  | { kind: "kirudaFirstTrick"; leading: boolean };
+
+/** `card`를 지금 낼 수 없으면 그 이유, 낼 수 있으면 `null`. 판단 순서는 `playableCards`와 같다 */
+export function unplayableReason(
+  ctx: TrickContext,
+  hand: readonly Card[],
+  trick: TrickCards,
+  card: Card,
+): UnplayableReason | null {
+  if (!hand.includes(card)) return { kind: "notInHand" };
+  if (playableCards(ctx, hand, trick).includes(card)) return null;
+
+  const { rules } = ctx;
+  const first = isFirst(ctx);
+  const leading = trick.cards.length === 0;
+  const mighty = mightyOf(rules, ctx.kiruda);
+  const hasJoker = hand.some(isJoker);
+  if (!leading && hasJoker && isJokerCalled(ctx, trick))
+    return { kind: "jokerCalled" };
+
+  const lastIndex = lastTrickIndex(rules);
+  const mightyStuck = hand.includes(mighty) && !rules.mightyInLastTrick;
+  const jokerStuck = hasJoker && !rules.jokerInLastTrick;
+  if (
+    (ctx.trickIndex === lastIndex - 2 && mightyStuck && jokerStuck) ||
+    (ctx.trickIndex === lastIndex - 1 && (mightyStuck || jokerStuck))
+  ) {
+    return { kind: "mustPlayMightyOrJoker" };
+  }
+
+  if (card === mighty)
+    return first ? { kind: "mightyFirstTrick" } : { kind: "mightyLastTrick" };
+  if (isJoker(card))
+    return first ? { kind: "jokerFirstTrick" } : { kind: "jokerLastTrick" };
+  const lead = leadSuitOf(trick);
+  if (lead !== null && suitOf(card) !== lead)
+    return { kind: "followSuit", suit: lead };
+  return { kind: "kirudaFirstTrick", leading };
+}
