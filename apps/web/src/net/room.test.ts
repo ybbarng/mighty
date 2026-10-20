@@ -29,6 +29,8 @@ async function setup() {
     name: "철수",
     token: null,
   });
+  // 두 사람이 동시에 들어오면 앉는 순서가 그때그때 달라진다. 앞사람이 앉은 뒤에 들어온다.
+  await until(() => a.seat !== null);
   const b = new GuestRoom({
     transport: net.join("b"),
     name: "영희",
