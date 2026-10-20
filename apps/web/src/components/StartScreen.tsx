@@ -18,8 +18,11 @@ import { ActionButton } from "./panels/common";
 /** 게임 시작 화면: 기본 규칙 고르기, 원작 규칙 문자열 붙여넣기 */
 export function StartScreen({
   onStart,
+  onResume,
 }: {
   onStart: (rules: RuleSet) => void;
+  /** 저장한 대국이 있을 때만 */
+  onResume?: () => void;
 }) {
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
@@ -113,6 +116,15 @@ export function StartScreen({
         >
           {rules ? `${rules.playerCount}마로 시작` : "규칙을 고르세요"}
         </ActionButton>
+        {onResume && (
+          <ActionButton
+            variant="secondary"
+            className="py-3 text-base"
+            onClick={onResume}
+          >
+            하던 게임 이어하기
+          </ActionButton>
+        )}
       </div>
     </main>
   );

@@ -33,6 +33,19 @@ describe("LocalMatch", () => {
     ).toBe(true);
   });
 
+  it("저장한 기록으로 같은 대국을 되살린다", () => {
+    const match = new LocalMatch({ rules, seed: 14 });
+    for (let i = 0; i < 30; i++) {
+      const view = match.current();
+      if (view.decision === null) break;
+      match.submit(heuristicBot.decide(view, { seed: i }));
+    }
+    const saved = JSON.parse(JSON.stringify(match.save()));
+    const restored = LocalMatch.restore(saved);
+    expect(restored.serialize()).toBe(match.serialize());
+    expect(restored.current()).toEqual(match.current());
+  });
+
   it("잘못된 행동은 거절하고 상태를 바꾸지 않는다", () => {
     const match = new LocalMatch({ rules, seed: 13 });
     const before = match.serialize();

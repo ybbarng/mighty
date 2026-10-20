@@ -9,7 +9,8 @@ import type {
 import { create } from "zustand";
 
 import type { Snapshot, SubmitResult } from "./host";
-import { LocalMatch } from "./local-match";
+import { LocalMatch, type SavedMatch } from "./local-match";
+import { saveGame } from "./persistence";
 
 /** 이벤트마다 화면이 머무는 시간(ms). docs/05-layout.md 3.9절 */
 const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
@@ -56,6 +57,8 @@ interface GameStore {
   busy: boolean;
   notice: string | null;
   newGame(options: NewGameOptions): void;
+  /** 저장해 둔 대국을 이어서 한다 */
+  resume(saved: SavedMatch): void;
   submit(action: Action): SubmitResult;
   setSpeed(speed: number): void;
   clearNotice(): void;
@@ -122,6 +125,30 @@ export const useGame = create<GameStore>((set, get) => {
     advance();
   };
 
+  /** 새 대국이나 되살린 대국을 화면에 붙인다. 진행될 때마다 저장한다 */
+  const attach = (host: LocalMatch) => {
+    clearTimer();
+    unsubscribe?.();
+    const current = host.current();
+    const pending = host.drain();
+    set({
+      host,
+      view: pending.length > 0 ? null : current,
+      events: [],
+      queue: [],
+      shownTrick: null,
+      collecting: false,
+      busy: false,
+      roundStartMoney: [...current.money],
+    });
+    saveGame(host.save());
+    unsubscribe = host.subscribe((snapshot) => {
+      saveGame(host.save());
+      enqueue([snapshot]);
+    });
+    enqueue(pending);
+  };
+
   return {
     host: null,
     view: null,
@@ -135,25 +162,16 @@ export const useGame = create<GameStore>((set, get) => {
     notice: null,
 
     newGame(options) {
-      clearTimer();
-      unsubscribe?.();
       const host = new LocalMatch({
         rules: options.rules,
         seed: options.seed ?? Math.floor(Math.random() * 2 ** 31),
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
-      set({
-        host,
-        view: null,
-        events: [],
-        queue: [],
-        shownTrick: null,
-        collecting: false,
-        busy: false,
-      });
-      const pending = host.drain();
-      unsubscribe = host.subscribe((snapshot) => enqueue([snapshot]));
-      enqueue(pending);
+      attach(host);
+    },
+
+    resume(saved) {
+      attach(LocalMatch.restore(saved));
     },
 
     submit(action) {

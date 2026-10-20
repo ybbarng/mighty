@@ -54,8 +54,7 @@ describe("replay", () => {
     const { state, log } = playAndLog(9, 1);
     const index = log.findIndex((e) => e.action.type === "bid");
     const entry = log[index];
-    if (!entry || entry.action.type !== "bid")
-      throw new Error("공약 기록이 없다");
+    if (entry?.action.type !== "bid") throw new Error("공약 기록이 없다");
     const changed = [...log];
     changed[index] = { ...entry, action: { type: "pass" } };
     const result = replay({ rules, seed: 9 }, changed);
