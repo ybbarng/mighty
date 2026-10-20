@@ -3,7 +3,7 @@
 import { encodeRuleString, RULE_PRESETS, type RuleSet } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
 
-import { botFor } from "@/game/bots";
+import { botFor, browserPace } from "@/game/bots";
 import { useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
@@ -78,6 +78,7 @@ export function OnlineScreen({
           hostName: trimmed,
           rules,
           bot: botFor(useSettings.getState().botLevel),
+          pace: browserPace,
         });
         onlineSession.host = host;
         host.onLobby((l) => {

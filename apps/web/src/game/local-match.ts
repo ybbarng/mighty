@@ -28,6 +28,11 @@ export interface LocalMatchOptions {
   presetDeal?: PresetDeal;
   /** 튜토리얼 미션처럼 정해진 장면(`createScenario`)에서 시작한다. 이런 대국은 저장하지 않는다 */
   initialState?: MatchState;
+  /**
+   * 봇이 한 수 둘 때마다 다음 수를 이 함수로 미룬다. 브라우저에서 `setTimeout`을 넘기면
+   * 2단계 봇이 여럿 이어 생각해도 화면이 한 번에 오래 멈추지 않는다. 없으면 한 번에 다 둔다.
+   */
+  pace?: (next: () => void) => void;
 }
 
 /** 브라우저에 남기는 저장 내용. 상태 대신 시작 조건과 행동 기록만 남기고 `replay`로 되살린다 */
@@ -60,6 +65,8 @@ export class LocalMatch implements MatchHost {
   private readonly standIns = new Set<number>();
   private readonly listeners = new Map<number, Set<Listener>>();
   private readonly pending: Snapshot[] = [];
+  private readonly pace: ((next: () => void) => void) | null;
+  private botScheduled = false;
 
   constructor(options: LocalMatchOptions, savedLog?: readonly LoggedAction[]) {
     this.seat = options.humanSeat ?? 0;
@@ -67,6 +74,7 @@ export class LocalMatch implements MatchHost {
     this.humans.add(this.seat);
     this.seed = options.seed;
     this.bot = options.bot ?? heuristicBot;
+    this.pace = options.pace ?? null;
     this.rng = createRng(options.seed ^ 0x2545f491);
     this.createOptions = {
       rules: options.rules,
@@ -94,13 +102,16 @@ export class LocalMatch implements MatchHost {
     this.runBots();
   }
 
-  static restore(saved: SavedMatch, bot?: Bot): LocalMatch {
+  static restore(
+    saved: SavedMatch,
+    extra: Pick<LocalMatchOptions, "bot" | "pace"> = {},
+  ): LocalMatch {
     return new LocalMatch(
       {
         rules: saved.rules,
         seed: saved.seed,
         humanSeat: saved.humanSeat,
-        ...(bot ? { bot } : {}),
+        ...extra,
         ...(saved.presetDeal ? { presetDeal: saved.presetDeal } : {}),
       },
       saved.log,
@@ -204,18 +215,37 @@ export class LocalMatch implements MatchHost {
 
   /** 사람 차례가 올 때까지 봇을 돌린다. */
   private runBots(): void {
-    for (let guard = 0; guard < 10_000; guard++) {
-      const seat = this.nextBotSeat();
-      if (seat === null) return;
-      const view = viewOf(this.state, seat);
-      // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
-      if (view.decision?.kind === "play" && view.decision.cards.length === 0)
-        return;
-      const action = this.bot.decide(view, this.rng);
-      const result = this.apply(seat, action);
-      if (!result.ok)
-        throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);
+    if (this.pace) {
+      this.scheduleBot();
+      return;
     }
+    for (let guard = 0; guard < 10_000; guard++) {
+      if (!this.stepBot()) return;
+    }
+  }
+
+  private scheduleBot(): void {
+    if (this.botScheduled || !this.pace) return;
+    this.botScheduled = true;
+    this.pace(() => {
+      this.botScheduled = false;
+      if (this.stepBot()) this.scheduleBot();
+    });
+  }
+
+  /** 봇 한 수. 둘 봇이 없으면 `false` */
+  private stepBot(): boolean {
+    const seat = this.nextBotSeat();
+    if (seat === null) return false;
+    const view = viewOf(this.state, seat);
+    // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
+    if (view.decision?.kind === "play" && view.decision.cards.length === 0)
+      return false;
+    const action = this.bot.decide(view, this.rng);
+    const result = this.apply(seat, action);
+    if (!result.ok)
+      throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);
+    return true;
   }
 
   private nextBotSeat(): number | null {

@@ -33,6 +33,28 @@ describe("LocalMatch", () => {
     ).toBe(true);
   });
 
+  it("pace를 주면 봇이 한 수씩 나눠 두고, 다 두면 미루지 않을 때와 같은 곳에 이른다", () => {
+    const later: (() => void)[] = [];
+    const paced = new LocalMatch({
+      rules,
+      seed: 21,
+      humanSeat: 2,
+      pace: (next) => later.push(next),
+    });
+    // 판을 만든 장면 하나뿐이고 아직 아무 봇도 두지 않았다.
+    expect(paced.drain()).toHaveLength(1);
+    let steps = 0;
+    while (later.length > 0) {
+      (later.shift() as () => void)();
+      steps++;
+      // 한 번 미룰 때마다 봇 한 수만 둔다.
+      expect(paced.drain().length).toBeLessThanOrEqual(1);
+    }
+    expect(steps).toBeGreaterThan(1);
+    const direct = new LocalMatch({ rules, seed: 21, humanSeat: 2 });
+    expect(paced.serialize()).toBe(direct.serialize());
+  });
+
   it("저장한 기록으로 같은 대국을 되살린다", () => {
     const match = new LocalMatch({ rules, seed: 14 });
     for (let i = 0; i < 30; i++) {

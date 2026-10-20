@@ -25,6 +25,8 @@ export interface HostRoomOptions {
   revealTimeoutMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
   bot?: Bot;
+  /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
+  pace?: (next: () => void) => void;
 }
 
 interface GuestSeat {
@@ -50,6 +52,7 @@ export class HostRoom {
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
   private readonly bot: Bot | null;
+  private readonly pace: ((next: () => void) => void) | null;
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private commitments: Commitment[] = [];
   match: LocalMatch | null = null;
@@ -61,6 +64,7 @@ export class HostRoom {
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
     this.bot = options.bot ?? null;
+    this.pace = options.pace ?? null;
     void commit(this.hostSecret).then((hash) => {
       this.hostCommit = hash;
     });
@@ -145,6 +149,7 @@ export class HostRoom {
       humanSeat: 0,
       humanSeats: [0, ...this.guests.keys()],
       ...(this.bot ? { bot: this.bot } : {}),
+      ...(this.pace ? { pace: this.pace } : {}),
     });
     this.match = match;
     const first = match.viewFor(0);
