@@ -1,8 +1,10 @@
 "use client";
 
+import { heuristicBot } from "@mighty/ai";
 import {
   type Card,
   countPoints,
+  createRng,
   type Decision,
   isJoker,
   lastTrickIndex,
@@ -39,6 +41,7 @@ import {
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 import { SettingsMenu } from "./SettingsMenu";
+import { MissionOverlay, type MissionProps } from "./tutorial/MissionOverlay";
 
 function useStageSize() {
   const ref = useRef<HTMLDivElement>(null);
@@ -88,7 +91,17 @@ function waitingText(
   }
 }
 
-export function GameTable({ onExit }: { onExit: () => void }) {
+export function GameTable({
+  onExit,
+  mission,
+  hints = false,
+}: {
+  onExit: () => void;
+  /** 튜토리얼 미션 목표와 결과 안내 */
+  mission?: MissionProps;
+  /** 컴퓨터가 추천하는 카드에 빛을 낸다 */
+  hints?: boolean;
+}) {
   const stage = useStageSize();
   const view = useGame((s) => s.view);
   const shownTrick = useGame((s) => s.shownTrick);
@@ -173,6 +186,11 @@ export function GameTable({ onExit }: { onExit: () => void }) {
   const decision: Decision | null = acting ? view.decision : null;
   const playable = decision?.kind === "play" ? new Set(decision.cards) : null;
   const exchanging = decision?.kind === "exchange";
+  const hintAction =
+    hints && decision?.kind === "play"
+      ? heuristicBot.decide(view, createRng(view.trickIndex))
+      : null;
+  const hintCard = hintAction?.type === "play" ? hintAction.card : null;
 
   const act = (action: Parameters<typeof submit>[0]) => {
     const result = submit(action);
@@ -481,7 +499,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                     (playable !== null && !canPlay) ||
                     (!acting && view.phase === "play")
                   }
-                  highlight={discards.includes(card)}
+                  highlight={discards.includes(card) || card === hintCard}
                   interactive={acting && (exchanging || playable !== null)}
                   onActivate={(pointer) => onCardActivate(card, pointer)}
                 />
@@ -669,6 +687,13 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                 ? "내가 선입니다 — 낼 카드를 고르세요"
                 : "내 차례 — 낼 카드를 고르세요"}
             </div>
+          )}
+
+          {mission && (
+            <MissionOverlay
+              mission={mission}
+              top={layout.hud.y + layout.hud.h + 8}
+            />
           )}
 
           {hostLeft && (

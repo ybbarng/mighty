@@ -12,11 +12,15 @@ import { GameTable } from "./GameTable";
 import { OnlineScreen } from "./OnlineScreen";
 import { Splash } from "./Splash";
 import { StartScreen } from "./StartScreen";
+import { LessonPlayer } from "./tutorial/LessonPlayer";
+import { TutorialHome } from "./tutorial/TutorialHome";
 
 type Screen =
   | { kind: "start" }
   | { kind: "online"; rules: RuleSet; room: string | null }
-  | { kind: "playing" };
+  | { kind: "playing" }
+  | { kind: "tutorial" }
+  | { kind: "lesson"; lessonId: string };
 
 export function MightyApp() {
   const [screen, setScreen] = useState<Screen>({ kind: "start" });
@@ -58,6 +62,25 @@ export function MightyApp() {
     );
   }
 
+  if (screen.kind === "tutorial") {
+    return (
+      <TutorialHome
+        onBack={backToStart}
+        onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
+      />
+    );
+  }
+
+  if (screen.kind === "lesson") {
+    return (
+      <LessonPlayer
+        key={screen.lessonId}
+        lessonId={screen.lessonId}
+        onExit={() => setScreen({ kind: "tutorial" })}
+      />
+    );
+  }
+
   if (screen.kind === "start") {
     return (
       <>
@@ -68,6 +91,7 @@ export function MightyApp() {
             setScreen({ kind: "playing" });
           }}
           onOnline={(rules) => setScreen({ kind: "online", rules, room: null })}
+          onTutorial={() => setScreen({ kind: "tutorial" })}
           {...(saved
             ? {
                 onResume: () => {

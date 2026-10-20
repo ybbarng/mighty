@@ -21,11 +21,14 @@ import { RuleEditor } from "./rules/RuleEditor";
 export function StartScreen({
   onStart,
   onOnline,
+  onTutorial,
   onResume,
 }: {
   onStart: (rules: RuleSet) => void;
   /** 친구와 하기: 고른 규칙으로 방을 만든다 */
   onOnline: (rules: RuleSet) => void;
+  /** 처음 하는 사람을 위한 단원별 배우기 */
+  onTutorial: () => void;
   /** 저장한 대국이 있을 때만 */
   onResume?: () => void;
 }) {
@@ -60,6 +63,21 @@ export function StartScreen({
             공약을 걸고, 프렌드를 찾고, 마이티로 뒤집어라
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={onTutorial}
+          className="flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-400/10 px-4 py-3 text-left transition hover:bg-amber-400/20"
+        >
+          <span className="text-2xl">🎓</span>
+          <span className="flex flex-1 flex-col">
+            <span className="font-bold">처음이라면? 마이티 배우기</span>
+            <span className="text-xs opacity-70">
+              용어부터 한 판까지, 단원별로 차근차근
+            </span>
+          </span>
+          <span className="text-amber-300">→</span>
+        </button>
 
         <section className="flex flex-col gap-2">
           <h2 className="font-semibold text-sm">규칙</h2>
