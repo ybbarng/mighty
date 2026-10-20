@@ -3,6 +3,7 @@ import {
   createMatch,
   createRng,
   createScenario,
+  fullDeck,
   presetRules,
   RULE_PRESETS,
   step,
@@ -120,4 +121,85 @@ describe("2단계 봇", () => {
       ).toBe(true);
     },
   );
+});
+
+describe("2단계 봇의 판 전체 계획", () => {
+  /** 0번 손패를 정해 두고 나머지는 덱에서 차례로 나눈다 */
+  function dealWith(mine: Card[]) {
+    const rest = fullDeck().filter((c) => !mine.includes(c));
+    const hands = [
+      mine,
+      ...[1, 2, 3, 4].map((i) => rest.slice((i - 1) * 10, i * 10)),
+    ];
+    return createMatch({
+      rules: standard5,
+      seed: 1,
+      firstBeginner: 0,
+      presetDeal: { hands, kitty: rest.slice(40) },
+    }).state;
+  }
+  const bot = createSearchBot({ worlds: 4, planWorlds: 16 });
+
+  it("아주 센 패면 그 무늬로 공약을 건다", () => {
+    const state = dealWith([
+      "JK",
+      "DA",
+      "SA",
+      "SK",
+      "SQ",
+      "SJ",
+      "S10",
+      "S9",
+      "HA",
+      "CA",
+    ]);
+    const action = bot.decide(viewOf(state, 0), createRng(1));
+    expect(action.type).toBe("bid");
+    if (action.type === "bid") expect(action.goal.kiruda).toBe("S");
+  });
+
+  it("아주 약한 패면 포기한다", () => {
+    const state = dealWith([
+      "S2",
+      "S3",
+      "D2",
+      "D4",
+      "H2",
+      "H3",
+      "H5",
+      "C2",
+      "C10",
+      "DJ",
+    ]);
+    expect(bot.decide(viewOf(state, 0), createRng(1)).type).toBe("pass");
+  });
+
+  it("교환과 프렌드 결정은 엔진이 받아 준다", () => {
+    let state = createScenario({
+      rules: standard5,
+      phase: "exchange",
+      declarer: 0,
+      goal: { kiruda: "S", score: 13 },
+      hands: [
+        ["SA", "SK", "SQ", "S10", "S5", "HA", "H4", "D3", "C7", "C8"],
+        ["D2", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "DJ", "DQ"],
+        ["H2", "H3", "H5", "H6", "H7", "H8", "H9", "H10", "HJ", "HQ"],
+        ["C2", "C3", "C4", "C5", "C6", "C9", "C10", "CJ", "CQ", "CK"],
+        ["S2", "S3", "S4", "S6", "S7", "S8", "S9", "SJ", "HK", "DK"],
+      ],
+      kitty: ["JK", "DA", "CA"],
+    });
+    const rng = createRng(2);
+    for (const kind of ["exchange", "friend"]) {
+      const view = viewOf(state, 0);
+      expect(view.decision?.kind).toBe(kind);
+      const result = step(state, 0, bot.decide(view, rng));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      state = result.state;
+    }
+    // 버린 카드에 마이티·조커는 없다.
+    expect(state.round.discarded).not.toContain("DA");
+    expect(state.round.discarded).not.toContain("JK");
+  });
 });

@@ -4,6 +4,7 @@ import {
   canDeclareJokerCall,
   countPoints,
   type Decision,
+  deckFor,
   type FriendDeclaration,
   fullDeck,
   type Goal,
@@ -29,10 +30,11 @@ import {
 } from "@mighty/engine";
 
 import type { Bot } from "./bot";
+import { cardKeepValue, estimatePoints, KIRUDAS } from "./hand";
 import { heuristicBot } from "./heuristic-bot";
 
 /*
- * 2단계 봇: 카드를 낼 때만 앞을 내다본다.
+ * 2단계 봇: 카드를 낼 때 앞을 내다본다. 공약·교환·프렌드도 같은 방법으로 판 끝까지 둬 보고 정한다(아래 "판 전체 계획").
  *
  * 1. 지금까지 본 것(낸 카드, 무늬를 못 따라 낸 사람, 조커콜에 조커를 안 낸 사람)과
  *    어긋나지 않게 남의 손패를 여러 번 추측한다(determinization).
@@ -366,19 +368,325 @@ function sameAction(a: PlayAction, b: Action): boolean {
   );
 }
 
+/*
+ * 판 전체 계획: 공약, 바닥 카드 교환, 프렌드 고르기.
+ *
+ * 남의 손패(공약 때는 바닥 카드까지)를 여러 번 추측하고, 고를 수 있는 것마다 판 처음부터
+ * 끝까지 1단계 봇끼리 둬 본다. 같은 추측 판으로 모든 후보를 비교해 운의 차이를 줄인다.
+ */
+
+/** 판 처음(첫 트릭 전) 상태. 첫 트릭 선은 주공이다 */
+function roundStart(
+  rules: RuleSet,
+  players: readonly number[],
+  money: readonly number[],
+  declarer: number,
+  goal: Goal,
+  friendDeclaration: FriendDeclaration,
+  hands: Card[][],
+  discarded: readonly Card[],
+): Sim {
+  let friend: number | null = null;
+  if (friendDeclaration.kind === "card")
+    friend =
+      players.find(
+        (s) => s !== declarer && hands[s]?.includes(friendDeclaration.card),
+      ) ?? null;
+  else if (friendDeclaration.kind === "player") friend = friendDeclaration.seat;
+  return {
+    rules,
+    kiruda: goal.kiruda,
+    goal,
+    declarer,
+    friendDeclaration,
+    friend,
+    friendRevealed: friendDeclaration.kind === "none",
+    players,
+    hands: hands.map((h) => [...h]),
+    trickIndex: 0,
+    trick: { leader: declarer, plays: [], jokerSuit: null, jokerCalled: false },
+    jokerUsed: false,
+    scored: money.map(() => 0),
+    discardedPoints: countPoints(discarded),
+    done: false,
+  };
+}
+
+/** 주공이 버릴 카드: 남길 가치가 낮은 것부터 */
+function discardFor(
+  rules: RuleSet,
+  hand: readonly Card[],
+  kiruda: Kiruda,
+  count: number,
+): Card[] {
+  const jokerCall = jokerCallOf(rules, kiruda);
+  return [...hand]
+    .sort(
+      (a, b) =>
+        cardKeepValue(rules, hand, kiruda, a, jokerCall) -
+        cardKeepValue(rules, hand, kiruda, b, jokerCall),
+    )
+    .slice(0, count);
+}
+
+/** 1단계 봇과 같은 순서로 부를 만한 프렌드 후보 */
+function friendCandidates(
+  rules: RuleSet,
+  kiruda: Kiruda,
+  options: readonly FriendDeclaration[],
+): FriendDeclaration[] {
+  const cards = new Set(
+    options.flatMap((o) => (o.kind === "card" ? [o.card] : [])),
+  );
+  const wanted: Card[] = [mightyOf(rules, kiruda), "JK"];
+  if (kiruda !== "NT") wanted.push(`${kiruda}A`, `${kiruda}K`);
+  for (const suit of SUITS) if (suit !== kiruda) wanted.push(`${suit}A`);
+  if (kiruda !== "NT") wanted.push(`${kiruda}Q`);
+  const result: FriendDeclaration[] = wanted
+    .filter((c) => cards.has(c))
+    .slice(0, 5)
+    .map((card) => ({ kind: "card", card }));
+  for (const o of options)
+    if (o.kind === "firstTrick" || o.kind === "none") result.push(o);
+  return result;
+}
+
+/** 프렌드 선택지가 아직 없을 때(공약·교환 중) 쓸 1단계 봇식 프렌드 */
+function likelyFriend(
+  rules: RuleSet,
+  kiruda: Kiruda,
+  hand: readonly Card[],
+): FriendDeclaration {
+  if (!rules.friend) return { kind: "none" };
+  const options: FriendDeclaration[] = fullDeck()
+    .filter((c) => !hand.includes(c))
+    .map((card) => ({ kind: "card", card }));
+  return friendCandidates(rules, kiruda, options)[0] ?? { kind: "none" };
+}
+
+interface World {
+  hands: Map<number, Card[]>;
+}
+
+/**
+ * 남의 손패를 여러 번 추측한다. 이 규칙의 덱에서 내가 아는 카드를 뺀 나머지를 나눈다.
+ * 남는 카드(바닥 카드 등)는 `-1` 자리에 둔다.
+ */
+function sampleWorlds(
+  view: PlayerView,
+  known: readonly Card[],
+  count: number,
+  rng: RngState,
+): World[] {
+  const pool = deckFor(view.rules).filter((c) => !known.includes(c));
+  const needs = new Map<number, number>();
+  for (const s of view.players)
+    if (s !== view.seat) needs.set(s, view.handCounts[s] ?? 0);
+  const held = [...needs.values()].reduce((a, b) => a + b, 0);
+  if (held > pool.length) throw new Error("손패 장수가 맞지 않는다");
+  if (pool.length > held) needs.set(-1, pool.length - held);
+  const inference: Inference = { voids: new Map(), noJoker: new Set() };
+  return Array.from({ length: count }, () => ({
+    hands: sampleHands(pool, needs, inference, rng),
+  }));
+}
+
+function handsOf(view: PlayerView, world: World, mine: readonly Card[]) {
+  const hands: Card[][] = view.money.map(() => []);
+  for (const [seat, cards] of world.hands) if (seat >= 0) hands[seat] = cards;
+  hands[view.seat] = [...mine];
+  return hands;
+}
+
+/** 이 계획으로 둔 판들의 평균 돈 변화 */
+function averagePayoff(
+  view: PlayerView,
+  worlds: readonly World[],
+  plan: {
+    goal: Goal;
+    friend: FriendDeclaration;
+    hand: readonly Card[];
+    discard: readonly Card[];
+  },
+  rng: RngState,
+): number {
+  let total = 0;
+  for (const world of worlds) {
+    const sim = roundStart(
+      view.rules,
+      view.players,
+      view.money,
+      view.seat,
+      plan.goal,
+      plan.friend,
+      handsOf(view, world, plan.hand),
+      plan.discard,
+    );
+    playOut(sim, rng);
+    total += payoff(sim, view.seat, view.money);
+  }
+  return total / worlds.length;
+}
+
+function planExchange(
+  view: PlayerView,
+  decision: Extract<Decision, { kind: "exchange" }>,
+  worldCount: number,
+  rng: RngState,
+): Action | null {
+  const { rules } = view;
+  const worlds = sampleWorlds(view, view.hand, worldCount, rng);
+  // 기루다 후보: 당선 공약과, 바꿀 수 있는 공약 중 패가 좋아 보이는 둘
+  const lowest = (kiruda: Kiruda) =>
+    decision.goals
+      .filter((g) => g.kiruda === kiruda)
+      .sort((a, b) => a.score - b.score)[0];
+  const goals: Goal[] = [decision.electedGoal];
+  const others = KIRUDAS.filter((k) => k !== decision.electedGoal.kiruda)
+    .map((k) => ({
+      goal: lowest(k),
+      estimate: estimatePoints(rules, view.hand, k),
+    }))
+    .filter((o): o is { goal: Goal; estimate: number } => o.goal !== undefined)
+    .sort((a, b) => b.estimate - b.goal.score - (a.estimate - a.goal.score))
+    .slice(0, 2);
+  goals.push(...others.map((o) => o.goal));
+
+  let best: { action: Action; value: number } | null = null;
+  for (const goal of goals) {
+    const base = discardFor(rules, view.hand, goal.kiruda, view.hand.length);
+    const count = decision.discardCount;
+    // 버릴 카드: 1단계 봇이 고른 것과, 그중 한 장을 다음 후보로 바꾼 것들
+    const sets: Card[][] = [base.slice(0, count)];
+    const spare = base[count];
+    if (spare)
+      for (let i = 0; i < count; i++) {
+        const set = base.slice(0, count);
+        set[i] = spare;
+        sets.push(set);
+      }
+    for (const discard of sets) {
+      const hand = view.hand.filter((c) => !discard.includes(c));
+      const value = averagePayoff(
+        view,
+        worlds,
+        { goal, friend: likelyFriend(rules, goal.kiruda, hand), hand, discard },
+        rng,
+      );
+      if (!best || value > best.value)
+        best = { action: { type: "exchange", goal, discard }, value };
+    }
+  }
+  return best?.action ?? null;
+}
+
+function planFriend(
+  view: PlayerView,
+  decision: Extract<Decision, { kind: "friend" }>,
+  worldCount: number,
+  rng: RngState,
+): Action | null {
+  const goal = view.goal;
+  if (!goal) return null;
+  const candidates = friendCandidates(
+    view.rules,
+    goal.kiruda,
+    decision.options,
+  );
+  if (candidates.length <= 1) return null;
+  const known = [...view.hand, ...(view.discarded ?? [])];
+  const worlds = sampleWorlds(view, known, worldCount, rng);
+  const discard = view.discarded ?? [];
+  let best: { friend: FriendDeclaration; value: number } | null = null;
+  for (const friend of candidates) {
+    const value = averagePayoff(
+      view,
+      worlds,
+      { goal, friend, hand: view.hand, discard },
+      rng,
+    );
+    if (!best || value > best.value) best = { friend, value };
+  }
+  return best ? { type: "friend", friend: best.friend } : null;
+}
+
+/** 공약을 걸어 볼 만한 최소 기대 이득(판당 돈). 포기했을 때보다 이만큼은 나아야 나선다 */
+const BID_MARGIN = 0.4;
+
+function planElection(
+  view: PlayerView,
+  decision: Extract<Decision, { kind: "election" }>,
+  worldCount: number,
+  rng: RngState,
+): Action | null {
+  if (decision.canDealMiss || decision.bids.length === 0) return null;
+  // 6·7마는 당선 뒤 한 사람을 죽이고 다시 나눠 손패가 달라지므로 어림으로 둔다.
+  if (view.rules.playerCount > 5) return null;
+  const { rules } = view;
+  const kitty = view.kittyCount;
+  const worlds = sampleWorlds(view, view.hand, worldCount, rng);
+
+  let best: { goal: Goal; value: number } | null = null;
+  for (const kiruda of KIRUDAS) {
+    const bids = decision.bids
+      .filter((g) => g.kiruda === kiruda)
+      .sort((a, b) => a.score - b.score);
+    const lowest = bids[0];
+    if (!lowest) continue;
+    // 바닥 카드를 받아 1단계 봇처럼 버리고 프렌드를 부른 뒤 끝까지 둔다.
+    let total = 0;
+    for (const world of worlds) {
+      const full = [...view.hand, ...(world.hands.get(-1) ?? [])];
+      const discard = discardFor(rules, full, kiruda, kitty);
+      const hand = full.filter((c) => !discard.includes(c));
+      const sim = roundStart(
+        rules,
+        view.players,
+        view.money,
+        view.seat,
+        lowest,
+        likelyFriend(rules, kiruda, hand),
+        handsOf(view, world, hand),
+        discard,
+      );
+      playOut(sim, rng);
+      total += payoff(sim, view.seat, view.money);
+    }
+    const value = total / worlds.length;
+    if (!best || value > best.value) best = { goal: lowest, value };
+  }
+  if (best && best.value > BID_MARGIN) return { type: "bid", goal: best.goal };
+  return decision.canPass ? { type: "pass" } : null;
+}
+
 export interface SearchBotOptions {
   /** 카드 하나를 고를 때 추측해 보는 판 수. 많을수록 강하고 느리다 */
   worlds?: number;
+  /** 공약·교환·프렌드를 정할 때 추측해 보는 판 수. 0이면 1단계 봇처럼 어림한다 */
+  planWorlds?: number;
 }
 
 /** 카드를 낼 때 남의 손패를 추측해 끝까지 둬 보는 봇 */
 export function createSearchBot(options: SearchBotOptions = {}): Bot {
   const worlds = options.worlds ?? 64;
+  const planWorlds = options.planWorlds ?? 24;
   return {
     name: "search",
     decide(view, rng) {
       const decision = view.decision;
       const fallback = heuristicBot.decide(view, rng);
+      // 2마는 판 흐름(카드 고르기)이 달라 공약·교환은 어림으로 둔다.
+      if (planWorlds > 0 && view.rules.playerCount >= 3) {
+        const planned =
+          decision?.kind === "election"
+            ? planElection(view, decision, planWorlds, rng)
+            : decision?.kind === "exchange"
+              ? planExchange(view, decision, planWorlds, rng)
+              : decision?.kind === "friend"
+                ? planFriend(view, decision, planWorlds, rng)
+                : null;
+        if (planned) return planned;
+      }
       if (decision?.kind !== "play" || view.goal === null) return fallback;
       const actions = candidates(decision);
       if (actions.length <= 1) return fallback;

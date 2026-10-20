@@ -39,6 +39,7 @@ function duel(challenger: Bot, seeds: number, rounds = 6) {
 describe("2단계 봇의 세기 (pnpm --filter @mighty/ai bench)", () => {
   it("1단계 봇과 섞어 앉히면 판당 돈을 더 번다", () => {
     const edge = duel(createSearchBot(), 60);
-    expect(edge).toBeGreaterThan(0.5);
+    // 2026-10-21 측정: 카드 내기만 내다볼 때 0.97, 공약·교환·프렌드까지 계획하면 2.24(40판)
+    expect(edge).toBeGreaterThan(1.5);
   });
 });
