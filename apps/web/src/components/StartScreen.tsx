@@ -139,7 +139,7 @@ export function StartScreen({
           </button>
         </div>
         <p className="mt-2 text-center text-[11px] opacity-40">
-          © 2019–2026 Bang Yongbae · 원작 규칙 Mighty Network
+          마이티 네트워크 4.0을 이어받아 만들었습니다 · © 2026 ybbarng
         </p>
       </div>
     </main>

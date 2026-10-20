@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: `${BRAND.name} (${BRAND.englishName})`,
     short_name: BRAND.name,
-    description: BRAND.tagline,
+    description: BRAND.description,
     lang: "ko",
     start_url: "/",
     scope: "/",

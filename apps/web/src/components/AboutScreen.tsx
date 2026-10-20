@@ -1,5 +1,6 @@
 "use client";
 
+import { CREDITS } from "./brand/brand";
 import { Logo } from "./brand/Logo";
 import { ActionButton } from "./panels/common";
 
@@ -40,26 +41,39 @@ export function AboutScreen({
         <section className="flex flex-col gap-1.5 text-xs leading-relaxed opacity-80">
           <h2 className="font-semibold text-sm">이 게임은</h2>
           <p>
-            규칙 옵션과 진행 방식은 윈도우용{" "}
+            윈도우용{" "}
             <a
               href="https://github.com/skyser2003/mighty40"
               className="underline"
               target="_blank"
               rel="noreferrer"
             >
-              Mighty Network
+              마이티 네트워크(Mighty Network) 4.0
             </a>
-            (장문성, UPnL)를 따랐습니다. 원작의 규칙 문자열을 그대로 쓸 수
-            있습니다. 코드와 그림·소리는 새로 만들었습니다.
+            을 이어받아 웹으로 다시 만들었습니다. 원작의 규칙 옵션과 진행 방식을
+            따르고, 원작의 규칙 문자열을 그대로 쓸 수 있습니다. 코드와
+            그림·소리는 새로 만들었습니다.
           </p>
           <p>
-            친구와 하기는 서버 없이 기기끼리 바로 연결되고, 방장도 섞기를 조작할
-            수 없게 판이 끝난 뒤 모두가 직접 검증합니다.
+            다함께 마이티는 서버 없이 기기끼리 바로 연결되고, 방장도 섞기를
+            조작할 수 없게 판이 끝난 뒤 모두가 직접 검증합니다.
           </p>
         </section>
 
+        <section className="flex flex-col gap-1.5 text-xs">
+          <h2 className="font-semibold text-sm opacity-80">만든 사람들</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+            {CREDITS.map((c) => (
+              <div key={c.name} className="contents">
+                <dt className="tabular-nums opacity-60">{c.years}</dt>
+                <dd>{c.name}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
         <p className="text-center text-[11px] opacity-50">
-          © 2019–2026 Bang Yongbae · MIT License
+          © 2026 ybbarng · MIT License
         </p>
 
         <button

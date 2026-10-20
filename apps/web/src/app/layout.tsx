@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     default: `${BRAND.name} · ${BRAND.englishName}`,
     template: `%s · ${BRAND.name}`,
   },
-  description: BRAND.tagline,
+  description: BRAND.description,
   applicationName: BRAND.name,
   keywords: [
     "마이티",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ko_KR",
     title: `${BRAND.name} · ${BRAND.englishName}`,
-    description: BRAND.tagline,
+    description: BRAND.description,
     siteName: BRAND.name,
   },
 };

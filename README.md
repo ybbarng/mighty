@@ -1,6 +1,6 @@
 # Mighty: The Great Card Game
 
-대학가 카드게임 마이티를 웹에서 되살리는 프로젝트. 윈도우판 Mighty Network의 규칙 옵션과 진행 방식을 따르고, 빈자리는 컴퓨터 플레이어가 채운다.
+대학가 카드게임 마이티를 웹에서 되살리는 프로젝트. 윈도우용 마이티 네트워크(Mighty Network) 4.0을 이어받아 규칙 옵션과 진행 방식을 따르고, 빈자리는 컴퓨터 플레이어가 채운다.
 
 ## 문서
 
@@ -36,5 +36,10 @@ pnpm build      # 정적 빌드 (apps/web/out)
 
 ## Thanks to
 
-- [Mighty Network](https://github.com/skyser2003/mighty40) by 장문성 (sw6ueyz@hitel.net), UPnL — 규칙과 진행 방식의 기준
+- [Mighty Network](https://github.com/skyser2003/mighty40) — 규칙과 진행 방식의 기준. 이 게임은 마이티 네트워크 4.0을 이어받아 만들었다.
+  - 1999 장문성
+  - 2006–2011 UPnL
+  - 2006 puzzlet
+  - 2011 Yoshi-TS4
+  - 2026 ybbarng (웹으로 다시 만듦)
 
