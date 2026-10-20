@@ -54,7 +54,7 @@ export function handStrength(
   return strength;
 }
 
-/** 프렌드와 키티까지 생각해 여당이 가져갈 점수 카드 장수를 어림한다. */
+/** 프렌드와 바닥 카드까지 생각해 여당이 가져갈 점수 카드 장수를 어림한다. */
 export function estimatePoints(
   rules: RuleSet,
   hand: readonly Card[],

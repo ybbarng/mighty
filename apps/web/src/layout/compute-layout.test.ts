@@ -121,7 +121,7 @@ it("세로 폰에서 13장이면 두 줄로 놓는다", () => {
 describe.each(cases)(
   "$width×$height / 인원 $playerCount / 손패 $handCount — 바닥",
   (input) => {
-    it("자리 판은 바닥 카드와 겹치지 않는다", () => {
+    it("자리 판은 바닥에 낸 카드와 겹치지 않는다", () => {
       const layout = computeLayout(input);
       const { card, slots } = layout.trick;
       const cards = slots.map((s) => ({

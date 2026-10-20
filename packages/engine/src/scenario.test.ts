@@ -58,7 +58,7 @@ describe("정해진 장면에서 시작", () => {
     });
   });
 
-  it("교환 단계: 키티가 주공 손에 들어가 있다", () => {
+  it("교환 단계: 바닥 카드가 주공 손에 들어가 있다", () => {
     const state = createScenario({
       rules,
       phase: "exchange",

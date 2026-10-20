@@ -6,7 +6,7 @@ import type { FriendDeclaration, MatchState } from "./state";
 
 /**
  * 튜토리얼 미션처럼 정해진 장면에서 판을 시작한다.
- * 선거를 건너뛰고 주공·공약을 정해 둔 채 키티 교환, 프렌드 지정, 트릭 단계 가운데 하나로 바로 들어간다.
+ * 선거를 건너뛰고 주공·공약을 정해 둔 채 바닥 카드 교환, 프렌드 지정, 트릭 단계 가운데 하나로 바로 들어간다.
  * 손패는 10장이 아니어도 된다(짧은 미션). 그런 판은 미션이 끝나면 버린다.
  */
 export interface ScenarioOptions {
@@ -14,7 +14,7 @@ export interface ScenarioOptions {
   seed?: number;
   /** 자리 번호 순서의 손패 */
   hands: Card[][];
-  /** 교환 단계면 주공이 받을 키티(이미 손패에 넣어 둔 상태로 시작하려면 비워 둔다) */
+  /** 교환 단계면 주공이 받을 바닥 카드(이미 손패에 넣어 둔 상태로 시작하려면 비워 둔다) */
   kitty?: Card[];
   phase: "exchange" | "friend" | "play";
   declarer: number;

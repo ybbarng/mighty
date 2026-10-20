@@ -9,7 +9,7 @@ import { ActionButton, KirudaPicker, Panel, ScoreStepper } from "./common";
 
 type ExchangeDecision = Extract<Decision, { kind: "exchange" }>;
 
-/** 주공: 키티를 받은 뒤 버릴 카드 고르기(손패에서 누른다)와 공약 바꾸기 */
+/** 주공: 바닥 카드를 받은 뒤 버릴 카드 고르기(손패에서 누른다)와 공약 바꾸기 */
 export function ExchangePanel({
   decision,
   discards,

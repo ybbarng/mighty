@@ -4,7 +4,7 @@ import { startSolo } from "./start";
 
 /**
  * 인원별로 내가 주공이 되는 길로 한 판을 끝까지 두며 장면마다 화면을 찍는다.
- * 2마 고르기, 6·7마 죽이기, 키티 교환, 프렌드, 조커·조커콜 선택지를 모두 지나간다.
+ * 2마 고르기, 6·7마 죽이기, 바닥 카드 교환, 프렌드, 조커·조커콜 선택지를 모두 지나간다.
  */
 const VARIANTS = [
   { preset: "표준 5마", name: "5ma" },
@@ -92,7 +92,7 @@ for (const variant of VARIANTS) {
         await shot("exchange");
         const discards = page.getByText(/버릴 카드/).first();
         await expect(discards).toBeVisible();
-        // 3장이 다 골라질 때까지 누른다(키티가 들어오는 중에 누르면 기다렸다가 다시).
+        // 3장이 다 골라질 때까지 누른다(바닥 카드가 들어오는 중에 누르면 기다렸다가 다시).
         for (let k = 0; k < 8; k++) {
           if (await page.getByText("(3/3)").isVisible()) break;
           const target = page

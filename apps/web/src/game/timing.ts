@@ -2,7 +2,7 @@
 export const SHUFFLE_MS = 1600;
 /** 나눠 주는 카드 한 장이 날아가는 시간 */
 export const FLIGHT_MS = 450;
-/** 다 나눈 뒤 남은 키티가 흐려지는 시간 */
+/** 다 나눈 뒤 잠시 쉬는 시간 */
 export const SETTLE_MS = 400;
 
 /** 원작처럼 2장·3장·3장·2장 묶음으로 나눈다(6마 2·3·3, 7마 2·3·2) */

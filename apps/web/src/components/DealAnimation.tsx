@@ -60,7 +60,7 @@ export function DealAnimation({
   return (
     <>
       {Array.from({ length: count }, (_, i) => {
-        // 아래부터 쌓는다. 키티는 맨 아래에 남고, 나눠 줄 카드는 맨 위부터 나간다.
+        // 아래부터 쌓는다. 바닥 카드는 맨 아래에 남고, 나눠 줄 카드는 맨 위부터 나간다.
         const isKitty = i < kittyCount;
         const order = count - 1 - i;
         const flight = isKitty ? undefined : flights[order];

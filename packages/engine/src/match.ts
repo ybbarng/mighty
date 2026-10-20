@@ -158,7 +158,7 @@ function startRound(
   events.push({ type: "dealt", handSize });
 }
 
-/** 2마: 덱 맨 뒤 두 장을 차례인 사람에게 보여 준다. 26번 고르면 키티 1장이 남는다. */
+/** 2마: 덱 맨 뒤 두 장을 차례인 사람에게 보여 준다. 26번 고르면 바닥 카드 1장이 남는다. */
 function offerPick(round: RoundState): void {
   const faceUp = round.deck.pop() as Card;
   const faceDown = round.deck.pop() as Card;

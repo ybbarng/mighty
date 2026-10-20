@@ -50,7 +50,7 @@ function expectFail(result: StepResult): void {
 
 const pass: Action = { type: "pass" };
 
-// 0번: 스페이드 위주, 1번: 하트, 2번: 다이아(◆A 포함), 3번: 클로버, 4번: ♠A·조커와 낮은 카드. 키티: ♠3 ♠2 ♣3
+// 0번: 스페이드 위주, 1번: 하트, 2번: 다이아(◆A 포함), 3번: 클로버, 4번: ♠A·조커와 낮은 카드. 바닥 카드: ♠3 ♠2 ♣3
 const scenarioDeal: PresetDeal = {
   hands: [
     ["SK", "SQ", "SJ", "S10", "S9", "S8", "S7", "S6", "S5", "S4"],
@@ -98,7 +98,7 @@ describe("행동 검사", () => {
 });
 
 describe("선거", () => {
-  it("나머지가 모두 포기하면 마지막 공약자가 당선되고 키티를 받는다", () => {
+  it("나머지가 모두 포기하면 마지막 공약자가 당선되고 바닥 카드를 받는다", () => {
     const state = electSpade14();
     expect(state.round.phase).toBe("exchange");
     expect(state.round.declarer).toBe(0);
@@ -379,7 +379,7 @@ describe("6마 죽이기", () => {
     return current;
   }
 
-  it("당선되면 키티를 받기 전에 한 명을 죽인다", () => {
+  it("당선되면 바닥 카드를 받기 전에 한 명을 죽인다", () => {
     const state = elected6();
     expect(state.round.phase).toBe("kill");
     expect(state.round.hands[0]).toHaveLength(8);

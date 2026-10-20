@@ -62,7 +62,7 @@ init → shuffle → deal → bidding → exchangingCard → callingPartner → 
 
 ## 구조상 문제 (다시 손대기 어려웠던 이유)
 
-1. **게임 진행을 UI가 몰고 간다.** 셔플·딜·키티 가져오기를 `Board`의 `componentDidUpdate` → `autoMoves()` → `setTimeout`이 호출한다. 화면이 마운트되어 있지 않으면 게임이 멈추고, 여러 클라이언트가 동시에 같은 move를 부르려 한다. `Board.js`의 "1.3초 뒤 `endPhase`" 같은 타이밍 코드가 애니메이션과 게임 상태 전환을 묶어 버렸다.
+1. **게임 진행을 UI가 몰고 간다.** 셔플·딜·바닥 카드 가져오기를 `Board`의 `componentDidUpdate` → `autoMoves()` → `setTimeout`이 호출한다. 화면이 마운트되어 있지 않으면 게임이 멈추고, 여러 클라이언트가 동시에 같은 move를 부르려 한다. `Board.js`의 "1.3초 뒤 `endPhase`" 같은 타이밍 코드가 애니메이션과 게임 상태 전환을 묶어 버렸다.
 2. **한 동작이 move 여러 개로 쪼개져 있다.** 공약은 `bid` → `endTurn`, 교환 확정은 `bid` → `discardCards` → `endPhase`처럼 클라이언트가 여러 번 보낸다. 중간에 하나만 실패하면 상태가 어긋난다. 커밋 로그의 `ERROR: invalid stateID`, `Workaround of the bug of TurnOrder.ANY_ONCE`, `Fix infinity loop`가 모두 이 문제다.
 3. **boardgame.io 0.31 시절 API에 묶여 있다.** `Game()` 래퍼, `flow.phases`, `TurnOrder.CUSTOM_FROM`, `allowedMoves`, `endPhaseIf`, `(G, ctx)` move 시그니처는 이후 버전에서 모두 바뀌었다. 라이브러리만 올려서는 돌아가지 않고 사실상 게임 정의를 다시 써야 한다.
 4. **애니메이션 상태를 게임 상태(`G.prevMove`)로 전달한다.** 효과음·애니메이션을 위해 "직전 move"를 게임 상태에 넣었다. 이 방식으로 딜 애니메이션을 만들다가 막힌 흔적이 feature 브랜치에 남아 있다.

@@ -48,7 +48,7 @@
 - 선거 중에는 직전 공약보다 숫자가 **커야** 한다. 무늬 사이 우열은 없다. `bNoKirudaAlways`면 노기루다가 1 적게 쳐진다
 - `bNoKirudaAdvantage`면 노기루다는 최소 공약보다 1 적게 부를 수 있다
 - 첫 공약자(선)는 `bBeginerPass`가 꺼져 있으면 포기할 수 없다
-- 당선 후(키티를 받은 뒤) 기루다를 바꾸려면 `bRaise2ForKirudaChange`면 +2, 아니면 +1. 노기루다로 바꿀 때 `bNoKirudaAdvantage`면 1 덜 올린다. 키티를 보기 전에 바꾸면 +1. 기루다를 안 바꾸면 숫자를 낮출 수 없다
+- 당선 후(바닥 카드를 받은 뒤) 기루다를 바꾸려면 `bRaise2ForKirudaChange`면 +2, 아니면 +1. 노기루다로 바꿀 때 `bNoKirudaAdvantage`면 1 덜 올린다. 바닥 카드를 보기 전에 바꾸면 +1. 기루다를 안 바꾸면 숫자를 낮출 수 없다
 
 **프렌드** (`GetValidFriend`)
 

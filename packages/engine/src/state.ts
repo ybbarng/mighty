@@ -87,7 +87,7 @@ export interface RoundState {
   /** 지금 결정할 자리. `roundEnd`에서는 `null` */
   turn: number | null;
   hands: Card[][];
-  /** 아직 나누지 않은 카드. 딜 뒤에는 키티 */
+  /** 아직 나누지 않은 카드. 딜 뒤에는 바닥 카드 */
   deck: Card[];
   /** 2마: 지금 차례에게 보여준 두 장 [앞면, 뒷면] */
   pickOffer: [Card, Card] | null;

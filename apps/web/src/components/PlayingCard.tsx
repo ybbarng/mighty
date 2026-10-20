@@ -37,7 +37,7 @@ interface PlayingCardProps {
   highlight?: boolean;
   /** 튜토리얼 추천 카드: 강조와 다른 색으로 깜빡이고 "추천" 표를 단다 */
   hint?: boolean;
-  /** 키티에서 막 들어온 카드: "새" 표를 단다 */
+  /** 바닥 카드에서 막 들어온 카드: "바닥" 표를 단다 */
   fresh?: boolean;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
@@ -146,7 +146,7 @@ export function PlayingCard({
         >
           {fresh && (
             <span className="rounded-full bg-emerald-400 px-[0.5em] py-[0.25em] text-black shadow">
-              새
+              바닥
             </span>
           )}
           {hint && (

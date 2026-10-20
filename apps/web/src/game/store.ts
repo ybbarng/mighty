@@ -304,7 +304,7 @@ export const useGame = create<GameStore>((set, get) => {
 
 /**
  * 사람이 지금 고를 수 있는가. 재생할 장면이 남아 있거나 트릭·나눠 주기를 보여 주는 중이면 기다린다.
- * 마지막 장면의 남은 연출 시간(키티 들어오기 등)은 기다리지 않는다. 그 사이 누른 것이 사라지지 않게 하려고.
+ * 마지막 장면의 남은 연출 시간(바닥 카드 들어오기 등)은 기다리지 않는다. 그 사이 누른 것이 사라지지 않게 하려고.
  */
 export function canAct(
   state: Pick<GameStore, "queue" | "view" | "shownTrick" | "dealing">,

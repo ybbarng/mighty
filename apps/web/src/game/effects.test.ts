@@ -82,15 +82,44 @@ describe("효과 글자", () => {
 
   it("당선과 프렌드 공개", () => {
     expect(
-      effect({ type: "elected", seat: 2, goal: { kiruda: "H", score: 15 } })
-        ?.text,
-    ).toBe("P2 당선 · ♥ 15");
+      effect({ type: "elected", seat: 2, goal: { kiruda: "H", score: 15 } }),
+    ).toMatchObject({
+      text: "P2 당선",
+      lines: ["공약 ♥ 15", "바닥 카드를 가져갑니다"],
+    });
     expect(effect({ type: "friendRevealed", seat: 3 })?.text).toBe(
       "프렌드는 P3!",
     );
     expect(effect({ type: "friendRevealed", seat: null })?.text).toBe(
       "프렌드 없음",
     );
+  });
+
+  it("공약을 바꾸면 크게 알리고, 그대로면 알리지 않는다", () => {
+    const elected = {
+      ...view,
+      election: { ...view.election, goal: { kiruda: "S" as const, score: 14 } },
+    };
+    expect(
+      effectFor(
+        elected,
+        [{ type: "exchanged", seat: 0, goal: { kiruda: "H", score: 16 } }],
+        name,
+      ),
+    ).toMatchObject({ text: "공약 변경", lines: ["♠ 14 → ♥ 16"] });
+    expect(
+      effectFor(
+        elected,
+        [{ type: "exchanged", seat: 0, goal: { kiruda: "S", score: 14 } }],
+        name,
+      ),
+    ).toBeNull();
+  });
+
+  it("프렌드 선언을 크게 알린다", () => {
+    expect(
+      effect({ type: "friendDeclared", friend: { kind: "card", card: "SA" } }),
+    ).toMatchObject({ text: "프렌드 선언" });
   });
 
   it("6마 죽이기", () => {

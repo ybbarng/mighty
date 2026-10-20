@@ -55,8 +55,9 @@ export const GLOSSARY: readonly Term[] = [
   },
   {
     id: "kitty",
-    term: "키티",
-    meaning: "나눠 주고 남은 3장. 주공이 받아서 13장 중 3장을 버린다.",
+    term: "바닥 카드",
+    meaning:
+      "나눠 주고 남아 가운데 엎어 둔 3장. 당선된 주공이 가져가 13장 중 3장을 바닥에 묻는다(버린다).",
   },
   {
     id: "mighty",

@@ -393,13 +393,13 @@ export const LESSONS: readonly Lesson[] = [
   {
     id: "declarer",
     title: "주공이 되면",
-    summary: "키티 받기와 3장 버리기",
+    summary: "바닥 카드 받기와 3장 묻기",
     steps: [
       {
         kind: "explain",
-        title: "키티",
+        title: "바닥 카드",
         body: [
-          "당선되면 남아 있던 3장(**키티**)을 받아요. 그러면 13장이 되고, 그중 3장을 버려요.",
+          "당선되면 가운데 엎어 둔 **바닥 카드** 3장을 가져와요. 그러면 13장이 되고, 그중 쓸모없는 3장을 다시 바닥에 묻어요(버려요).",
           "버린 카드 속 점수 카드도 여당 득점으로 쳐요.",
         ],
         terms: ["kitty"],
@@ -425,7 +425,7 @@ export const LESSONS: readonly Lesson[] = [
         kind: "mission",
         title: "3장 버리기",
         objective:
-          "♠14로 당선됐어요(마이티는 ◆A). **키티를 받은 13장 중 3장을 버리세요.** 마이티·조커·기루다는 남기세요.",
+          "♠14로 당선됐어요(마이티는 ◆A). **바닥 카드를 받은 13장 중 3장을 묻으세요.** 마이티·조커·기루다는 남기세요.",
         hint: "♣와 ♥가 짧아요. 그쪽 낮은 카드를 버려 보세요.",
         scenario: {
           phase: "exchange",

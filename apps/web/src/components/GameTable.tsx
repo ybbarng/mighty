@@ -156,7 +156,7 @@ export function GameTable({
   if (view && view.kittyCount > 0)
     floorMemo.current = { round: view.roundNumber, count: view.kittyCount };
 
-  // 키티를 받기 전 손패를 기억해 두었다가 새로 들어온 카드에 표를 단다.
+  // 바닥 카드를 받기 전 손패를 기억해 두었다가 새로 들어온 카드에 표를 단다.
   const beforeKitty = useRef<{ round: number; hand: Card[] } | null>(null);
   if (view && view.phase !== "exchange" && view.phase !== "play")
     beforeKitty.current = { round: view.roundNumber, hand: view.hand };
@@ -627,7 +627,7 @@ export function GameTable({
                             ? 0
                             : -layout.hand.card.h * 0.04),
                     }}
-                    // 키티는 가운데에서, 처음 받은 패는 나눠 받은 더미(손패 가운데)에서 펼쳐진다.
+                    // 바닥 카드는 가운데에서, 처음 받은 패는 나눠 받은 더미(손패 가운데)에서 펼쳐진다.
                     from={
                       view.phase === "exchange"
                         ? { ...tableCenter, scale: 0.6, opacity: 0 }
