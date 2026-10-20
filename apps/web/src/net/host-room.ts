@@ -21,6 +21,8 @@ export interface HostRoomOptions {
   transport: Transport;
   hostName: string;
   rules: RuleSet;
+  /** 방장이 저장해 둔 내 규칙이면 그 이름 */
+  ruleName?: string;
   /** 사람이 연결이 끊긴 뒤 컴퓨터가 대신 두기까지 기다리는 시간 */
   standInDelayMs?: number;
   /** 시작할 때 참가자의 비밀 값을 기다리는 시간 */
@@ -48,6 +50,7 @@ interface GuestSeat {
 export class HostRoom {
   readonly transport: Transport;
   private rules: RuleSet;
+  private ruleName: string | null;
   private readonly hostName: string;
   private readonly guests = new Map<number, GuestSeat>();
   private readonly names = new Map<number, string>();
@@ -72,6 +75,7 @@ export class HostRoom {
   constructor(options: HostRoomOptions) {
     this.transport = options.transport;
     this.rules = options.rules;
+    this.ruleName = options.ruleName ?? null;
     this.hostName = options.hostName;
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
@@ -113,6 +117,7 @@ export class HostRoom {
     );
     return {
       ruleCode: encodeRuleString(this.rules),
+      ...(this.ruleName ? { ruleName: this.ruleName } : {}),
       seats,
       started: this.match !== null,
     };
@@ -124,9 +129,11 @@ export class HostRoom {
     return () => this.lobbyListeners.delete(listener);
   }
 
-  setRules(rules: RuleSet): void {
+  /** 대기실에서 규칙을 바꾼다. `name`은 내 규칙 이름(참가자 화면에 보인다) */
+  setRules(rules: RuleSet, name?: string): void {
     if (this.match) return;
     this.rules = rules;
+    this.ruleName = name?.trim() || null;
     // 인원이 줄면 넘치는 자리의 참가자는 내보낸다.
     for (const seat of [...this.guests.keys()]) {
       if (seat >= rules.playerCount) {

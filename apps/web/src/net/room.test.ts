@@ -1,5 +1,5 @@
 import { heuristicBot } from "@mighty/ai";
-import { presetRules } from "@mighty/engine";
+import { encodeRuleString, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "./guest-room";
@@ -101,6 +101,19 @@ describe("온라인 방", () => {
     // 게임 중에는 비밀 값이 오가지 않는다(감사 때 처음 공개된다).
     const beforeAudit = seen.filter((m) => !m.includes('"t":"audit"'));
     expect(beforeAudit.some((m) => m.includes(a.secret))).toBe(false);
+  });
+
+  it("방장이 대기실에서 고친 규칙과 이름이 참가자에게 간다", async () => {
+    const { host, a } = await setup();
+    const custom = { ...presetRules("standard5"), noKirudaAdvantage: true };
+    host.setRules(custom, "우리 학교 5마");
+    await until(() => a.lobby?.ruleName === "우리 학교 5마");
+    expect(a.lobby?.ruleCode).toBe(encodeRuleString(custom));
+
+    // 기본 규칙으로 돌아가면 이름을 지운다.
+    host.setRules(presetRules("standard5"));
+    await until(() => a.lobby?.ruleName === undefined);
+    host.close();
   });
 
   it("방장과 잠깐 끊겨도 다시 연결되면 같은 자리로 이어서 한다", async () => {

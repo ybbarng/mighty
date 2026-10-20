@@ -17,6 +17,8 @@ export interface LobbySeat {
 export interface LobbyState {
   /** 원작 규칙 문자열 */
   ruleCode: string;
+  /** 방장이 붙인 규칙 이름(내 규칙). 기본 규칙이면 없다 */
+  ruleName?: string;
   seats: LobbySeat[];
   started: boolean;
 }

@@ -1,10 +1,15 @@
 "use client";
 
-import { encodeRuleString, RULE_PRESETS, type RuleSet } from "@mighty/engine";
+import {
+  decodeRuleString,
+  encodeRuleString,
+  RULE_PRESETS,
+  type RuleSet,
+} from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
 
 import { botFor, browserPace } from "@/game/bots";
-import { useSettings } from "@/game/settings";
+import { ruleLabel, useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
 import {
@@ -29,12 +34,9 @@ import { Logo } from "./brand/Logo";
 import { ChatBox } from "./ChatBox";
 import { InviteQr } from "./InviteQr";
 import { ActionButton } from "./panels/common";
+import { RuleEditor } from "./rules/RuleEditor";
 
 type Phase = "name" | "connecting" | "lobby" | "full" | "kicked" | "error";
-
-function ruleName(code: string): string {
-  return RULE_PRESETS.find((p) => p.code === code)?.name ?? "직접 정한 규칙";
-}
 
 /** 연결이 끊긴 사람 자리 */
 function offlineSeatsOf(lobby: LobbyState): number[] {
@@ -64,6 +66,14 @@ export function OnlineScreen({
   onPlaying: () => void;
 }) {
   const savedName = useSettings((s) => s.playerName);
+  const customRules = useSettings((s) => s.customRules);
+  const [editingRules, setEditingRules] = useState(false);
+  /** 규칙 이름. 방장이 붙인 이름 → 기본 규칙·내 규칙 → "직접 정한 n마" */
+  const ruleName = (code: string, given?: string) =>
+    given ?? ruleLabel(code, customRules);
+  /** 내 규칙과 같으면 그 이름(참가자에게 보인다) */
+  const customName = (code: string) =>
+    customRules.find((r) => r.code === code)?.name;
   const setPlayerName = useSettings((s) => s.setPlayerName);
   const attachOnline = useGame((s) => s.attachOnline);
   const setSeatNames = useGame((s) => s.setSeatNames);
@@ -106,10 +116,12 @@ export function OnlineScreen({
     try {
       const transport = await openTransport(roomCode);
       if (isHost) {
+        const initialRuleName = customName(encodeRuleString(rules));
         const host = new HostRoom({
           transport,
           hostName: trimmed,
           rules,
+          ...(initialRuleName ? { ruleName: initialRuleName } : {}),
           bot: botFor(useSettings.getState().botLevel),
           botNames: useSettings.getState().botNames,
           pace: browserPace,
@@ -324,28 +336,60 @@ export function OnlineScreen({
             )}
             <div className="flex flex-col gap-1">
               {isHost ? (
-                <div className="flex flex-wrap gap-1">
-                  {RULE_PRESETS.map((p) => (
+                <div className="flex flex-wrap items-center gap-1">
+                  {[
+                    ...RULE_PRESETS.map((p) => ({
+                      key: p.id,
+                      name: p.name,
+                      code: p.code,
+                      custom: false,
+                    })),
+                    ...customRules.map((r) => ({
+                      key: `custom-${r.name}`,
+                      name: r.name,
+                      code: r.code,
+                      custom: true,
+                    })),
+                  ].map((r) => (
                     <button
-                      key={p.id}
+                      key={r.key}
                       type="button"
-                      onClick={() => onlineSession.host?.setRules(p.rules)}
+                      onClick={() => {
+                        const decoded = decodeRuleString(r.code);
+                        if (decoded.ok)
+                          onlineSession.host?.setRules(
+                            decoded.rules,
+                            r.custom ? r.name : undefined,
+                          );
+                      }}
                       className={cn(
                         "rounded-full border px-2 py-0.5 text-[11px]",
-                        p.code === lobby.ruleCode
+                        r.code === lobby.ruleCode
                           ? "border-amber-300 bg-white text-black"
                           : "border-white/15 bg-white/5",
                       )}
                     >
-                      {p.name}
+                      {r.name}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setEditingRules(true)}
+                    className="rounded-full border border-white/30 border-dashed px-2 py-0.5 text-[11px]"
+                  >
+                    자세히 고치기
+                  </button>
                 </div>
               ) : (
                 <p className="text-xs opacity-60">
-                  {ruleName(lobby.ruleCode)} · {lobby.seats.length}명
+                  {ruleName(lobby.ruleCode, lobby.ruleName)} ·{" "}
+                  {lobby.seats.length}명
                 </p>
               )}
+              <p className="text-[11px] opacity-50">
+                규칙 문자열{" "}
+                <span className="select-all font-mono">{lobby.ruleCode}</span>
+              </p>
               {lobby.seats.map((s) => (
                 <div
                   key={s.seat}
@@ -422,6 +466,22 @@ export function OnlineScreen({
           처음으로
         </button>
       </div>
+      {editingRules && lobby && isHost && (
+        <RuleEditor
+          initial={(() => {
+            const decoded = decodeRuleString(lobby.ruleCode);
+            return decoded.ok ? decoded.rules : rules;
+          })()}
+          onClose={() => setEditingRules(false)}
+          onApply={(next) => {
+            onlineSession.host?.setRules(
+              next,
+              customName(encodeRuleString(next)),
+            );
+            setEditingRules(false);
+          }}
+        />
+      )}
     </main>
   );
 }
