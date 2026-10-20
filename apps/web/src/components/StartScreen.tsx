@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 
+import { Logo } from "./brand/Logo";
 import { CARD_THEMES } from "./card-art/themes";
 
 import { ActionButton } from "./panels/common";
@@ -36,7 +37,9 @@ export function StartScreen({
     <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
       <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-white/10 bg-black/40 p-6 shadow-2xl backdrop-blur">
         <div className="text-center">
-          <h1 className="font-black text-4xl tracking-tight">Mighty</h1>
+          <h1 className="flex justify-center">
+            <Logo size={240} animated />
+          </h1>
           <p className="mt-1 text-sm opacity-70">빈자리는 컴퓨터가 채웁니다</p>
         </div>
 

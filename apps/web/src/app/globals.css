@@ -3,9 +3,81 @@
 @theme {
   --color-felt: #0f5132;
   --color-felt-dark: #0a3622;
+  --color-gold: #f2c14e;
 }
 
+html,
 body {
   background: var(--color-felt-dark);
   color: white;
+  /* 게임 화면에서 두 번 눌러 확대·당겨서 새로고침·글자 선택이 끼어들지 않게 한다 */
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+main,
+button {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 로고 카드가 부채꼴로 펼쳐진다 */
+.logo-card {
+  animation: logo-fan 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes logo-fan {
+  from {
+    transform: translateX(0) rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(var(--logo-x)) rotate(var(--logo-rotate)) scale(1);
+    opacity: 1;
+  }
+}
+
+.splash-glow {
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(242, 193, 78, 0.18),
+    transparent 55%
+  );
+  animation: splash-glow 1.6s ease-out both;
+}
+
+@keyframes splash-glow {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.splash-tagline {
+  animation: rise 0.6s 0.6s ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-card,
+  .splash-glow,
+  .splash-tagline {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
 }

@@ -7,6 +7,7 @@ import { clearGame, loadGame } from "@/game/persistence";
 import { useGame } from "@/game/store";
 
 import { GameTable } from "./GameTable";
+import { Splash } from "./Splash";
 import { StartScreen } from "./StartScreen";
 
 export function MightyApp() {
@@ -22,26 +23,29 @@ export function MightyApp() {
 
   if (!playing) {
     return (
-      <StartScreen
-        onStart={(rules) => {
-          newGame({ rules });
-          setPlaying(true);
-        }}
-        {...(saved
-          ? {
-              onResume: () => {
-                try {
-                  resume(saved);
-                  setPlaying(true);
-                } catch {
-                  // 규칙이 바뀌어 되살릴 수 없는 저장은 버린다.
-                  clearGame();
-                  setSaved(null);
-                }
-              },
-            }
-          : {})}
-      />
+      <>
+        <Splash />
+        <StartScreen
+          onStart={(rules) => {
+            newGame({ rules });
+            setPlaying(true);
+          }}
+          {...(saved
+            ? {
+                onResume: () => {
+                  try {
+                    resume(saved);
+                    setPlaying(true);
+                  } catch {
+                    // 규칙이 바뀌어 되살릴 수 없는 저장은 버린다.
+                    clearGame();
+                    setSaved(null);
+                  }
+                },
+              }
+            : {})}
+        />
+      </>
     );
   }
   return <GameTable onExit={() => setPlaying(false)} />;
