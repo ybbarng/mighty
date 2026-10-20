@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { dealTiming, SHUFFLE_MS } from "@/game/timing";
+import { dealPlan, SHUFFLE_MS } from "@/game/timing";
 import type { Point, Size } from "@/layout/compute-layout";
 
 import { PlayingCard } from "./PlayingCard";
@@ -31,7 +31,7 @@ export function DealAnimation({
 }: DealAnimationProps) {
   const [stage, setStage] = useState<Stage>("stack");
   const total = handSize * targets.length;
-  const { perCard } = dealTiming(total);
+  const { flights } = dealPlan(handSize, targets.length);
 
   useEffect(() => {
     const step = SHUFFLE_MS / 4;
@@ -54,11 +54,12 @@ export function DealAnimation({
         const dealt = stage === "deal" && i < total;
         // 덱 맨 위부터 나눠 주므로 위에 쌓인 카드(번호가 큰 쪽)를 먼저 보낸다.
         const order = total - 1 - i;
+        const flight = flights[order];
         const half = i % 2 === 0 ? -1 : 1;
         const stack = Math.min(i, 20) * 0.4;
         const at = dealt
           ? {
-              ...(targets[order % targets.length] as Point),
+              ...(targets[flight?.player ?? 0] as Point),
               scale: 0.55,
               opacity: 0.9,
             }
@@ -77,7 +78,7 @@ export function DealAnimation({
             at={at}
             rotate={split ? half * 6 : 0}
             z={dealt ? 50 + order : 10 + i}
-            delay={dealt ? order * perCard : 0}
+            delay={dealt ? (flight?.delay ?? 0) : 0}
           />
         );
       })}

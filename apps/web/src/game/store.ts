@@ -15,7 +15,7 @@ import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
 import { play as playCue } from "./sound";
-import { dealTiming, prefersReducedMotion } from "./timing";
+import { dealPlan, prefersReducedMotion } from "./timing";
 
 /** 화면에 붙일 수 있는 대국. 처음 쌓인 진행을 넘겨 줄 수 있어야 한다 */
 export type AttachableHost = MatchHost & { drain(): Snapshot[] };
@@ -144,7 +144,6 @@ export const useGame = create<GameStore>((set, get) => {
         0,
         ...others.map((e) => EVENT_DELAY[e.type] ?? 150),
       );
-      const total = dealt.handSize * next.view.players.length;
       set({
         dealing: {
           key: (get().dealing?.key ?? 0) + 1,
@@ -154,7 +153,8 @@ export const useGame = create<GameStore>((set, get) => {
       });
       // 연출 컴포넌트가 실제 시간으로 돌기 때문에 빨리 감지 않는다.
       wait(
-        startDelay + dealTiming(total).duration,
+        startDelay +
+          dealPlan(dealt.handSize, next.view.players.length).duration,
         () => {
           set({ dealing: null });
           advance();
