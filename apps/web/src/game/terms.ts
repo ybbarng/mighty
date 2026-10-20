@@ -108,3 +108,30 @@ export function unplayableText(reason: UnplayableReason): string {
         : "첫 트릭에는 기루다를 낼 수 없습니다";
   }
 }
+
+/**
+ * 카드 툴팁 문구(원작 `GetHelpString`): 카드 이름과, 같은 무늬에서 아직 나오지 않은 더 높은 카드.
+ * 더 높은 카드가 없으면 "최고패". 마이티·조커는 이름만.
+ */
+export function cardTipText(
+  card: Card,
+  rules: RuleSet,
+  kiruda: Kiruda | null,
+  played: ReadonlySet<Card>,
+): string {
+  const mighty = mightyOf(rules, kiruda ?? "NT");
+  if (card === mighty) return "마이티";
+  if (isJoker(card)) return "조커";
+  const suit = suitOf(card) as Suit;
+  const higher = (
+    ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"] as const
+  )
+    .map((rank): Card => `${suit}${rank}`)
+    .filter(
+      (c) => rankPower(c) > rankPower(card) && c !== mighty && !played.has(c),
+    )
+    .map((c) => rankOf(c));
+  return higher.length > 0
+    ? `${cardLabel(card)} (${higher.join(" ")})`
+    : `${cardLabel(card)} (최고패)`;
+}

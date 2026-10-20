@@ -41,6 +41,8 @@ interface PlayingCardProps {
   fresh?: boolean;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
+  /** 마우스를 올리고 내릴 때(카드 툴팁) */
+  onHover?: (hovering: boolean) => void;
 }
 
 function transform(
@@ -68,6 +70,7 @@ export function PlayingCard({
   fresh = false,
   interactive = false,
   onActivate,
+  onHover,
 }: PlayingCardProps) {
   const theme = useCardTheme();
   const [arrived, setArrived] = useState(from === undefined);
@@ -103,6 +106,10 @@ export function PlayingCard({
       aria-label={card ? cardLabel(card) : "뒷면 카드"}
       disabled={!interactive}
       onPointerUp={handlePointerUp}
+      onPointerEnter={(e) => {
+        if (e.pointerType === "mouse") onHover?.(true);
+      }}
+      onPointerLeave={() => onHover?.(false)}
       onKeyDown={(e) => {
         if (interactive && onActivate && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();

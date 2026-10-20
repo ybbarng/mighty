@@ -73,11 +73,17 @@ interface GameStore {
   audit: { ok: true } | { ok: false; reason: string } | null;
   /** 온라인 대전에서 방장이 나가 더 진행할 수 없음 */
   hostLeft: boolean;
+  /** 다른 사람과 하는 온라인 대전인가. 카드 툴팁 같은 도움 기능을 끈다(원작 `bUseHintInNetwork`) */
+  network: boolean;
   newGame(options: NewGameOptions): void;
   /** 저장해 둔 대국을 이어서 한다 */
   resume(saved: SavedMatch): void;
   /** 온라인 대국(방장의 LocalMatch나 참가자의 RemoteMatch)을 붙인다 */
-  attachOnline(host: AttachableHost, seatNames: string[]): void;
+  attachOnline(
+    host: AttachableHost,
+    seatNames: string[],
+    options?: { network?: boolean },
+  ): void;
   setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
   clearNotice(): void;
@@ -193,7 +199,7 @@ export const useGame = create<GameStore>((set, get) => {
    */
   const attach = (
     host: AttachableHost,
-    options: { save: boolean; seatNames: string[] | null },
+    options: { save: boolean; seatNames: string[] | null; network?: boolean },
   ) => {
     clearTimer();
     unsubscribe?.();
@@ -210,6 +216,7 @@ export const useGame = create<GameStore>((set, get) => {
       busy: false,
       roundStartMoney: [...current.money],
       seatNames: options.seatNames,
+      network: options.network ?? false,
     });
     const persist = () => {
       if (options.save && host instanceof LocalMatch) saveGame(host.save());
@@ -237,6 +244,7 @@ export const useGame = create<GameStore>((set, get) => {
     notice: null,
     audit: null,
     hostLeft: false,
+    network: false,
 
     newGame(options) {
       const host = new LocalMatch({
@@ -262,8 +270,12 @@ export const useGame = create<GameStore>((set, get) => {
       );
     },
 
-    attachOnline(host, seatNames) {
-      attach(host, { save: false, seatNames });
+    attachOnline(host, seatNames, options) {
+      attach(host, {
+        save: false,
+        seatNames,
+        network: options?.network ?? false,
+      });
     },
 
     setSeatNames(seatNames) {

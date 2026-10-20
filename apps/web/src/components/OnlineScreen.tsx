@@ -124,6 +124,7 @@ export function OnlineScreen({
             seatNamesOf(
               guest.lobby ?? { seats: [], ruleCode: "", started: true },
             ),
+            { network: true },
           );
           onPlaying();
         });
@@ -140,7 +141,7 @@ export function OnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()));
+      attachOnline(match, seatNamesOf(host.lobby()), { network: true });
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

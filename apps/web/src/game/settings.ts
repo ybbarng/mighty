@@ -40,6 +40,9 @@ interface Settings {
   /** 효과음 */
   sound: boolean;
   setSound(on: boolean): void;
+  /** 카드 툴팁: 손패 카드에 그 무늬에서 아직 안 나온 더 높은 카드를 보여 준다(원작 `bCardTip`) */
+  cardTip: boolean;
+  setCardTip(on: boolean): void;
   /** 효과음 크기 0~1 */
   volume: number;
   setVolume(volume: number): void;
@@ -66,6 +69,8 @@ export const useSettings = create<Settings>()(
       setSpeed: (speed) => set({ speed }),
       sound: true,
       setSound: (sound) => set({ sound }),
+      cardTip: false,
+      setCardTip: (cardTip) => set({ cardTip }),
       volume: 0.8,
       setVolume: (volume) => {
         setSoundVolume(volume);

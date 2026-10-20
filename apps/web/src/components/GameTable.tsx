@@ -19,6 +19,7 @@ import { useCardTheme, useSettings } from "@/game/settings";
 import { play as playCue } from "@/game/sound";
 import { canAct, useGame } from "@/game/store";
 import {
+  cardTipText,
   friendLabel,
   goalLabel,
   kirudaName,
@@ -122,6 +123,9 @@ export function GameTable({
 
   const [discards, setDiscards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
+  const [hovered, setHovered] = useState<Card | null>(null);
+  const cardTipOn = useSettings((s) => s.cardTip);
+  const network = useGame((s) => s.network);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [leadChoice, setLeadChoice] = useState<{
@@ -288,6 +292,17 @@ export function GameTable({
   };
 
   const trick = shownTrick ?? view.trick;
+  // 카드 툴팁은 카드를 낼 때만, 혼자 할 때만 보여 준다(원작도 네트워크 게임에서는 끈다).
+  const tipCard =
+    cardTipOn && !network && view.phase === "play"
+      ? (hovered ?? selected)
+      : null;
+  const tipIndex = tipCard ? hand.indexOf(tipCard) : -1;
+  const tipSlot = tipIndex >= 0 ? (layout?.hand.slots[tipIndex] ?? null) : null;
+  const playedCards = new Set<Card>([
+    ...view.tricks.flatMap((t) => t.plays.map((p) => p.card)),
+    ...(view.trick?.plays.map((p) => p.card) ?? []),
+  ]);
   const trickPlays = trick?.plays ?? [];
   const pointsTaken = view.tricks.reduce(
     (sum, t) => sum + countPoints(t.plays.map((p) => p.card)),
@@ -543,6 +558,9 @@ export function GameTable({
                   fresh={freshCards?.has(card) ?? false}
                   interactive={acting && (exchanging || playable !== null)}
                   onActivate={(pointer) => onCardActivate(card, pointer)}
+                  onHover={(on) =>
+                    setHovered((h) => (on ? card : h === card ? null : h))
+                  }
                 />
               );
             }),
@@ -760,6 +778,19 @@ export function GameTable({
               >
                 처음으로
               </button>
+            </div>
+          )}
+
+          {/* 카드 툴팁: 같은 무늬에서 아직 안 나온 더 높은 카드 */}
+          {tipCard && tipSlot && (
+            <div
+              className="pointer-events-none absolute z-[290] -translate-x-1/2 whitespace-nowrap rounded-lg bg-black/85 px-2 py-1 font-semibold text-xs shadow"
+              style={{
+                left: tipSlot.x,
+                top: tipSlot.y - layout.hand.card.h / 2 - 34,
+              }}
+            >
+              {cardTipText(tipCard, rules, kiruda, playedCards)}
             </div>
           )}
 

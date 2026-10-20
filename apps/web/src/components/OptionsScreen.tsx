@@ -176,6 +176,29 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
             </div>
           </Section>
 
+          <Section title="카드 툴팁">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => settings.setCardTip(true)}
+                className={chip(settings.cardTip)}
+              >
+                켜기
+              </button>
+              <button
+                type="button"
+                onClick={() => settings.setCardTip(false)}
+                className={chip(!settings.cardTip)}
+              >
+                끄기
+              </button>
+              <span className="ml-2 text-xs opacity-60">
+                손패 카드에 그 무늬에서 아직 안 나온 높은 카드를 보여 준다.
+                친구와 할 때는 꺼진다
+              </span>
+            </div>
+          </Section>
+
           <Section title="컴퓨터 실력">
             <div className="flex items-center gap-1.5">
               {BOT_LEVELS.map((level) => (
