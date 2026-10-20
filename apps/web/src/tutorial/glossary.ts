@@ -235,6 +235,14 @@ export const GLOSSARY: readonly Term[] = [
     group: "slang",
   },
   {
+    id: "come",
+    term: "컴",
+    meaning:
+      "어떤 카드를 가진 사람이 그 카드를 내게 하려고 카드를 냈다는 말. 예: 쪼카컴은 조커를 가진 사람이 조커를 내게 하려고 카드를 낸 것.",
+    aka: "원작은 은어 표시를 켜면 선이 낸 카드를 삽컴·끌컴처럼 보여 줬다",
+    group: "slang",
+  },
+  {
     id: "numbers",
     term: "공약 숫자 부르는 말",
     meaning:
