@@ -4,7 +4,7 @@
 
 ## 정해야 할 것
 
-- [ ] `revival`을 `master`로 합칠 시점 (지금 CI는 `master` push와 PR에서만 돈다)
+- [x] `revival`을 합치고 기본 브랜치를 `main`으로 바꾸기. CI는 `main` push와 PR에서 돈다
 - [ ] 배포할 곳: GitHub Pages / Cloudflare Pages / Vercel (모두 정적 내보내기로 가능)
 - [ ] `legacy/` 폴더를 지울 시점. 저장소를 공개하기 전에는 원작 효과음이 들어 있는 `legacy/src/components/Sound/resources/`를 반드시 빼야 한다
 - [ ] 원작과 다르게 정한 6가지([04-original-game-flow.md](./04-original-game-flow.md) 14.4절)를 이대로 둘지
