@@ -201,6 +201,19 @@ export function GameTable({ onExit }: { onExit: () => void }) {
     return entry.bid ? goalLabel(entry.bid) : "포기";
   };
 
+  // 세로 화면은 패널이 양옆 자리 판을 가리지 않게 자리 판 아래부터 손패 위까지 쓴다.
+  const panelArea = (() => {
+    if (!layout) return { top: 0, bottom: 0 };
+    if (layout.orientation === "landscape") {
+      return { top: layout.table.y, bottom: layout.center.y + layout.center.h };
+    }
+    const bottom = layout.hand.top - layout.gutter;
+    const platesBottom = Math.max(
+      ...layout.seats.slice(1).map((s) => s.plate.y + s.plate.h + 24),
+    );
+    return { top: Math.min(platesBottom, bottom - 280), bottom };
+  })();
+
   const showPanel =
     layout !== null && shownTrick === null && trickPlays.length === 0;
   const waiting = waitingText(view, seatName);
@@ -395,12 +408,12 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                     layout.center.w / 2 -
                     Math.max(layout.center.w, 340) / 2,
                 ),
-                top: layout.table.y,
+                top: panelArea.top,
                 width: Math.min(
                   Math.max(layout.center.w, 340),
                   stage.width - 2 * layout.gutter,
                 ),
-                height: layout.center.y + layout.center.h - layout.table.y,
+                height: panelArea.bottom - panelArea.top,
               }}
             >
               <div className="w-full">

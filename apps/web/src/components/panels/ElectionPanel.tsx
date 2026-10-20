@@ -35,6 +35,10 @@ export function ElectionPanel({
   const validScore = scores.includes(score) ? score : (scores[0] ?? 0);
 
   const current = decision.current;
+  const target = Math.floor(suggestion.estimate);
+  const reachable = decision.bids.some(
+    (g) => g.kiruda === suggestion.kiruda && g.score <= target,
+  );
   return (
     <Panel title="공약을 정하세요">
       <p className="text-center text-sm opacity-80">
@@ -54,12 +58,9 @@ export function ElectionPanel({
         <ScoreStepper value={validScore} options={scores} onChange={setScore} />
       )}
       <p className="text-center text-xs opacity-60">
-        도움말: 이 패라면{" "}
-        {goalLabel({
-          kiruda: suggestion.kiruda,
-          score: Math.floor(suggestion.estimate),
-        })}{" "}
-        정도를 노려볼 만합니다
+        {reachable
+          ? `도움말: 이 패라면 ${goalLabel({ kiruda: suggestion.kiruda, score: target })} 정도까지 노려볼 만합니다`
+          : "도움말: 지금 공약을 넘기기엔 패가 약해 보입니다. 포기를 고려해 보세요"}
       </p>
       <div className="flex justify-center gap-2">
         <ActionButton
