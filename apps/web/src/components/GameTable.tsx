@@ -634,12 +634,12 @@ export function GameTable({
               </span>
               <span
                 className="shrink-0 tabular-nums opacity-80"
-                title="트릭 진행과 아직 나오지 않은 점수 카드 수"
+                title="턴 진행과 아직 나오지 않은 점수 카드 수"
               >
                 {view.phase === "play"
                   ? compactHud
                     ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
-                    : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
+                    : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}턴 · 남은 점수 ${20 - pointsTaken}`
                   : `${view.roundNumber}판`}
               </span>
               {network && (

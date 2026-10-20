@@ -250,17 +250,17 @@ export function RoundResultPanel({
                 <th className="px-1">득점</th>
                 <th
                   className="px-1"
-                  title="같은 편이 이긴 트릭에 점수 카드를 낸 수"
+                  title="같은 편이 이긴 턴에 점수 카드를 낸 수"
                 >
                   도움
                 </th>
                 <th
                   className="px-1"
-                  title="상대 편이 이긴 트릭에 점수 카드를 낸 수"
+                  title="상대 편이 이긴 턴에 점수 카드를 낸 수"
                 >
                   실점
                 </th>
-                <th className="px-1" title="선을 잡은 트릭의 비율">
+                <th className="px-1" title="선을 잡은 턴의 비율">
                   점유율
                 </th>
               </tr>

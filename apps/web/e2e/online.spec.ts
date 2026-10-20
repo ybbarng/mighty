@@ -99,7 +99,7 @@ test("방장이 방을 만들고 친구가 링크로 들어와 한 판을 끝까
   for (let i = 0; i < 800; i++) {
     const [h, g] = [await stepOnce(host), await stepOnce(guest)];
     if (h && g) break;
-    if (!shot && (await guest.getByText(/트릭 · 남은 점수/).isVisible())) {
+    if (!shot && (await guest.getByText(/턴 · 남은 점수/).isVisible())) {
       await guest.screenshot({
         path: test.info().outputPath("online-2-guest-trick.png"),
       });

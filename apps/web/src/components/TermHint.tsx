@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { cn } from "@/lib/cn";
-import { termOf } from "@/tutorial/glossary";
+import { type Term as GlossaryTerm, termOf } from "@/tutorial/glossary";
 
 const TermContext = createContext<(id: string) => void>(() => {});
 
@@ -33,10 +33,26 @@ export function TermProvider({ children }: { children: ReactNode }) {
           className="pop-in fixed inset-x-0 top-14 z-[500] mx-auto flex w-[min(92%,26rem)] flex-col gap-0.5 rounded-2xl border border-amber-300/50 bg-black/90 px-4 py-2.5 text-left shadow-2xl"
         >
           <span className="font-bold text-amber-200 text-sm">{term.term}</span>
-          <span className="text-sm leading-snug">{term.meaning}</span>
+          <span className="text-sm leading-snug">
+            {term.meaning}
+            <TermAside term={term} />
+          </span>
         </button>
       )}
     </TermContext.Provider>
+  );
+}
+
+/** 용어 뜻 뒤에 붙이는 다른 이름: 마이티 은어와 보드게임에서 부르는 이름 */
+export function TermAside({ term }: { term: GlossaryTerm }) {
+  if (!term.aka && !term.general) return null;
+  return (
+    <span className="mt-1 block text-xs leading-snug opacity-70">
+      {term.aka && <span className="block">다른 말: {term.aka}</span>}
+      {term.general && (
+        <span className="block">보드게임에서는: {term.general}</span>
+      )}
+    </span>
   );
 }
 

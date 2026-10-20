@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import { cn } from "@/lib/cn";
 import { LESSONS } from "@/tutorial/lessons";
 import { lessonStates, useTutorialProgress } from "@/tutorial/progress";
+
+import { GlossarySheet } from "./GlossarySheet";
 
 /** 튜토리얼 단원 목록. 언어 학습 앱처럼 한 단원씩 쌓아 간다 */
 export function TutorialHome({
@@ -15,20 +19,31 @@ export function TutorialHome({
   const completed = useTutorialProgress((s) => s.completed);
   const states = lessonStates(completed);
   const doneCount = states.filter((s) => s === "done").length;
+  const [glossary, setGlossary] = useState(false);
 
   return (
     <main className="flex min-h-dvh justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
       <div className="flex w-full max-w-md flex-col gap-4 py-4">
         <div className="flex items-center justify-between">
           <h1 className="font-black text-2xl">마이티 배우기</h1>
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-lg bg-white/10 px-3 py-1 text-sm"
-          >
-            처음으로
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setGlossary(true)}
+              className="rounded-lg bg-white/10 px-3 py-1 text-sm"
+            >
+              용어 사전
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-lg bg-white/10 px-3 py-1 text-sm"
+            >
+              처음으로
+            </button>
+          </div>
         </div>
+        {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
         <div className="flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
             <div

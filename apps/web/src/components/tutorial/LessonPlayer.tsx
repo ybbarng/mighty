@@ -18,6 +18,7 @@ import { useTutorialProgress } from "@/tutorial/progress";
 import { CardArt } from "../card-art/CardArt";
 import { GameTable } from "../GameTable";
 import { ActionButton } from "../panels/common";
+import { TermAside } from "../TermHint";
 import { RichText } from "./RichText";
 
 const NAMES = ["나", ...DEFAULT_BOT_NAMES.slice(0, 4)];
@@ -167,7 +168,11 @@ export function LessonPlayer({
                         <dt className="inline font-bold text-amber-200">
                           {term.term}
                         </dt>
-                        <dd className="inline opacity-80"> — {term.meaning}</dd>
+                        <dd className="inline opacity-80">
+                          {" "}
+                          — {term.meaning}
+                          <TermAside term={term} />
+                        </dd>
                       </div>
                     ) : null;
                   })}

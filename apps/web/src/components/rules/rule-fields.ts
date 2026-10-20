@@ -41,7 +41,7 @@ export const BOOL_GROUPS: RuleGroup[] = [
       {
         key: "revealFriendOnScore",
         label: "프렌드가 득점하면 바로 공개",
-        hint: "카드 프렌드가 점수 카드가 든 트릭을 이기면 그 자리에서 정체를 밝힌다",
+        hint: "카드 프렌드가 점수 카드가 든 턴을 이기면 그 자리에서 정체를 밝힌다",
       },
       {
         key: "hideScoredCards",
@@ -87,34 +87,34 @@ export const BOOL_GROUPS: RuleGroup[] = [
   {
     title: "카드 효력",
     fields: [
-      { key: "mightyInFirstTrick", label: "첫 트릭에 마이티 내기" },
-      { key: "mightyEffectInFirstTrick", label: "첫 트릭 마이티 효력" },
-      { key: "mightyInLastTrick", label: "막 트릭에 마이티 내기" },
-      { key: "mightyEffectInLastTrick", label: "막 트릭 마이티 효력" },
-      { key: "jokerInFirstTrick", label: "첫 트릭에 조커 내기" },
-      { key: "jokerEffectInFirstTrick", label: "첫 트릭 조커 효력" },
+      { key: "mightyInFirstTrick", label: "첫 턴에 마이티 내기" },
+      { key: "mightyEffectInFirstTrick", label: "첫 턴 마이티 효력" },
+      { key: "mightyInLastTrick", label: "마지막 턴에 마이티 내기" },
+      { key: "mightyEffectInLastTrick", label: "마지막 턴 마이티 효력" },
+      { key: "jokerInFirstTrick", label: "첫 턴에 조커 내기" },
+      { key: "jokerEffectInFirstTrick", label: "첫 턴 조커 효력" },
       {
         key: "jokerInLastTrick",
-        label: "막 트릭에 조커 내기",
+        label: "마지막 턴에 조커 내기",
         hint: "못 내면 그 전에 강제로 낸다",
       },
-      { key: "jokerEffectInLastTrick", label: "막 트릭 조커 효력" },
+      { key: "jokerEffectInLastTrick", label: "마지막 턴 조커 효력" },
       {
         key: "mightyOverridesJokerCall",
         label: "조커콜에 마이티로 대신 내기 (올마)",
       },
-      { key: "jokerCallEffectInFirstTrick", label: "첫 트릭 조커콜 효력" },
+      { key: "jokerCallEffectInFirstTrick", label: "첫 턴 조커콜 효력" },
       {
         key: "calledJokerKeepsEffect",
         label: "조커콜로 끌려 나온 조커도 효력",
       },
       {
         key: "kirudaInFirstTrick",
-        label: "첫 트릭에 기루다 내기 (선이 아닌 사람)",
+        label: "첫 턴에 기루다 내기 (선이 아닌 사람)",
       },
       {
         key: "leaderKirudaInFirstTrick",
-        label: "첫 트릭 선(주공)도 기루다 내기",
+        label: "첫 턴 선(주공)도 기루다 내기",
       },
     ],
   },

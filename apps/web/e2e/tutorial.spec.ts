@@ -46,7 +46,7 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   await expect(page.getByText("1/10")).toBeVisible();
 
   // 2단원: 틀리면 다시 풀고, 미션은 실패하면 다시 한다.
-  await page.getByRole("button", { name: /트릭 이기기/ }).click();
+  await page.getByRole("button", { name: /턴 이기기/ }).click();
   await next(page, 2);
   await page.getByRole("button", { name: "♠A" }).click();
   await expect(page.getByText("아쉬워요")).toBeVisible();
@@ -55,7 +55,7 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   await next(page);
   await page.getByRole("button", { name: "미션 시작" }).click();
 
-  await expect(page.getByText("이 트릭을 가져오세요")).toBeVisible();
+  await expect(page.getByText("이 턴을 이기세요")).toBeVisible();
   // 게임 중에도 용어 사전을 열 수 있다.
   await page.getByRole("button", { name: "설정" }).click();
   await page.getByRole("button", { name: /용어 사전/ }).click();

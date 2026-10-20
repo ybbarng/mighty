@@ -74,7 +74,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
     if (
       !tookTrickShot &&
       (await page
-        .getByText(/\d+\/10( ·|트릭)/)
+        .getByText(/\d+\/10( ·|턴)/)
         .first()
         .isVisible())
     ) {
