@@ -20,6 +20,7 @@ import {
 import { randomId } from "@/net/transport";
 
 import { Logo } from "./brand/Logo";
+import { InviteQr } from "./InviteQr";
 import { ActionButton } from "./panels/common";
 
 type Phase = "name" | "connecting" | "lobby" | "full" | "error";
@@ -223,7 +224,15 @@ export function OnlineScreen({
                     {copied ? "복사됨" : "보내기"}
                   </ActionButton>
                 </div>
-                <p className="text-xs opacity-60">방 코드 {roomCode}</p>
+                {link && (
+                  <div className="flex items-center gap-3">
+                    <InviteQr url={link} size={120} />
+                    <p className="text-xs leading-relaxed opacity-70">
+                      휴대폰 카메라로 찍으면 바로 들어옵니다.
+                      <br />방 코드 {roomCode}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex flex-col gap-1">
