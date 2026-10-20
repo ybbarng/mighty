@@ -50,6 +50,8 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
   const setSound = useSettings((s) => s.setSound);
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
+  const slangTerms = useSettings((s) => s.slangTerms);
+  const setSlangTerms = useSettings((s) => s.setSlangTerms);
   const botLevel = useSettings((s) => s.botLevel);
   const setBotLevel = useSettings((s) => s.setBotLevel);
   const [glossary, setGlossary] = useState(false);
@@ -57,7 +59,7 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[400]" onPointerDown={onClose}>
       <div
-        className="absolute top-14 right-3 flex w-64 flex-col gap-3 rounded-2xl border border-white/15 bg-felt-dark/95 p-4 shadow-2xl backdrop-blur"
+        className="absolute top-14 right-3 flex max-h-[calc(100dvh-4.5rem)] w-64 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-felt-dark/95 p-4 shadow-2xl backdrop-blur"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-1.5">
@@ -96,6 +98,19 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
             options={CARD_THEMES.map((t) => ({ value: t.id, label: t.name }))}
             value={cardThemeId}
             onChange={setCardTheme}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs opacity-70">
+            마이티 은어 (셋트·기아·삽컴)
+          </span>
+          <Chips
+            options={[
+              { value: "on", label: "켜기" },
+              { value: "off", label: "끄기" },
+            ]}
+            value={slangTerms ? "on" : "off"}
+            onChange={(v) => setSlangTerms(v === "on")}
           />
         </div>
         <div className="flex flex-col gap-1.5">

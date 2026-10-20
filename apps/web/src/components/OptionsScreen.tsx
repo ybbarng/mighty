@@ -281,6 +281,30 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
             </p>
           </Section>
 
+          <Section title="마이티 은어">
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => settings.setSlangTerms(true)}
+                className={chip(settings.slangTerms)}
+              >
+                켜기
+              </button>
+              <button
+                type="button"
+                onClick={() => settings.setSlangTerms(false)}
+                className={chip(!settings.slangTerms)}
+              >
+                끄기
+              </button>
+            </div>
+            <p className="text-xs opacity-60">
+              게임 화면을 마이티 은어로 보여 줍니다. 공약은 셋트(♥13)·둘노,
+              프렌드는 기아·쪼카 프렌드, 조커 무늬는 삽컴!, 조커콜은 쪼카컴!.
+              원작의 "마이티 용어 사용"과 같습니다.
+            </p>
+          </Section>
+
           <Section title="컴퓨터 이름">
             <div className="grid grid-cols-3 gap-1.5">
               {[1, 2, 3, 4, 5, 6].map((n) => (

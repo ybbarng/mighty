@@ -12,7 +12,7 @@ import {
 } from "@mighty/engine";
 import { useState } from "react";
 
-import { friendLabel } from "@/game/terms";
+import { friendLabel, slangTerms } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
 import { ActionButton, CardPicker, Panel } from "./common";
@@ -39,15 +39,17 @@ export function FriendPanel({
   const addCard = (label: string, card: Card) => {
     if (available(card)) quick.push({ label, friend: { kind: "card", card } });
   };
+  // 은어 보기면 원작처럼 쪼카·기아·기카로 부른다.
+  const slang = slangTerms();
   addCard("마이티", mighty);
-  addCard("조커", "JK");
+  addCard(slang ? "쪼카" : "조커", "JK");
   if (kiruda !== "NT") {
-    addCard("기루다 A", `${kiruda}A`);
-    addCard("기루다 K", `${kiruda}K`);
+    addCard(slang ? "기아" : "기루다 A", `${kiruda}A`);
+    addCard(slang ? "기카" : "기루다 K", `${kiruda}K`);
   }
   if (decision.options.some((o) => o.kind === "firstTrick"))
     quick.push({ label: "초구", friend: { kind: "firstTrick" } });
-  quick.push({ label: "노프렌드", friend: { kind: "none" } });
+  quick.push({ label: slang ? "노프" : "노프렌드", friend: { kind: "none" } });
   const players = decision.options.filter(
     (o): o is Extract<FriendDeclaration, { kind: "player" }> =>
       o.kind === "player",
@@ -114,7 +116,7 @@ export function FriendPanel({
       </details>
       <div className="panel-pair flex flex-col items-center gap-1">
         <span className="text-sm">
-          {friendLabel(choice, seatName)}
+          {friendLabel(choice, seatName, { rules, kiruda })}
           {pickedCard &&
             !available(pickedCard) &&
             " — 내 손에 있거나 버린 카드라 지목할 수 없습니다"}

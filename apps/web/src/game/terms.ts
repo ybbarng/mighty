@@ -3,6 +3,7 @@ import {
   type FriendDeclaration,
   type Goal,
   isJoker,
+  jokerCallOf,
   type Kiruda,
   mightyOf,
   type RuleSet,
@@ -26,6 +27,88 @@ export const SUIT_NAME: Record<Suit, string> = {
   C: "클로버",
 };
 
+/**
+ * 마이티 은어로 보여 줄지(원작 "마이티 용어 사용", `bUseTerm`). 설정이 바꾼다.
+ * 켜면 공약은 셋트·둘노, 카드는 기아·삽카·쪼카, 조커 무늬는 삽컴!처럼 부른다.
+ */
+let slang = false;
+export function setSlangTerms(on: boolean): void {
+  slang = on;
+}
+export function slangTerms(): boolean {
+  return slang;
+}
+
+const SUIT_SLANG: Record<Suit, string> = {
+  S: "삽",
+  D: "다리",
+  H: "트",
+  C: "끌",
+};
+/** 공약 숫자 은어. 원작 `GetGoalString`의 표: 11 독, 12 둘 … 20 풀 */
+const SCORE_SLANG = [
+  "독",
+  "둘",
+  "셋",
+  "넷",
+  "닷",
+  "엿",
+  "곱",
+  "덜",
+  "홉",
+  "풀",
+];
+
+/** 공약 은어(원작 `GetGoalString`). 2마는 턴 수라 "열·열한"을 붙인다 */
+export function goalSlang(goal: Goal, playerCount = 5): string {
+  const shape = goal.kiruda === "NT" ? "노" : SUIT_SLANG[goal.kiruda];
+  const { score } = goal;
+  const digit = SCORE_SLANG[(score + 9) % 10] ?? "";
+  if (playerCount === 2) {
+    if (score === 10) return `열${shape}`;
+    if (score === 11) return `열한${shape}`;
+    if (score === 13) return `풀${shape}`;
+    return `${score > 10 ? "열" : ""}${digit}${shape}`;
+  }
+  const prefix = score <= 10 ? "초" : score > 20 ? "풀" : "";
+  return `${prefix}${digit}${shape}`;
+}
+
+/** 카드 은어(원작 `CCard::GetString`): 마이티, 쪼카, 쪼콜, 기아, 삽카, 다리10 … */
+export function cardSlang(
+  card: Card,
+  rules: RuleSet,
+  kiruda: Kiruda | null,
+): string {
+  if (card === mightyOf(rules, kiruda ?? "NT")) return "마이티";
+  if (isJoker(card)) return "쪼카";
+  if (kiruda !== null && card === jokerCallOf(rules, kiruda)) return "쪼콜";
+  const suit = suitOf(card) as Suit;
+  const shape = suit === kiruda ? "기" : SUIT_SLANG[suit];
+  const rank = rankOf(card);
+  const name =
+    rank === "A"
+      ? "아"
+      : rank === "K"
+        ? "카"
+        : rank === "Q"
+          ? "큐"
+          : rank === "J"
+            ? "자"
+            : rank;
+  return `${shape}${name}`;
+}
+
+/** 조커로 부른 무늬: "스페이드" / 은어면 "삽컴!" */
+export function jokerSuitLabel(suit: Suit): string {
+  return slang ? `${SUIT_SLANG[suit]}컴!` : SUIT_NAME[suit];
+}
+
+/** 조커콜 선언: "조커콜!" / 은어면 "쪼카컴!" */
+export function jokerCallLabel(): string {
+  return slang ? "쪼카컴!" : "조커콜!";
+}
+
 export function kirudaSymbol(kiruda: Kiruda): string {
   return kiruda === "NT" ? "노기" : SUIT_SYMBOL[kiruda];
 }
@@ -38,7 +121,8 @@ export function isRedSuit(kiruda: Kiruda | null): boolean {
   return kiruda === "D" || kiruda === "H";
 }
 
-export function goalLabel(goal: Goal): string {
+export function goalLabel(goal: Goal, playerCount?: number): string {
+  if (slang) return goalSlang(goal, playerCount);
   return `${kirudaSymbol(goal.kiruda)} ${goal.score}`;
 }
 
@@ -50,6 +134,8 @@ export function cardLabel(card: Card): string {
 export function friendLabel(
   friend: FriendDeclaration,
   seatName: (seat: number) => string,
+  /** 은어로 보여 줄 때 기아·마이티를 가리려면 규칙과 기루다가 필요하다 */
+  context?: { rules: RuleSet; kiruda: Kiruda | null },
 ): string {
   switch (friend.kind) {
     case "none":
@@ -59,7 +145,11 @@ export function friendLabel(
     case "player":
       return `${seatName(friend.seat)} 프렌드`;
     case "card":
-      return `${cardLabel(friend.card)} 프렌드`;
+      return `${
+        slang && context
+          ? cardSlang(friend.card, context.rules, context.kiruda)
+          : cardLabel(friend.card)
+      } 프렌드`;
   }
 }
 
@@ -121,7 +211,8 @@ export function cardTipText(
 ): string {
   const mighty = mightyOf(rules, kiruda ?? "NT");
   if (card === mighty) return "마이티";
-  if (isJoker(card)) return "조커";
+  if (isJoker(card)) return slang ? "쪼카" : "조커";
+  const name = slang ? cardSlang(card, rules, kiruda) : cardLabel(card);
   const suit = suitOf(card) as Suit;
   const higher = (
     ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"] as const
@@ -131,7 +222,8 @@ export function cardTipText(
       (c) => rankPower(c) > rankPower(card) && c !== mighty && !played.has(c),
     )
     .map((c) => rankOf(c));
+  // 원작은 은어일 때 가장 높은 카드를 "보스카"라고 불렀다.
   return higher.length > 0
-    ? `${cardLabel(card)} (${higher.join(" ")})`
-    : `${cardLabel(card)} (최고패)`;
+    ? `${name} (${higher.join(" ")})`
+    : `${name} (${slang ? "보스카" : "최고패"})`;
 }

@@ -14,8 +14,11 @@ import {
   cardLabel,
   goalLabel,
   isRedSuit,
+  jokerCallLabel,
+  jokerSuitLabel,
   SUIT_NAME,
   SUIT_SYMBOL,
+  slangTerms,
 } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
@@ -143,19 +146,24 @@ export function LeadChoicePanel({
               )}
             >
               {SUIT_SYMBOL[s]}
+              {slangTerms() && (
+                <span className="block font-semibold text-[10px] leading-none">
+                  {jokerSuitLabel(s)}
+                </span>
+              )}
             </button>
           ))}
         </div>
       ) : (
         <div className="flex justify-center gap-2">
           <ActionButton onClick={() => onChoose({ jokerCall: true })}>
-            조커콜!
+            {jokerCallLabel()}
           </ActionButton>
           <ActionButton
             variant="secondary"
             onClick={() => onChoose({ jokerCall: false })}
           >
-            그냥 내기
+            {slangTerms() ? "쪼콜 아님" : "그냥 내기"}
           </ActionButton>
         </div>
       )}
@@ -198,7 +206,8 @@ export function RoundResultPanel({
   return (
     <Panel title={won ? "승리!" : "패배"}>
       <p className="text-center text-sm">
-        {seatName(view.declarer ?? 0)}의 공약 {goalLabel(view.goal)} — 여당{" "}
+        {seatName(view.declarer ?? 0)}의 공약{" "}
+        {goalLabel(view.goal, view.rules.playerCount)} — 여당{" "}
         {result.rulingPoints}장 {result.rulingWon ? "달성" : "실패"}
       </p>
       <p className="text-center text-xs opacity-70">

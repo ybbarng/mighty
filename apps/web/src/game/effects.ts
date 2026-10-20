@@ -7,7 +7,7 @@ import {
   type PlayerView,
 } from "@mighty/engine";
 
-import { cardLabel, friendLabel, goalLabel } from "./terms";
+import { cardLabel, friendLabel, goalLabel, jokerCallLabel } from "./terms";
 
 function sameGoal(a: Goal, b: Goal): boolean {
   return a.kiruda === b.kiruda && a.score === b.score;
@@ -47,7 +47,10 @@ export function effectFor(
         return {
           text: `${seatName(event.seat)} 당선`,
           tone: "gold",
-          lines: [`공약 ${goalLabel(event.goal)}`, "바닥 카드를 가져갑니다"],
+          lines: [
+            `공약 ${goalLabel(event.goal, view.rules.playerCount)}`,
+            "바닥 카드를 가져갑니다",
+          ],
         };
       case "exchanged": {
         const before = view.election.goal;
@@ -55,14 +58,21 @@ export function effectFor(
         return {
           text: "공약 변경",
           tone: "gold",
-          lines: [`${goalLabel(before)} → ${goalLabel(event.goal)}`],
+          lines: [
+            `${goalLabel(before, view.rules.playerCount)} → ${goalLabel(event.goal, view.rules.playerCount)}`,
+          ],
         };
       }
       case "friendDeclared":
         return {
           text: "프렌드 선언",
           tone: "info",
-          lines: [friendLabel(event.friend, seatName)],
+          lines: [
+            friendLabel(event.friend, seatName, {
+              rules: view.rules,
+              kiruda: view.goal?.kiruda ?? null,
+            }),
+          ],
         };
       case "killAttempt":
         return event.killed === null
@@ -76,7 +86,7 @@ export function effectFor(
           ? { text: "프렌드 없음", tone: "info" }
           : { text: `프렌드는 ${seatName(event.seat)}!`, tone: "gold" };
       case "played":
-        if (event.jokerCall) return { text: "조커콜!", tone: "red" };
+        if (event.jokerCall) return { text: jokerCallLabel(), tone: "red" };
         if (event.card === mighty) return { text: "마이티!", tone: "gold" };
         if (isJoker(event.card)) return { text: "조커!", tone: "gold" };
         break;

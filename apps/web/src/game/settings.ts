@@ -20,6 +20,7 @@ import {
 
 import type { BotLevel } from "./bots";
 import { setVolume as setSoundVolume } from "./sound";
+import { setSlangTerms as applySlangTerms } from "./terms";
 
 /** 원작의 rule.txt처럼 이름을 붙여 둔 내 규칙 */
 export interface CustomRule {
@@ -57,6 +58,9 @@ interface Settings {
   /** 카드 툴팁: 손패 카드에 그 무늬에서 아직 안 나온 더 높은 카드를 보여 준다(원작 `bCardTip`) */
   cardTip: boolean;
   setCardTip(on: boolean): void;
+  /** 마이티 은어로 보기: 셋트·기아 프렌드·삽컴! (원작 "마이티 용어 사용", `bUseTerm`) */
+  slangTerms: boolean;
+  setSlangTerms(on: boolean): void;
   /** 효과음 크기 0~1 */
   volume: number;
   setVolume(volume: number): void;
@@ -97,6 +101,8 @@ export const useSettings = create<Settings>()(
         }),
       cardTip: false,
       setCardTip: (cardTip) => set({ cardTip }),
+      slangTerms: false,
+      setSlangTerms: (slangTerms) => set({ slangTerms }),
       volume: 0.8,
       setVolume: (volume) => {
         setSoundVolume(volume);
@@ -133,6 +139,9 @@ export const useSettings = create<Settings>()(
     },
   ),
 );
+
+// 화면 문구를 만드는 함수(terms.ts)가 설정을 따라가게 한다.
+useSettings.subscribe((s) => applySlangTerms(s.slangTerms));
 
 export function useCardTheme(): CardTheme {
   const id = useSettings((s) => s.cardThemeId);

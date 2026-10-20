@@ -22,7 +22,9 @@ import {
   cardTipText,
   friendLabel,
   goalLabel,
-  kirudaName,
+  jokerCallLabel,
+  jokerSuitLabel,
+  slangTerms,
   sortHand,
   unplayableText,
 } from "@/game/terms";
@@ -139,6 +141,8 @@ export function GameTable({
   const [dragArmed, setDragArmed] = useState(false);
   const [hovered, setHovered] = useState<Card | null>(null);
   const cardTipOn = useSettings((s) => s.cardTip);
+  // 은어 보기를 바꾸면 문구를 다시 그린다(문구 함수는 terms.ts가 설정을 따라간다).
+  useSettings((s) => s.slangTerms);
   const speedSetting = useSettings((s) => s.speed);
   const botNames = useSettings((s) => s.botNames);
   const network = useGame((s) => s.network);
@@ -492,7 +496,7 @@ export function GameTable({
     if (view.phase !== "election") return null;
     const entry = [...view.election.log].reverse().find((e) => e.seat === seat);
     if (!entry) return null;
-    return entry.bid ? goalLabel(entry.bid) : "포기";
+    return entry.bid ? goalLabel(entry.bid, n) : "포기";
   };
 
   // 세로 화면은 패널이 양옆 자리 판을 가리지 않게 자리 판 아래부터 손패 위까지 쓴다.
@@ -609,7 +613,7 @@ export function GameTable({
                   id={view.goal.kiruda === "NT" ? "noKiruda" : "goal"}
                   className="shrink-0 font-bold text-base"
                 >
-                  {goalLabel(view.goal)}
+                  {goalLabel(view.goal, n)}
                 </Term>
               ) : (
                 <span className="shrink-0 opacity-70">공약 전</span>
@@ -624,7 +628,10 @@ export function GameTable({
                   <>
                     {" · "}
                     <Term id="friend">
-                      {friendLabel(view.friendDeclaration, seatName)}
+                      {friendLabel(view.friendDeclaration, seatName, {
+                        rules,
+                        kiruda,
+                      })}
                     </Term>
                     {view.friend !== null && view.friendRevealed
                       ? ` → ${seatName(view.friend)}`
@@ -929,8 +936,10 @@ export function GameTable({
                   transform: "translate(-50%,-100%)",
                 }}
               >
-                조커 → {kirudaName(trick.jokerSuit as Suit)}
-                {trick.jokerCalled ? " · 조커콜" : ""}
+                {slangTerms()
+                  ? jokerSuitLabel(trick.jokerSuit as Suit)
+                  : `조커 → ${jokerSuitLabel(trick.jokerSuit as Suit)}`}
+                {trick.jokerCalled ? ` · ${jokerCallLabel()}` : ""}
               </div>
             )}
             {trick?.jokerCalled &&
@@ -944,7 +953,7 @@ export function GameTable({
                     transform: "translate(-50%,-100%)",
                   }}
                 >
-                  조커콜!
+                  {jokerCallLabel()}
                 </div>
               )}
 
