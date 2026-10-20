@@ -39,6 +39,11 @@ export const BOOL_GROUPS: RuleGroup[] = [
       },
       { key: "jokerFriend", label: "조커 프렌드 허용" },
       {
+        key: "revealFriendOnScore",
+        label: "프렌드가 득점하면 바로 공개",
+        hint: "카드 프렌드가 점수 카드가 든 트릭을 이기면 그 자리에서 정체를 밝힌다",
+      },
+      {
         key: "hideScoredCards",
         label: "딴 점수 카드 숨기기",
         hint: "각자 딴 점수 카드를 장수로만 보여 준다",

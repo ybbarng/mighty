@@ -153,6 +153,13 @@ function apply(sim: Sim, seat: number, action: PlayAction): void {
     sim.rules.playerCount === 2
       ? 1
       : countPoints(sim.trick.plays.map((p) => p.card));
+  if (
+    sim.rules.revealFriendOnScore &&
+    sim.friend !== null &&
+    winner === sim.friend &&
+    points > 0
+  )
+    sim.friendRevealed = true;
   sim.scored[winner] = (sim.scored[winner] ?? 0) + points;
   if (sim.trickIndex >= lastTrickIndex(sim.rules)) {
     sim.done = true;

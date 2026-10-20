@@ -231,6 +231,16 @@ function finishTrick(state: MatchState, events: GameEvent[]): void {
   }
 
   const points = rules.playerCount === 2 ? 1 : countPoints(cards);
+  // 프렌드가 득점하면 그 자리에서 정체를 밝힌다(`bShowFriend`). 딴 카드는 여당 몫으로 간다.
+  if (
+    rules.revealFriendOnScore &&
+    !round.friendRevealed &&
+    round.friend !== null &&
+    winner === round.friend &&
+    points > 0
+  ) {
+    revealFriend(round, events);
+  }
   const { history } = round;
   history.scored[winner] = (history.scored[winner] ?? 0) + points;
   for (const { seat, card } of trick.plays) {

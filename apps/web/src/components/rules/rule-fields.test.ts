@@ -8,9 +8,7 @@ describe("규칙 설정 화면", () => {
     const rules = presetRules("standard5");
     const booleanKeys = Object.entries(rules)
       .filter(([, v]) => typeof v === "boolean")
-      .map(([k]) => k)
-      // 원작에서도 진행 코드가 쓰지 않는 옵션이라 화면에 두지 않는다(04 문서 7.3절).
-      .filter((k) => k !== "revealFriendOnScore");
+      .map(([k]) => k);
     const shown = BOOL_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
     expect(new Set(shown)).toEqual(new Set(booleanKeys));
     expect(shown).toHaveLength(new Set(shown).size);

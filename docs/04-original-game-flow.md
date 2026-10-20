@@ -460,7 +460,7 @@ AI 호출은 별도 스레드에서 하고(`MFSM_AISupp.cpp:44-54`), 화면 연�
 | `bHideScore` | | | | | | ○ 득점 더미 | | |
 | `bFriend` | | | | | ● | | ● 분배·노프 2배 | |
 | `bJokerFriend` | | | | | ● | | | |
-| `bShowFriend` | | | | | (쓰이지 않음) | | | |
+| `bShowFriend` | | | | | (원작은 쓰지 않음. 새 엔진은 구현: 카드 프렌드가 점수 카드가 든 트릭을 이기면 공개) | | | |
 | `bAttScoreThrownPoints` | | | | ○ 키티 공개 | | | ● | |
 | `bFriendGetsBeginer` | | | | | | | | ● |
 | `bRandomSeat` | ● | | | | | | | ● |
