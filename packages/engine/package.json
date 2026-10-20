@@ -1,0 +1,13 @@
+{
+  "name": "@mighty/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "마이티 규칙 엔진 — 순수 함수, 외부 의존성 없음",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

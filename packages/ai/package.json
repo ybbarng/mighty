@@ -1,0 +1,16 @@
+{
+  "name": "@mighty/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "마이티 컴퓨터 플레이어 — PlayerView만 보고 행동을 고른다",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*"
+  }
+}
