@@ -9,6 +9,7 @@ import {
 import { memo, type ReactNode } from "react";
 
 import { SPADE_PATH } from "../brand/brand";
+import { CourtFigure } from "./court";
 import { SuitShape } from "./suits";
 import { type CardTheme, CLASSIC } from "./themes";
 
@@ -360,6 +361,35 @@ export const CardArt = memo(function CardArt({
   } else {
     const suit = suitOf(card);
     const rank = rankOf(card);
+    const faces = theme.faces;
+    const isFace = rank === "J" || rank === "Q" || rank === "K";
+    if (isFace && faces?.kind === "image") {
+      // 카드 한 장 전체가 그림 파일이다(모서리 숫자까지 들어 있다).
+      return (
+        <svg
+          viewBox={`0 0 ${CARD_W} ${CARD_H}`}
+          className="block h-full w-full"
+          aria-hidden="true"
+        >
+          <rect
+            x={1}
+            y={1}
+            width={CARD_W - 2}
+            height={CARD_H - 2}
+            rx={16}
+            fill={theme.paper}
+          />
+          <image
+            href={faces.href(suit, rank)}
+            x={0}
+            y={0}
+            width={CARD_W}
+            height={CARD_H}
+            preserveAspectRatio="none"
+          />
+        </svg>
+      );
+    }
     const color = theme.suitColor[suit];
     const large = theme.largeIndex ?? false;
     body = (
@@ -384,6 +414,8 @@ export const CardArt = memo(function CardArt({
               size={suit === "S" ? 130 : 110}
               fill={color}
             />
+          ) : isFace && faces?.kind === "court" ? (
+            <CourtFigure rank={rank} suit={suit} color={color} />
           ) : rank === "J" || rank === "Q" || rank === "K" ? (
             <Face
               rank={rank}

@@ -142,3 +142,6 @@ next-env.d.ts
 
 test-results/
 playwright-report/
+
+# 원작 그림 카드를 키운 데모용 파일(원작 그림이라 저장소에 올리지 않는다)
+apps/web/public/cards-local/

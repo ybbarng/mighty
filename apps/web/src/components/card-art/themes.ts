@@ -67,6 +67,13 @@ export interface CardTheme {
   joker: { field: string; disc: string; star: string };
   /** 모서리 숫자·무늬를 크게. 손패가 겹쳐 왼쪽 띠만 보일 때 읽기 쉽다 */
   largeIndex?: boolean;
+  /**
+   * 그림 카드(J·Q·K) 그리는 방법. 없으면 큰 글자와 장식.
+   * `court`는 직접 그린 전통풍 인물, `image`는 카드 한 장 전체를 그림 파일로 쓴다.
+   */
+  faces?:
+    | { kind: "court" }
+    | { kind: "image"; href: (suit: Suit, rank: "J" | "Q" | "K") => string };
 }
 
 const RED = "#d42a2a";
@@ -117,4 +124,41 @@ export const CARD_THEMES: readonly CardTheme[] = [
   FOUR_COLOR,
   LARGE_PRINT,
   DARK,
+];
+
+const SUIT_WORD: Record<Suit, string> = {
+  S: "spades",
+  H: "hearts",
+  D: "diamonds",
+  C: "clubs",
+};
+const RANK_WORD = { J: "jack", Q: "queen", K: "king" } as const;
+
+/** 그림 카드 비교 데모용 테마. 고르면 설정에 넣는다 */
+export const FACE_DEMO_THEMES: readonly CardTheme[] = [
+  {
+    ...CLASSIC,
+    id: "demo-court",
+    name: "② 직접 그림",
+    faces: { kind: "court" },
+  },
+  {
+    ...CLASSIC,
+    id: "demo-traditional",
+    name: "① 전통(공개 저작물)",
+    faces: {
+      kind: "image",
+      href: (suit, rank) =>
+        `/cards/traditional/${RANK_WORD[rank]}_${SUIT_WORD[suit]}.svg`,
+    },
+  },
+  {
+    ...CLASSIC,
+    id: "demo-original",
+    name: "③ 원작 고화질",
+    faces: {
+      kind: "image",
+      href: (suit, rank) => `/cards-local/original/${suit}${rank}.png`,
+    },
+  },
 ];

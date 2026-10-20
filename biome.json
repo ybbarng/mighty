@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!legacy", "!docs", "!**/.next", "!**/out"]
+    "includes": [
+      "**",
+      "!legacy",
+      "!docs",
+      "!**/.next",
+      "!**/out",
+      "!apps/web/public/cards"
+    ]
   },
   "formatter": {
     "enabled": true,
