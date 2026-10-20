@@ -1,0 +1,172 @@
+import { heuristicBot } from "@mighty/ai";
+import { presetRules } from "@mighty/engine";
+import { describe, expect, it } from "vitest";
+
+import { type AuditResult, GuestRoom } from "./guest-room";
+import { HostRoom } from "./host-room";
+import type { HostMessage } from "./protocol";
+import { MemoryNetwork } from "./transport";
+
+const rules = presetRules("standard5");
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function until(condition: () => boolean, tries = 200): Promise<void> {
+  for (let i = 0; i < tries && !condition(); i++) await flush();
+  if (!condition()) throw new Error("조건을 기다리다 시간이 지났다");
+}
+
+async function setup() {
+  const net = new MemoryNetwork();
+  const host = new HostRoom({
+    transport: net.join("host"),
+    hostName: "방장",
+    rules,
+    revealTimeoutMs: 500,
+    standInDelayMs: 10,
+  });
+  const a = new GuestRoom({
+    transport: net.join("a"),
+    name: "철수",
+    token: null,
+  });
+  const b = new GuestRoom({
+    transport: net.join("b"),
+    name: "영희",
+    token: null,
+  });
+  await until(() => a.seat !== null && b.seat !== null);
+  return { net, host, a, b };
+}
+
+/** 사람 자리(방장과 참가자)도 봇처럼 두게 해서 판을 진행한다 */
+async function playRounds(
+  host: HostRoom,
+  guests: GuestRoom[],
+  rounds: number,
+): Promise<void> {
+  const match = host.match;
+  if (!match) throw new Error("시작하지 않았다");
+  for (let i = 0; i < 5000 && match.current().roundNumber <= rounds; i++) {
+    const hostView = match.current();
+    if (hostView.decision)
+      match.submit(heuristicBot.decide(hostView, { seed: i }));
+    for (const g of guests) {
+      const view = g.match?.current();
+      if (view?.decision)
+        g.match?.submit(heuristicBot.decide(view, { seed: i }));
+    }
+    await flush();
+    if (hostView.phase === "gameOver") break;
+  }
+}
+
+describe("온라인 방", () => {
+  it("참가자는 차례대로 빈자리에 앉고, 나머지는 컴퓨터다", async () => {
+    const { host, a, b } = await setup();
+    expect([a.seat, b.seat]).toEqual([1, 2]);
+    await until(() => a.lobby?.seats.length === 5);
+    expect(a.lobby?.seats.map((s) => [s.name, s.kind])).toEqual([
+      ["방장", "host"],
+      ["철수", "guest"],
+      ["영희", "guest"],
+      ["컴퓨터 3", "bot"],
+      ["컴퓨터 4", "bot"],
+    ]);
+    expect(host.lobby().started).toBe(false);
+  });
+
+  it("두 판을 두고, 끝나면 참가자가 시드와 진행을 직접 다시 계산해 확인한다", async () => {
+    const { host, a, b } = await setup();
+    const audits: AuditResult[] = [];
+    a.on("audit", (r) => audits.push(r));
+    b.on("audit", (r) => audits.push(r));
+    const seen: string[] = [];
+    a.transport.onMessage((m) => seen.push(JSON.stringify(m)));
+
+    await host.start();
+    await until(() => a.match !== null && b.match !== null);
+    await playRounds(host, [a, b], 2);
+    await until(
+      () =>
+        a.match?.current().roundNumber === host.match?.current().roundNumber,
+    );
+    host.finish();
+    await until(() => audits.length === 2);
+
+    expect(audits).toEqual([{ ok: true }, { ok: true }]);
+    // 참가자가 받은 메시지에는 남의 손패나 게임 상태 전체가 없다.
+    expect(seen.some((m) => m.includes('"hands"'))).toBe(false);
+    // 게임 중에는 비밀 값이 오가지 않는다(감사 때 처음 공개된다).
+    const beforeAudit = seen.filter((m) => !m.includes('"t":"audit"'));
+    expect(beforeAudit.some((m) => m.includes(a.secret))).toBe(false);
+  });
+
+  it("연결이 끊기면 컴퓨터가 대신 두고, 같은 토큰으로 돌아오면 같은 자리를 받는다", async () => {
+    const { net, host, a, b } = await setup();
+    await host.start();
+    await until(() => a.match !== null);
+    const token = a.token;
+    const seat = a.seat;
+    a.transport.leave();
+
+    // a 없이도 판이 이어진다.
+    await playRounds(host, [b], 1);
+    expect(host.match?.current().roundNumber).toBeGreaterThan(1);
+
+    const back = new GuestRoom({
+      transport: net.join("a2"),
+      name: "철수",
+      token,
+      secret: a.secret,
+    });
+    await until(() => back.match !== null);
+    expect(back.seat).toBe(seat);
+    expect(back.match?.current().roundNumber).toBe(
+      host.match?.current().roundNumber,
+    );
+  });
+
+  it("방장이 비밀 값을 바꿔 공개하면 참가자가 잡아낸다", async () => {
+    const { host, a, b } = await setup();
+    const results: AuditResult[] = [];
+    a.on("audit", (r) => results.push(r));
+    await host.start();
+    await until(() => a.match !== null && b.match !== null);
+    await playRounds(host, [a, b], 1);
+
+    // 방장이 공개하는 값 중 자기 값을 바꿔치기한다.
+    const send = host.transport.send.bind(host.transport);
+    host.transport.send = (message, to) => {
+      const m = message as HostMessage;
+      if (m.t === "audit") {
+        send(
+          {
+            ...m,
+            reveals: m.reveals.map((r) =>
+              r.seat === 0 ? { ...r, secret: "조작" } : r,
+            ),
+          },
+          to,
+        );
+      } else send(message, to);
+    };
+    host.finish();
+    await until(() => results.length === 1);
+    expect(results[0]).toEqual({
+      ok: false,
+      reason: "0번 자리의 값이 약속과 다르다",
+    });
+  });
+
+  it("남의 차례에 보낸 행동은 거절된다", async () => {
+    const { host, a } = await setup();
+    const errors: string[] = [];
+    a.on("rejected", (e) => errors.push(e));
+    await host.start();
+    await until(() => a.match !== null);
+    // 첫 차례는 방장(0번)이다. a가 억지로 보낸다.
+    a.transport.send({ t: "action", action: { type: "pass" } });
+    await until(() => errors.length === 1);
+    expect(errors[0]).toBe("지금은 이 자리의 차례가 아니다");
+  });
+});

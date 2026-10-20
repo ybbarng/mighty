@@ -20,8 +20,10 @@ import type { MatchHost, Snapshot, SubmitResult } from "./host";
 export interface LocalMatchOptions {
   rules: RuleSet;
   seed: number;
-  /** 사람 자리. 나머지는 봇이 앉는다 */
+  /** 이 화면의 자리 */
   humanSeat?: number;
+  /** 사람이 앉은 자리 전부(온라인 대전에서 방장이 엔진을 돌릴 때). 나머지는 봇이 앉는다 */
+  humanSeats?: number[];
   bot?: Bot;
   presetDeal?: PresetDeal;
 }
@@ -36,9 +38,12 @@ export interface SavedMatch {
   log: LoggedAction[];
 }
 
+type Listener = (snapshot: Snapshot) => void;
+
 /**
  * 브라우저 안에서 엔진과 봇을 돌린다. 서버가 없다.
- * 엔진 진행은 즉시 끝내고, 화면이 스냅숏을 받아 제 속도로 재생한다.
+ * 혼자 할 때는 이 화면의 자리만 사람이고, 온라인 대전에서는 방장 기기가 이것으로 모든 자리를 진행한다.
+ * 엔진 진행은 즉시 끝내고, 각 화면이 스냅숏을 받아 제 속도로 재생한다.
  */
 export class LocalMatch implements MatchHost {
   readonly seat: number;
@@ -48,11 +53,16 @@ export class LocalMatch implements MatchHost {
   private readonly bot: Bot;
   private readonly rng: RngState;
   private readonly log: LoggedAction[] = [];
-  private readonly listeners = new Set<(snapshot: Snapshot) => void>();
+  private readonly humans: Set<number>;
+  /** 사람 자리지만 연결이 끊겨 잠시 봇이 대신 두는 자리 */
+  private readonly standIns = new Set<number>();
+  private readonly listeners = new Map<number, Set<Listener>>();
   private readonly pending: Snapshot[] = [];
 
   constructor(options: LocalMatchOptions, savedLog?: readonly LoggedAction[]) {
     this.seat = options.humanSeat ?? 0;
+    this.humans = new Set(options.humanSeats ?? [this.seat]);
+    this.humans.add(this.seat);
     this.seed = options.seed;
     this.bot = options.bot ?? heuristicBot;
     this.rng = createRng(options.seed ^ 0x2545f491);
@@ -95,21 +105,46 @@ export class LocalMatch implements MatchHost {
     return viewOf(this.state, this.seat);
   }
 
+  viewFor(seat: number) {
+    return viewOf(this.state, seat);
+  }
+
   /** 지금까지 쌓인 진행을 넘겨 준다. 구독을 시작할 때 처음 한 번 부른다 */
   drain(): Snapshot[] {
     return this.pending.splice(0);
   }
 
   submit(action: Action): SubmitResult {
-    const result = this.apply(this.seat, action);
+    return this.submitAs(this.seat, action);
+  }
+
+  /** 다른 사람 자리의 행동(온라인 대전에서 참가자가 보낸 것) */
+  submitAs(seat: number, action: Action): SubmitResult {
+    if (!this.humans.has(seat))
+      return { ok: false, error: "사람 자리가 아니다" };
+    const result = this.apply(seat, action);
     if (!result.ok) return result;
     this.runBots();
     return { ok: true };
   }
 
-  subscribe(listener: (snapshot: Snapshot) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  subscribe(listener: Listener): () => void {
+    return this.subscribeSeat(this.seat, listener);
+  }
+
+  /** 그 자리에서 보이는 정보로 스냅숏을 받는다 */
+  subscribeSeat(seat: number, listener: Listener): () => void {
+    const set = this.listeners.get(seat) ?? new Set<Listener>();
+    set.add(listener);
+    this.listeners.set(seat, set);
+    return () => set.delete(listener);
+  }
+
+  /** 연결이 끊긴 사람 자리를 봇이 대신 두게 하거나(`true`) 다시 사람에게 돌려준다 */
+  setStandIn(seat: number, standIn: boolean): void {
+    if (standIn) this.standIns.add(seat);
+    else this.standIns.delete(seat);
+    this.runBots();
   }
 
   save(): SavedMatch {
@@ -125,6 +160,11 @@ export class LocalMatch implements MatchHost {
     };
   }
 
+  /** 판 끝 검증용 행동 기록 */
+  actionLog(): LoggedAction[] {
+    return [...this.log];
+  }
+
   /** 상태 전체(JSON). 테스트와 디버깅용 */
   serialize(): string {
     return JSON.stringify(this.state);
@@ -135,16 +175,25 @@ export class LocalMatch implements MatchHost {
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push({ seat, action });
-    this.emit({ view: viewOf(this.state, this.seat), events: result.events });
+    for (const [listenerSeat, set] of this.listeners) {
+      if (set.size === 0) continue;
+      const snapshot = {
+        view: viewOf(this.state, listenerSeat),
+        events: result.events,
+      };
+      for (const listener of set) listener(snapshot);
+    }
+    if ((this.listeners.get(this.seat)?.size ?? 0) === 0) {
+      this.pending.push({
+        view: viewOf(this.state, this.seat),
+        events: result.events,
+      });
+    }
     return { ok: true };
   }
 
-  private emit(snapshot: Snapshot): void {
-    if (this.listeners.size === 0) {
-      this.pending.push(snapshot);
-      return;
-    }
-    for (const listener of this.listeners) listener(snapshot);
+  private isBot(seat: number): boolean {
+    return !this.humans.has(seat) || this.standIns.has(seat);
   }
 
   /** 사람 차례가 올 때까지 봇을 돌린다. */
@@ -165,10 +214,10 @@ export class LocalMatch implements MatchHost {
     if (round.phase === "roundEnd") {
       return (
         this.state.order.find(
-          (s) => s !== this.seat && decisionFor(this.state, s) !== null,
+          (s) => this.isBot(s) && decisionFor(this.state, s) !== null,
         ) ?? null
       );
     }
-    return round.turn !== null && round.turn !== this.seat ? round.turn : null;
+    return round.turn !== null && this.isBot(round.turn) ? round.turn : null;
   }
 }
