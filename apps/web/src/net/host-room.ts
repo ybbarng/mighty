@@ -5,6 +5,7 @@ import { LocalMatch } from "@/game/local-match";
 
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
+  type AuditReport,
   CHAT_MAX_LENGTH,
   type ChatMessage,
   type Commitment,
@@ -60,6 +61,7 @@ export class HostRoom {
   private readonly botNames: readonly string[];
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private chatListeners = new Set<(message: ChatMessage) => void>();
+  private reportListeners = new Set<(report: AuditReport) => void>();
   /** 자리별 마지막 채팅 시각. 도배를 막는다 */
   private readonly lastChat = new Map<number, number>();
   private commitments: Commitment[] = [];
@@ -141,6 +143,12 @@ export class HostRoom {
   onChat(listener: (message: ChatMessage) => void): () => void {
     this.chatListeners.add(listener);
     return () => this.chatListeners.delete(listener);
+  }
+
+  /** 참가자의 검증 결과 알림 */
+  onReport(listener: (report: AuditReport) => void): () => void {
+    this.reportListeners.add(listener);
+    return () => this.reportListeners.delete(listener);
   }
 
   /** 방장이 말한다 */
@@ -311,6 +319,18 @@ export class HostRoom {
         const seat = this.seatOf(from);
         if (seat === null || typeof message.text !== "string") return;
         this.relayChat(seat, this.names.get(seat) ?? "손님", message.text);
+        break;
+      }
+      case "auditReport": {
+        // 보낸 사람의 자리로 고쳐 적는다(남의 자리를 사칭하지 못하게).
+        const seat = this.seatOf(from);
+        if (seat === null) return;
+        const report: AuditReport = {
+          ...message,
+          seat,
+          name: this.names.get(seat) ?? message.name,
+        };
+        for (const l of this.reportListeners) l(report);
         break;
       }
       case "leave":

@@ -21,6 +21,18 @@ export interface LobbyState {
   started: boolean;
 }
 
+/**
+ * 참가자가 판 끝 검증 결과를 모두에게 직접 알린다(방장을 거치지 않는다).
+ * 방장이 섞기를 조작했다면 그 결과를 숨길 수 없게 하려는 것이다.
+ */
+export interface AuditReport {
+  t: "auditReport";
+  seat: number;
+  name: string;
+  ok: boolean;
+  reason?: string;
+}
+
 /** 채팅 한 줄 */
 export interface ChatMessage {
   id: string;
@@ -48,6 +60,7 @@ export type GuestMessage =
   | { t: "action"; action: Action }
   | { t: "reveal"; secret: string }
   | { t: "chat"; text: string }
+  | AuditReport
   | { t: "leave" };
 
 /** 방장 → 참가자 */
@@ -64,7 +77,8 @@ export type HostMessage =
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
   | { t: "audit"; reveals: Reveal[]; log: LoggedAction[] }
   /** 채팅. 방장이 받은 말을 모두에게 다시 보낸다(이름은 방장이 붙인다) */
-  | { t: "chat"; message: ChatMessage };
+  | { t: "chat"; message: ChatMessage }
+  | AuditReport;
 
 function hasTag(value: unknown): boolean {
   return (

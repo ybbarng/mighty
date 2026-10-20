@@ -130,6 +130,7 @@ export function GameTable({
   const cardTipOn = useSettings((s) => s.cardTip);
   const botNames = useSettings((s) => s.botNames);
   const network = useGame((s) => s.network);
+  const invalid = useGame((s) => s.invalid);
   const chatMessages = useChat((s) => s.messages);
   const chatUnread = useChat((s) => s.unread);
   const chatOpen = useChat((s) => s.open);
@@ -832,6 +833,15 @@ export function GameTable({
               />
             )}
 
+            {invalid && (
+              <div
+                role="alert"
+                className="absolute inset-x-0 z-[340] mx-auto w-fit max-w-[92%] rounded-xl bg-rose-700/95 px-3 py-1.5 text-center font-semibold text-sm shadow-xl"
+                style={{ top: layout.hud.y + layout.hud.h + 6 }}
+              >
+                ⚠ 공정성 검증 실패 — 이 게임은 무효입니다 ({invalid})
+              </div>
+            )}
             {hostLeft && (
               <div className="absolute inset-x-0 top-16 z-[350] mx-auto flex w-fit items-center gap-3 rounded-2xl bg-black/85 px-4 py-3 text-sm shadow-2xl">
                 방장이 방을 나가 게임이 끝났습니다

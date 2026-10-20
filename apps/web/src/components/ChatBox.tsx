@@ -32,18 +32,24 @@ export function ChatBox({ mySeat }: { mySeat: number | null }) {
         {messages.length === 0 ? (
           <p className="m-auto text-xs opacity-50">아직 아무 말도 없습니다</p>
         ) : (
-          messages.map((m) => (
-            <p key={m.id} className="leading-snug">
-              <b
-                className={
-                  m.seat === mySeat ? "text-amber-200" : "text-sky-200"
-                }
-              >
-                {m.name}
-              </b>{" "}
-              {m.text}
-            </p>
-          ))
+          messages.map((m) =>
+            m.seat < 0 ? (
+              <p key={m.id} className="text-xs leading-snug opacity-70">
+                [{m.name}] {m.text}
+              </p>
+            ) : (
+              <p key={m.id} className="leading-snug">
+                <b
+                  className={
+                    m.seat === mySeat ? "text-amber-200" : "text-sky-200"
+                  }
+                >
+                  {m.name}
+                </b>{" "}
+                {m.text}
+              </p>
+            ),
+          )
         )}
       </div>
       <div className="flex flex-wrap gap-1">

@@ -11,6 +11,7 @@ import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
+  type AuditReport,
   type ChatMessage,
   type Commitment,
   type GuestMessage,
@@ -100,6 +101,7 @@ export class GuestRoom {
     full: new Set<() => void>(),
     kicked: new Set<() => void>(),
     chat: new Set<(message: ChatMessage) => void>(),
+    report: new Set<(report: AuditReport) => void>(),
     hostLeft: new Set<() => void>(),
     audit: new Set<(result: AuditResult) => void>(),
   };
@@ -214,8 +216,21 @@ export class GuestRoom {
         if (from !== this.hostId) return;
         const result = await this.verify(message.reveals, message.log);
         for (const l of this.listeners.audit) l(result);
+        // 방장을 거치지 않고 모두에게 결과를 알린다.
+        if (this.seat !== null)
+          this.transport.send({
+            t: "auditReport",
+            seat: this.seat,
+            name: this.name,
+            ok: result.ok,
+            ...(result.ok ? {} : { reason: result.reason }),
+          } satisfies AuditReport);
         break;
       }
+      case "auditReport":
+        if (message.seat === this.seat) return;
+        for (const l of this.listeners.report) l(message);
+        break;
     }
   }
 

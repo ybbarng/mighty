@@ -73,6 +73,8 @@ interface GameStore {
   audit: { ok: true } | { ok: false; reason: string } | null;
   /** 온라인 대전에서 방장이 나가 더 진행할 수 없음 */
   hostLeft: boolean;
+  /** 판 끝 검증에서 누군가 문제를 찾았다. 이 게임은 무효로 본다 */
+  invalid: string | null;
   /** 다른 사람과 하는 온라인 대전인가. 카드 툴팁 같은 도움 기능을 끈다(원작 `bUseHintInNetwork`) */
   network: boolean;
   newGame(options: NewGameOptions): void;
@@ -217,6 +219,7 @@ export const useGame = create<GameStore>((set, get) => {
       roundStartMoney: [...current.money],
       seatNames: options.seatNames,
       network: options.network ?? false,
+      invalid: null,
     });
     const persist = () => {
       if (options.save && host instanceof LocalMatch) saveGame(host.save());
@@ -245,6 +248,7 @@ export const useGame = create<GameStore>((set, get) => {
     audit: null,
     hostLeft: false,
     network: false,
+    invalid: null,
 
     newGame(options) {
       const host = new LocalMatch({

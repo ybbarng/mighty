@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
-import type { HostMessage } from "./protocol";
+import type { AuditReport, HostMessage } from "./protocol";
 import { MemoryNetwork } from "./transport";
 
 const rules = presetRules("standard5");
@@ -130,6 +130,10 @@ describe("온라인 방", () => {
     const { host, a, b } = await setup();
     const results: AuditResult[] = [];
     a.on("audit", (r) => results.push(r));
+    const heardByB: AuditReport[] = [];
+    const heardByHost: AuditReport[] = [];
+    b.on("report", (r) => heardByB.push(r));
+    host.onReport((r) => heardByHost.push(r));
     await host.start();
     await until(() => a.match !== null && b.match !== null);
     await playRounds(host, [a, b], 1);
@@ -156,6 +160,13 @@ describe("온라인 방", () => {
       ok: false,
       reason: "0번 자리의 값이 약속과 다르다",
     });
+    // 철수의 실패 알림은 방장을 거치지 않고 다른 참가자에게도 간다.
+    await until(() => heardByB.some((r) => r.name === "철수"));
+    expect(heardByB.find((r) => r.name === "철수")).toMatchObject({
+      ok: false,
+      reason: "0번 자리의 값이 약속과 다르다",
+    });
+    await until(() => heardByHost.some((r) => r.name === "철수"));
   });
 
   it("남의 차례에 보낸 행동은 거절된다", async () => {

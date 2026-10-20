@@ -7,6 +7,11 @@ import { botFor, browserPace } from "@/game/bots";
 import { useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
+import {
+  type AuditRecord,
+  loadAuditHistory,
+  recordAudit,
+} from "@/net/audit-history";
 import { useChat } from "@/net/chat";
 import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
@@ -63,11 +68,27 @@ export function OnlineScreen({
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isHost = roomFromUrl === null;
+  // 저장소는 브라우저에만 있으므로 그린 뒤에 읽는다.
+  const [history, setHistory] = useState<AuditRecord[]>([]);
+  useEffect(() => setHistory(loadAuditHistory()), []);
   const started = useRef(false);
 
   useEffect(() => {
     if (savedName && !name) setName(savedName);
   }, [savedName, name]);
+
+  /** 판 끝 검증 결과(내 것과 다른 사람이 알린 것)를 채팅에 남기고, 실패면 게임을 무효로 표시한다 */
+  const onAuditReport = (who: string, ok: boolean, reason?: string) => {
+    const failure = ok ? null : `${who}: ${reason ?? "알 수 없는 문제"}`;
+    useChat.getState().receive({
+      id: randomId(8),
+      seat: -1,
+      name: "검증",
+      text: ok ? `${who} — 문제없음 ✓` : `${who} — 실패 ⚠ ${reason ?? ""}`,
+    });
+    if (failure) useGame.setState({ invalid: failure });
+    recordAudit(roomCode, failure);
+  };
 
   const enter = async () => {
     const trimmed = name.trim() || (isHost ? "방장" : "손님");
@@ -88,6 +109,7 @@ export function OnlineScreen({
         useChat.getState().reset();
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
+        host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));
@@ -117,14 +139,16 @@ export function OnlineScreen({
         guest.on("kicked", () => setPhase("kicked"));
         guest.on("hostLeft", () => useGame.setState({ hostLeft: true }));
         guest.on("rejected", (e) => useGame.setState({ notice: e }));
-        guest.on("audit", (result) =>
+        guest.on("audit", (result) => {
           useGame.setState({
             audit: result,
             notice: result.ok
               ? "공정성 확인: 섞기와 진행에 문제가 없습니다"
               : `공정성 확인 실패: ${result.reason}`,
-          }),
-        );
+          });
+          onAuditReport("나", result.ok, result.ok ? undefined : result.reason);
+        });
+        guest.on("report", (r) => onAuditReport(r.name, r.ok, r.reason));
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -207,6 +231,32 @@ export function OnlineScreen({
             >
               {isHost ? "방 만들기" : "들어가기"}
             </ActionButton>
+            {history.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer opacity-70">
+                  지난 게임 공정성 검증 기록
+                </summary>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {history.slice(0, 5).map((r) => (
+                    <li key={`${r.room}-${r.at}`} className="flex gap-2">
+                      <span className="tabular-nums opacity-60">
+                        {new Date(r.at).toLocaleString("ko-KR", {
+                          month: "numeric",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <span
+                        className={r.ok ? "text-emerald-300" : "text-rose-300"}
+                      >
+                        {r.ok ? "문제없음" : `무효 — ${r.failures.join(", ")}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </>
         )}
 
