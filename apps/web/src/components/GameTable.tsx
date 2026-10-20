@@ -34,6 +34,7 @@ import {
   PickPanel,
   RoundResultPanel,
 } from "./panels/OtherPanels";
+import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 
 function useStageSize() {
@@ -100,6 +101,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
 
   const [discards, setDiscards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
+  const [showScoreboard, setShowScoreboard] = useState(false);
   const [leadChoice, setLeadChoice] = useState<{
     card: Card;
     kind: "jokerSuit" | "jokerCall";
@@ -306,6 +308,13 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                 ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
                 : `${view.roundNumber}판`}
             </span>
+            <button
+              type="button"
+              onClick={() => setShowScoreboard(true)}
+              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+            >
+              점수판
+            </button>
             <button
               type="button"
               onClick={onExit}
@@ -522,6 +531,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
                     startMoney={startMoney}
                     seatName={seatName}
                     onSubmit={act}
+                    onNewGame={onExit}
                   />
                 ) : waiting ? (
                   <p className="text-center text-sm opacity-80">{waiting}</p>
@@ -555,6 +565,14 @@ export function GameTable({ onExit }: { onExit: () => void }) {
             >
               {effect.text}
             </div>
+          )}
+
+          {showScoreboard && (
+            <Scoreboard
+              view={view}
+              seatName={seatName}
+              onClose={() => setShowScoreboard(false)}
+            />
           )}
 
           {/* 알림 */}

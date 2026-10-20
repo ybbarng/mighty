@@ -180,11 +180,13 @@ export function RoundResultPanel({
   startMoney,
   seatName,
   onSubmit,
+  onNewGame,
 }: {
   view: PlayerView;
   startMoney: number[];
   seatName: (seat: number) => string;
   onSubmit: (action: Action) => void;
+  onNewGame: () => void;
 }) {
   const result = view.result;
   if (!result || !view.goal) return null;
@@ -234,10 +236,69 @@ export function RoundResultPanel({
           })}
         </tbody>
       </table>
+      {view.history && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-center opacity-70">
+            이번 판 분석
+          </summary>
+          <table className="mx-auto mt-2 tabular-nums">
+            <thead className="opacity-60">
+              <tr>
+                <th className="pr-3 text-left">이름</th>
+                <th className="px-1">득점</th>
+                <th
+                  className="px-1"
+                  title="같은 편이 이긴 트릭에 점수 카드를 낸 수"
+                >
+                  도움
+                </th>
+                <th
+                  className="px-1"
+                  title="상대 편이 이긴 트릭에 점수 카드를 낸 수"
+                >
+                  실점
+                </th>
+                <th className="px-1" title="선을 잡은 트릭의 비율">
+                  점유율
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.players.map((seat) => (
+                <tr key={seat}>
+                  <td className="pr-3">{seatName(seat)}</td>
+                  <td className="px-1 text-center">
+                    {view.history?.scored[seat] ?? 0}
+                  </td>
+                  <td className="px-1 text-center">
+                    {view.history?.assist[seat] ?? 0}
+                  </td>
+                  <td className="px-1 text-center">
+                    {view.history?.lost[seat] ?? 0}
+                  </td>
+                  <td className="px-1 text-center">
+                    {view.history?.share[seat] ?? 0}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
       {gameOver ? (
-        <p className="text-center text-sm">
-          파산한 사람이 생겨 게임이 끝났습니다.
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-center text-sm">
+            돈이 바닥난 사람이 생겨 게임이 끝났습니다. 내 등수는{" "}
+            <b>
+              {view.order.filter(
+                (s) => (view.money[s] ?? 0) > (view.money[view.seat] ?? 0),
+              ).length + 1}
+              등
+            </b>
+            입니다.
+          </p>
+          <ActionButton onClick={onNewGame}>새 게임</ActionButton>
+        </div>
       ) : (
         view.decision?.kind === "continue" && (
           <div className="flex justify-center">
