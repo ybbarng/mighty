@@ -1,7 +1,9 @@
 /** 덱 섞기 두 번(갈라졌다 합치기)에 걸리는 시간 */
-export const SHUFFLE_MS = 900;
-/** 카드 한 장이 날아가는 시간 */
-export const FLIGHT_MS = 300;
+export const SHUFFLE_MS = 1600;
+/** 나눠 주는 카드 한 장이 날아가는 시간 */
+export const FLIGHT_MS = 450;
+/** 다 나눈 뒤 남은 키티가 흐려지는 시간 */
+export const SETTLE_MS = 400;
 
 /** 원작처럼 2장·3장·3장·2장 묶음으로 나눈다(6마 2·3·3, 7마 2·3·2) */
 const PACKET_PATTERN = [2, 3, 3, 2];
@@ -19,7 +21,7 @@ export function dealPackets(handSize: number): number[] {
 }
 
 /** 묶음 안에서 카드 사이 간격 */
-const IN_PACKET_MS = 35;
+const IN_PACKET_MS = 70;
 
 /**
  * 나눠 주기 순서와 시간. 선부터 한 사람씩 묶음을 주고, 한 바퀴 돌면 다음 묶음으로 간다.
@@ -30,10 +32,10 @@ export function dealPlan(
   players: number,
 ): { flights: { player: number; delay: number }[]; duration: number } {
   const packets = dealPackets(handSize);
-  // 묶음 수가 많아도 1.5초 남짓에 끝나게 묶음 사이 간격을 줄인다.
+  // 손으로 나눠 주듯 차분하게. 묶음이 많으면(7마) 간격을 조금 줄여 3초 남짓에 끝낸다.
   const gap = Math.min(
-    150,
-    Math.max(70, 1500 / Math.max(1, packets.length * players)),
+    220,
+    Math.max(120, 2800 / Math.max(1, packets.length * players)),
   );
   const flights: { player: number; delay: number }[] = [];
   let at = 0;
@@ -41,11 +43,15 @@ export function dealPlan(
     for (let player = 0; player < players; player++) {
       for (let c = 0; c < size; c++)
         flights.push({ player, delay: at + c * IN_PACKET_MS });
-      at += gap;
+      // 다음 묶음은 이 묶음의 마지막 카드가 나간 뒤에 출발한다.
+      at += Math.max(gap, (size - 1) * IN_PACKET_MS + 60);
     }
   }
   const last = flights.at(-1)?.delay ?? 0;
-  return { flights, duration: SHUFFLE_MS + last + FLIGHT_MS };
+  return {
+    flights,
+    duration: SHUFFLE_MS + last + FLIGHT_MS + SETTLE_MS,
+  };
 }
 
 /** 기기에서 움직임 줄이기를 켰는가. 켜져 있으면 섞고 나눠 주는 연출을 건너뛴다 */

@@ -41,6 +41,8 @@ interface PlayingCardProps {
   fresh?: boolean;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
+  /** 움직이는 시간(ms). 기본 300 */
+  duration?: number;
   /** 마우스를 올리고 내릴 때(카드 툴팁) */
   onHover?: (hovering: boolean) => void;
 }
@@ -71,6 +73,7 @@ export function PlayingCard({
   interactive = false,
   onActivate,
   onHover,
+  duration,
 }: PlayingCardProps) {
   const theme = useCardTheme();
   const [arrived, setArrived] = useState(from === undefined);
@@ -92,6 +95,7 @@ export function PlayingCard({
     transform: transform(position, width, height, arrived ? rotate : 0),
     opacity: position.opacity ?? 1,
     transitionDelay: `${delay}ms`,
+    ...(duration ? { transitionDuration: `${duration}ms` } : {}),
   };
 
   const handlePointerUp = (e: PointerEvent<HTMLButtonElement>) => {
