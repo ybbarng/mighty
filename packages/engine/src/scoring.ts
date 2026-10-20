@@ -4,11 +4,13 @@ import { type RuleSet, runScore } from "./rules";
 export interface ScoreInput {
   rules: RuleSet;
   goal: Goal;
-  /** 이번 판에 참가한 자리 수 (6마에서 한 명이 죽으면 5) */
-  seatCount: number;
+  /** 이번 판에 참가한 자리. 6·7마에서 죽은 사람은 빠진다 */
+  players: readonly number[];
   declarer: number;
   /** 프렌드 자리. 노프렌드면 `null` */
   friend: number | null;
+  /** 처음부터 노프렌드를 선언했는가. 노프렌드 2배는 이때만 붙는다 */
+  noFriendDeclared: boolean;
   /** 자리별 이번 판에 딴 점수 카드 장수 */
   scoredBySeat: readonly number[];
   /** 주공이 버린 카드 속 점수 카드 장수 */
@@ -85,7 +87,8 @@ function baseAmount(
 
 /** 판의 점수 계산과 돈 분배 (MFSM.cpp). */
 export function scoreRound(input: ScoreInput): ScoreResult {
-  const { rules, goal, seatCount, declarer, friend } = input;
+  const { rules, goal, players, declarer, friend } = input;
+  const seatCount = players.length;
   const hasFriend = rules.friend && friend !== null;
   const isRuling = (seat: number) =>
     seat === declarer || (hasFriend && seat === friend);
@@ -138,14 +141,19 @@ export function scoreRound(input: ScoreInput): ScoreResult {
     moved *= 2;
     multipliers.push("noKiruda");
   }
-  if (rules.doubleForNoFriend && rules.friend && rulingWon && friend === null) {
+  if (
+    rules.doubleForNoFriend &&
+    rules.friend &&
+    rulingWon &&
+    input.noFriendDeclared
+  ) {
     moved *= 2;
     multipliers.push("noFriend");
   }
 
   const money = [...input.money];
   let pool = 0;
-  for (let seat = 0; seat < seatCount; seat++) {
+  for (const seat of players) {
     if (isRuling(seat)) continue;
     money[seat] = (money[seat] ?? 0) + (rulingWon ? -moved : moved);
     pool += rulingWon ? moved : -moved;
@@ -174,7 +182,7 @@ export function scoreRound(input: ScoreInput): ScoreResult {
 
   // 0 밑으로 내려간 돈을 메운다. 여당 승이면 주공이 덜 받고, 야당 승이면 야당이 나눠 덜 받는다.
   let shortfall = 0;
-  for (let seat = 0; seat < seatCount; seat++) {
+  for (const seat of players) {
     const value = money[seat] ?? 0;
     if (value < 0) {
       shortfall += value;
@@ -187,7 +195,7 @@ export function scoreRound(input: ScoreInput): ScoreResult {
     } else {
       let remaining = seatCount - 1 - (hasFriend ? 1 : 0);
       const share = idiv(shortfall, remaining);
-      for (let seat = 0; seat < seatCount; seat++) {
+      for (const seat of players) {
         if (isRuling(seat)) continue;
         remaining--;
         if (remaining > 0) {

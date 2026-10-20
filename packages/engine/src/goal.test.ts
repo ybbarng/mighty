@@ -48,46 +48,38 @@ describe("당선 후 공약 변경", () => {
 
   it("기루다를 그대로 두면 낮출 수만 없다", () => {
     expect(
-      isValidGoalChange(standard, current, { kiruda: "S", score: 14 }, false),
+      isValidGoalChange(standard, current, { kiruda: "S", score: 14 }),
     ).toBe(true);
     expect(
-      isValidGoalChange(standard, current, { kiruda: "S", score: 13 }, false),
+      isValidGoalChange(standard, current, { kiruda: "S", score: 13 }),
     ).toBe(false);
     expect(
-      isValidGoalChange(standard, current, { kiruda: "S", score: 15 }, false),
+      isValidGoalChange(standard, current, { kiruda: "S", score: 15 }),
     ).toBe(true);
   });
 
   it("기루다를 바꾸려면 2 이상 올린다", () => {
     expect(
-      isValidGoalChange(standard, current, { kiruda: "H", score: 15 }, false),
+      isValidGoalChange(standard, current, { kiruda: "H", score: 15 }),
     ).toBe(false);
     expect(
-      isValidGoalChange(standard, current, { kiruda: "H", score: 16 }, false),
-    ).toBe(true);
-  });
-
-  it("키티를 보기 전에 바꾸면 1만 올려도 된다", () => {
-    expect(
-      isValidGoalChange(standard, current, { kiruda: "H", score: 15 }, true),
+      isValidGoalChange(standard, current, { kiruda: "H", score: 16 }),
     ).toBe(true);
   });
 
   it("노기루다 혜택이 있으면 노기루다로 바꿀 때 1 덜 올린다", () => {
     const d = { kiruda: "S" as const, score: 14 };
-    expect(
-      isValidGoalChange(daegu, d, { kiruda: "NT", score: 15 }, false),
-    ).toBe(true);
-    expect(
-      isValidGoalChange(standard, d, { kiruda: "NT", score: 15 }, false),
-    ).toBe(false);
+    expect(isValidGoalChange(daegu, d, { kiruda: "NT", score: 15 })).toBe(true);
+    expect(isValidGoalChange(standard, d, { kiruda: "NT", score: 15 })).toBe(
+      false,
+    );
   });
 
   it("19에서 기루다를 바꾸면 20으로 충분하다", () => {
     const high = { kiruda: "S" as const, score: 19 };
-    expect(
-      isValidGoalChange(standard, high, { kiruda: "H", score: 20 }, false),
-    ).toBe(true);
+    expect(isValidGoalChange(standard, high, { kiruda: "H", score: 20 })).toBe(
+      true,
+    );
   });
 });
 

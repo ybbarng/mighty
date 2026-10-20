@@ -50,18 +50,17 @@ export function isValidBid(
 
 /**
  * 당선 후 공약 변경이 유효한가 (`IsValidNewGoal`의 특권 부분).
- * 기루다를 바꾸면 +2(`raise2ForKirudaChange`가 꺼져 있거나 키티를 보기 전이면 +1),
+ * 기루다를 바꾸면 +2(`raise2ForKirudaChange`가 꺼져 있으면 +1),
  * 노기루다로 바꿀 때 `noKirudaAdvantage`면 1 덜 올린다. 기루다를 안 바꾸면 낮출 수 없다.
  */
 export function isValidGoalChange(
   rules: RuleSet,
   current: Goal,
   next: Goal,
-  beforeKitty: boolean,
 ): boolean {
   if (!withinLimits(rules, next)) return false;
   if (current.kiruda === next.kiruda) return next.score >= current.score;
-  let raise = !rules.raise2ForKirudaChange || beforeKitty ? 1 : 2;
+  let raise = rules.raise2ForKirudaChange ? 2 : 1;
   if (rules.noKirudaAdvantage && next.kiruda === "NT") raise--;
   const max = maxGoal(rules);
   return Math.min(current.score + raise, max) <= Math.min(next.score, max);

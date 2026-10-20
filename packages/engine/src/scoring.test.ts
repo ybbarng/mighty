@@ -13,9 +13,10 @@ function input(
   return {
     rules: standard,
     goal: { kiruda: "D", score: 15 },
-    seatCount: 5,
+    players: [0, 1, 2, 3, 4],
     declarer: 0,
     friend: 1,
+    noFriendDeclared: false,
     scoredBySeat: [ruling, 0, opposition, 0, 0],
     discardedPoints: 0,
     money: [100, 100, 100, 100, 100],
@@ -111,7 +112,9 @@ describe("배수", () => {
 
 describe("분배", () => {
   it("노프렌드면 주공이 야당 4명분을 모두 받는다", () => {
-    const result = scoreRound(input({ friend: null, ruling: 19 }));
+    const result = scoreRound(
+      input({ friend: null, noFriendDeclared: true, ruling: 19 }),
+    );
     expect(result.money).toEqual([132, 92, 92, 92, 92]);
   });
 
