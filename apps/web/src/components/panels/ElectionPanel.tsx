@@ -46,18 +46,24 @@ export function ElectionPanel({
           ? `지금 최고: ${seatName(view.election.bidder)} ${goalLabel(current)}`
           : "아직 아무도 출마하지 않았습니다"}
       </p>
-      <KirudaPicker
-        value={kiruda}
-        enabled={hasBid}
-        onChange={(k) => {
-          setKiruda(k);
-          setScore(decision.bids.find((g) => g.kiruda === k)?.score ?? 0);
-        }}
-      />
-      {scores.length > 0 && (
-        <ScoreStepper value={validScore} options={scores} onChange={setScore} />
-      )}
-      <p className="text-center text-xs opacity-60">
+      <div className="panel-pair flex flex-col gap-3">
+        <KirudaPicker
+          value={kiruda}
+          enabled={hasBid}
+          onChange={(k) => {
+            setKiruda(k);
+            setScore(decision.bids.find((g) => g.kiruda === k)?.score ?? 0);
+          }}
+        />
+        {scores.length > 0 && (
+          <ScoreStepper
+            value={validScore}
+            options={scores}
+            onChange={setScore}
+          />
+        )}
+      </div>
+      <p className="panel-aside text-center text-xs opacity-60">
         {reachable
           ? `도움말: 이 패라면 ${goalLabel({ kiruda: suggestion.kiruda, score: target })} 정도까지 노려볼 만합니다`
           : "도움말: 지금 공약을 넘기기엔 패가 약해 보입니다. 포기를 고려해 보세요"}

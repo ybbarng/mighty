@@ -302,35 +302,55 @@ export function GameTable({
 
   // 세로 화면은 패널이 양옆 자리 판을 가리지 않게 자리 판 아래부터 손패 위까지 쓴다.
   const panelArea = (() => {
-    if (!layout) return { top: 0, bottom: 0 };
+    if (!layout) return { left: 0, width: 0, top: 0, bottom: 0 };
     // 판이 끝나 손패가 비면 손패 자리까지 패널이 쓴다.
     const handTop = hand.length === 0 ? stage.height : layout.hand.top;
+    const cx = layout.center.x + layout.center.w / 2;
+    const half =
+      Math.min(
+        Math.max(layout.center.w, 340),
+        stage.width - 2 * layout.gutter,
+      ) / 2;
+    const plates = layout.seats.slice(1).map((s) => s.plate);
     if (layout.orientation === "landscape") {
       // 가로 화면도 패널이 맞은편 자리 판을 덮지 않게 그 아래에서 시작하고, 아래로는 손패 위까지 쓴다.
-      const cx = layout.center.x + layout.center.w / 2;
-      const half =
-        Math.min(
-          Math.max(layout.center.w, 340),
-          stage.width - 2 * layout.gutter,
-        ) / 2;
-      const above = layout.seats
-        .slice(1)
-        .map((s) => s.plate)
-        .filter(
-          (p) =>
-            p.x < cx + half && cx - half < p.x + p.w && p.y < layout.center.y,
-        );
+      const above = plates.filter(
+        (p) =>
+          p.x < cx + half && cx - half < p.x + p.w && p.y < layout.center.y,
+      );
       const top = Math.max(
         layout.table.y,
         ...above.map((p) => p.y + p.h + layout.gutter),
       );
-      return { top, bottom: handTop - layout.gutter };
+      const bottom = handTop - layout.gutter;
+      // 눕힌 폰처럼 높이가 모자라면 양옆 자리 판 사이의 빈 곳까지 옆으로 넓힌다.
+      let wide = half;
+      if (bottom - top < 300) {
+        const beside = plates.filter((p) => p.y < bottom && top < p.y + p.h);
+        const leftLimit = Math.max(
+          layout.gutter,
+          ...beside
+            .filter((p) => p.x + p.w / 2 < cx)
+            .map((p) => p.x + p.w + layout.gutter),
+        );
+        const rightLimit = Math.min(
+          stage.width - layout.gutter,
+          ...beside
+            .filter((p) => p.x + p.w / 2 >= cx)
+            .map((p) => p.x - layout.gutter),
+        );
+        wide = Math.max(half, Math.min(cx - leftLimit, rightLimit - cx, 300));
+      }
+      return { left: cx - wide, width: wide * 2, top, bottom };
     }
     const bottom = handTop - layout.gutter;
-    const platesBottom = Math.max(
-      ...layout.seats.slice(1).map((s) => s.plate.y + s.plate.h + 24),
-    );
-    return { top: Math.min(platesBottom, bottom - 280), bottom };
+    const platesBottom = Math.max(...plates.map((p) => p.y + p.h + 24));
+    return {
+      left: Math.max(layout.gutter, cx - half),
+      width: half * 2,
+      top: Math.min(platesBottom, bottom - 280),
+      bottom,
+    };
   })();
 
   const tableCenter: Point = layout
@@ -576,19 +596,11 @@ export function GameTable({
           {/* 판 가운데 행동 패널 */}
           {(showPanel || leadChoice) && (
             <div
-              className="absolute z-[200] flex items-end justify-center"
+              className="panel-area absolute z-[200] flex items-end justify-center"
               style={{
-                left: Math.max(
-                  layout.gutter,
-                  layout.center.x +
-                    layout.center.w / 2 -
-                    Math.max(layout.center.w, 340) / 2,
-                ),
+                left: panelArea.left,
                 top: panelArea.top,
-                width: Math.min(
-                  Math.max(layout.center.w, 340),
-                  stage.width - 2 * layout.gutter,
-                ),
+                width: panelArea.width,
                 height: panelArea.bottom - panelArea.top,
               }}
             >

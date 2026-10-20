@@ -21,7 +21,7 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="flex max-h-full min-h-0 w-full flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-white/15 bg-black/70 p-4 shadow-2xl backdrop-blur">
+    <div className="panel flex max-h-full min-h-0 w-full flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-white/15 bg-black/70 p-4 shadow-2xl backdrop-blur">
       <h2 className="text-center font-bold text-base">{title}</h2>
       {children}
     </div>
@@ -39,7 +39,7 @@ export function ActionButton({
     <button
       type="button"
       className={cn(
-        "rounded-xl px-4 py-2 font-semibold text-sm transition disabled:cursor-not-allowed disabled:opacity-40",
+        "action-button rounded-xl px-4 py-2 font-semibold text-sm transition disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary" && "bg-amber-400 text-black hover:bg-amber-300",
         variant === "secondary" && "bg-white/15 hover:bg-white/25",
         variant === "danger" && "bg-red-500/80 hover:bg-red-500",
@@ -106,7 +106,7 @@ export function ScoreStepper({
       >
         −
       </button>
-      <span className="w-12 text-center font-bold text-3xl tabular-nums">
+      <span className="panel-number w-12 text-center font-bold text-3xl tabular-nums">
         {value}
       </span>
       <button
@@ -139,7 +139,7 @@ export function CardPicker({
   const currentSuit = suit ?? "S";
   const shownSuit = value === "JK" ? null : currentSuit;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="card-picker flex flex-col gap-1.5">
       <div className="flex justify-center gap-1">
         {SUITS.map((s) => (
           <button

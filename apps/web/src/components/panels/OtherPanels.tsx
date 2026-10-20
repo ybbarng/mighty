@@ -37,7 +37,7 @@ export function KillPanel({
   const tried = new Set([...decision.failed, ...hand]);
   return (
     <Panel title="이번 판에서 뺄 사람을 카드로 지목하세요">
-      <p className="text-center text-xs opacity-70">
+      <p className="panel-aside text-center text-xs opacity-70">
         고른 카드를 가진 사람이 이번 판에서 빠집니다. 내 손에 있거나 이미 고른
         카드는 헛다리입니다.
       </p>

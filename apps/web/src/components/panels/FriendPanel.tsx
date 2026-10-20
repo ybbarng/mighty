@@ -110,7 +110,7 @@ export function FriendPanel({
           />
         </div>
       </details>
-      <div className="flex flex-col items-center gap-1">
+      <div className="panel-pair flex flex-col items-center gap-1">
         <span className="text-sm">
           {friendLabel(choice, seatName)}
           {pickedCard &&

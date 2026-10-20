@@ -101,3 +101,19 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
 
   expect(errors).toEqual([]);
 });
+
+for (const preset of ["표준 5마", "표준 7마"]) {
+  test(`${preset}: 공약 단추가 스크롤 없이 다 보인다`, async ({ page }) => {
+    await prepare(page);
+    await page.goto("/");
+    await page.getByRole("button", { name: preset, exact: true }).click();
+    await page.getByRole("button", { name: /^컴퓨터와/ }).click();
+    const bid = page.getByRole("button", { name: /^출마/ });
+    await bid.waitFor({ timeout: 20_000 });
+    // 눕힌 폰처럼 낮은 화면에서도 패널 안에서 잘리지 않아야 한다.
+    await expect(bid).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "올리기" })).toBeInViewport({
+      ratio: 1,
+    });
+  });
+}
