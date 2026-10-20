@@ -72,7 +72,7 @@ test("방장이 방을 만들고 친구가 링크로 들어와 한 판을 끝까
   }
 
   await host.goto("/?net=local");
-  await host.getByRole("button", { name: "친구와 하기" }).click();
+  await host.getByRole("button", { name: /다함께 마이티/ }).click();
   await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();
   const link = await host.locator("input[readonly]").inputValue();

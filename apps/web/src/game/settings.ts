@@ -1,3 +1,9 @@
+import {
+  decodeRuleString,
+  presetRules,
+  RULE_PRESETS,
+  type RuleSet,
+} from "@mighty/engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -40,6 +46,9 @@ interface Settings {
   /** 컴퓨터 실력. 새 게임부터 적용된다 */
   botLevel: BotLevel;
   setBotLevel(level: BotLevel): void;
+  /** 고른 규칙(원작 규칙 문자열). 나홀로·다함께 모두 이 규칙으로 시작한다 */
+  ruleCode: string;
+  setRuleCode(code: string): void;
   customRules: CustomRule[];
   setCardTheme(id: string): void;
   saveCustomRule(rule: CustomRule): void;
@@ -64,6 +73,8 @@ export const useSettings = create<Settings>()(
       },
       botLevel: 2,
       setBotLevel: (botLevel) => set({ botLevel }),
+      ruleCode: RULE_PRESETS[0]?.code ?? "",
+      setRuleCode: (ruleCode) => set({ ruleCode }),
       customRules: [],
       setCardTheme: (id) => set({ cardThemeId: id }),
       // 같은 이름이면 덮어쓴다.
@@ -95,4 +106,16 @@ export const useSettings = create<Settings>()(
 export function useCardTheme(): CardTheme {
   const id = useSettings((s) => s.cardThemeId);
   return CARD_THEMES.find((t) => t.id === id) ?? CLASSIC;
+}
+
+/** 고른 규칙. 문자열이 깨졌으면 표준 5마 */
+export function chosenRules(code: string): RuleSet {
+  const decoded = decodeRuleString(code);
+  return decoded.ok ? decoded.rules : presetRules("standard5");
+}
+
+/** 규칙 이름. 기본 규칙·내 규칙에 없으면 인원만 */
+export function ruleLabel(code: string, custom: readonly CustomRule[]): string {
+  const named = [...RULE_PRESETS, ...custom].find((r) => r.code === code);
+  return named?.name ?? `직접 정한 ${chosenRules(code).playerCount}마`;
 }

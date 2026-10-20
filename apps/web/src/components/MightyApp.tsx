@@ -1,15 +1,18 @@
 "use client";
 
-import { presetRules, type RuleSet } from "@mighty/engine";
+import type { RuleSet } from "@mighty/engine";
 import { useEffect, useState } from "react";
 
 import type { SavedMatch } from "@/game/local-match";
 import { clearGame, loadGame } from "@/game/persistence";
+import { chosenRules, useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { endOnlineSession } from "@/net/session";
 
+import { AboutScreen } from "./AboutScreen";
 import { GameTable } from "./GameTable";
 import { OnlineScreen } from "./OnlineScreen";
+import { OptionsScreen } from "./OptionsScreen";
 import { Splash } from "./Splash";
 import { StartScreen } from "./StartScreen";
 import { LessonPlayer } from "./tutorial/LessonPlayer";
@@ -20,7 +23,9 @@ type Screen =
   | { kind: "online"; rules: RuleSet; room: string | null }
   | { kind: "playing" }
   | { kind: "tutorial" }
-  | { kind: "lesson"; lessonId: string };
+  | { kind: "lesson"; lessonId: string }
+  | { kind: "options" }
+  | { kind: "about" };
 
 export function MightyApp() {
   const [screen, setScreen] = useState<Screen>({ kind: "start" });
@@ -36,7 +41,11 @@ export function MightyApp() {
   useEffect(() => {
     const room = new URLSearchParams(window.location.search).get("room");
     if (room)
-      setScreen({ kind: "online", rules: presetRules("standard5"), room });
+      setScreen({
+        kind: "online",
+        rules: chosenRules(useSettings.getState().ruleCode),
+        room,
+      });
   }, []);
 
   const backToStart = () => {
@@ -81,23 +90,39 @@ export function MightyApp() {
     );
   }
 
+  if (screen.kind === "options") return <OptionsScreen onBack={backToStart} />;
+
+  if (screen.kind === "about") {
+    return (
+      <AboutScreen
+        onBack={backToStart}
+        onTutorial={() => setScreen({ kind: "tutorial" })}
+      />
+    );
+  }
+
   if (screen.kind === "start") {
+    const rules = () => chosenRules(useSettings.getState().ruleCode);
     return (
       <>
         <Splash />
         <StartScreen
-          onStart={(rules) => {
+          onSolo={() => {
             // 주소에 ?seed=숫자 가 있으면 같은 패로 시작한다(버그 재현용).
             const seed = Number(
               new URLSearchParams(window.location.search).get("seed"),
             );
             newGame({
-              rules,
+              rules: rules(),
               ...(Number.isInteger(seed) && seed > 0 ? { seed } : {}),
             });
             setScreen({ kind: "playing" });
           }}
-          onOnline={(rules) => setScreen({ kind: "online", rules, room: null })}
+          onTogether={() =>
+            setScreen({ kind: "online", rules: rules(), room: null })
+          }
+          onOptions={() => setScreen({ kind: "options" })}
+          onAbout={() => setScreen({ kind: "about" })}
           onTutorial={() => setScreen({ kind: "tutorial" })}
           {...(saved
             ? {

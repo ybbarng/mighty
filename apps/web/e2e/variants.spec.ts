@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { startSolo } from "./start";
+
 /**
  * 인원별로 내가 주공이 되는 길로 한 판을 끝까지 두며 장면마다 화면을 찍는다.
  * 2마 고르기, 6·7마 죽이기, 키티 교환, 프렌드, 조커·조커콜 선택지를 모두 지나간다.
@@ -53,10 +55,7 @@ for (const variant of VARIANTS) {
     });
     await prepare(page);
     await page.goto("/");
-    await page
-      .getByRole("button", { name: variant.preset, exact: true })
-      .click();
-    await page.getByRole("button", { name: /^컴퓨터와 \d마$/ }).click();
+    await startSolo(page, variant.preset);
 
     const shots = new Set<string>();
     const shot = async (key: string) => {

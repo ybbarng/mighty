@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { startSolo } from "./start";
+
 /** 스플래시를 건너뛰고 진행을 빠르게 해 둔다 */
 async function prepare(page: Page) {
   await page.addInitScript(() => {
@@ -60,7 +62,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
   await expect(page.getByRole("img", { name: /마이티/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("1-start.png") });
 
-  await page.getByRole("button", { name: "컴퓨터와 5마" }).click();
+  await startSolo(page);
   await expect(page.getByRole("button", { name: "포기" })).toBeVisible({
     timeout: 15_000,
   });
@@ -106,8 +108,7 @@ for (const preset of ["표준 5마", "표준 7마"]) {
   test(`${preset}: 공약 단추가 스크롤 없이 다 보인다`, async ({ page }) => {
     await prepare(page);
     await page.goto("/");
-    await page.getByRole("button", { name: preset, exact: true }).click();
-    await page.getByRole("button", { name: /^컴퓨터와/ }).click();
+    await startSolo(page, preset);
     const bid = page.getByRole("button", { name: /^출마/ });
     await bid.waitFor({ timeout: 20_000 });
     // 눕힌 폰처럼 낮은 화면에서도 패널 안에서 잘리지 않아야 한다.
@@ -124,7 +125,7 @@ test("움직임 줄이기를 켜면 섞고 나눠 주는 연출 없이 바로 �
   await page.emulateMedia({ reducedMotion: "reduce" });
   await prepare(page);
   await page.goto("/");
-  await page.getByRole("button", { name: /^컴퓨터와/ }).click();
+  await startSolo(page);
   // 연출이 있으면 2초 넘게 걸린다.
   await expect(page.getByText("공약을 정하세요")).toBeVisible({
     timeout: 1500,

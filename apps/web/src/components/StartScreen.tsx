@@ -1,64 +1,85 @@
 "use client";
 
-import {
-  decodeRuleString,
-  encodeRuleString,
-  RULE_PRESETS,
-  type RuleSet,
-} from "@mighty/engine";
-import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
-import { useSettings } from "@/game/settings";
+import { chosenRules, ruleLabel, useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
+import { useTutorialProgress } from "@/tutorial/progress";
 
 import { Logo } from "./brand/Logo";
-import { CARD_THEMES } from "./card-art/themes";
 
-import { ActionButton } from "./panels/common";
-import { RuleEditor } from "./rules/RuleEditor";
+function MenuItem({
+  title,
+  detail,
+  onClick,
+  primary = false,
+  icon,
+}: {
+  title: string;
+  detail: string;
+  onClick: () => void;
+  primary?: boolean;
+  icon: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
+        primary
+          ? "border-amber-300 bg-amber-400 text-black hover:bg-amber-300"
+          : "border-white/15 bg-white/5 hover:bg-white/10",
+      )}
+    >
+      <span className="w-7 text-center text-2xl">{icon}</span>
+      <span className="flex flex-1 flex-col">
+        <span className="font-bold text-base">{title}</span>
+        <span className={cn("text-xs", primary ? "opacity-75" : "opacity-60")}>
+          {detail}
+        </span>
+      </span>
+    </button>
+  );
+}
 
-/** 게임 시작 화면: 기본 규칙 고르기, 원작 규칙 문자열 붙여넣기 */
+/**
+ * 첫 화면. 원작처럼 무엇을 할지만 고른다(나홀로·다함께·배우기).
+ * 규칙·카드·컴퓨터 실력은 옵션 화면에 둔다.
+ */
 export function StartScreen({
-  onStart,
-  onOnline,
+  onSolo,
+  onTogether,
   onTutorial,
+  onOptions,
+  onAbout,
   onResume,
 }: {
-  onStart: (rules: RuleSet) => void;
-  /** 친구와 하기: 고른 규칙으로 방을 만든다 */
-  onOnline: (rules: RuleSet) => void;
-  /** 처음 하는 사람을 위한 단원별 배우기 */
+  /** 나홀로 마이티: 컴퓨터와 */
+  onSolo: () => void;
+  /** 다함께 마이티: 방을 만들어 친구를 부른다 */
+  onTogether: () => void;
   onTutorial: () => void;
+  onOptions: () => void;
+  onAbout: () => void;
   /** 저장한 대국이 있을 때만 */
   onResume?: () => void;
 }) {
-  const cardThemeId = useSettings((s) => s.cardThemeId);
-  const botLevel = useSettings((s) => s.botLevel);
-  const setBotLevel = useSettings((s) => s.setBotLevel);
-  const setCardTheme = useSettings((s) => s.setCardTheme);
+  const ruleCode = useSettings((s) => s.ruleCode);
   const customRules = useSettings((s) => s.customRules);
-  const saveCustomRule = useSettings((s) => s.saveCustomRule);
-  const removeCustomRule = useSettings((s) => s.removeCustomRule);
-  // 고른 규칙은 늘 규칙 문자열 하나로 들고 있다. 기본 규칙·내 규칙·자세히 고치기가 모두 이 문자열을 바꾼다.
-  const [ruleText, setRuleText] = useState(RULE_PRESETS[0]?.code ?? "");
-  const [editing, setEditing] = useState(false);
-  const [saveName, setSaveName] = useState("");
-  const decoded = ruleText.trim() ? decodeRuleString(ruleText) : null;
-  const rules = decoded?.ok ? decoded.rules : null;
-  const code = rules ? encodeRuleString(rules) : null;
-  const chip = (selected: boolean) =>
-    cn(
-      "rounded-lg border px-2 py-1.5 text-xs",
-      selected
-        ? "border-amber-300 bg-white text-black"
-        : "border-white/15 bg-white/5",
-    );
+  const botLevel = useSettings((s) => s.botLevel);
+  const learned = useTutorialProgress((s) => s.completed.length);
+  const rules = chosenRules(ruleCode);
+  const rule = ruleLabel(ruleCode, customRules);
+  const level = BOT_LEVELS.find((l) => l.value === botLevel)?.label;
+  // 처음 온 사람에게는 배우기를 먼저 권한다.
+  const newcomer = learned === 0 && !onResume;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
-      <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-white/10 bg-black/40 p-6 shadow-2xl backdrop-blur">
-        <div className="text-center">
+      <div className="flex w-full max-w-sm flex-col gap-3">
+        <div className="mb-2 text-center">
           <h1 className="flex justify-center">
             <Logo size={240} animated />
           </h1>
@@ -67,207 +88,60 @@ export function StartScreen({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onTutorial}
-          className="flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-400/10 px-4 py-3 text-left transition hover:bg-amber-400/20"
-        >
-          <span className="text-2xl">🎓</span>
-          <span className="flex flex-1 flex-col">
-            <span className="font-bold">처음이라면? 마이티 배우기</span>
-            <span className="text-xs opacity-70">
-              용어부터 한 판까지, 단원별로 차근차근
-            </span>
-          </span>
-          <span className="text-amber-300">→</span>
-        </button>
-
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold text-sm">규칙</h2>
-          <div className="grid grid-cols-3 gap-1.5">
-            {RULE_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setRuleText(p.code)}
-                className={chip(p.code === code)}
-              >
-                {p.name}
-              </button>
-            ))}
-            {customRules.map((r) => (
-              <span
-                key={r.name}
-                className={cn(
-                  chip(r.code === code),
-                  "flex items-center justify-between gap-1",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setRuleText(r.code)}
-                  className="truncate"
-                >
-                  {r.name}
-                </button>
-                <button
-                  type="button"
-                  aria-label={`${r.name} 지우기`}
-                  onClick={() => removeCustomRule(r.name)}
-                  className="opacity-50 hover:opacity-100"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <ActionButton
-              variant="secondary"
-              className="flex-1 py-1.5 text-xs"
-              disabled={!rules}
-              onClick={() => setEditing(true)}
-            >
-              규칙 자세히 보기·고치기
-            </ActionButton>
-          </div>
-        </section>
-
-        <section className="flex flex-col gap-1.5">
-          <label htmlFor="rule-string" className="font-semibold text-sm">
-            규칙 문자열 (원작 Mighty Network와 같은 형식)
-          </label>
-          <input
-            id="rule-string"
-            value={ruleText}
-            onChange={(e) => setRuleText(e.target.value)}
-            spellCheck={false}
-            className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 font-mono text-sm"
-          />
-          <p
-            className={cn(
-              "text-xs",
-              decoded && !decoded.ok ? "text-red-300" : "opacity-60",
-            )}
-          >
-            {decoded && !decoded.ok
-              ? decoded.reason
-              : "친구에게 이 문자열을 보내면 같은 규칙으로 할 수 있습니다."}
-          </p>
-          {rules &&
-            ![...RULE_PRESETS, ...customRules].some((r) => r.code === code) && (
-              <div className="flex gap-2">
-                <input
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="이 규칙의 이름 (예: 우리 학교 5마)"
-                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs"
-                />
-                <ActionButton
-                  variant="secondary"
-                  className="px-3 py-1.5 text-xs"
-                  disabled={!saveName.trim() || !code}
-                  onClick={() => {
-                    if (!code) return;
-                    saveCustomRule({ name: saveName.trim(), code });
-                    setSaveName("");
-                  }}
-                >
-                  내 규칙으로 저장
-                </ActionButton>
-              </div>
-            )}
-        </section>
-
-        <section className="flex items-center gap-2">
-          <h2 className="font-semibold text-sm">카드</h2>
-          {CARD_THEMES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setCardTheme(t.id)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs",
-                t.id === cardThemeId
-                  ? "border-amber-300 bg-white text-black"
-                  : "border-white/15 bg-white/5",
-              )}
-            >
-              {t.name}
-            </button>
-          ))}
-          <a href="/cards" className="ml-auto text-xs underline opacity-70">
-            모든 카드 보기
-          </a>
-        </section>
-
-        <section className="flex items-center gap-2">
-          <h2 className="font-semibold text-sm">컴퓨터 실력</h2>
-          {BOT_LEVELS.map((level) => (
-            <button
-              key={level.value}
-              type="button"
-              onClick={() => setBotLevel(level.value)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs",
-                level.value === botLevel
-                  ? "border-amber-300 bg-white text-black"
-                  : "border-white/15 bg-white/5",
-              )}
-            >
-              {level.label}
-            </button>
-          ))}
-          <span className="ml-auto text-xs opacity-60">
-            {botLevel === 2
-              ? "남의 패를 추측해 수를 읽는다"
-              : "정해진 요령대로 둔다"}
-          </span>
-        </section>
-
-        <ActionButton
-          disabled={!rules}
-          className="py-3 text-base"
-          onClick={() => rules && onStart(rules)}
-        >
-          {rules ? `컴퓨터와 ${rules.playerCount}마` : "규칙을 고르세요"}
-        </ActionButton>
-        {rules && (
-          <p className="-mt-3 text-center text-xs opacity-60">
-            나와 컴퓨터 {rules.playerCount - 1}명이 함께합니다
-          </p>
-        )}
-        <ActionButton
-          variant="secondary"
-          disabled={!rules}
-          className="py-3 text-base"
-          onClick={() => rules && onOnline(rules)}
-        >
-          친구와 하기
-        </ActionButton>
-        <p className="-mt-3 text-center text-xs opacity-60">
-          방을 만들어 링크를 보내면 됩니다. 빈자리는 컴퓨터가 채웁니다
-        </p>
         {onResume && (
-          <ActionButton
-            variant="secondary"
-            className="py-3 text-base"
+          <MenuItem
+            primary
+            icon="▶"
+            title="하던 게임 이어하기"
+            detail="멈춘 곳부터 다시 둡니다"
             onClick={onResume}
-          >
-            하던 게임 이어하기
-          </ActionButton>
+          />
         )}
-      </div>
-      {editing && rules && (
-        <RuleEditor
-          initial={rules}
-          onClose={() => setEditing(false)}
-          onApply={(next) => {
-            setRuleText(encodeRuleString(next));
-            setEditing(false);
-          }}
+        <MenuItem
+          primary={!onResume && !newcomer}
+          icon="♠"
+          title="나홀로 마이티"
+          detail={`컴퓨터 ${rules.playerCount - 1}명과 · ${rule} · ${level ?? ""}`}
+          onClick={onSolo}
         />
-      )}
+        <MenuItem
+          icon="👥"
+          title="다함께 마이티"
+          detail="링크로 친구를 부릅니다. 빈자리는 컴퓨터가 앉습니다"
+          onClick={onTogether}
+        />
+        <MenuItem
+          primary={newcomer}
+          icon="🎓"
+          title="마이티 배우기"
+          detail={
+            learned === 0
+              ? "처음이라면 여기부터. 용어부터 한 판까지"
+              : `${learned}단원 마쳤어요`
+          }
+          onClick={onTutorial}
+        />
+
+        <div className="mt-1 flex justify-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={onOptions}
+            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
+          >
+            옵션
+          </button>
+          <button
+            type="button"
+            onClick={onAbout}
+            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
+          >
+            마이티는?
+          </button>
+        </div>
+        <p className="mt-2 text-center text-[11px] opacity-40">
+          © 2019–2026 Bang Yongbae · 원작 규칙 Mighty Network
+        </p>
+      </div>
     </main>
   );
 }
