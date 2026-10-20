@@ -43,6 +43,7 @@ import {
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 import { SettingsMenu } from "./SettingsMenu";
+import { Term, TermProvider } from "./TermHint";
 import { MissionOverlay, type MissionProps } from "./tutorial/MissionOverlay";
 
 function useStageSize() {
@@ -407,407 +408,418 @@ export function GameTable({
   const waiting = waitingText(view, seatName);
 
   return (
-    <div
-      ref={stage.ref}
-      className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]"
-    >
-      {layout && (
-        <>
-          {/* HUD */}
-          <div
-            className="absolute flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-xl bg-black/35 px-3 text-sm"
-            style={{
-              left: layout.hud.x,
-              top: layout.hud.y,
-              width: layout.hud.w,
-              height: layout.hud.h,
-            }}
-          >
-            {view.goal ? (
-              <span
-                className="shrink-0 font-bold text-base"
-                title={kirudaName(view.goal.kiruda)}
-              >
-                {goalLabel(view.goal)}
-              </span>
-            ) : (
-              <span className="shrink-0 opacity-70">공약 전</span>
-            )}
-            <span className="min-w-0 flex-1 truncate opacity-80">
-              {[
-                view.declarer !== null && `주공 ${seatName(view.declarer)}`,
-                view.friendDeclaration &&
-                  `${friendLabel(view.friendDeclaration, seatName)}${
-                    view.friend !== null && view.friendRevealed
+    <TermProvider>
+      <div
+        ref={stage.ref}
+        className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]"
+      >
+        {layout && (
+          <>
+            {/* HUD */}
+            <div
+              className="absolute flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-xl bg-black/35 px-3 text-sm"
+              style={{
+                left: layout.hud.x,
+                top: layout.hud.y,
+                width: layout.hud.w,
+                height: layout.hud.h,
+              }}
+            >
+              {view.goal ? (
+                <Term
+                  id={view.goal.kiruda === "NT" ? "noKiruda" : "goal"}
+                  className="shrink-0 font-bold text-base"
+                >
+                  {goalLabel(view.goal)}
+                </Term>
+              ) : (
+                <span className="shrink-0 opacity-70">공약 전</span>
+              )}
+              <span className="min-w-0 flex-1 truncate opacity-80">
+                {view.declarer !== null && (
+                  <>
+                    <Term id="declarer">주공</Term> {seatName(view.declarer)}
+                  </>
+                )}
+                {view.friendDeclaration && (
+                  <>
+                    {" · "}
+                    <Term id="friend">
+                      {friendLabel(view.friendDeclaration, seatName)}
+                    </Term>
+                    {view.friend !== null && view.friendRevealed
                       ? ` → ${seatName(view.friend)}`
-                      : ""
-                  }`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-            <span
-              className="shrink-0 tabular-nums opacity-80"
-              title="트릭 진행과 아직 나오지 않은 점수 카드 수"
-            >
-              {view.phase === "play"
-                ? compactHud
-                  ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
-                  : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
-                : `${view.roundNumber}판`}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowSettings(true)}
-              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
-            >
-              설정
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowScoreboard(true)}
-              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
-            >
-              점수판
-            </button>
-            <button
-              type="button"
-              onClick={onExit}
-              className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
-            >
-              나가기
-            </button>
-          </div>
-
-          {/* 자리 판 */}
-          {layout.seats.slice(1).map((seatLayout) => {
-            const seat = view.order[
-              (myIndex + seatLayout.offset) % n
-            ] as number;
-            const revealedFriend = view.friend === seat && view.friendRevealed;
-            return (
-              <SeatPlate
-                key={seat}
-                rect={seatLayout.plate}
-                name={seatName(seat)}
-                handCount={view.handCounts[seat] ?? 0}
-                points={view.pointPiles?.[seat] ?? null}
-                pointCount={view.pointCounts[seat] ?? 0}
-                money={view.money[seat] ?? 0}
-                declarer={seat === view.declarer}
-                friend={revealedFriend}
-                ruling={seat === view.declarer || revealedFriend}
-                active={view.turn === seat && view.phase !== "roundEnd"}
-                leader={view.phase === "play" && trick?.leader === seat}
-                dead={view.dead.includes(seat)}
-                bubble={lastBid(seat)}
-                bubbleDim={
-                  view.phase === "election" && view.election.bidder !== seat
-                }
-                compact={layout.orientation === "portrait" && n >= 6}
-              />
-            );
-          })}
-
-          {/* 카드 무대: 손패와 바닥을 한 배열로 그려야 같은 카드가 손패에서 바닥으로 날아간다 */}
-          {dealing && (
-            <DealAnimation
-              key={dealing.key}
-              center={tableCenter}
-              card={layout.trick.card}
-              targets={dealTargets}
-              handSize={dealing.handSize}
-              kittyCount={view.kittyCount}
-              startDelay={dealing.startDelay}
-            />
-          )}
-          {[
-            ...(dealing ? [] : hand).map((card, i) => {
-              const slot = layout.hand.slots[i] as Point;
-              const lifted = discards.includes(card) || selected === card;
-              const canPlay = playable?.has(card) ?? false;
-              return (
-                <PlayingCard
-                  key={card}
-                  card={card}
-                  width={layout.hand.card.w}
-                  height={layout.hand.card.h}
-                  at={{
-                    x: slot.x,
-                    y:
-                      slot.y -
-                      (lifted
-                        ? layout.hand.card.h * 0.2
-                        : acting
-                          ? 0
-                          : -layout.hand.card.h * 0.04),
-                  }}
-                  // 키티는 가운데에서, 처음 받은 패는 나눠 받은 더미(손패 가운데)에서 펼쳐진다.
-                  from={
-                    view.phase === "exchange"
-                      ? { ...tableCenter, scale: 0.6, opacity: 0 }
-                      : { ...myPile, scale: 0.55, opacity: 0.6 }
-                  }
-                  delay={Math.min(i * 25, 300)}
-                  z={10 + i}
-                  dim={
-                    (playable !== null && !canPlay) ||
-                    (!acting && view.phase === "play")
-                  }
-                  highlight={discards.includes(card)}
-                  hint={hintCards.has(card)}
-                  fresh={freshCards?.has(card) ?? false}
-                  interactive={acting && (exchanging || playable !== null)}
-                  onActivate={(pointer) => onCardActivate(card, pointer)}
-                  onHover={(on) =>
-                    setHovered((h) => (on ? card : h === card ? null : h))
-                  }
-                />
-              );
-            }),
-            ...trickPlays.map((play, order) => {
-              const offset = offsetOf(play.seat);
-              const slot = layout.trick.slots[offset] as Point;
-              const target =
-                collecting && shownTrick
-                  ? plateCenter(shownTrick.winner)
-                  : slot;
-              return (
-                <PlayingCard
-                  key={play.card}
-                  card={play.card}
-                  width={layout.trick.card.w}
-                  height={layout.trick.card.h}
-                  at={{
-                    ...target,
-                    scale: collecting ? 0.3 : 1,
-                    opacity: collecting ? 0 : 1,
-                  }}
-                  {...(offset === 0
-                    ? {}
-                    : { from: { ...plateCenter(play.seat), scale: 0.5 } })}
-                  rotate={tilt(play.card)}
-                  z={100 + order}
-                  highlight={
-                    shownTrick !== null &&
-                    !collecting &&
-                    play.seat === shownTrick.winner
-                  }
-                />
-              );
-            }),
-          ]}
-
-          {/* 조커 무늬 같은 짧은 표시 */}
-          {trick?.jokerSuit && trickPlays.length > 0 && (
-            <div
-              className="absolute rounded-full bg-white px-3 py-1 font-bold text-black text-sm shadow"
-              style={{
-                left: layout.center.x + layout.center.w / 2,
-                top: layout.center.y - 8,
-                transform: "translate(-50%,-100%)",
-              }}
-            >
-              조커 → {kirudaName(trick.jokerSuit as Suit)}
-              {trick.jokerCalled ? " · 조커콜" : ""}
-            </div>
-          )}
-          {trick?.jokerCalled && !trick.jokerSuit && trickPlays.length > 0 && (
-            <div
-              className="absolute rounded-full bg-red-500 px-3 py-1 font-bold text-sm shadow"
-              style={{
-                left: layout.center.x + layout.center.w / 2,
-                top: layout.center.y - 8,
-                transform: "translate(-50%,-100%)",
-              }}
-            >
-              조커콜!
-            </div>
-          )}
-
-          {/* 판 가운데 행동 패널 */}
-          {(showPanel || leadChoice) && (
-            <div
-              className="panel-area absolute z-[200] flex items-end justify-center"
-              style={{
-                left: panelArea.left,
-                top: panelArea.top,
-                width: panelArea.width,
-                height: panelArea.bottom - panelArea.top,
-              }}
-            >
-              <div className="flex max-h-full w-full flex-col justify-end">
-                {leadChoice ? (
-                  <LeadChoicePanel
-                    card={leadChoice.card}
-                    kind={leadChoice.kind}
-                    kiruda={kiruda ?? "NT"}
-                    onCancel={() => setLeadChoice(null)}
-                    onChoose={(choice) =>
-                      act({ type: "play", card: leadChoice.card, ...choice })
-                    }
-                  />
-                ) : decision?.kind === "election" ? (
-                  <ElectionPanel
-                    view={view}
-                    decision={decision}
-                    seatName={seatName}
-                    onSubmit={act}
-                  />
-                ) : decision?.kind === "exchange" ? (
-                  <ExchangePanel
-                    decision={decision}
-                    discards={discards}
-                    onSubmit={act}
-                  />
-                ) : decision?.kind === "friend" ? (
-                  <FriendPanel
-                    rules={rules}
-                    kiruda={kiruda ?? "NT"}
-                    decision={decision}
-                    seatName={seatName}
-                    onSubmit={act}
-                  />
-                ) : decision?.kind === "kill" ? (
-                  <KillPanel
-                    decision={decision}
-                    hand={view.hand}
-                    onSubmit={act}
-                  />
-                ) : decision?.kind === "pick" ? (
-                  <PickPanel faceUp={decision.faceUp} onSubmit={act} />
-                ) : (view.phase === "roundEnd" || view.phase === "gameOver") &&
-                  !busy ? (
-                  <RoundResultPanel
-                    view={view}
-                    startMoney={startMoney}
-                    seatName={seatName}
-                    onSubmit={act}
-                    onNewGame={onExit}
-                  />
-                ) : waiting ? (
-                  <p className="text-center text-sm opacity-80">{waiting}</p>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {/* 효과 글자: 당선, 마이티, 조커콜, 프렌드 공개 등 */}
-          {effect && (
-            <div
-              key={seq}
-              className={cn(
-                "pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
-                effect.cards ? "effect-pop-long" : "effect-pop",
-                effect.tone === "gold" &&
-                  "bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950",
-                effect.tone === "red" &&
-                  "bg-gradient-to-b from-rose-400 to-rose-600 text-white",
-                effect.tone === "info" && "bg-black/75 text-white",
-              )}
-              style={{
-                left: tableCenter.x,
-                top: effect.cards
-                  ? tableCenter.y
-                  : showPanel
-                    ? Math.max(
-                        layout.hud.y + layout.hud.h + 24,
-                        panelArea.top - 24,
-                      )
-                    : layout.center.y + layout.center.h * 0.3,
-              }}
-            >
-              {effect.text}
-              {effectCards && (
-                <div className="mt-2 flex justify-center gap-0.5">
-                  {sortHand(effectCards, rules, null).map((card) => (
-                    <div
-                      key={card}
-                      className="aspect-[5/7]"
-                      style={{
-                        width: Math.min(
-                          56,
-                          (stage.width - 64) / effectCards.length - 2,
-                        ),
-                      }}
-                    >
-                      <CardArt card={card} theme={theme} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {showSettings && (
-            <SettingsMenu onClose={() => setShowSettings(false)} />
-          )}
-          {showScoreboard && (
-            <Scoreboard
-              view={view}
-              seatName={seatName}
-              onClose={() => setShowScoreboard(false)}
-            />
-          )}
-
-          {/* 트릭 중간에 내 차례가 오면 손패 위에 알린다 */}
-          {acting && decision?.kind === "play" && !leadChoice && !notice && (
-            <div
-              className="pointer-events-none absolute z-[240] -translate-x-1/2 animate-pulse rounded-full bg-amber-400 px-3 py-1 font-bold text-black text-xs shadow"
-              style={{ left: stage.width / 2, top: layout.hand.top - 30 }}
-            >
-              {decision.leading
-                ? "내가 선입니다 — 낼 카드를 고르세요"
-                : "내 차례 — 낼 카드를 고르세요"}
-            </div>
-          )}
-
-          {mission && (
-            <MissionOverlay
-              mission={mission}
-              top={layout.hud.y + layout.hud.h + 8}
-            />
-          )}
-
-          {hostLeft && (
-            <div className="absolute inset-x-0 top-16 z-[350] mx-auto flex w-fit items-center gap-3 rounded-2xl bg-black/85 px-4 py-3 text-sm shadow-2xl">
-              방장이 방을 나가 게임이 끝났습니다
+                      : ""}
+                  </>
+                )}
+              </span>
+              <span
+                className="shrink-0 tabular-nums opacity-80"
+                title="트릭 진행과 아직 나오지 않은 점수 카드 수"
+              >
+                {view.phase === "play"
+                  ? compactHud
+                    ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
+                    : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}트릭 · 남은 점수 ${20 - pointsTaken}`
+                  : `${view.roundNumber}판`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
+              >
+                설정
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowScoreboard(true)}
+                className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
+              >
+                점수판
+              </button>
               <button
                 type="button"
                 onClick={onExit}
-                className="rounded-lg bg-amber-400 px-3 py-1 font-semibold text-black"
+                className="shrink-0 rounded-lg bg-white/10 px-1.5 py-1 text-xs hover:bg-white/20"
               >
-                처음으로
+                나가기
               </button>
             </div>
-          )}
 
-          {/* 카드 툴팁: 같은 무늬에서 아직 안 나온 더 높은 카드 */}
-          {tipCard && tipSlot && (
-            <div
-              className="pointer-events-none absolute z-[290] -translate-x-1/2 whitespace-nowrap rounded-lg bg-black/85 px-2 py-1 font-semibold text-xs shadow"
-              style={{
-                left: tipSlot.x,
-                top: tipSlot.y - layout.hand.card.h / 2 - 34,
-              }}
-            >
-              {cardTipText(tipCard, rules, kiruda, playedCards)}
-            </div>
-          )}
+            {/* 자리 판 */}
+            {layout.seats.slice(1).map((seatLayout) => {
+              const seat = view.order[
+                (myIndex + seatLayout.offset) % n
+              ] as number;
+              const revealedFriend =
+                view.friend === seat && view.friendRevealed;
+              return (
+                <SeatPlate
+                  key={seat}
+                  rect={seatLayout.plate}
+                  name={seatName(seat)}
+                  handCount={view.handCounts[seat] ?? 0}
+                  points={view.pointPiles?.[seat] ?? null}
+                  pointCount={view.pointCounts[seat] ?? 0}
+                  money={view.money[seat] ?? 0}
+                  declarer={seat === view.declarer}
+                  friend={revealedFriend}
+                  ruling={seat === view.declarer || revealedFriend}
+                  active={view.turn === seat && view.phase !== "roundEnd"}
+                  leader={view.phase === "play" && trick?.leader === seat}
+                  dead={view.dead.includes(seat)}
+                  bubble={lastBid(seat)}
+                  bubbleDim={
+                    view.phase === "election" && view.election.bidder !== seat
+                  }
+                  compact={layout.orientation === "portrait" && n >= 6}
+                />
+              );
+            })}
 
-          {/* 알림 */}
-          {notice && (
-            <div
-              className={cn(
-                "absolute z-[300] -translate-x-1/2 rounded-full bg-black/80 px-4 py-1.5 text-sm shadow",
+            {/* 카드 무대: 손패와 바닥을 한 배열로 그려야 같은 카드가 손패에서 바닥으로 날아간다 */}
+            {dealing && (
+              <DealAnimation
+                key={dealing.key}
+                center={tableCenter}
+                card={layout.trick.card}
+                targets={dealTargets}
+                handSize={dealing.handSize}
+                kittyCount={view.kittyCount}
+                startDelay={dealing.startDelay}
+              />
+            )}
+            {[
+              ...(dealing ? [] : hand).map((card, i) => {
+                const slot = layout.hand.slots[i] as Point;
+                const lifted = discards.includes(card) || selected === card;
+                const canPlay = playable?.has(card) ?? false;
+                return (
+                  <PlayingCard
+                    key={card}
+                    card={card}
+                    width={layout.hand.card.w}
+                    height={layout.hand.card.h}
+                    at={{
+                      x: slot.x,
+                      y:
+                        slot.y -
+                        (lifted
+                          ? layout.hand.card.h * 0.2
+                          : acting
+                            ? 0
+                            : -layout.hand.card.h * 0.04),
+                    }}
+                    // 키티는 가운데에서, 처음 받은 패는 나눠 받은 더미(손패 가운데)에서 펼쳐진다.
+                    from={
+                      view.phase === "exchange"
+                        ? { ...tableCenter, scale: 0.6, opacity: 0 }
+                        : { ...myPile, scale: 0.55, opacity: 0.6 }
+                    }
+                    delay={Math.min(i * 25, 300)}
+                    z={10 + i}
+                    dim={
+                      (playable !== null && !canPlay) ||
+                      (!acting && view.phase === "play")
+                    }
+                    highlight={discards.includes(card)}
+                    hint={hintCards.has(card)}
+                    fresh={freshCards?.has(card) ?? false}
+                    interactive={acting && (exchanging || playable !== null)}
+                    onActivate={(pointer) => onCardActivate(card, pointer)}
+                    onHover={(on) =>
+                      setHovered((h) => (on ? card : h === card ? null : h))
+                    }
+                  />
+                );
+              }),
+              ...trickPlays.map((play, order) => {
+                const offset = offsetOf(play.seat);
+                const slot = layout.trick.slots[offset] as Point;
+                const target =
+                  collecting && shownTrick
+                    ? plateCenter(shownTrick.winner)
+                    : slot;
+                return (
+                  <PlayingCard
+                    key={play.card}
+                    card={play.card}
+                    width={layout.trick.card.w}
+                    height={layout.trick.card.h}
+                    at={{
+                      ...target,
+                      scale: collecting ? 0.3 : 1,
+                      opacity: collecting ? 0 : 1,
+                    }}
+                    {...(offset === 0
+                      ? {}
+                      : { from: { ...plateCenter(play.seat), scale: 0.5 } })}
+                    rotate={tilt(play.card)}
+                    z={100 + order}
+                    highlight={
+                      shownTrick !== null &&
+                      !collecting &&
+                      play.seat === shownTrick.winner
+                    }
+                  />
+                );
+              }),
+            ]}
+
+            {/* 조커 무늬 같은 짧은 표시 */}
+            {trick?.jokerSuit && trickPlays.length > 0 && (
+              <div
+                className="absolute rounded-full bg-white px-3 py-1 font-bold text-black text-sm shadow"
+                style={{
+                  left: layout.center.x + layout.center.w / 2,
+                  top: layout.center.y - 8,
+                  transform: "translate(-50%,-100%)",
+                }}
+              >
+                조커 → {kirudaName(trick.jokerSuit as Suit)}
+                {trick.jokerCalled ? " · 조커콜" : ""}
+              </div>
+            )}
+            {trick?.jokerCalled &&
+              !trick.jokerSuit &&
+              trickPlays.length > 0 && (
+                <div
+                  className="absolute rounded-full bg-red-500 px-3 py-1 font-bold text-sm shadow"
+                  style={{
+                    left: layout.center.x + layout.center.w / 2,
+                    top: layout.center.y - 8,
+                    transform: "translate(-50%,-100%)",
+                  }}
+                >
+                  조커콜!
+                </div>
               )}
-              style={{ left: stage.width / 2, top: layout.hand.top - 36 }}
-            >
-              {notice}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+
+            {/* 판 가운데 행동 패널 */}
+            {(showPanel || leadChoice) && (
+              <div
+                className="panel-area absolute z-[200] flex items-end justify-center"
+                style={{
+                  left: panelArea.left,
+                  top: panelArea.top,
+                  width: panelArea.width,
+                  height: panelArea.bottom - panelArea.top,
+                }}
+              >
+                <div className="flex max-h-full w-full flex-col justify-end">
+                  {leadChoice ? (
+                    <LeadChoicePanel
+                      card={leadChoice.card}
+                      kind={leadChoice.kind}
+                      kiruda={kiruda ?? "NT"}
+                      onCancel={() => setLeadChoice(null)}
+                      onChoose={(choice) =>
+                        act({ type: "play", card: leadChoice.card, ...choice })
+                      }
+                    />
+                  ) : decision?.kind === "election" ? (
+                    <ElectionPanel
+                      view={view}
+                      decision={decision}
+                      seatName={seatName}
+                      onSubmit={act}
+                    />
+                  ) : decision?.kind === "exchange" ? (
+                    <ExchangePanel
+                      decision={decision}
+                      discards={discards}
+                      onSubmit={act}
+                    />
+                  ) : decision?.kind === "friend" ? (
+                    <FriendPanel
+                      rules={rules}
+                      kiruda={kiruda ?? "NT"}
+                      decision={decision}
+                      seatName={seatName}
+                      onSubmit={act}
+                    />
+                  ) : decision?.kind === "kill" ? (
+                    <KillPanel
+                      decision={decision}
+                      hand={view.hand}
+                      onSubmit={act}
+                    />
+                  ) : decision?.kind === "pick" ? (
+                    <PickPanel faceUp={decision.faceUp} onSubmit={act} />
+                  ) : (view.phase === "roundEnd" ||
+                      view.phase === "gameOver") &&
+                    !busy ? (
+                    <RoundResultPanel
+                      view={view}
+                      startMoney={startMoney}
+                      seatName={seatName}
+                      onSubmit={act}
+                      onNewGame={onExit}
+                    />
+                  ) : waiting ? (
+                    <p className="text-center text-sm opacity-80">{waiting}</p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {/* 효과 글자: 당선, 마이티, 조커콜, 프렌드 공개 등 */}
+            {effect && (
+              <div
+                key={seq}
+                className={cn(
+                  "pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
+                  effect.cards ? "effect-pop-long" : "effect-pop",
+                  effect.tone === "gold" &&
+                    "bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950",
+                  effect.tone === "red" &&
+                    "bg-gradient-to-b from-rose-400 to-rose-600 text-white",
+                  effect.tone === "info" && "bg-black/75 text-white",
+                )}
+                style={{
+                  left: tableCenter.x,
+                  top: effect.cards
+                    ? tableCenter.y
+                    : showPanel
+                      ? Math.max(
+                          layout.hud.y + layout.hud.h + 24,
+                          panelArea.top - 24,
+                        )
+                      : layout.center.y + layout.center.h * 0.3,
+                }}
+              >
+                {effect.text}
+                {effectCards && (
+                  <div className="mt-2 flex justify-center gap-0.5">
+                    {sortHand(effectCards, rules, null).map((card) => (
+                      <div
+                        key={card}
+                        className="aspect-[5/7]"
+                        style={{
+                          width: Math.min(
+                            56,
+                            (stage.width - 64) / effectCards.length - 2,
+                          ),
+                        }}
+                      >
+                        <CardArt card={card} theme={theme} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showSettings && (
+              <SettingsMenu onClose={() => setShowSettings(false)} />
+            )}
+            {showScoreboard && (
+              <Scoreboard
+                view={view}
+                seatName={seatName}
+                onClose={() => setShowScoreboard(false)}
+              />
+            )}
+
+            {/* 트릭 중간에 내 차례가 오면 손패 위에 알린다 */}
+            {acting && decision?.kind === "play" && !leadChoice && !notice && (
+              <div
+                className="pointer-events-none absolute z-[240] -translate-x-1/2 animate-pulse rounded-full bg-amber-400 px-3 py-1 font-bold text-black text-xs shadow"
+                style={{ left: stage.width / 2, top: layout.hand.top - 30 }}
+              >
+                {decision.leading
+                  ? "내가 선입니다 — 낼 카드를 고르세요"
+                  : "내 차례 — 낼 카드를 고르세요"}
+              </div>
+            )}
+
+            {mission && (
+              <MissionOverlay
+                mission={mission}
+                top={layout.hud.y + layout.hud.h + 8}
+              />
+            )}
+
+            {hostLeft && (
+              <div className="absolute inset-x-0 top-16 z-[350] mx-auto flex w-fit items-center gap-3 rounded-2xl bg-black/85 px-4 py-3 text-sm shadow-2xl">
+                방장이 방을 나가 게임이 끝났습니다
+                <button
+                  type="button"
+                  onClick={onExit}
+                  className="rounded-lg bg-amber-400 px-3 py-1 font-semibold text-black"
+                >
+                  처음으로
+                </button>
+              </div>
+            )}
+
+            {/* 카드 툴팁: 같은 무늬에서 아직 안 나온 더 높은 카드 */}
+            {tipCard && tipSlot && (
+              <div
+                className="pointer-events-none absolute z-[290] -translate-x-1/2 whitespace-nowrap rounded-lg bg-black/85 px-2 py-1 font-semibold text-xs shadow"
+                style={{
+                  left: tipSlot.x,
+                  top: tipSlot.y - layout.hand.card.h / 2 - 34,
+                }}
+              >
+                {cardTipText(tipCard, rules, kiruda, playedCards)}
+              </div>
+            )}
+
+            {/* 알림 */}
+            {notice && (
+              <div
+                className={cn(
+                  "absolute z-[300] -translate-x-1/2 rounded-full bg-black/80 px-4 py-1.5 text-sm shadow",
+                )}
+                style={{ left: stage.width / 2, top: layout.hand.top - 36 }}
+              >
+                {notice}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </TermProvider>
   );
 }

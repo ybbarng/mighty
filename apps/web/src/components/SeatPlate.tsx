@@ -5,6 +5,8 @@ import { cardLabel } from "@/game/terms";
 import { PLATE_COMPACT_H, type Rect } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 
+import { Term } from "./TermHint";
+
 interface SeatPlateProps {
   rect: Rect;
   name: string;
@@ -49,19 +51,28 @@ export function SeatPlate(props: SeatPlateProps) {
       <div className="flex items-center gap-1">
         <span className="min-w-0 truncate font-semibold">{props.name}</span>
         {props.declarer && (
-          <span className="shrink-0 whitespace-nowrap rounded bg-amber-400 px-1 text-[10px] text-black">
+          <Term
+            id="declarer"
+            className="shrink-0 whitespace-nowrap rounded bg-amber-400 px-1 text-[10px] text-black no-underline"
+          >
             주공
-          </span>
+          </Term>
         )}
         {props.friend && (
-          <span className="shrink-0 whitespace-nowrap rounded bg-sky-300 px-1 text-[10px] text-black">
+          <Term
+            id="friend"
+            className="shrink-0 whitespace-nowrap rounded bg-sky-300 px-1 text-[10px] text-black no-underline"
+          >
             프렌드
-          </span>
+          </Term>
         )}
         {props.leader && (
-          <span className="shrink-0 whitespace-nowrap rounded bg-white/20 px-1 text-[10px]">
+          <Term
+            id="lead"
+            className="shrink-0 whitespace-nowrap rounded bg-white/20 px-1 text-[10px] no-underline"
+          >
             선
-          </span>
+          </Term>
         )}
         <span
           className="ml-auto shrink-0 whitespace-nowrap tabular-nums opacity-80"

@@ -40,7 +40,7 @@ export function ElectionPanel({
     (g) => g.kiruda === suggestion.kiruda && g.score <= target,
   );
   return (
-    <Panel title="공약을 정하세요">
+    <Panel title="공약을 정하세요" term="goal">
       <p className="text-center text-sm opacity-80">
         {current && view.election.bidder !== null
           ? `지금 최고: ${seatName(view.election.bidder)} ${goalLabel(current)}`

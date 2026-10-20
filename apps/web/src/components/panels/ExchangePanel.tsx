@@ -29,7 +29,7 @@ export function ExchangePanel({
   const ready = discards.length === decision.discardCount;
 
   return (
-    <Panel title="당선을 축하합니다">
+    <Panel title="당선을 축하합니다" term="kitty">
       <p className="text-center text-sm">
         손패에서 버릴 카드 <b>{decision.discardCount}장</b>을 누르세요 (
         {discards.length}/{decision.discardCount})

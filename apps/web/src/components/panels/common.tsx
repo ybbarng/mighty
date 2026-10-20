@@ -13,16 +13,24 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { isRedSuit, kirudaName, kirudaSymbol, SUIT_SYMBOL } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
+import { TermQuestion } from "../TermHint";
+
 export function Panel({
   title,
+  term,
   children,
 }: {
   title: string;
+  /** 제목 옆 "?"를 누르면 이 용어의 뜻을 보여 준다 */
+  term?: string;
   children: ReactNode;
 }) {
   return (
     <div className="panel flex max-h-full min-h-0 w-full flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-white/15 bg-black/70 p-4 shadow-2xl backdrop-blur">
-      <h2 className="text-center font-bold text-base">{title}</h2>
+      <h2 className="text-center font-bold text-base">
+        {title}
+        {term && <TermQuestion id={term} />}
+      </h2>
       {children}
     </div>
   );

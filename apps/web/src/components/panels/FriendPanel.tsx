@@ -60,7 +60,7 @@ export function FriendPanel({
   const valid = decision.options.some((o) => sameFriend(o, choice));
 
   return (
-    <Panel title="프렌드를 정하세요">
+    <Panel title="프렌드를 정하세요" term="friend">
       <div className="flex flex-wrap justify-center gap-1.5">
         {quick.map((q) => (
           <button
