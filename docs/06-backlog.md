@@ -5,7 +5,9 @@
 ## 정해야 할 것
 
 - [x] `revival`을 합치고 기본 브랜치를 `main`으로 바꾸기. CI는 `main` push와 PR에서 돈다
-- [ ] 배포할 곳: GitHub Pages / Cloudflare Pages / Vercel (모두 정적 내보내기로 가능)
+- [ ] 배포: 도메인은 `mighty.byb.kr`(사용자 운영). 운영 환경(직접 서버 / Cloudflare 등)을 정하면 배포 설정을 만든다. 정적 빌드(`apps/web/out`)만 올리면 된다
+- [ ] 방 중개를 직접 할지: 같은 서버에 Nostr 릴레이(strfry 등) 하나를 두고 `NEXT_PUBLIC_RELAY_URLS`로 주소를 받게 한다(공개 릴레이는 예비). 부하는 연결할 때 수 KB뿐이라 아주 작다. 공개 방 목록이 필요해지면 작은 WebSocket 중개 서버로. 방화벽 대비 TURN(coturn)도 같이 검토
+- [ ] 학교 규칙 리뷰(사용자): 2019년 코드에서 읽은 추정 — 기루다 ♣일 때 조커콜 ♥3, 첫·막 트릭 조커는 낼 수 있지만 효력 없음, 조커콜에 마이티로 대신 내기 허용, 선거 중 노기루다는 같은 숫자면 이김, 다음 판 선은 프렌드. 확정되면 내 규칙/기본 규칙으로 넣는다
 - [ ] `legacy/` 폴더를 지울 시점. 저장소를 공개하기 전에는 원작 효과음이 들어 있는 `legacy/src/components/Sound/resources/`를 반드시 빼야 한다
 - [ ] 원작과 다르게 정한 6가지([04-original-game-flow.md](./04-original-game-flow.md) 14.4절)를 이대로 둘지
 
