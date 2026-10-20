@@ -13,6 +13,8 @@ export type EffectTone = "gold" | "red" | "info";
 export interface Effect {
   text: string;
   tone: EffectTone;
+  /** 함께 보여 줄 카드(딜미스한 사람의 패) */
+  cards?: Card[];
 }
 
 /** 짧게 띄울 효과 글자. 한 스냅숏에서 가장 눈에 띄어야 할 것 하나만 고른다 */
@@ -30,6 +32,7 @@ export function effectFor(
         return {
           text: `${seatName(event.seat)} 딜미스! 다시 섞습니다`,
           tone: "red",
+          cards: event.hand,
         };
       case "allPassed":
         return { text: "모두 포기 — 다시 섞습니다", tone: "info" };

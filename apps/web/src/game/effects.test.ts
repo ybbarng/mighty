@@ -20,6 +20,24 @@ function effect(...events: GameEvent[]) {
 }
 
 describe("효과 글자", () => {
+  it("딜미스는 그 사람의 패를 함께 보여 준다", () => {
+    const hand = [
+      "S2",
+      "S3",
+      "H4",
+      "H5",
+      "D6",
+      "D7",
+      "C8",
+      "C9",
+      "S9",
+      "H2",
+    ] as const;
+    const shown = effect({ type: "dealMiss", seat: 3, hand: [...hand] });
+    expect(shown?.text).toBe("P3 딜미스! 다시 섞습니다");
+    expect(shown?.cards).toEqual(hand);
+  });
+
   it("기루다가 ♠이면 ◆A가 마이티다", () => {
     expect(
       effect({

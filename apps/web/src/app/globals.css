@@ -108,6 +108,11 @@ button {
   }
 }
 
+/* 딜미스처럼 카드를 함께 보여 줄 때는 더 오래 머문다 */
+.effect-pop-long {
+  animation: effect-pop 2.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 /* 나타난 뒤 그대로 머무는 안내 상자 */
 .pop-in {
   animation: pop-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -145,6 +150,7 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .effect-pop,
+  .effect-pop-long,
   .pop-in,
   .hint-glow {
     animation-name: none;

@@ -15,7 +15,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { effectFor } from "@/game/effects";
-import { useSettings } from "@/game/settings";
+import { useCardTheme, useSettings } from "@/game/settings";
 import { play as playCue } from "@/game/sound";
 import { canAct, useGame } from "@/game/store";
 import {
@@ -27,6 +27,7 @@ import {
 } from "@/game/terms";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
+import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
@@ -103,6 +104,7 @@ export function GameTable({
   hints?: boolean;
 }) {
   const stage = useStageSize();
+  const theme = useCardTheme();
   const view = useGame((s) => s.view);
   const shownTrick = useGame((s) => s.shownTrick);
   const collecting = useGame((s) => s.collecting);
@@ -301,6 +303,7 @@ export function GameTable({
   };
 
   const effect = effectFor(view, events, seatName);
+  const effectCards = effect?.cards ?? null;
 
   const lastBid = (seat: number): string | null => {
     if (view.phase !== "election") return null;
@@ -675,7 +678,8 @@ export function GameTable({
             <div
               key={seq}
               className={cn(
-                "effect-pop pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
+                "pointer-events-none absolute z-[250] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl px-5 py-2 font-black text-2xl shadow-2xl",
+                effect.cards ? "effect-pop-long" : "effect-pop",
                 effect.tone === "gold" &&
                   "bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950",
                 effect.tone === "red" &&
@@ -684,15 +688,35 @@ export function GameTable({
               )}
               style={{
                 left: tableCenter.x,
-                top: showPanel
-                  ? Math.max(
-                      layout.hud.y + layout.hud.h + 24,
-                      panelArea.top - 24,
-                    )
-                  : layout.center.y + layout.center.h * 0.3,
+                top: effect.cards
+                  ? tableCenter.y
+                  : showPanel
+                    ? Math.max(
+                        layout.hud.y + layout.hud.h + 24,
+                        panelArea.top - 24,
+                      )
+                    : layout.center.y + layout.center.h * 0.3,
               }}
             >
               {effect.text}
+              {effectCards && (
+                <div className="mt-2 flex justify-center gap-0.5">
+                  {sortHand(effectCards, rules, null).map((card) => (
+                    <div
+                      key={card}
+                      className="aspect-[5/7]"
+                      style={{
+                        width: Math.min(
+                          56,
+                          (stage.width - 64) / effectCards.length - 2,
+                        ),
+                      }}
+                    >
+                      <CardArt card={card} theme={theme} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

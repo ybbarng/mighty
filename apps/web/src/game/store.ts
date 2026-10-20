@@ -27,7 +27,8 @@ const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
   picked: 250,
   bid: 550,
   passed: 450,
-  dealMiss: 1600,
+  // 딜미스한 사람의 패를 보여 주므로 오래 머문다.
+  dealMiss: 2800,
   allPassed: 1200,
   elected: 1000,
   killAttempt: 900,

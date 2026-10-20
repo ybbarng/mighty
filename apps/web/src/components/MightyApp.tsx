@@ -87,7 +87,14 @@ export function MightyApp() {
         <Splash />
         <StartScreen
           onStart={(rules) => {
-            newGame({ rules });
+            // 주소에 ?seed=숫자 가 있으면 같은 패로 시작한다(버그 재현용).
+            const seed = Number(
+              new URLSearchParams(window.location.search).get("seed"),
+            );
+            newGame({
+              rules,
+              ...(Number.isInteger(seed) && seed > 0 ? { seed } : {}),
+            });
             setScreen({ kind: "playing" });
           }}
           onOnline={(rules) => setScreen({ kind: "online", rules, room: null })}
