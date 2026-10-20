@@ -165,7 +165,19 @@ export function GameTable({
   const phaseKey = `${view?.roundNumber}-${view?.phase}-${view?.trickIndex}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: 단계가 바뀔 때만 비운다
   useEffect(() => {
-    setDiscards([]);
+    // 원작처럼 바닥 카드에서 들어온 카드는 처음부터 버릴 카드로 골라 들어 올려 둔다.
+    const before = beforeKitty.current;
+    const decision = view?.decision;
+    if (
+      view?.phase === "exchange" &&
+      decision?.kind === "exchange" &&
+      before?.round === view.roundNumber
+    ) {
+      const fresh = view.hand.filter((c) => !before.hand.includes(c));
+      setDiscards(fresh.length === decision.discardCount ? fresh : []);
+    } else {
+      setDiscards([]);
+    }
     setSelected(null);
     setLeadChoice(null);
   }, [phaseKey]);
@@ -641,7 +653,11 @@ export function GameTable({
                     }
                     highlight={discards.includes(card)}
                     hint={hintCards.has(card)}
-                    fresh={freshCards?.has(card) ?? false}
+                    // 들어 올린 채면 표가 필요 없고, 내려놓았을 때만 바닥에서 온 카드임을 알린다.
+                    fresh={
+                      (freshCards?.has(card) ?? false) &&
+                      !discards.includes(card)
+                    }
                     interactive={acting && (exchanging || playable !== null)}
                     onActivate={(pointer) => onCardActivate(card, pointer)}
                     onHover={(on) =>
