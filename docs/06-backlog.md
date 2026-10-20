@@ -5,10 +5,10 @@
 ## 정해야 할 것
 
 - [x] `revival`을 합치고 기본 브랜치를 `main`으로 바꾸기. CI는 `main` push와 PR에서 돈다
-- [x] 배포 준비: `deploy/`에 Traefik 라벨을 단 Docker Compose(nginx 정적 사이트 + nostr-rs-relay), 설명은 [deploy/README.md](../deploy/README.md)
-- [ ] 배포: `mighty.byb.kr`(사용자 개인 서버). 서버를 nginx에서 Traefik으로 바꾸는 중이라 그 뒤에 한다. 이미지 빌드는 아직 실제로 해 보지 않았다
+- [x] 배포 준비: byb.kr 서버 규칙대로 `Dockerfile`(정적 빌드 → nginx)과 `.github/workflows/image.yml`(빌드 → GHCR → SSH 배포). 서버 쪽 compose 초안은 [deploy/README.md](../deploy/README.md)
+- [ ] 배포: servers 저장소에 `byb.kr/apps/mighty/`(compose.yaml, deploy.sh), 서버에 배포 키, 이 저장소에 시크릿(`SERVER_HOST`·`SERVER_USER`·`SERVER_SSH_KEY`)
 - [x] 방 중개: 같은 서버의 Nostr 릴레이를 `NEXT_PUBLIC_RELAY_URLS`(빌드 때)로 받아 먼저 쓰고, 공개 릴레이 두 곳을 예비로 쓴다
-- [x] 방화벽 대비 TURN(coturn) 준비(deploy/turnserver.conf). 실제 확인은 배포 때
+- [ ] 방화벽 대비 TURN: 설정 초안(deploy/turnserver.conf)과 앱 쪽 빌드 값은 있다. UDP 포트를 열어야 해서 서버 규칙("포트를 열지 않는다")과 맞지 않아 보류
 - [ ] 공개 방 목록이 필요해지면 작은 WebSocket 중개 서버
 - [x] 학교 규칙 "관악컴반" `(0$1M&I9BOU-C5%`: 표준 5마 + 06학번 선배 글의 "컴반에서는" 8가지(노기 12부터·노기로 바꿀 때 +1, 다음 판 선 프렌드, 조커콜에 마이티 대신, 딜미스 마이티 0·조커 −1, 10 한 장 아님, 애꾸눈 J 한 장 딜미스). 조커콜 대체는 기본 ♠3(2026-10-20)
 - [ ] 관악컴반에서 사용자가 더 정할 수 있는 것([08-school-rules.md](./08-school-rules.md) 7절): 사용자가 기억한 문자열 `(0$1M&IYb]5,C55`에만 있는 노기 같은 숫자면 이김, 첫·막 트릭 조커 낼 수는 있음(효력 없음), 첫 트릭 선 기루다 허용, 판마다 자리 섞기
@@ -117,7 +117,7 @@
 - [x] 온라인: 채팅(대기실·게임 중, 자주 쓰는 말·이모지, 자리 판 말풍선, 안 읽은 수). 방장이 이름을 붙여 다시 보내고 0.5초 안에 또 말하면 버린다
 - [ ] 온라인: 대기실에서 내 규칙·자세히 고치기
 - [ ] 온라인: 방장이 나가면 다른 사람이 이어받기(방장 이전)
-- [x] 온라인: 직접 연결이 막힌 네트워크 대비 TURN(coturn, deploy/compose.yaml). 계정은 빌드 값, 서버에서 사용량 제한. 실제 서버에서 확인은 배포 때
+- [ ] 온라인: 직접 연결이 막힌 네트워크 대비 TURN — 앱은 빌드 값이 있으면 쓴다. 서버 쪽은 보류(위 "정해야 할 것")
 - [ ] 온라인: 연결이 불안정할 때 재연결 안내
   - [x] 공정한 섞기: 약속(해시)을 먼저 모두 알리고 비밀 값은 방장에게만, 공개는 게임 끝에
   - [x] 게임 끝 검증: 공개된 값과 기록으로 참가자가 시드와 진행을 다시 계산해 확인한다

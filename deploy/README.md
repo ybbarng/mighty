@@ -1,49 +1,85 @@
 # 배포 (mighty.byb.kr)
 
-개인 서버의 Traefik 뒤에 컨테이너 세 개를 붙인다(TURN은 Traefik을 거치지 않는다).
+byb.kr 서버의 규칙(`servers` 저장소 `byb.kr/apps/README.md`)을 따른다. 이미지는 GitHub Actions 가 빌드해 GHCR 에 올리고,
+서버는 받아서 띄우기만 한다. 서버에서는 빌드하지 않는다.
 
-| 컨테이너 | 하는 일 | 주소 |
-|---|---|---|
-| `web` | 정적 사이트(nginx) | `https://mighty.byb.kr` |
-| `relay` | 온라인 대전 시그널링용 Nostr 릴레이(nostr-rs-relay) | `wss://mighty.byb.kr/relay` |
-| `turn` | 직접 연결이 막힌 네트워크용 TURN 중계(coturn). Traefik을 거치지 않는다 | `turn:mighty.byb.kr:3478` |
+## 나누는 일
 
-게임 진행은 기기끼리 WebRTC로 바로 주고받는다. 릴레이는 서로를 찾을 때 몇 KB만 거친다.
-앱은 이 릴레이를 먼저 쓰고, 공개 릴레이 두 곳을 예비로 함께 쓴다(`apps/web/src/net/p2p-transport.ts`).
+| 어디 | 무엇 |
+|---|---|
+| **이 저장소** | `Dockerfile`(정적 빌드 → nginx), `.github/workflows/image.yml`(빌드 → `ghcr.io/ybbarng/mighty` → SSH 로 `deploy <sha>`/`test <sha>`), `deploy/nginx.conf` |
+| **servers 저장소 `byb.kr/apps/mighty/`** | `compose.yaml`, `deploy.sh`(wine 의 것을 본떠 이름·헬스체크만 바꾼다) |
+| **서버에만** | `~/data/mighty/relay/`(릴레이를 띄우면), `~/.ssh/authorized_keys` 의 배포 키 한 줄 |
 
-## 처음 올릴 때
+정적 사이트라 DB·배포 전 단계(`ops/release.sh`)·도구 이미지가 없다. 헬스체크 주소는 `/healthz`(늘 200).
 
-1. 서버의 Traefik 설정에 맞춰 `deploy/.env`를 만든다. 기본값과 같으면 만들지 않아도 된다.
+## 이 저장소의 GitHub 설정
 
-   ```sh
-   MIGHTY_HOST=mighty.byb.kr
-   TRAEFIK_NETWORK=traefik          # Traefik 컨테이너가 붙은 외부 네트워크
-   TRAEFIK_ENTRYPOINT=websecure     # 443 진입점 이름
-   TRAEFIK_CERT_RESOLVER=letsencrypt
-   TURN_USERNAME=mighty
-   TURN_PASSWORD=길고-무작위인-값      # 웹 번들에 들어가므로 다른 곳에 쓰는 비밀번호는 쓰지 않는다
-   TURN_EXTERNAL_IP=서버의-공인-IP
-   ```
+- 시크릿: `SERVER_HOST`(byb.kr), `SERVER_USER`(ybbarng), `SERVER_SSH_KEY`(mighty 전용 배포 키의 개인키). 시크릿이 없으면 이미지만 올리고 배포는 건너뛴다.
+- 변수(선택): `RELAY_URLS` — 직접 운영하는 Nostr 릴레이 주소(예: `wss://mighty.byb.kr/relay`). 없으면 공개 릴레이만 쓴다. 정적 빌드라 바꾸면 다시 빌드해야 한다.
 
-   방화벽에서 3478(UDP·TCP)과 49160–49200(UDP)을 연다.
+## servers 저장소에 둘 compose.yaml 초안
 
-2. `deploy/compose.yaml`의 릴레이 이미지 태그를 그때 확인한 버전으로 고정한다.
-3. 올린다.
+```yaml
+# mighty.byb.kr — 이미지는 ybbarng/mighty 의 GitHub Actions 가 GHCR 에 올린다. 배포는 deploy.sh.
+services:
+  mighty:
+    image: ghcr.io/ybbarng/mighty:${MIGHTY_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 32m
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    networks: [web]
+    labels:
+      - traefik.enable=${MIGHTY_TRAEFIK:-true} # 시험 판(deploy.sh test)은 false
+      - traefik.http.routers.mighty-secure.rule=Host(`mighty.byb.kr`)
+      - traefik.http.routers.mighty-secure.entrypoints=websecure
+      - traefik.http.routers.mighty-secure.tls.certresolver=le
+      - traefik.http.services.mighty.loadbalancer.server.port=80
 
-   ```sh
-   docker compose -f deploy/compose.yaml up -d --build
-   ```
+  # (선택) 온라인 대전의 연결 중개용 Nostr 릴레이. 연결할 때 몇 KB만 오간다.
+  # 띄우면 이 저장소의 변수 RELAY_URLS 를 wss://mighty.byb.kr/relay 로 정한다.
+  relay:
+    image: scsibug/nostr-rs-relay:<확인한 버전>
+    restart: unless-stopped
+    user: "1000:1000"
+    mem_limit: 64m
+    volumes:
+      - ./relay.toml:/usr/src/app/config.toml:ro # 이 저장소 deploy/relay.toml 을 옮겨 둔다
+      - /home/ybbarng/data/mighty/relay:/usr/src/app/db
+    networks: [web]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mighty-relay-secure.rule=Host(`mighty.byb.kr`) && PathPrefix(`/relay`)
+      - traefik.http.routers.mighty-relay-secure.entrypoints=websecure
+      - traefik.http.routers.mighty-relay-secure.tls.certresolver=le
+      - traefik.http.routers.mighty-relay-secure.middlewares=mighty-relay-strip
+      - traefik.http.middlewares.mighty-relay-strip.stripprefix.prefixes=/relay
+      - traefik.http.services.mighty-relay.loadbalancer.server.port=8080
+
+networks:
+  web:
+    external: true
+```
+
+`deploy.sh` 는 wine 의 것에서 DB 백업·`tools` 단계를 빼고, 헬스체크를 이렇게 바꾼다(nginx alpine 에는 busybox wget 이 있다):
+
+```sh
+CODE=$(docker compose exec -T mighty wget -qO /dev/null -S http://127.0.0.1/healthz 2>&1 | awk '/HTTP\//{print $2; exit}' || echo 000)
+```
+
+## TURN 은 아직 하지 않는다
+
+직접 연결이 막힌 네트워크용 TURN(`deploy/turnserver.conf`)은 UDP 포트를 열어야 해서 서버 규칙("포트를 열지 않는다")과 맞지 않는다.
+앱은 빌드 값 `NEXT_PUBLIC_TURN_URLS`·`_USERNAME`·`_CREDENTIAL` 이 있을 때만 TURN 을 쓰므로, 지금은 넣지 않는다.
+필요해지면 서버 쪽에서 방식을 정한다.
 
 ## 확인
 
-- `https://mighty.byb.kr` 첫 화면, `/cards` 카드 모음이 열린다.
+- `https://mighty.byb.kr` 첫 화면, `/cards` 카드 모음, `/healthz` 가 열린다.
 - 홈 화면에 추가했을 때 아이콘과 이름이 나온다(`manifest.webmanifest`).
 - 휴대폰 두 대(다른 네트워크)로 방을 만들고 들어가 한 판을 끝까지 둔다. 끝에 "공정성 확인" 문구가 나온다.
-- 릴레이: 브라우저 개발자 도구의 네트워크 탭에서 `wss://mighty.byb.kr/relay` 연결이 열려 있다.
-- TURN: 한 기기를 휴대폰 데이터, 다른 기기를 회사 와이파이처럼 서로 다른 망에 두고 방에 들어간다. 또는 [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/)에 `turn:mighty.byb.kr:3478`과 계정을 넣어 `relay` 후보가 나오는지 본다.
-
-## 아직 안 한 것
-
-- 실제 서버에서 이미지를 빌드해 본 적이 없다(작성할 때 로컬 Docker 데몬이 꺼져 있었다).
-- TURN 계정은 정적 사이트라 웹 번들에 들어간다. 누구나 빼내 쓸 수 있으므로 `turnserver.conf`에서 동시 중계 수와 대역폭을 낮게 제한했다. 남용이 보이면 시간 제한 계정을 발급하는 작은 서버(coturn REST API 방식)로 바꾼다.
-- TLS(`turns:` 443)는 아직 없다. 443만 열린 아주 엄격한 망에서는 연결되지 않을 수 있다.
+- 릴레이를 띄웠다면 브라우저 개발자 도구의 네트워크 탭에서 `wss://mighty.byb.kr/relay` 연결이 열려 있다.
