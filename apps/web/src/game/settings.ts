@@ -25,6 +25,9 @@ interface Settings {
   /** 재생 속도 배율. 클수록 빠르다 */
   speed: number;
   setSpeed(speed: number): void;
+  /** 효과음 */
+  sound: boolean;
+  setSound(on: boolean): void;
   customRules: CustomRule[];
   setCardTheme(id: string): void;
   saveCustomRule(rule: CustomRule): void;
@@ -38,6 +41,8 @@ export const useSettings = create<Settings>()(
       cardThemeId: CLASSIC.id,
       speed: 1,
       setSpeed: (speed) => set({ speed }),
+      sound: true,
+      setSound: (sound) => set({ sound }),
       customRules: [],
       setCardTheme: (id) => set({ cardThemeId: id }),
       // 같은 이름이면 덮어쓴다.

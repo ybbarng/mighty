@@ -8,11 +8,12 @@ import type {
 } from "@mighty/engine";
 import { isJoker, mightyOf } from "@mighty/engine";
 import { create } from "zustand";
-
+import { cuesFor } from "./cues";
 import type { Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
+import { play as playCue } from "./sound";
 import { dealTiming } from "./timing";
 
 /** 이벤트마다 화면이 머무는 시간(ms). docs/05-layout.md 3.9절 */
@@ -107,6 +108,10 @@ export const useGame = create<GameStore>((set, get) => {
       busy: true,
       ...(started ? { roundStartMoney: [...next.view.money] } : {}),
     });
+
+    if (useSettings.getState().sound) {
+      for (const cue of cuesFor(next.view, next.events)) playCue(cue);
+    }
 
     const dealt = next.events.find((e) => e.type === "dealt");
     if (dealt && next.view.rules.playerCount !== 2) {

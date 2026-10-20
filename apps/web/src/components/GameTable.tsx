@@ -13,6 +13,8 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { effectFor } from "@/game/effects";
+import { useSettings } from "@/game/settings";
+import { play as playCue } from "@/game/sound";
 import { canAct, useGame } from "@/game/store";
 import {
   friendLabel,
@@ -212,6 +214,7 @@ export function GameTable({ onExit }: { onExit: () => void }) {
       useGame.setState({
         notice: reason ? unplayableText(reason) : "지금 낼 수 없는 카드입니다",
       });
+      if (useSettings.getState().sound) playCue("invalid");
       return;
     }
     // 터치는 두 단계: 골라서 들어 올린 뒤 다시 눌러 낸다.

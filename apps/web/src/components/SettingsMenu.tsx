@@ -39,6 +39,8 @@ function Chips<T extends string | number>({
 export function SettingsMenu({ onClose }: { onClose: () => void }) {
   const speed = useSettings((s) => s.speed);
   const setSpeed = useSettings((s) => s.setSpeed);
+  const sound = useSettings((s) => s.sound);
+  const setSound = useSettings((s) => s.setSound);
   const cardThemeId = useSettings((s) => s.cardThemeId);
   const setCardTheme = useSettings((s) => s.setCardTheme);
   return (
@@ -50,6 +52,17 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col gap-1.5">
           <span className="text-xs opacity-70">진행 속도</span>
           <Chips options={SPEEDS} value={speed} onChange={setSpeed} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs opacity-70">효과음</span>
+          <Chips
+            options={[
+              { value: "on", label: "켜기" },
+              { value: "off", label: "끄기" },
+            ]}
+            value={sound ? "on" : "off"}
+            onChange={(v) => setSound(v === "on")}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs opacity-70">카드</span>
