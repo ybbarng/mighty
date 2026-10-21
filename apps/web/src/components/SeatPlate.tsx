@@ -22,6 +22,10 @@ interface SeatPlateProps {
   dead: boolean;
   /** 온라인 대전에서 연결이 끊겨 컴퓨터가 대신 두는 중 */
   offline?: boolean;
+  /** 멘탈 포커 판: 컴퓨터가 대신할 수 없어 돌아오기를 기다린다 */
+  waiting?: boolean;
+  /** 내 기기가 이 자리의 부정을 찾았다 */
+  accused?: boolean;
   bubble: string | null;
   /** 포기했거나 다른 사람에게 밀린 공약 */
   bubbleDim?: boolean;
@@ -47,6 +51,8 @@ export function SeatPlate(props: SeatPlateProps) {
         props.active &&
           "shadow-[0_0_0_2px_#fde68a,0_0_20px_2px_rgba(253,230,138,0.55)]",
         props.dead && "opacity-40",
+        props.accused &&
+          "border-rose-400 shadow-[0_0_0_2px_#fb7185,0_0_22px_4px_rgba(244,63,94,0.6)]",
       )}
       // 손패 뒷면(z 1~13)보다 위, 카드 무대(손패 10~, 바닥 100~)와는 겹치지 않는다.
       style={{
@@ -92,13 +98,28 @@ export function SeatPlate(props: SeatPlateProps) {
           {props.dead ? "탈락" : `${props.handCount}장`}
         </span>
       </div>
-      {props.offline && (
+      {props.accused ? (
         <div
-          className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-[10px] shadow"
-          title="연결이 끊겨 컴퓨터가 대신 둡니다"
+          className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-bold text-[10px] shadow"
+          title="이 자리에서 규칙 위반이나 조작을 찾았습니다"
         >
-          연결 끊김 · 컴퓨터가 대신
+          ⚠ 부정 감지
         </div>
+      ) : (
+        props.offline && (
+          <div
+            className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-[10px] shadow"
+            title={
+              props.waiting
+                ? "연결이 끊겼습니다. 이 사람 카드는 이 사람만 열 수 있어 돌아오기를 기다립니다"
+                : "연결이 끊겨 컴퓨터가 대신 둡니다"
+            }
+          >
+            {props.waiting
+              ? "연결 끊김 · 기다리는 중"
+              : "연결 끊김 · 컴퓨터가 대신"}
+          </div>
+        )
       )}
       {compact ? (
         <div className="flex items-center justify-between text-[10px] tabular-nums opacity-70">

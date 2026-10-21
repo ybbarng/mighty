@@ -9,7 +9,7 @@ import {
 import { isToken } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
 
-import { type AuditResult, GuestRoom } from "./guest-room";
+import { type AuditResult, type FairSaved, GuestRoom } from "./guest-room";
 import { HostRoom, type IncidentNotice } from "./host-room";
 import { MemoryNetwork } from "./transport";
 
@@ -22,6 +22,17 @@ async function until(condition: () => boolean, ms = 60_000): Promise<void> {
       throw new Error("조건을 기다리다 시간이 지났다");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+/** 참가자 브라우저 저장소(새로고침해도 남는다) */
+function memoryStore() {
+  let saved: FairSaved | null = null;
+  return {
+    load: () => saved,
+    save: (s: FairSaved) => {
+      saved = JSON.parse(JSON.stringify(s));
+    },
+  };
 }
 
 async function setup(rules: RuleSet, guestCount: number) {
@@ -41,6 +52,7 @@ async function setup(rules: RuleSet, guestCount: number) {
       transport: net.join(`g${i}`),
       name: `손님${i}`,
       token: null,
+      fairStore: memoryStore(),
     });
     await until(() => guest.seat !== null);
     guests.push(guest);
@@ -72,10 +84,14 @@ async function playRounds(
   match.subscribe((snapshot) => {
     if (snapshot.events.some((e) => e.type === "roundScored")) scored++;
   });
+  // 거절되면(예: 낸 직후 새로고침해 열쇠가 가지 못함) 사람처럼 다시 낸다.
+  const offs = guests.map((g, i) =>
+    g.on("rejected", () => submitted.delete(`g${i}`)),
+  );
   match.drain();
   while (scored < rounds) {
     if (Date.now() - start > 120_000) throw new Error("판이 끝나지 않는다");
-    if (incidents.length > 0) return scored;
+    if (incidents.length > 0) break;
     const hostView = match.current();
     if (hostView.phase === "gameOver") break;
     const act = (
@@ -107,6 +123,7 @@ async function playRounds(
     }
     await new Promise((resolve) => setTimeout(resolve, 2));
   }
+  for (const off of offs) off();
   return scored;
 }
 
@@ -162,6 +179,63 @@ describe("멘탈 포커 온라인 대전", () => {
     },
     180_000,
   );
+
+  it("판 중간에 참가자가 새로고침해도 남겨 둔 열쇠로 같은 자리에서 이어 가고, 검증도 통과한다", async () => {
+    const { net, host, guests, incidents } = await setup(
+      presetRules("standard5"),
+      2,
+    );
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    // 판을 조금 진행한다.
+    const match = host.match;
+    for (let i = 0; i < 400 && (match?.actionLog().length ?? 0) < 12; i++) {
+      const views: [string, PlayerView | undefined, (a: never) => void][] = [
+        ["h", match?.current(), (a) => match?.submit(a)],
+        ...guests.map(
+          (g, k) =>
+            [`g${k}`, g.match?.current(), (a: never) => g.match?.submit(a)] as [
+              string,
+              PlayerView | undefined,
+              (a: never) => void,
+            ],
+        ),
+      ];
+      for (const [, view, submit] of views)
+        if (view?.decision)
+          submit(heuristicBot.decide(view, { seed: 3 }) as never);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const old = guests[0] as GuestRoom;
+    const store = (
+      old as unknown as { fairStore: ReturnType<typeof memoryStore> }
+    ).fairStore;
+    const token = old.token;
+    const secret = old.secret;
+    // 새로고침: 연결이 끊기고(메모리 상태는 사라진다) 같은 토큰·저장소로 새로 들어온다.
+    net.disconnect("g0");
+    old.leave();
+    const fresh = new GuestRoom({
+      transport: net.join("g0-reloaded"),
+      name: "손님0",
+      token,
+      secret,
+      fairStore: store,
+    });
+    fresh.on("incident", (n) => incidents.push(n));
+    await until(
+      () => fresh.match !== null && fresh.match.current().hand.length > 0,
+    );
+    guests[0] = fresh;
+    const verified: number[] = [];
+    fresh.on("roundVerified", (d) => verified.push(d));
+    const scored = await playRounds(host, guests, 1, incidents);
+    expect(incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`)).toEqual(
+      [],
+    );
+    expect(scored).toBe(1);
+    await until(() => verified.length > 0);
+  }, 180_000);
 
   describe("고친 프로그램으로 부정하는 참가자(나머지는 정상)", () => {
     it("무늬 안 따르기: 그 무늬 카드가 나중에 드러나는 순간 모두의 화면에 그 자리가 찍힌다", async () => {

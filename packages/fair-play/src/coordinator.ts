@@ -31,6 +31,7 @@ export interface Incident {
   reason: string;
 }
 
+/** 엔진 사건을 처리할 때 함께 보는 공개 정보 */
 export interface PublicView {
   players: readonly number[];
   declarer: number | null;
@@ -100,6 +101,7 @@ export class FairCoordinator {
       if (deal === this.deal) this.checkPlays();
       this.tryOpenAll(deal);
     });
+    this.device.on("cards", () => this.updateBusy());
     this.device.on("problem", (_deal, reason, device) =>
       this.incident({
         seat: device === null ? null : this.seatOfDevice(device),
@@ -178,6 +180,28 @@ export class FairCoordinator {
     });
     this.device.start(deal, this.devices, deckFor(this.rules));
     this.device.assign(deal, owners);
+    this.updateBusy();
+  }
+
+  private busy = false;
+  private busyListeners = new Set<(busy: boolean) => void>();
+  /** 내 기기가 받을 카드를 아직 다 열지 못했다(섞고 나누는 중) */
+  onBusy(listener: (busy: boolean) => void): () => void {
+    this.busyListeners.add(listener);
+    listener(this.busy);
+    return () => this.busyListeners.delete(listener);
+  }
+
+  /** 다시 섞는 중이거나, 내 기기 자리 카드 중 아직 못 연 것이 있으면 바쁘다 */
+  private updateBusy(): void {
+    const me = this.device.id;
+    const mine = this.device.myCards(this.deal);
+    let waiting = this.redealPlan !== null && !this.redeals.has(this.deal);
+    for (const [slot, seat] of this.seatOwners)
+      if (this.deviceOf(seat) === me && !mine.has(slot)) waiting = true;
+    if (waiting === this.busy) return;
+    this.busy = waiting;
+    for (const l of this.busyListeners) l(waiting);
   }
 
   private giveSlots(slots: readonly number[], seat: number): void {
@@ -187,6 +211,7 @@ export class FairCoordinator {
       owners.set(slot, this.deviceOf(seat));
     }
     this.device.assign(this.deal, owners);
+    this.updateBusy();
   }
 
   /** 다시 섞을 자리: 바닥 카드, 죽은 순서대로 그 사람 자리(엔진의 덱 순서와 같다) */
@@ -204,6 +229,7 @@ export class FairCoordinator {
     this.redealPlan = { players: [...view.players], declarer: view.declarer };
     for (const slot of this.pool) this.seatOwners.delete(slot);
     this.device.reshuffle(this.deal, this.pool);
+    this.updateBusy();
   }
 
   /** 다시 나누기에 쓸 새 자리 번호(엔진 덱 순서). 방장이 엔진에 넣을 자리 표를 만들 때도 쓴다 */
@@ -226,6 +252,7 @@ export class FairCoordinator {
       owners.set(slot, this.deviceOf(seat));
     }
     this.device.assign(deal, owners);
+    this.updateBusy();
   }
 
   private onPlayed(

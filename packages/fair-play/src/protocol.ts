@@ -112,6 +112,15 @@ export class Party {
     return key;
   }
 
+  /** 이 섞기 열쇠를 이미 만들었나(새로고침 뒤: 이미 계산해 보낸 차례인지) */
+  hasPass(name: string): boolean {
+    return this.passes.has(name);
+  }
+
+  hasSlotKey(slot: number): boolean {
+    return this.slotKeys.has(slot);
+  }
+
   /** 섞기: 섞기 열쇠 `pass`로 잠그고 섞는다 */
   async lockAndShuffle(
     deck: readonly bigint[],

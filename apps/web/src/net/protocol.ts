@@ -1,5 +1,10 @@
 import type { Action, GameEvent, PlayerView } from "@mighty/engine";
-import type { FairControl, FairWire, GroupName } from "@mighty/fair-play";
+import type {
+  FairControl,
+  PublicView as FairPublicView,
+  FairWire,
+  GroupName,
+} from "@mighty/fair-play";
 
 import type { KitLoggedAction } from "@/game/kit";
 
@@ -128,7 +133,8 @@ export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
   | { t: "lobby"; lobby: LobbyState }
   /** 게임 시작: 방장 것까지 모든 약속(해시)을 먼저 알린다. 참가자는 이걸 받은 뒤 비밀 값을 방장에게만 보낸다 */
   | { t: "started"; commitments: Commitment[] }
-  | { t: "snapshot"; view: V; events: E[] }
+  /** `resync`: 다시 연결한 참가자에게 보내는 지금 화면(사건 없음) */
+  | { t: "snapshot"; view: V; events: E[]; resync?: boolean }
   | { t: "rejected"; error: string }
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
   | {
@@ -147,6 +153,8 @@ export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
   | { t: "seed"; reveals: Reveal[]; commitments: Commitment[] }
   /** 다시 연결된 참가자에게 그동안 오간 멘탈 포커 메시지를 다시 보낸다 */
   | { t: "fpRelay"; items: { from: number; message: FairMessage }[] }
+  /** 다시 연결된 참가자에게 걸음별 사건을 다시 보낸다(자리 주인을 되살린다) */
+  | { t: "fpHistory"; items: { events: GameEvent[]; pub: FairPublicView }[] }
   | AuditReport
   | IncidentReport;
 

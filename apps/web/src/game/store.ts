@@ -81,6 +81,14 @@ interface GameStore {
   offlineSeats: number[];
   /** 판 끝 검증에서 누군가 문제를 찾았다. 이 게임은 무효로 본다 */
   invalid: string | null;
+  /** 내 기기가 부정을 찾아 판을 멈췄다(멘탈 포커). `seat`가 null이면 누군지 가릴 수 없다 */
+  incident: { seat: number | null; reason: string } | null;
+  /** 멘탈 포커 판: 모두 함께 섞고 나누는 중이라 내 카드를 아직 다 열지 못했다 */
+  shuffling: boolean;
+  /** 멘탈 포커 판인가(연결이 끊긴 사람을 컴퓨터가 대신하지 않고 기다린다) */
+  fair: boolean;
+  /** 방장: 연결이 끊긴 사람을 더 기다리지 않고 게임을 끝낸다(멘탈 포커) */
+  endGame: (() => void) | null;
   /** 다른 사람과 하는 온라인 대전인가. 카드 툴팁 같은 도움 기능을 끈다(원작 `bUseHintInNetwork`) */
   network: boolean;
   newGame(options: NewGameOptions): void;
@@ -226,6 +234,8 @@ export const useGame = create<GameStore>((set, get) => {
       seatNames: options.seatNames,
       network: options.network ?? false,
       invalid: null,
+      incident: null,
+      shuffling: false,
     });
     const persist = () => {
       if (options.save && host instanceof LocalMatch) saveGame(host.save());
@@ -257,6 +267,10 @@ export const useGame = create<GameStore>((set, get) => {
     offlineSeats: [],
     network: false,
     invalid: null,
+    incident: null,
+    shuffling: false,
+    fair: false,
+    endGame: null,
 
     newGame(options) {
       const host = new LocalMatch({
@@ -267,6 +281,7 @@ export const useGame = create<GameStore>((set, get) => {
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
       attach(host, { save: true, seatNames: null });
+      set({ fair: false, endGame: null });
     },
 
     resume(saved) {

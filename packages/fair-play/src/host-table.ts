@@ -20,7 +20,12 @@ import {
   tokenDeal,
   tokenOf,
 } from "./blind";
-import { FairCoordinator, type Incident, roundDealOf } from "./coordinator";
+import {
+  FairCoordinator,
+  type Incident,
+  type PublicView,
+  roundDealOf,
+} from "./coordinator";
 import { FairDevice, type FairWire, type GroupName } from "./device";
 import type { FairControl, FairQuery } from "./messages";
 
@@ -112,18 +117,23 @@ export class FairHostTable {
     return tokenDeal(this.rules).deal;
   }
 
+  /** 걸음마다의 사건과 공개 정보(첫 항목은 대국을 만들 때). 새로고침한 참가자에게 다시 보낸다 */
+  readonly history: { events: GameEvent[]; pub: PublicView }[] = [];
+
   /** 대국을 만든 직후: 첫 판 사건으로 섞기를 시작한다 */
   begin(events: readonly GameEvent[]): void {
-    this.coordinator.handle(events, this.publicOf(this.hooks.state()));
+    const pub = this.publicOf(this.hooks.state());
+    this.history.push({ events: [...events], pub });
+    this.coordinator.handle(events, pub);
   }
 
   get halted(): boolean {
     return this.coordinator.halted;
   }
 
-  private publicOf(state: MatchState) {
+  private publicOf(state: MatchState): PublicView {
     return {
-      players: state.round.players,
+      players: [...state.round.players],
       declarer: state.round.declarer,
       goal: state.round.goal,
     };
@@ -161,7 +171,9 @@ export class FairHostTable {
   /** 엔진 걸음 뒤 */
   after(state: MatchState, events: readonly GameEvent[]): void {
     this.observed.push([...events]);
-    this.coordinator.handle(events, this.publicOf(state));
+    const pub = this.publicOf(state);
+    this.history.push({ events: [...events], pub });
+    this.coordinator.handle(events, pub);
     // 마지막 턴 열쇠 공개를 시작했으면 검증이 끝날 때까지 다음 걸음을 미룬다.
     const deal = this.coordinator.deal;
     if (

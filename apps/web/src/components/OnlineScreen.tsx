@@ -22,6 +22,7 @@ import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
 import type { LobbyState } from "@/net/protocol";
 import {
+  fairStoreFor,
   hostFingerprintFromUrl,
   inviteUrl,
   loadSeatToken,
@@ -124,6 +125,41 @@ export function OnlineScreen({
     }
   };
 
+  /**
+   * 부정 알림. 내 기기가 찾은 것은 판을 멈추고 화면에 크게 띄운다.
+   * 다른 사람이 알린 것은 그 사람의 주장으로 채팅에만 남긴다(거짓 알림으로 판을 멈추지 못하게).
+   */
+  const onIncident = (
+    n: { reporter: number; seat: number | null; reason: string; own: boolean },
+    names: string[],
+  ) => {
+    const who =
+      n.seat === null ? "누군지 모름" : (names[n.seat] ?? `${n.seat}번`);
+    useChat.getState().receive({
+      id: randomId(8),
+      seat: -1,
+      name: "부정 감지",
+      text: n.own
+        ? `⚠ 내 기기가 찾음 — ${who}: ${n.reason}`
+        : `${names[n.reporter] ?? `${n.reporter}번`}의 알림 — ${who}: ${n.reason} (내 기기 확인과 따로 봅니다)`,
+    });
+    if (n.own)
+      useGame.setState({ incident: { seat: n.seat, reason: n.reason } });
+  };
+
+  /** 멘탈 포커 판: 섞는 중 표시와 끊긴 사람 처리 */
+  const attachFair = (
+    coordinator: { onBusy(l: (busy: boolean) => void): () => void } | undefined,
+    endGame: (() => void) | null,
+  ) => {
+    if (!coordinator) {
+      useGame.setState({ fair: false, endGame: null, shuffling: false });
+      return;
+    }
+    useGame.setState({ fair: true, endGame });
+    coordinator.onBusy((busy) => useGame.setState({ shuffling: busy }));
+  };
+
   const enter = async () => {
     const trimmed = name.trim() || (isHost ? "방장" : "손님");
     setPlayerName(trimmed);
@@ -141,6 +177,9 @@ export function OnlineScreen({
           botLevel: useSettings.getState().botLevel,
           botNames: useSettings.getState().botNames,
           pace: browserPace,
+          ...(useSettings.getState().fairPlay
+            ? { fair: { group: "2048" as const } }
+            : {}),
         });
         onlineSession.host = host;
         setFingerprint(await host.fingerprint());
@@ -148,6 +187,7 @@ export function OnlineScreen({
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
         host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
+        host.onIncident((n) => onIncident(n, seatNamesOf(host.lobby())));
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));
@@ -161,6 +201,7 @@ export function OnlineScreen({
           name: trimmed,
           token: saved?.token ?? null,
           ...(saved ? { secret: saved.secret } : {}),
+          fairStore: fairStoreFor(roomCode),
           ...(hostFingerprintFromUrl()
             ? { hostFingerprint: hostFingerprintFromUrl() as string }
             : {}),
@@ -197,6 +238,22 @@ export function OnlineScreen({
           onAuditReport("나", result.ok, result.ok ? undefined : result.reason);
         });
         guest.on("report", (r) => onAuditReport(r.name, r.ok, r.reason));
+        guest.on("incident", (n) =>
+          onIncident(
+            n,
+            seatNamesOf(
+              guest.lobby ?? { seats: [], ruleCode: "", started: true },
+            ),
+          ),
+        );
+        guest.on("roundVerified", () =>
+          useChat.getState().receive({
+            id: randomId(8),
+            seat: -1,
+            name: "검증",
+            text: "이번 판을 진짜 카드로 다시 계산했습니다 — 문제없음 ✓",
+          }),
+        );
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -207,6 +264,7 @@ export function OnlineScreen({
             ),
             { network: true },
           );
+          attachFair(guest.fair?.coordinator, null);
           onPlaying();
         });
       }
@@ -223,6 +281,7 @@ export function OnlineScreen({
     try {
       const match = await host.start();
       attachOnline(match, seatNamesOf(host.lobby()), { network: true });
+      attachFair(host.fair?.coordinator, () => host.abandon());
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -409,6 +468,7 @@ export function OnlineScreen({
                   {lobby.seats.length}명
                 </p>
               )}
+              <FairLine lobby={lobby} isHost={isHost} />
               <p className="text-[11px] opacity-50">
                 규칙 문자열{" "}
                 <span className="select-all font-mono">{lobby.ruleCode}</span>
@@ -514,5 +574,53 @@ export function OnlineScreen({
         />
       )}
     </main>
+  );
+}
+
+/** 대기실: 멘탈 포커로 하는지. 방장은 켜고 끌 수 있다 */
+function FairLine({ lobby, isHost }: { lobby: LobbyState; isHost: boolean }) {
+  const fairPlay = useSettings((s) => s.fairPlay);
+  const setFairPlay = useSettings((s) => s.setFairPlay);
+  const possible = lobby.game !== "hearts" && lobby.seats.length >= 3;
+  if (!possible) return null;
+  const on = lobby.fair !== undefined;
+  return (
+    <div className="flex items-start gap-2 rounded-lg bg-emerald-950/60 px-3 py-2 text-xs">
+      <span aria-hidden>{on ? "🔐" : "🔓"}</span>
+      <span className="flex-1 leading-relaxed">
+        {on ? (
+          <>
+            <b>멘탈 포커</b>로 함께 섞습니다. 방장 기기도 남의 카드를 볼 수
+            없고, 판마다 진행을 모두가 다시 계산해 확인합니다.{" "}
+            <a
+              href="/security#mental-poker"
+              target="_blank"
+              className="underline opacity-80"
+              rel="noopener"
+            >
+              어떻게?
+            </a>
+          </>
+        ) : (
+          <>
+            방장 기기가 섞습니다(방장 기기에는 모든 패가 있습니다). 판 끝에
+            섞기와 진행을 확인합니다.
+          </>
+        )}
+      </span>
+      {isHost && (
+        <button
+          type="button"
+          onClick={() => {
+            const next = !fairPlay;
+            setFairPlay(next);
+            onlineSession.host?.setFair(next ? { group: "2048" } : null);
+          }}
+          className="shrink-0 rounded bg-white/10 px-1.5 py-0.5"
+        >
+          {on ? "끄기" : "켜기"}
+        </button>
+      )}
+    </div>
   );
 }

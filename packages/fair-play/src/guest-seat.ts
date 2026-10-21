@@ -10,10 +10,16 @@ import {
 
 import type { FairLogged, RoundDeal } from "./audit";
 import { tokenOf } from "./blind";
-import { FairCoordinator, type Incident, roundDealOf } from "./coordinator";
+import {
+  FairCoordinator,
+  type Incident,
+  type PublicView,
+  roundDealOf,
+} from "./coordinator";
 import { FairDevice, type FairWire, type GroupName } from "./device";
 import { revealSeatView } from "./host-table";
 import type { FairControl, FairQuery } from "./messages";
+import type { PartySnapshot } from "./protocol";
 
 /*
  * 참가자 기기 쪽 멘탈 포커 진행.
@@ -38,6 +44,8 @@ export interface GuestSeatOptions {
   onSnapshot: (view: PlayerView, events: GameEvent[]) => void;
   /** 판의 모든 카드가 열리고 기록이 왔다: 다시 계산해 검증할 때 */
   onVerify: (deal: number, log: FairLogged[]) => void;
+  /** 새로고침 전에 남겨 둔 열쇠 */
+  restore?: Record<number, PartySnapshot>;
 }
 
 export class FairGuestSeat {
@@ -64,6 +72,7 @@ export class FairGuestSeat {
       id: options.seat,
       group: options.group,
       send: (m) => options.broadcast(m),
+      ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new FairCoordinator({
       rules: options.rules,
@@ -88,8 +97,30 @@ export class FairGuestSeat {
     return this.coordinator.halted;
   }
 
-  /** 방장 화면 */
-  snapshot(view: PlayerView, events: GameEvent[]): void {
+  /** 방장 진행 중 사건을 처리한 걸음 수(첫 화면 포함) */
+  private steps = 0;
+
+  /**
+   * 다시 연결했을 때 방장이 보낸 걸음별 사건. 아직 처리하지 않은 걸음부터 이어서 처리한다
+   * (새로고침했으면 처음부터 다시 처리해 자리 주인과 카드를 되살린다)
+   */
+  history(items: readonly { events: GameEvent[]; pub: PublicView }[]): void {
+    for (let i = this.steps; i < items.length; i++) {
+      const item = items[i] as { events: GameEvent[]; pub: PublicView };
+      this.coordinator.handle(item.events, item.pub);
+    }
+    this.steps = Math.max(this.steps, items.length);
+  }
+
+  /** 방장 화면. `resync`면 다시 연결할 때 보낸 지금 화면(사건 없음) */
+  snapshot(view: PlayerView, events: GameEvent[], resync = false): void {
+    if (resync) {
+      this.last = view;
+      this.queue.push({ view, events: [] });
+      this.flush();
+      return;
+    }
+    this.steps++;
     if (this.expectKill !== null) {
       const card = this.expectKill;
       this.expectKill = null;

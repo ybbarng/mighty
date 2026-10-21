@@ -121,7 +121,7 @@ export class HostRoom<
   private chatListeners = new Set<(message: ChatMessage) => void>();
   private reportListeners = new Set<(report: AuditReport) => void>();
   private incidentListeners = new Set<(notice: IncidentNotice) => void>();
-  private readonly fairOption: { group: GroupName } | null;
+  private fairOption: { group: GroupName } | null;
   /** 멘탈 포커 진행(이 판이 멘탈 포커일 때) */
   fair: FairHostTable | null = null;
   /** 오간 멘탈 포커 메시지. 다시 연결된 참가자에게 다시 보낸다 */
@@ -222,6 +222,18 @@ export class HostRoom<
     if (!this.fairOption || this.kit.id !== "mighty") return null;
     const count = this.kit.playerCount(this.rules);
     return count >= 3 ? this.fairOption.group : null;
+  }
+
+  /** 대기실에서 멘탈 포커를 켜고 끈다 */
+  setFair(fair: { group: GroupName } | null): void {
+    if (this.match) return;
+    this.fairOption = fair;
+    this.broadcastLobby();
+  }
+
+  /** 연결이 끊긴 사람을 더 기다리지 않고 게임을 끝낸다(멘탈 포커는 컴퓨터가 대신할 수 없다) */
+  abandon(): void {
+    this.match?.submit({ type: "retire" } as unknown as ActionT);
   }
 
   /** 부정 알림(내 기기가 찾은 것과 다른 사람이 알린 것) */
@@ -666,6 +678,8 @@ export class HostRoom<
           this.match.setStandIn(seat, false);
           this.send({ t: "started", commitments: this.commitments }, peerId);
           if (this.fair) {
+            // 새로고침했으면 대기실 정보부터 다시 있어야 멘탈 포커 진행을 만든다.
+            this.send({ t: "lobby", lobby: this.lobby() }, peerId);
             this.send(
               {
                 t: "seed",
@@ -674,11 +688,20 @@ export class HostRoom<
               },
               peerId,
             );
-            // 끊긴 동안 오간 멘탈 포커 메시지를 다시 보낸다(이미 받은 것은 참가자가 건너뛴다).
+            // 끊긴 동안 오간 멘탈 포커 메시지와 걸음별 사건을 다시 보낸다(이미 받은 것은 참가자가 건너뛴다).
             this.send({ t: "fpRelay", items: [...this.fpLog] }, peerId);
+            this.send(
+              { t: "fpHistory", items: [...this.fair.history] as never },
+              peerId,
+            );
           }
           this.send(
-            { t: "snapshot", view: this.match.viewFor(seat), events: [] },
+            {
+              t: "snapshot",
+              view: this.match.viewFor(seat),
+              events: [],
+              resync: true,
+            },
             peerId,
           );
         }

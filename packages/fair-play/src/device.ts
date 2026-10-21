@@ -53,6 +53,8 @@ export interface DeviceEvents {
   keys: (deal: number, from: number, slots: number[]) => void;
   /** 이상한 일(내 카드가 안 열린다, 같은 자리에 다른 열쇠 등) */
   problem: (deal: number, reason: string, device: number | null) => void;
+  /** 새 열쇠를 만들었다(새로고침에 대비해 남겨 둘 때) */
+  persist: () => void;
 }
 
 interface DealCtx {
@@ -79,6 +81,8 @@ export interface FairDeviceOptions {
   id: number;
   group: GroupName;
   send: (message: FairWire) => void;
+  /** 새로고침 전에 남겨 둔 열쇠(`snapshotAll`) */
+  restore?: Record<number, PartySnapshot>;
 }
 
 export class FairDevice {
@@ -94,12 +98,28 @@ export class FairDevice {
     slots: new Set(),
     keys: new Set(),
     problem: new Set(),
+    persist: new Set(),
   };
+  /** 새로고침 전에 남겨 둔 열쇠(판 번호 → 열쇠) */
+  private readonly restored: Map<number, PartySnapshot>;
 
   constructor(options: FairDeviceOptions) {
     this.id = options.id;
     this.g = GROUPS[options.group];
     this.send = options.send;
+    this.restored = new Map(
+      Object.entries(options.restore ?? {}).map(([deal, snap]) => [
+        Number(deal),
+        snap,
+      ]),
+    );
+  }
+
+  /** 모든 판의 내 열쇠(새로고침에 대비해 남긴다) */
+  snapshotAll(): Record<number, PartySnapshot> {
+    const out: Record<number, PartySnapshot> = {};
+    for (const [deal, ctx] of this.deals) out[deal] = ctx.party.snapshot();
+    return out;
   }
 
   on<K extends keyof DeviceEvents>(
@@ -166,7 +186,9 @@ export class FairDevice {
     const ctx: DealCtx = {
       id: deal,
       devices: [...devices],
-      party: new Party(this.id, this.g),
+      party: this.restored.has(deal)
+        ? Party.restore(this.g, this.restored.get(deal) as PartySnapshot)
+        : new Party(this.id, this.g),
       ledger: new PublicLedger(this.g),
       owners: new Map(),
       chains: new Map(),
@@ -178,11 +200,12 @@ export class FairDevice {
       done: new Set(),
     };
     this.deals.set(deal, ctx);
-    void this.queue(() => this.advance(ctx));
-    // 시작 명령보다 먼저 온 사슬 결과·열쇠를 다시 넣는다.
+    // 시작 명령보다 먼저 온 사슬 결과·열쇠를 먼저 넣는다. 새로고침 뒤라면 내가 전에 보낸 결과도
+    // 여기 들어 있어서, 내 차례를 다시 계산하지 않는다(다시 섞으면 남들이 쓴 덱과 달라진다).
     const early = this.early.filter((e) => e.message.deal === deal);
     this.early = this.early.filter((e) => e.message.deal !== deal);
     for (const { message, from } of early) this.receive(message, from);
+    void this.queue(() => this.advance(ctx));
   }
 
   /** 6·7마 다시 나누기: `pool` 자리들을 새 자리로 섞는다 */
@@ -345,8 +368,11 @@ export class FairDevice {
           const input = this.inputOf(ctx, round, stages, si, index);
           if (input === null) return;
           if (ctx.devices[index] !== this.id) return;
+          // 새로고침 전에 이미 계산해 보낸 차례면 다시 하지 않고 그 결과가 다시 오기를 기다린다.
+          if (this.alreadyDone(ctx, stage)) return;
           const output = await this.compute(ctx, stage, input);
           ctx.chains.set(key, output);
+          this.emit("persist");
           this.send({
             t: "fp",
             k: "chain",
@@ -368,6 +394,22 @@ export class FairDevice {
         this.emit("slots", ctx.id, base, final.length);
         await this.publishGrants(ctx);
       }
+    }
+  }
+
+  private alreadyDone(ctx: DealCtx, stage: Stage): boolean {
+    const { party } = ctx;
+    switch (stage) {
+      case "shuffle":
+        return party.hasPass("shuffle");
+      case "relock":
+        return party.hasSlotKey(0);
+      case "convert":
+        return party.hasPass("pool");
+      case "poolShuffle":
+        return party.hasPass("poolShuffle");
+      case "poolRelock":
+        return party.hasSlotKey(ctx.ledger.deck.length);
     }
   }
 

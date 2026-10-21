@@ -1,5 +1,5 @@
 import { useChat } from "./chat";
-import type { GuestRoom } from "./guest-room";
+import type { FairSaved, GuestRoom } from "./guest-room";
 import type { HostRoom } from "./host-room";
 import { joinBroadcast, type Transport } from "./transport";
 
@@ -76,4 +76,29 @@ export function saveSeatToken(
   } catch {
     // 저장하지 못하면 새로고침 때 새 손님으로 들어간다.
   }
+}
+
+/** 멘탈 포커 열쇠와 보낸 행동을 방별로 탭에 남긴다(새로고침해도 내 카드를 다시 연다) */
+export function fairStoreFor(room: string): {
+  load(): FairSaved | null;
+  save(saved: FairSaved): void;
+} {
+  const key = `mighty-fair-${room}`;
+  return {
+    load() {
+      try {
+        const raw = sessionStorage.getItem(key);
+        return raw ? (JSON.parse(raw) as FairSaved) : null;
+      } catch {
+        return null;
+      }
+    },
+    save(saved) {
+      try {
+        sessionStorage.setItem(key, JSON.stringify(saved));
+      } catch {
+        // 저장하지 못하면 새로고침 뒤 이 판을 이어 가지 못한다.
+      }
+    },
+  };
 }

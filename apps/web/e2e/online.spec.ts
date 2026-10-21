@@ -145,9 +145,9 @@ test("게임 중에 참가자가 새로고침해도 같은 자리로 돌아온�
   await host.getByRole("button", { name: "시작하기" }).click();
   await expect(guest.getByRole("button", { name: "점수판" })).toBeVisible();
 
-  // 새로고침하면 방장 화면에 연결이 끊겼다고 보인다.
+  // 새로고침하면 방장 화면에 연결이 끊겼다고 보인다. 멘탈 포커 판이라 컴퓨터가 대신하지 않고 기다린다.
   await guest.reload();
-  await expect(host.getByText("연결 끊김 · 컴퓨터가 대신")).toBeVisible();
+  await expect(host.getByText("연결 끊김 · 기다리는 중")).toBeVisible();
   await host.screenshot({
     path: test.info().outputPath("online-4-host-offline.png"),
   });
@@ -156,5 +156,5 @@ test("게임 중에 참가자가 새로고침해도 같은 자리로 돌아온�
   const join = guest.getByRole("button", { name: "들어가기" });
   if (await join.isVisible()) await join.click();
   await expect(guest.getByRole("button", { name: "점수판" })).toBeVisible();
-  await expect(host.getByText("연결 끊김 · 컴퓨터가 대신")).toBeHidden();
+  await expect(host.getByText("연결 끊김 · 기다리는 중")).toBeHidden();
 });

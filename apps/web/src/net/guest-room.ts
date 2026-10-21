@@ -12,6 +12,7 @@ import {
   FairGuestSeat,
   type FairLogged,
   type Incident,
+  type PartySnapshot,
 } from "@mighty/fair-play";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import type { GameKit, KitLoggedAction } from "@/game/kit";
@@ -121,6 +122,20 @@ export interface GuestRoomOptions<
    * 없으면(예전 링크·시험) 처음 "어서 와"라고 답한 연결을 방장으로 믿는다.
    */
   hostFingerprint?: string;
+  /**
+   * 멘탈 포커 열쇠와 보낸 행동을 브라우저에 남기고 되살린다(새로고침해도 같은 판을 이어 가게).
+   * 열쇠가 없으면 내 카드를 아무도 열 수 없다
+   */
+  fairStore?: {
+    load(): FairSaved | null;
+    save(saved: FairSaved): void;
+  };
+}
+
+/** 새로고침에 대비해 남기는 멘탈 포커 정보 */
+export interface FairSaved {
+  snapshots: Record<number, PartySnapshot>;
+  sent: string[];
 }
 
 /** 방장과의 연결 상태 */
@@ -183,6 +198,7 @@ export class GuestRoom<
   private hostClosed = false;
   private readonly reconnectTimeoutMs: number;
   private readonly hostFingerprint: string | null;
+  private readonly fairStore: GuestRoomOptions["fairStore"] | null;
   /** 상대마다 보낸 입장 요청의 임의 값 */
   private readonly nonces = new Map<string, string>();
   /** 방장 확인(서명 검사)이 끝나기 전에 온 대기실 정보. 확인되면 그 연결의 것을 쓴다 */
@@ -243,6 +259,7 @@ export class GuestRoom<
     this.commitHash = commit(this.secret);
     this.reconnectTimeoutMs = options.reconnectTimeoutMs ?? 60_000;
     this.hostFingerprint = options.hostFingerprint ?? null;
+    this.fairStore = options.fairStore ?? null;
 
     this.transport.onPeerJoin((peerId) => {
       // 누가 방장인지 모르므로 새로 보이는 상대에게 들어가겠다고 알린다. 방장만 답한다.
@@ -385,6 +402,7 @@ export class GuestRoom<
     const rules = this.kit.decodeRules(lobby.ruleCode);
     if (!rules.ok) return null;
     const seat = this.seat;
+    const saved = this.fairStore?.load() ?? null;
     const fair = new FairGuestSeat({
       rules: rules.rules as unknown as RuleSet,
       seat,
@@ -400,11 +418,25 @@ export class GuestRoom<
           events: events as unknown as Event[],
         }),
       onVerify: (deal, log) => void this.verifyRound(deal, log),
+      ...(saved ? { restore: saved.snapshots } : {}),
     });
     this.fair = fair;
+    this.restoredSent = saved?.sent ?? [];
+    fair.device.on("persist", () => this.persistFair());
     for (const { message, from } of this.fairEarly.splice(0))
       fair.receive(message, from);
     return fair;
+  }
+
+  /** 새로고침 전에 보낸 행동(되살린 대국의 `sent` 앞에 붙인다) */
+  private restoredSent: string[] = [];
+
+  private persistFair(): void {
+    if (!this.fair || !this.fairStore) return;
+    this.fairStore.save({
+      snapshots: this.fair.device.snapshotAll(),
+      sent: this.match ? [...this.match.sent] : this.restoredSent,
+    });
   }
 
   /** 내 기기가 부정을 찾았다: 모두에게 알리고 화면에 표시한다 */
@@ -438,12 +470,14 @@ export class GuestRoom<
       snapshot,
       (action) => {
         if (this.hostId) this.send({ t: "action", action }, this.hostId);
+        this.persistFair();
       },
       this.fair
         ? (action) =>
             (this.fair?.outgoing(action as never) as ActionT | null) ?? null
         : undefined,
     );
+    this.match.sent.push(...this.restoredSent);
     for (const l of this.listeners.match) l(this.match);
   }
 
@@ -519,6 +553,8 @@ export class GuestRoom<
       }
       case "seed": {
         if (from !== this.hostId) return;
+        // 바로 앞의 "started"가 먼저 처리되게 같은 값을 기다린다(메시지 처리가 비동기다).
+        await this.commitHash;
         const checked = await this.checkSeed(
           message.reveals,
           message.commitments,
@@ -528,6 +564,11 @@ export class GuestRoom<
           return;
         }
         this.fairSeed = checked.seed;
+        break;
+      }
+      case "fpHistory": {
+        if (from !== this.hostId || !Array.isArray(message.items)) return;
+        this.ensureFair()?.history(message.items as never);
         break;
       }
       case "fpRelay": {
@@ -611,6 +652,7 @@ export class GuestRoom<
           fair.snapshot(
             message.view as unknown as PlayerView,
             message.events as unknown as GameEvent[],
+            message.resync === true,
           );
         else this.deliver(snapshot);
         break;

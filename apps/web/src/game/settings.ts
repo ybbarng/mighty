@@ -61,6 +61,9 @@ interface Settings {
   /** 마이티 은어로 보기: 셋트·기아 프렌드·삽컴! (원작 "마이티 용어 사용", `bUseTerm`) */
   slangTerms: boolean;
   setSlangTerms(on: boolean): void;
+  /** 친구와 하기를 멘탈 포커로(방장도 남의 패를 못 본다). 마이티 3~7마 */
+  fairPlay: boolean;
+  setFairPlay(on: boolean): void;
   /** 효과음 크기 0~1 */
   volume: number;
   setVolume(volume: number): void;
@@ -103,6 +106,8 @@ export const useSettings = create<Settings>()(
       setCardTip: (cardTip) => set({ cardTip }),
       slangTerms: false,
       setSlangTerms: (slangTerms) => set({ slangTerms }),
+      fairPlay: true,
+      setFairPlay: (fairPlay) => set({ fairPlay }),
       volume: 0.8,
       setVolume: (volume) => {
         setSoundVolume(volume);
