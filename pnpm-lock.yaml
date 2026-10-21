@@ -257,6 +257,15 @@ importers:
 
   packages/engine: {}
 
+  packages/hearts-ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/hearts-engine':
+        specifier: workspace:*
+        version: link:../hearts-engine
+
   packages/hearts-engine:
     dependencies:
       '@mighty/engine':

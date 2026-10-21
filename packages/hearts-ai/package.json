@@ -1,0 +1,18 @@
+{
+  "name": "@mighty/hearts-ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "하트 컴퓨터 플레이어 — PlayerView만 보고 행동을 고른다",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "bench": "vitest run --config vitest.strength.config.ts"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*",
+    "@mighty/hearts-engine": "workspace:*"
+  }
+}
