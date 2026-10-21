@@ -1,0 +1,20 @@
+{
+  "name": "@mighty/fair-play",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "멘탈 포커 시험 구현 — 아무도 혼자 덱을 볼 수 없게 섞고 나누고 내기(SRA), 무늬 안 따르기 즉시 잡기",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "bench": "vitest run --config vitest.strength.config.ts"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@mighty/ai": "workspace:*"
+  }
+}

@@ -263,6 +263,16 @@ importers:
 
   packages/engine: {}
 
+  packages/fair-play:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+    devDependencies:
+      '@mighty/ai':
+        specifier: workspace:*
+        version: link:../ai
+
   packages/hearts-ai:
     dependencies:
       '@mighty/engine':
