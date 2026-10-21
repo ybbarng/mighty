@@ -11,6 +11,11 @@ export const onlineSession: { host: HostRoom | null; guest: GuestRoom | null } =
   };
 
 /** 주소에 `?net=local`이 있으면 같은 브라우저 탭끼리(인터넷 없이), 아니면 WebRTC로 잇는다 */
+/** 초대 링크에 들어 있는 방장 열쇠 지문 */
+export function hostFingerprintFromUrl(): string | undefined {
+  return new URLSearchParams(window.location.search).get("k") ?? undefined;
+}
+
 export function isLocalNet(): boolean {
   return new URLSearchParams(window.location.search).get("net") === "local";
 }
@@ -22,10 +27,14 @@ export async function openTransport(roomCode: string): Promise<Transport> {
   return joinP2P(roomCode);
 }
 
-export function inviteUrl(roomCode: string): string {
+/**
+ * 초대 링크. `k`는 방장 공개 열쇠의 지문이다. 참가자는 이 열쇠로 서명한 연결만 방장으로 믿는다(identity.ts).
+ */
+export function inviteUrl(roomCode: string, fingerprint?: string): string {
   const url = new URL(window.location.href);
   url.search = "";
   url.searchParams.set("room", roomCode);
+  if (fingerprint) url.searchParams.set("k", fingerprint);
   if (isLocalNet()) url.searchParams.set("net", "local");
   return url.toString();
 }

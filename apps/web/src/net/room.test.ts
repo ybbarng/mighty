@@ -246,6 +246,70 @@ describe("온라인 방", () => {
     await until(() => heardByHost.some((r) => r.name === "철수"));
   });
 
+  it("방장이 게임 중 보낸 화면 하나라도 조작하면 판 끝에 잡아낸다", async () => {
+    const { host, a, b } = await setup();
+    const results: AuditResult[] = [];
+    a.on("audit", (r) => results.push(r));
+    // 방장이 철수에게 보내는 화면 하나를 고쳐 보낸다(예: 남의 점수를 바꿔 보여 주기).
+    const send = host.transport.send.bind(host.transport);
+    let tampered = false;
+    host.transport.send = (message, to) => {
+      const m = message as HostMessage;
+      if (
+        !tampered &&
+        m.t === "snapshot" &&
+        to === "a" &&
+        m.events.length > 0
+      ) {
+        tampered = true;
+        send(
+          { ...m, view: { ...m.view, money: m.view.money.map(() => 0) } },
+          to,
+        );
+      } else send(message, to);
+    };
+    await host.start();
+    await until(() => a.match !== null && b.match !== null);
+    await playRounds(host, [a, b], 1);
+    host.finish();
+    await until(() => results.length === 1);
+    expect(tampered).toBe(true);
+    expect(results[0]?.ok).toBe(false);
+    if (results[0]?.ok === false)
+      expect(results[0].reason).toMatch(
+        /받은 \d+번째 화면이 기록과 맞지 않는다/,
+      );
+  });
+
+  it("다른 참가자가 남의 자리로 보낸 검증 알림은 무시한다", async () => {
+    const { host, a, b } = await setup();
+    const heardByA: AuditReport[] = [];
+    a.on("report", (r) => heardByA.push(r));
+    await until(
+      () =>
+        a.lobby?.seats.every((s) => s.kind !== "guest" || s.peerId) ?? false,
+    );
+    // 영희(b)가 철수(a)가 아닌 다른 자리(방장 0번)인 척 "실패"를 알린다.
+    b.transport.send({
+      t: "auditReport",
+      seat: 0,
+      name: "방장",
+      ok: false,
+      reason: "거짓",
+    } satisfies AuditReport);
+    // 자기 자리로 보낸 것은 받는다.
+    b.transport.send({
+      t: "auditReport",
+      seat: b.seat as number,
+      name: "영희",
+      ok: true,
+    } satisfies AuditReport);
+    await until(() => heardByA.length >= 1);
+    await flush();
+    expect(heardByA.map((r) => r.name)).toEqual(["영희"]);
+    host.close();
+  });
+
   it("남의 차례에 보낸 행동은 거절된다", async () => {
     const { host, a } = await setup();
     const errors: string[] = [];
@@ -328,5 +392,61 @@ describe("채팅", () => {
     await until(() => heard.length >= 1);
     await flush();
     expect(heard).toEqual(["x".repeat(80)]);
+  });
+});
+
+describe("방장 확인(서명)", () => {
+  async function hostWithLink(net: MemoryNetwork) {
+    const host = new HostRoom({
+      transport: net.join("host"),
+      hostName: "방장",
+      rules,
+      revealTimeoutMs: 500,
+    });
+    return { host, fingerprint: await host.fingerprint() };
+  }
+
+  it("링크를 아는 사람이 먼저 방장인 척 답해도 서명이 없으면 무시한다", async () => {
+    const net = new MemoryNetwork();
+    const { host, fingerprint } = await hostWithLink(net);
+    // 가짜 방장: 들어오는 사람에게 서명 없이 바로 "어서 와"
+    const evil = net.join("evil");
+    evil.onMessage((m, from) => {
+      if ((m as { t?: string }).t === "join")
+        evil.send({ t: "welcome", seat: 1, token: "가짜" }, from);
+    });
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+      hostFingerprint: fingerprint,
+    });
+    await until(() => a.seat !== null && a.lobby !== null, 3000);
+    expect(a.token).not.toBe("가짜");
+    expect(a.impostors).toBeGreaterThanOrEqual(1);
+    expect(a.lobby?.seats.map((s) => s.name)).toContain("철수");
+    host.close();
+  });
+
+  it("다른 열쇠로 서명한 가짜 방장도 지문이 달라 무시한다", async () => {
+    const net = new MemoryNetwork();
+    const { host, fingerprint } = await hostWithLink(net);
+    // 가짜 방장도 HostRoom을 그대로 돌린다(자기 열쇠로 서명한다).
+    const fake = new HostRoom({
+      transport: net.join("fake"),
+      hostName: "가짜 방장",
+      rules,
+    });
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+      hostFingerprint: fingerprint,
+    });
+    await until(() => a.seat !== null && a.lobby !== null, 3000);
+    expect(a.lobby?.seats[0]?.name).toBe("방장");
+    expect(a.impostors).toBeGreaterThanOrEqual(1);
+    host.close();
+    fake.close();
   });
 });

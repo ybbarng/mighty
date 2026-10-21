@@ -12,6 +12,11 @@ import { LocalMatch } from "@/game/local-match";
 import { mightyKit } from "@/game/mighty-kit";
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
+  createHostIdentity,
+  type HostIdentity,
+  welcomeStatement,
+} from "./identity";
+import {
   type AuditReport,
   CHAT_MAX_LENGTH,
   type ChatMessage,
@@ -80,6 +85,8 @@ export class HostRoom<
   private readonly guests = new Map<number, GuestSeat>();
   private readonly names = new Map<number, string>();
   private readonly hostSecret = newSecret();
+  /** 방장 서명 열쇠. 지문을 초대 링크에 넣는다 */
+  private readonly identity: Promise<HostIdentity> = createHostIdentity();
   private hostCommit: string | null = null;
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
@@ -130,12 +137,23 @@ export class HostRoom<
     });
   }
 
+  /** 초대 링크에 넣을 방장 공개 열쇠 지문 */
+  async fingerprint(): Promise<string> {
+    return (await this.identity).fingerprint;
+  }
+
   lobby(): LobbyState {
     const seats: LobbySeat[] = Array.from(
       { length: this.kit.playerCount(this.rules) },
       (_, seat) => {
         if (seat === 0)
-          return { seat, name: this.hostName, kind: "host", connected: true };
+          return {
+            seat,
+            name: this.hostName,
+            kind: "host",
+            connected: true,
+            peerId: this.transport.selfId,
+          };
         const guest = this.guests.get(seat);
         if (guest)
           return {
@@ -143,6 +161,7 @@ export class HostRoom<
             name: this.names.get(seat) ?? "손님",
             kind: "guest",
             connected: guest.peerId !== null,
+            ...(guest.peerId ? { peerId: guest.peerId } : {}),
           };
         return {
           seat,
@@ -341,7 +360,13 @@ export class HostRoom<
   private onMessage(message: GuestMessage<ActionT>, from: string): void {
     switch (message.t) {
       case "join":
-        this.onJoin(from, message.name, message.token, message.commit);
+        void this.onJoin(
+          from,
+          message.name,
+          message.token,
+          message.commit,
+          typeof message.nonce === "string" ? message.nonce : null,
+        );
         break;
       case "reveal": {
         const seat = this.seatOf(from);
@@ -380,12 +405,34 @@ export class HostRoom<
     }
   }
 
-  private onJoin(
+  /** 들어온 사람에게 자리와 토큰을 알린다. 서명을 붙여 방장임을 증명한다 */
+  private async welcome(
+    peerId: string,
+    seat: number,
+    token: string,
+    nonce: string | null,
+  ): Promise<void> {
+    if (nonce === null) {
+      this.send({ t: "welcome", seat, token }, peerId);
+      return;
+    }
+    const identity = await this.identity;
+    const sig = await identity.sign(
+      welcomeStatement({ game: this.kit.id, nonce, peerId, seat, token }),
+    );
+    this.send(
+      { t: "welcome", seat, token, proof: { key: identity.publicKey, sig } },
+      peerId,
+    );
+  }
+
+  private async onJoin(
     peerId: string,
     name: string,
     token: string | null,
     commitHash: string,
-  ): void {
+    nonce: string | null,
+  ): Promise<void> {
     if (
       this.kickedPeers.has(peerId) ||
       (token !== null && this.kickedTokens.has(token))
@@ -399,7 +446,7 @@ export class HostRoom<
         guest.peerId = peerId;
         if (guest.standInTimer) clearTimeout(guest.standInTimer);
         guest.standInTimer = null;
-        this.send({ t: "welcome", seat, token }, peerId);
+        await this.welcome(peerId, seat, token, nonce);
         if (this.match) {
           this.match.setStandIn(seat, false);
           this.send({ t: "started", commitments: this.commitments }, peerId);
@@ -433,7 +480,7 @@ export class HostRoom<
       standInTimer: null,
     });
     this.names.set(free, name.trim().slice(0, 12) || "손님");
-    this.send({ t: "welcome", seat: free, token: newToken }, peerId);
+    await this.welcome(peerId, free, newToken, nonce);
     this.broadcastLobby();
   }
 

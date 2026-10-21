@@ -22,6 +22,7 @@ import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
 import type { LobbyState } from "@/net/protocol";
 import {
+  hostFingerprintFromUrl,
   inviteUrl,
   loadSeatToken,
   onlineSession,
@@ -86,6 +87,8 @@ export function OnlineScreen({
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
   const isHost = roomFromUrl === null;
   // 저장소는 브라우저에만 있으므로 그린 뒤에 읽는다.
   const [history, setHistory] = useState<AuditRecord[]>([]);
@@ -127,6 +130,7 @@ export function OnlineScreen({
           pace: browserPace,
         });
         onlineSession.host = host;
+        setFingerprint(await host.fingerprint());
         useChat.getState().reset();
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
@@ -144,6 +148,9 @@ export function OnlineScreen({
           name: trimmed,
           token: saved?.token ?? null,
           ...(saved ? { secret: saved.secret } : {}),
+          ...(hostFingerprintFromUrl()
+            ? { hostFingerprint: hostFingerprintFromUrl() as string }
+            : {}),
         });
         onlineSession.guest = guest;
         useChat.getState().reset();
@@ -210,7 +217,10 @@ export function OnlineScreen({
     }
   };
 
-  const link = typeof window === "undefined" ? "" : inviteUrl(roomCode);
+  const link =
+    typeof window === "undefined" || !fingerprint
+      ? ""
+      : inviteUrl(roomCode, fingerprint);
   const share = async () => {
     try {
       if (navigator.share)

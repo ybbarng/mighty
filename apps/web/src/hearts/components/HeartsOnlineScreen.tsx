@@ -14,6 +14,7 @@ import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
 import type { LobbyState } from "@/net/protocol";
 import {
+  hostFingerprintFromUrl,
   inviteUrl,
   loadSeatToken,
   openTransport,
@@ -64,6 +65,8 @@ export function HeartsOnlineScreen({
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
   const isHost = roomFromUrl === null;
   const started = useRef(false);
 
@@ -106,6 +109,7 @@ export function HeartsOnlineScreen({
           pace: (next) => setTimeout(next, 0),
         });
         heartsSession.host = host;
+        setFingerprint(await host.fingerprint());
         useChat.getState().reset();
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
@@ -120,6 +124,9 @@ export function HeartsOnlineScreen({
           name: trimmed,
           token: saved?.token ?? null,
           ...(saved ? { secret: saved.secret } : {}),
+          ...(hostFingerprintFromUrl()
+            ? { hostFingerprint: hostFingerprintFromUrl() as string }
+            : {}),
         });
         heartsSession.guest = guest;
         useChat.getState().reset();
@@ -190,7 +197,10 @@ export function HeartsOnlineScreen({
     }
   };
 
-  const link = typeof window === "undefined" ? "" : inviteUrl(roomCode);
+  const link =
+    typeof window === "undefined" || !fingerprint
+      ? ""
+      : inviteUrl(roomCode, fingerprint);
   const share = async () => {
     try {
       if (navigator.share)

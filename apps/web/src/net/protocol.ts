@@ -9,6 +9,8 @@ export interface LobbySeat {
   kind: "host" | "guest" | "bot";
   /** 사람 자리가 지금 연결되어 있는가. 끊기면 잠시 뒤 컴퓨터가 대신 둔다 */
   connected: boolean;
+  /** 사람 자리의 연결 아이디. 참가자끼리 직접 보낸 알림이 그 자리에서 왔는지 맞춰 본다 */
+  peerId?: string;
 }
 
 export interface LobbyState {
@@ -57,7 +59,14 @@ export interface Reveal {
 
 /** 참가자 → 방장. `A`는 게임의 행동(기본 마이티) */
 export type GuestMessage<A = Action> =
-  | { t: "join"; name: string; token: string | null; commit: string }
+  | {
+      t: "join";
+      name: string;
+      token: string | null;
+      commit: string;
+      /** 방장 서명에 넣을 임의의 값(identity.ts) */
+      nonce?: string;
+    }
   | { t: "action"; action: A }
   | { t: "reveal"; secret: string }
   | { t: "chat"; text: string }
@@ -66,7 +75,13 @@ export type GuestMessage<A = Action> =
 
 /** 방장 → 참가자. `V`·`E`·`A`는 게임의 화면·이벤트·행동(기본 마이티) */
 export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
-  | { t: "welcome"; seat: number; token: string }
+  | {
+      t: "welcome";
+      seat: number;
+      token: string;
+      /** 방장 서명: 공개 열쇠와 서명(identity.ts). 초대 링크의 지문과 맞아야 방장으로 믿는다 */
+      proof?: { key: string; sig: string };
+    }
   | { t: "full" }
   /** 방장이 대기실에서 내보냈다. 같은 방에는 다시 들어올 수 없다 */
   | { t: "kicked" }
