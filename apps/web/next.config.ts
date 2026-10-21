@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@mighty/engine",
     "@mighty/ai",
+    "@mighty/fair-play",
     "@mighty/hearts-engine",
     "@mighty/hearts-ai",
   ],

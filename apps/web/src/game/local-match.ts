@@ -12,7 +12,7 @@ import {
 } from "@mighty/engine";
 
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
-import type { GameKit, KitBot, KitLoggedAction } from "./kit";
+import type { GameKit, KitBot, KitLoggedAction, StepOutcome } from "./kit";
 import { mightyKit } from "./mighty-kit";
 
 export interface LocalMatchOptions<
@@ -41,6 +41,29 @@ export interface LocalMatchOptions<
    * 2단계 봇이 여럿 이어 생각해도 화면이 한 번에 오래 멈추지 않는다. 없으면 한 번에 다 둔다.
    */
   pace?: (next: () => void) => void;
+  /** 엔진 한 걸음을 바꾼다(멘탈 포커: 자리 표를 든 상태, packages/fair-play) */
+  step?: (
+    state: State,
+    seat: number,
+    action: ActionT,
+  ) => StepOutcome<State, Event>;
+  /**
+   * 엔진에 넣기 전 비동기 준비(멘탈 포커: 열쇠·증명 모으기). 있으면 행동을 하나씩 차례로 처리하고,
+   * 돌려준 행동을 엔진에 넣는다
+   */
+  prepare?: (
+    state: State,
+    seat: number,
+    action: ActionT,
+  ) => Promise<{ ok: true; action: ActionT } | { ok: false; error: string }>;
+  /** 그 자리에 보낼 화면을 바꾼다. null이면 아직 보여 줄 수 없어 미룬다(`flushViews`) */
+  revealView?: (seat: number, view: View) => View | null;
+  /** 아직 보여 줄 수 없는 화면 대신 쓸 것(결정을 숨긴 화면). 없으면 마지막으로 보낸 화면 */
+  maskView?: (seat: number, view: View) => View;
+  /** 엔진 걸음 뒤 */
+  afterStep?: (state: State, events: Event[]) => void;
+  /** 준비하다 거절된 행동(비동기라 `submitAs`가 돌려준 뒤에 알게 된다) */
+  onLateError?: (seat: number, error: string) => void;
 }
 
 /** 브라우저에 남기는 저장 내용. 상태 대신 시작 조건과 행동 기록만 남기고 `replay`로 되살린다 */
@@ -91,6 +114,29 @@ export class LocalMatch<
   private readonly pending: Snapshot<View, Event>[] = [];
   private readonly pace: ((next: () => void) => void) | null;
   private botScheduled = false;
+  private readonly stepper: (
+    state: State,
+    seat: number,
+    action: ActionT,
+  ) => StepOutcome<State, Event>;
+  private readonly options: LocalMatchOptions<
+    Rules,
+    State,
+    View,
+    ActionT,
+    Event,
+    Extra
+  >;
+  /** 준비 중인 행동들(차례로 처리한다) */
+  private work: Promise<void> = Promise.resolve();
+  /** 컴퓨터 행동을 준비하는 중 */
+  private botBusy = false;
+  /** 아직 보여 줄 수 없어 미룬 화면(자리별) */
+  private readonly held = new Map<number, Snapshot<View, Event>[]>();
+  /** 자리별로 마지막에 보낸 화면 */
+  private readonly shown = new Map<number, View>();
+  /** 부정이 드러나 멈췄다 */
+  private haltedReason: string | null = null;
 
   constructor(
     options: LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -116,6 +162,9 @@ export class LocalMatch<
       options.bot ?? (heuristicBot as unknown as KitBot<View, ActionT>);
     this.pace = options.pace ?? null;
     this.rng = createRng(options.seed ^ 0x2545f491);
+    this.options = options;
+    this.stepper =
+      options.step ?? ((st, seat, a) => this.kit.step(st, seat, a));
 
     if (savedLog && savedLog.length > 0) {
       const replayed = this.kit.replay(
@@ -141,13 +190,17 @@ export class LocalMatch<
         this.presetDeal,
       );
       this.state = created.state;
-      this.pending.push({
+      this.created = created.events;
+      this.hold(this.seat, {
         view: this.kit.viewOf(this.state, this.seat),
         events: created.events,
       });
     }
     this.runBots();
   }
+
+  /** 대국을 만들 때 나온 사건(멘탈 포커 첫 섞기를 시작한다) */
+  created: Event[] = [];
 
   static restore(
     saved: SavedMatch,
@@ -166,11 +219,70 @@ export class LocalMatch<
   }
 
   current(): View {
-    return this.kit.viewOf(this.state, this.seat);
+    return this.viewFor(this.seat);
   }
 
+  /** 그 자리 화면. 아직 보여 줄 수 없으면 마지막으로 보낸 화면 */
   viewFor(seat: number): View {
-    return this.kit.viewOf(this.state, seat);
+    const raw = this.kit.viewOf(this.state, seat);
+    if (!this.options.revealView) return raw;
+    const real = this.options.revealView(seat, raw);
+    if (real) return real;
+    return this.options.maskView
+      ? this.options.maskView(seat, raw)
+      : (this.shown.get(seat) ?? raw);
+  }
+
+  /** 엔진 상태(멘탈 포커 진행용) */
+  rawState(): State {
+    return this.state;
+  }
+
+  /** 엔진 상태를 고친다(행동 기록에는 남지 않는다. 멘탈 포커 증명 반영용) */
+  patchState(fn: (state: State) => State): void {
+    this.state = fn(this.state);
+  }
+
+  /** 미룬 화면을 다시 보내 보고 컴퓨터를 깨운다 */
+  refresh(): void {
+    for (const seat of [...this.held.keys()]) this.deliver(seat);
+    this.runBots();
+  }
+
+  /** 부정이 드러나 더 진행하지 않는다 */
+  halt(reason: string): void {
+    this.haltedReason = reason;
+  }
+
+  get halted(): string | null {
+    return this.haltedReason;
+  }
+
+  /** 화면 하나를 그 자리에 보낸다. 미룬 것이 있으면 뒤에 줄 세운다 */
+  private hold(seat: number, snapshot: Snapshot<View, Event>): void {
+    const queue = this.held.get(seat) ?? [];
+    queue.push(snapshot);
+    this.held.set(seat, queue);
+    this.deliver(seat);
+  }
+
+  private deliver(seat: number): void {
+    const queue = this.held.get(seat);
+    if (!queue) return;
+    while (queue.length > 0) {
+      const next = queue[0] as Snapshot<View, Event>;
+      const view = this.options.revealView
+        ? this.options.revealView(seat, next.view)
+        : next.view;
+      if (view === null) return;
+      queue.shift();
+      this.shown.set(seat, view);
+      const snapshot = { view, events: next.events };
+      const set = this.listeners.get(seat);
+      if (set && set.size > 0) for (const l of set) l(snapshot);
+      else if (seat === this.seat) this.pending.push(snapshot);
+    }
+    this.held.delete(seat);
   }
 
   /** 지금까지 쌓인 진행을 넘겨 준다. 구독을 시작할 때 처음 한 번 부른다 */
@@ -186,10 +298,36 @@ export class LocalMatch<
   submitAs(seat: number, action: ActionT): SubmitResult {
     if (!this.humans.has(seat))
       return { ok: false, error: "사람 자리가 아니다" };
+    if (this.haltedReason) return { ok: false, error: this.haltedReason };
+    if (this.options.prepare) {
+      this.enqueue(seat, action, false);
+      return { ok: true };
+    }
     const result = this.apply(seat, action);
     if (!result.ok) return result;
     this.runBots();
     return { ok: true };
+  }
+
+  /** 준비가 필요한 행동을 차례로 처리한다 */
+  private enqueue(seat: number, action: ActionT, bot: boolean): void {
+    const prepare = this.options.prepare as NonNullable<
+      LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>["prepare"]
+    >;
+    this.work = this.work.then(async () => {
+      if (this.haltedReason) return;
+      const prepared = await prepare(this.state, seat, action);
+      const result = prepared.ok
+        ? this.apply(seat, prepared.action, bot)
+        : prepared;
+      if (bot) this.botBusy = false;
+      if (!result.ok) {
+        this.options.onLateError?.(seat, result.error);
+        // 컴퓨터 행동이 거절되면 같은 생각을 되풀이하지 않게 멈춘다(다음 `refresh`에 다시 생각한다).
+        if (bot) return;
+      }
+      this.runBots();
+    });
   }
 
   subscribe(listener: (snapshot: Snapshot<View, Event>) => void): () => void {
@@ -236,21 +374,21 @@ export class LocalMatch<
   }
 
   private apply(seat: number, action: ActionT, bot = false): SubmitResult {
-    const result = this.kit.step(this.state, seat, action);
+    const result = this.stepper(this.state, seat, action);
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push(bot ? { seat, action, bot: true } : { seat, action });
-    for (const [listenerSeat, set] of this.listeners) {
-      if (set.size === 0) continue;
-      const snapshot = {
+    // 멘탈 포커는 이 걸음의 사건으로 섞기·나눠 주기를 이어 간다(화면을 보내기 전에).
+    this.options.afterStep?.(this.state, result.events);
+    const seats = new Set([...this.listeners.keys(), this.seat]);
+    for (const listenerSeat of seats) {
+      if (
+        listenerSeat !== this.seat &&
+        (this.listeners.get(listenerSeat)?.size ?? 0) === 0
+      )
+        continue;
+      this.hold(listenerSeat, {
         view: this.kit.viewOf(this.state, listenerSeat),
-        events: result.events,
-      };
-      for (const listener of set) listener(snapshot);
-    }
-    if ((this.listeners.get(this.seat)?.size ?? 0) === 0) {
-      this.pending.push({
-        view: this.kit.viewOf(this.state, this.seat),
         events: result.events,
       });
     }
@@ -283,14 +421,25 @@ export class LocalMatch<
 
   /** 봇 한 수. 둘 봇이 없으면 `false` */
   private stepBot(): boolean {
+    if (this.haltedReason || this.botBusy) return false;
     const seat = this.kit.pendingSeats(this.state).find((s) => this.isBot(s));
     if (seat === undefined) return false;
-    const view = this.kit.viewOf(this.state, seat);
+    const raw = this.kit.viewOf(this.state, seat);
+    const view = this.options.revealView
+      ? this.options.revealView(seat, raw)
+      : raw;
+    // 멘탈 포커: 아직 카드를 열지 못했으면 열 때까지 기다린다(`refresh`).
+    if (view === null) return false;
     if (this.kit.botCanAct && !this.kit.botCanAct(view)) return false;
     const decided = this.bot.decide(view, this.rng);
     const action = this.kit.annotateBotAction
       ? this.kit.annotateBotAction(view, decided)
       : decided;
+    if (this.options.prepare) {
+      this.botBusy = true;
+      this.enqueue(seat, action, true);
+      return false;
+    }
     const result = this.apply(seat, action, true);
     if (!result.ok)
       throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);

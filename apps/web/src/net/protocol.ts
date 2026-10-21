@@ -1,4 +1,5 @@
 import type { Action, GameEvent, PlayerView } from "@mighty/engine";
+import type { FairControl, FairWire, GroupName } from "@mighty/fair-play";
 
 import type { KitLoggedAction } from "@/game/kit";
 
@@ -24,6 +25,36 @@ export interface LobbyState {
   botLevel?: number;
   seats: LobbySeat[];
   started: boolean;
+  /**
+   * 멘탈 포커로 섞고 나눈다(docs/13-mental-poker.md). 방장도 남의 패를 모른다.
+   * `group`은 쓰는 수의 크기(비트)
+   */
+  fair?: { group: GroupName };
+}
+
+/**
+ * 부정을 찾았다. 찾은 기기가 모두에게 직접 알린다(방장을 거치지 않는다).
+ * 받은 쪽은 "그 사람의 주장"으로 보여 주고, 자기 기기가 찾은 것만 판을 멈추는 근거로 쓴다.
+ */
+export interface IncidentReport {
+  t: "incident";
+  /** 알린 사람 자리 */
+  reporter: number;
+  /** 탓한 자리. 누군지 가릴 수 없으면 null */
+  seat: number | null;
+  reason: string;
+}
+
+/** 멘탈 포커 메시지(섞은 덱, 공개한 열쇠, 물음과 답, 판 기록). 기기끼리 모두에게 직접 보낸다 */
+export type FairMessage = FairWire | FairControl;
+
+export function isFairMessage(value: unknown): value is FairMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { t?: unknown }).t === "fp" &&
+    typeof (value as { k?: unknown }).k === "string"
+  );
 }
 
 /**
@@ -77,6 +108,7 @@ export type GuestMessage<A = Action> =
   | { t: "reveal"; secret: string }
   | { t: "chat"; text: string }
   | AuditReport
+  | IncidentReport
   | { t: "leave" };
 
 /** 방장 → 참가자. `V`·`E`·`A`는 게임의 화면·이벤트·행동(기본 마이티) */
@@ -108,7 +140,15 @@ export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
     }
   /** 채팅. 방장이 받은 말을 모두에게 다시 보낸다(이름은 방장이 붙인다) */
   | { t: "chat"; message: ChatMessage }
-  | AuditReport;
+  /**
+   * 멘탈 포커 판: 시드는 덱을 정하지 않으므로(덱은 모두가 함께 섞는다) 시작하자마자 공개한다.
+   * 참가자는 이 값으로 판마다 진행을 다시 계산한다
+   */
+  | { t: "seed"; reveals: Reveal[]; commitments: Commitment[] }
+  /** 다시 연결된 참가자에게 그동안 오간 멘탈 포커 메시지를 다시 보낸다 */
+  | { t: "fpRelay"; items: { from: number; message: FairMessage }[] }
+  | AuditReport
+  | IncidentReport;
 
 function hasTag(value: unknown): boolean {
   return (

@@ -14,10 +14,10 @@ const OWNERS = Array.from({ length: 53 }, (_, s) =>
 describe("멘탈 포커 계산 시간 (pnpm --filter @mighty/fair-play bench)", () => {
   it.each([GROUP_1024, GROUP_2048])(
     "$bits비트",
-    (g) => {
+    async (g) => {
       const t0 = performance.now();
-      const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g, 53));
-      const deal = shuffleAndDeal(g, parties, OWNERS);
+      const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g));
+      const deal = await shuffleAndDeal(g, parties, OWNERS);
       const t1 = performance.now();
       for (let slot = 0; slot < 50; slot++)
         playSlot(deal, parties, Math.floor(slot / 10), slot);

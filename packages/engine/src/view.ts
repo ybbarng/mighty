@@ -1,6 +1,6 @@
 import type { Card } from "./cards";
-import { type Decision, decisionFor } from "./decision";
-import type { Goal } from "./goal";
+import { type Decision, decisionFor, playDecision } from "./decision";
+import { type Goal, isDealMiss } from "./goal";
 import type { RuleSet } from "./rules";
 import type { ScoreResult } from "./scoring";
 import type {
@@ -110,4 +110,54 @@ export function viewOf(state: MatchState, seat: number): PlayerView {
     result: round.result,
     decision: decisionFor(state, seat),
   };
+}
+
+/**
+ * 화면에 든 내 패로 결정을 다시 계산한다. 멘탈 포커로 하면 방장 엔진은 내 패를 모르고
+ * 자리 표(packages/fair-play)로만 들고 있으므로, 내 기기가 연 진짜 카드로 화면을 고친 뒤 이것을 부른다.
+ * 내 패에 따라 달라지는 것(딜미스, 프렌드로 부를 수 있는 카드, 낼 수 있는 카드)만 다시 계산한다.
+ */
+export function decisionFromView(view: PlayerView): Decision | null {
+  const decision = view.decision;
+  if (decision === null) return null;
+  switch (decision.kind) {
+    case "election":
+      return {
+        ...decision,
+        canDealMiss: isDealMiss(
+          view.rules,
+          view.hand,
+          decision.current?.kiruda ?? "NT",
+        ),
+      };
+    case "friend": {
+      const unavailable = new Set<Card>([
+        ...view.hand,
+        ...(view.discarded ?? []),
+      ]);
+      return {
+        ...decision,
+        options: decision.options.filter(
+          (o) => o.kind !== "card" || !unavailable.has(o.card),
+        ),
+      };
+    }
+    case "play":
+      return playDecision(
+        {
+          rules: view.rules,
+          kiruda: view.goal?.kiruda ?? "NT",
+          trickIndex: view.trickIndex,
+        },
+        view.hand,
+        {
+          cards: view.trick?.plays.map((p) => p.card) ?? [],
+          jokerSuit: view.trick?.jokerSuit ?? null,
+          jokerCalled: view.trick?.jokerCalled ?? false,
+        },
+        view.jokerUsed,
+      );
+    default:
+      return decision;
+  }
 }

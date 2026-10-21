@@ -13,6 +13,7 @@
   "dependencies": {
     "@mighty/ai": "workspace:*",
     "@mighty/engine": "workspace:*",
+    "@mighty/fair-play": "workspace:*",
     "@mighty/hearts-ai": "workspace:*",
     "@mighty/hearts-engine": "workspace:*",
     "clsx": "2.1.1",

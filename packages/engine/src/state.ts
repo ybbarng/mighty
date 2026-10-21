@@ -143,6 +143,11 @@ export interface MatchState {
   round: RoundState;
   /** 튜토리얼처럼 정해진 패로 다음 판을 시작할 때 쓴다. 쓰고 나면 비운다 */
   presetDeal: PresetDeal | null;
+  /**
+   * 6·7마 죽이기 뒤 다시 나눌 카드 순서(맨 뒤부터 나눈다). 있으면 섞지 않고 이 순서를 쓴다.
+   * 멘탈 포커로 섞은 결과를 넣는다(packages/fair-play). 쓰고 나면 지운다
+   */
+  presetRedeal?: Card[];
 }
 
 export type GameEvent =

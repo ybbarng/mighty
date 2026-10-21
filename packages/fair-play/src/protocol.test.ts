@@ -16,9 +16,11 @@ import {
   type DealResult,
   finalAudit,
   giveSlots,
+  giveTo,
   Party,
   PublicLedger,
   playSlot,
+  reshuffle,
   shuffleAndDeal,
 } from "./protocol";
 import { RenegeWatch } from "./renege";
@@ -30,35 +32,35 @@ const OWNERS = Array.from({ length: 53 }, (_, s) =>
   s < 50 ? Math.floor(s / 10) : -1,
 );
 
-function table(tamper?: Parameters<typeof shuffleAndDeal>[3]) {
-  const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g, 53));
-  const deal = shuffleAndDeal(g, parties, OWNERS, tamper);
+async function table(tamper?: Parameters<typeof shuffleAndDeal>[3]) {
+  const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g));
+  const deal = await shuffleAndDeal(g, parties, OWNERS, tamper);
   return { parties, deal };
 }
 
 describe("멘탈 포커 나눠 주기", () => {
-  it("각자 자기 10장만 보고, 다 모으면 바닥 카드 3장을 뺀 50장이 겹치지 않는다", () => {
-    const { parties } = table();
+  it("각자 자기 10장만 보고, 다 모으면 바닥 카드 3장을 뺀 50장이 겹치지 않는다", async () => {
+    const { parties } = await table();
     for (const p of parties) expect(p.hand.size).toBe(10);
     const all = parties.flatMap((p) => [...p.hand.values()]);
     expect(new Set(all).size).toBe(50);
   });
 
-  it("방장(0번)을 포함해 누구도 공개 정보만으로는 남의 카드나 바닥 카드를 열 수 없다", () => {
-    const { deal } = table();
+  it("방장(0번)을 포함해 누구도 공개 정보만으로는 남의 카드나 바닥 카드를 열 수 없다", async () => {
+    const { deal } = await table();
     const seats = [0, 1, 2, 3, 4];
     for (let slot = 0; slot < 53; slot++)
       expect(deal.ledger.open(slot, seats)).toBeNull();
   });
 
-  it("자기 자리 열쇠는 카드를 낼 때와 판 끝에만 내준다", () => {
-    const { parties } = table();
+  it("자기 자리 열쇠는 카드를 낼 때와 판 끝에만 내준다", async () => {
+    const { parties } = await table();
     expect(() => parties[0]?.revealKey(0, "deal")).toThrow();
     expect(() => parties[0]?.revealKey(0, "play")).not.toThrow();
   });
 
-  it("바닥 카드는 주공만 열고, 낸 카드는 모두가 같은 카드로 연다", () => {
-    const { parties, deal } = table();
+  it("바닥 카드는 주공만 열고, 낸 카드는 모두가 같은 카드로 연다", async () => {
+    const { parties, deal } = await table();
     const kitty = giveSlots(deal, parties, [50, 51, 52], 2);
     expect(parties[2]?.hand.size).toBe(13);
     expect(
@@ -69,24 +71,24 @@ describe("멘탈 포커 나눠 주기", () => {
     expect(() => playSlot(deal, parties, 3, 0)).toThrow(); // 남의 자리
   });
 
-  it("새로고침해도 남겨 둔 열쇠로 이어서 낸다", () => {
-    const { parties, deal } = table();
+  it("새로고침해도 남겨 둔 열쇠로 이어서 낸다", async () => {
+    const { parties, deal } = await table();
     const before = parties[1] as Party;
-    const restored = Party.restore(g, before.snapshot(), before.hand);
-    const others = parties.map((p) => (p.seat === 1 ? restored : p));
+    const restored = Party.restore(g, before.snapshot());
+    const others = parties.map((p) => (p.id === 1 ? restored : p));
     expect(playSlot(deal, others, 1, 12)).toBe(before.hand.get(12));
   });
 
-  it("판 끝에 모두 열쇠를 공개하면 53장이 한 번씩 있다", () => {
-    const { parties, deal } = table();
+  it("판 끝에 모두 열쇠를 공개하면 53장이 한 번씩 있다", async () => {
+    const { parties, deal } = await table();
     const audit = finalAudit(deal, parties);
     expect(audit.ok).toBe(true);
     if (audit.ok) expect(new Set(audit.cards).size).toBe(53);
   });
 
-  it("섞을 때 카드를 바꿔치기하면(같은 카드 둘) 판 끝 확인과 공개 순간에 들킨다", () => {
+  it("섞을 때 카드를 바꿔치기하면(같은 카드 둘) 판 끝 확인과 공개 순간에 들킨다", async () => {
     // 2번이 섞으면서 한 자리를 다른 자리 값으로 덮는다(예: 조커를 하나 더 만들기).
-    const { parties, deal } = table((seat, deck) =>
+    const { parties, deal } = await table((seat, deck) =>
       seat === 2
         ? deck.map((c, i) => (i === 1 ? (deck[0] as bigint) : c))
         : deck,
@@ -102,13 +104,14 @@ function peekSlots(
   parties: Party[],
   slots: number[],
 ): Card[] {
-  const ledger = new PublicLedger(g, deal.ledger.deck);
+  const ledger = new PublicLedger(g);
+  ledger.extend(deal.ledger.deck);
   return slots.map((slot) => {
     for (const p of parties)
-      ledger.publish(slot, p.seat, p.revealKey(slot, "audit"));
+      ledger.publish(slot, p.id, p.revealKey(slot, "audit"));
     return ledger.open(
       slot,
-      parties.map((p) => p.seat),
+      parties.map((p) => p.id),
     ) as Card;
   });
 }
@@ -131,6 +134,8 @@ function playRound(deal: DealResult, parties: Party[]) {
   for (
     let i = 0;
     i < 400 &&
+    // 모두 포기·딜미스로 다시 나누면 엔진이 따로 섞으므로 여기서 멈춘다.
+    state.roundNumber === 1 &&
     state.round.phase !== "roundEnd" &&
     state.round.phase !== "gameOver";
     i++
@@ -172,15 +177,37 @@ function playRound(deal: DealResult, parties: Party[]) {
 }
 
 describe("한 판 전체", () => {
-  it("정직한 판: 낸 카드를 프로토콜로 열면 엔진의 카드와 같고, 위반이 없다", () => {
-    const { parties, deal } = table();
+  it("정직한 판: 낸 카드를 프로토콜로 열면 엔진의 카드와 같고, 위반이 없다", async () => {
+    const { parties, deal } = await table();
     const { state, opened } = playRound(deal, parties);
     // 모두 포기해 다시 나누는 판이 아니면 50장을 낸다.
     if (state.round.phase === "roundEnd") expect(opened).toBe(50);
     expect(finalAudit(deal, parties).ok).toBe(true);
   });
 
-  it("DECK은 마이티 53장", () => {
+  it("6마 다시 나누기: 바닥 카드와 죽은 사람 카드를 새 자리로 섞어도 같은 카드들이고, 아무도 미리 모른다", async () => {
+    const parties = [0, 1, 2, 3, 4, 5].map((id) => new Party(id, g));
+    const owners = Array.from({ length: 53 }, (_, s) =>
+      s < 48 ? Math.floor(s / 8) : -1,
+    );
+    const deal = await shuffleAndDeal(g, parties, owners);
+    // 5번이 죽었다: 5번 카드 8장 + 바닥 5장. 죽인 카드 한 장(40번 자리)은 증명으로 이미 공개됐다.
+    deal.ledger.publish(40, 5, (parties[5] as Party).revealKey(40, "proof"));
+    const pool = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52];
+    const poolCards = peekSlots(deal, parties, pool);
+    const fresh = await reshuffle(deal, parties, pool);
+    expect(fresh).toEqual(Array.from({ length: 13 }, (_, i) => 53 + i));
+    const ids = parties.map((p) => p.id);
+    for (const slot of fresh) expect(deal.ledger.open(slot, ids)).toBeNull();
+    giveTo(deal, parties, fresh.slice(0, 2), 1);
+    expect([...(parties[1] as Party).hand]).toHaveLength(10);
+    expect(peekSlots(deal, parties, fresh).sort()).toEqual(poolCards.sort());
+    const audit = finalAudit(deal, parties);
+    expect(audit.ok).toBe(true);
+    if (audit.ok) expect(new Set(audit.cards).size).toBe(53);
+  });
+
+  it("DECK은 마이티 53장", async () => {
     expect(DECK).toHaveLength(53);
   });
 });

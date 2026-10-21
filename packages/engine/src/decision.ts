@@ -92,6 +92,23 @@ function friendOptions(state: MatchState): FriendDeclaration[] {
   return options;
 }
 
+/** 카드를 낼 차례의 결정: 낼 수 있는 카드와 조커콜 */
+export function playDecision(
+  ctx: TrickContext,
+  myHand: readonly Card[],
+  current: TrickCards,
+  jokerUsed: boolean,
+): Decision {
+  const cards = playableCards(ctx, myHand, current);
+  const leading = current.cards.length === 0;
+  const callCard = jokerCallOf(ctx.rules, ctx.kiruda);
+  const jokerCallCard =
+    leading && cards.includes(callCard) && canDeclareJokerCall(ctx, jokerUsed)
+      ? callCard
+      : null;
+  return { kind: "play", cards, leading, jokerCallCard };
+}
+
 /** `seat`가 지금 내릴 결정. 차례가 아니면 `null`. */
 export function decisionFor(state: MatchState, seat: number): Decision | null {
   const { rules, round } = state;
@@ -148,21 +165,13 @@ export function decisionFor(state: MatchState, seat: number): Decision | null {
     case "friend":
       return { kind: "friend", options: friendOptions(state) };
 
-    case "play": {
-      const ctx = trickContext(state);
-      const current = trickCards(round);
-      const myHand = hand(round, seat);
-      const cards = playableCards(ctx, myHand, current);
-      const leading = current.cards.length === 0;
-      const callCard = jokerCallOf(rules, ctx.kiruda);
-      const jokerCallCard =
-        leading &&
-        cards.includes(callCard) &&
-        canDeclareJokerCall(ctx, round.jokerUsed)
-          ? callCard
-          : null;
-      return { kind: "play", cards, leading, jokerCallCard };
-    }
+    case "play":
+      return playDecision(
+        trickContext(state),
+        hand(round, seat),
+        trickCards(round),
+        round.jokerUsed,
+      );
 
     default:
       return null;

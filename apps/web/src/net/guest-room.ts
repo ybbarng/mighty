@@ -8,18 +8,27 @@ import {
   type RuleSet,
 } from "@mighty/engine";
 
+import {
+  FairGuestSeat,
+  type FairLogged,
+  type Incident,
+} from "@mighty/fair-play";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import type { GameKit, KitLoggedAction } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 
+import { verifyFairLog } from "./fair-verify";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import { verifyHostProof, welcomeStatement } from "./identity";
 import {
   type AuditReport,
   type ChatMessage,
   type Commitment,
+  type FairMessage,
   type GuestMessage,
   type HostMessage,
+  type IncidentReport,
+  isFairMessage,
   isHostMessage,
   type LobbyState,
   type Reveal,
@@ -49,6 +58,8 @@ export class RemoteMatch<
     readonly seat: number,
     first: Snapshot<View, Event>,
     private readonly sendAction: (action: ActionT) => void,
+    /** 보내기 전에 행동을 바꾼다(멘탈 포커: 낼 카드 열쇠 공개, 버릴 카드를 자리 표로). null이면 못 보낸다 */
+    private readonly transform?: (action: ActionT) => ActionT | null,
   ) {
     this.last = first.view;
     this.seen.push(JSON.stringify(first.view));
@@ -67,8 +78,10 @@ export class RemoteMatch<
   submit(action: ActionT): SubmitResult {
     if (this.last.decision === null)
       return { ok: false, error: "지금은 차례가 아니다" };
-    this.sent.push(JSON.stringify(action));
-    this.sendAction(action);
+    const outgoing = this.transform ? this.transform(action) : action;
+    if (outgoing === null) return { ok: false, error: "손에 없는 카드다" };
+    this.sent.push(JSON.stringify(outgoing));
+    this.sendAction(outgoing);
     return { ok: true };
   }
 
@@ -130,6 +143,15 @@ export interface GuestEvents<
   hostLeft: () => void;
   connection: (state: ConnectionState) => void;
   audit: (result: AuditResult) => void;
+  /** 부정 알림. `own`이면 내 기기가 찾은 것이다 */
+  incident: (notice: {
+    reporter: number;
+    seat: number | null;
+    reason: string;
+    own: boolean;
+  }) => void;
+  /** 멘탈 포커: 한 판을 진짜 카드로 다시 계산해 문제가 없었다 */
+  roundVerified: (deal: number) => void;
 }
 
 /**
@@ -191,7 +213,15 @@ export class GuestRoom<
     hostLeft: new Set(),
     connection: new Set(),
     audit: new Set(),
+    incident: new Set(),
+    roundVerified: new Set(),
   };
+  /** 멘탈 포커 진행(이 방이 멘탈 포커일 때, 첫 화면을 받으면 만든다) */
+  fair: FairGuestSeat | null = null;
+  /** 멘탈 포커 판: 시작하자마자 공개된 시드 */
+  private fairSeed: number | null = null;
+  /** 진행을 만들기 전에 온 멘탈 포커 메시지 */
+  private readonly fairEarly: { message: FairMessage; from: number }[] = [];
 
   constructor(
     options: GuestRoomOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -330,12 +360,183 @@ export class GuestRoom<
     this.transport.send(message, to);
   }
 
+  /** 연결 아이디 → 자리(대기실에 적힌 연결). 모르면 null */
+  private seatOfPeer(peerId: string): number | null {
+    if (peerId === this.hostId) return 0;
+    const seat = this.lobby?.seats.find(
+      (s) => s.kind === "guest" && s.peerId === peerId,
+    );
+    return seat ? seat.seat : null;
+  }
+
+  private onFair(message: FairMessage, from: number): void {
+    if (!this.fair) {
+      this.fairEarly.push({ message, from });
+      return;
+    }
+    this.fair.receive(message, from);
+  }
+
+  /** 첫 화면을 받으면 멘탈 포커 진행을 만든다 */
+  private ensureFair(): FairGuestSeat | null {
+    if (this.fair) return this.fair;
+    const lobby = this.lobby;
+    if (!lobby?.fair || this.seat === null) return null;
+    const rules = this.kit.decodeRules(lobby.ruleCode);
+    if (!rules.ok) return null;
+    const seat = this.seat;
+    const fair = new FairGuestSeat({
+      rules: rules.rules as unknown as RuleSet,
+      seat,
+      guestSeats: lobby.seats
+        .filter((s) => s.kind === "guest")
+        .map((s) => s.seat),
+      group: lobby.fair.group,
+      broadcast: (message) => this.transport.send(message),
+      onIncident: (incident) => this.raiseIncident(incident),
+      onSnapshot: (view, events) =>
+        this.deliver({
+          view: view as unknown as View,
+          events: events as unknown as Event[],
+        }),
+      onVerify: (deal, log) => void this.verifyRound(deal, log),
+    });
+    this.fair = fair;
+    for (const { message, from } of this.fairEarly.splice(0))
+      fair.receive(message, from);
+    return fair;
+  }
+
+  /** 내 기기가 부정을 찾았다: 모두에게 알리고 화면에 표시한다 */
+  private raiseIncident(incident: Incident): void {
+    if (this.seat === null) return;
+    const report: IncidentReport = {
+      t: "incident",
+      reporter: this.seat,
+      seat: incident.seat,
+      reason: incident.reason,
+    };
+    this.transport.send(report);
+    for (const l of this.listeners.incident)
+      l({
+        reporter: this.seat,
+        seat: incident.seat,
+        reason: incident.reason,
+        own: true,
+      });
+  }
+
+  /** 화면을 대국에 넘긴다(첫 화면이면 대국을 만든다) */
+  private deliver(snapshot: Snapshot<View, Event>): void {
+    if (this.seat === null) return;
+    if (this.match) {
+      this.match.receive(snapshot);
+      return;
+    }
+    this.match = new RemoteMatch<View, ActionT, Event>(
+      this.seat,
+      snapshot,
+      (action) => {
+        if (this.hostId) this.send({ t: "action", action }, this.hostId);
+      },
+      this.fair
+        ? (action) =>
+            (this.fair?.outgoing(action as never) as ActionT | null) ?? null
+        : undefined,
+    );
+    for (const l of this.listeners.match) l(this.match);
+  }
+
+  private fairInput(log: readonly FairLogged[]) {
+    const lobby = this.lobby;
+    if (!lobby || this.seat === null || !this.match || !this.fair) return null;
+    if (this.fairSeed === null) return null;
+    const rules = this.kit.decodeRules(lobby.ruleCode);
+    if (!rules.ok) return null;
+    const level = lobby.botLevel;
+    const bot =
+      level !== undefined && this.kit.botFor ? this.kit.botFor(level) : null;
+    return {
+      rules: rules.rules as unknown as RuleSet,
+      seed: this.fairSeed,
+      seat: this.seat,
+      log,
+      deals: this.fair.deals,
+      botSeats: new Set(
+        lobby.seats.filter((s) => s.kind === "bot").map((s) => s.seat),
+      ),
+      bot: bot as never,
+      sent: this.match.sent,
+      seen: this.match.seen,
+    };
+  }
+
+  /** 마지막 턴에 판 전체를 진짜 카드로 다시 계산한다 */
+  private async verifyRound(deal: number, log: FairLogged[]): Promise<void> {
+    const input = this.fairInput(log);
+    if (!input) {
+      this.raiseIncident({
+        seat: 0,
+        reason: "방장이 시드를 공개하지 않아 검증하지 못했다",
+      });
+      return;
+    }
+    const verdict = await verifyFairLog({ ...input, inFlight: true });
+    if (verdict.ok) {
+      for (const l of this.listeners.roundVerified) l(deal);
+      return;
+    }
+    this.fair?.coordinator.incident({
+      seat: verdict.seat,
+      reason: verdict.reason,
+    });
+  }
+
   private async onMessage(
     message: HostMessage<View, Event, ActionT>,
     from: string,
   ): Promise<void> {
     if (this.kicked) return;
+    if (isFairMessage(message)) {
+      const seat = this.seatOfPeer(from);
+      if (seat !== null) this.onFair(message, seat);
+      return;
+    }
     switch (message.t) {
+      case "incident": {
+        const seat = this.seatOfPeer(from);
+        if (seat === null || seat === this.seat || seat !== message.reporter)
+          return;
+        if (typeof message.reason !== "string") return;
+        for (const l of this.listeners.incident)
+          l({
+            reporter: seat,
+            seat: typeof message.seat === "number" ? message.seat : null,
+            reason: message.reason.slice(0, 200),
+            own: false,
+          });
+        break;
+      }
+      case "seed": {
+        if (from !== this.hostId) return;
+        const checked = await this.checkSeed(
+          message.reveals,
+          message.commitments,
+        );
+        if (!checked.ok) {
+          this.raiseIncident({ seat: 0, reason: checked.reason });
+          return;
+        }
+        this.fairSeed = checked.seed;
+        break;
+      }
+      case "fpRelay": {
+        if (from !== this.hostId || !Array.isArray(message.items)) return;
+        for (const item of message.items)
+          if (isFairMessage(item.message) && typeof item.from === "number")
+            this.onFair(item.message, item.from);
+        break;
+      }
       case "welcome": {
         // 이미 방장을 정했으면 다른 연결의 "어서 와"는 무시한다(방장 사칭).
         if (this.hostId !== null && from !== this.hostId) return;
@@ -404,18 +605,14 @@ export class GuestRoom<
       case "snapshot": {
         if (from !== this.hostId || this.seat === null) return;
         const snapshot = { view: message.view, events: message.events };
-        if (this.match) {
-          this.match.receive(snapshot);
-        } else {
-          this.match = new RemoteMatch<View, ActionT, Event>(
-            this.seat,
-            snapshot,
-            (action) => {
-              if (this.hostId) this.send({ t: "action", action }, this.hostId);
-            },
+        const fair = this.ensureFair();
+        // 멘탈 포커: 자리 표를 내가 연 카드로 바꿔 넘긴다(못 열었으면 열 때까지 미룬다).
+        if (fair)
+          fair.snapshot(
+            message.view as unknown as PlayerView,
+            message.events as unknown as GameEvent[],
           );
-          for (const l of this.listeners.match) l(this.match);
-        }
+        else this.deliver(snapshot);
         break;
       }
       case "chat":
@@ -437,11 +634,13 @@ export class GuestRoom<
       case "audit": {
         if (from !== this.hostId || this.audited) return;
         this.audited = true;
-        const result = await this.verify(
-          message.reveals,
-          message.log,
-          message.commitments,
-        );
+        const result = this.fair
+          ? await this.verifyFairEnd(message.log as unknown as FairLogged[])
+          : await this.verify(
+              message.reveals,
+              message.log,
+              message.commitments,
+            );
         for (const l of this.listeners.audit) l(result);
         // 방장을 거치지 않고 모두에게 결과를 알린다.
         if (this.seat !== null)
@@ -463,6 +662,39 @@ export class GuestRoom<
         break;
       }
     }
+  }
+
+  /** 멘탈 포커 판 끝: 다 열린 판까지 기록 전체를 다시 계산한다 */
+  private async verifyFairEnd(log: FairLogged[]): Promise<AuditResult> {
+    if (this.startProblem) return { ok: false, reason: this.startProblem };
+    const input = this.fairInput(log);
+    if (!input) return { ok: false, reason: "검증할 정보가 없다" };
+    // 끝까지 하지 못한 판(그만두기 등)은 열쇠가 다 모이지 않아 그 앞까지만 본다(verifyFairLog).
+    const verdict = await verifyFairLog(input);
+    return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
+  }
+
+  /** 시작 때 알린 약속과 공개한 값으로 시드를 다시 만든다 */
+  private async checkSeed(
+    reveals: Reveal[],
+    finalCommitments: Commitment[],
+  ): Promise<{ ok: true; seed: number } | { ok: false; reason: string }> {
+    if (this.startProblem) return { ok: false, reason: this.startProblem };
+    for (const c of finalCommitments) {
+      const announced = this.startedCommitments.find((s) => s.seat === c.seat);
+      if (announced?.hash !== c.hash)
+        return {
+          ok: false,
+          reason: `${c.seat}번 자리 약속이 시작 때와 다르다`,
+        };
+    }
+    if (!finalCommitments.some((c) => c.seat === this.seat))
+      return { ok: false, reason: "방장이 내 값을 시드에서 뺐다" };
+    const mine = reveals.find((r) => r.seat === this.seat);
+    if (mine?.secret !== this.secret)
+      return { ok: false, reason: "방장이 내 비밀 값을 바꿨다" };
+    const seed = await deriveSeed(finalCommitments, reveals);
+    return seed;
   }
 
   /** 방장이 공개한 값으로 시드와 진행을 다시 계산해 내가 본 것과 맞춰 본다 */

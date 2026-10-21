@@ -196,6 +196,9 @@ importers:
       '@mighty/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@mighty/fair-play':
+        specifier: workspace:*
+        version: link:../../packages/fair-play
       '@mighty/hearts-ai':
         specifier: workspace:*
         version: link:../../packages/hearts-ai

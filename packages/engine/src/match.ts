@@ -489,7 +489,12 @@ export function step(
       round.players = round.players.filter((s) => s !== target);
       round.kill.remaining--;
       if (round.kill.remaining > 0) break;
-      shuffleInPlace(state.rng, round.deck);
+      if (state.presetRedeal) {
+        round.deck = [...state.presetRedeal];
+        delete state.presetRedeal;
+      } else {
+        shuffleInPlace(state.rng, round.deck);
+      }
       const order = seatsFrom(round, seat);
       for (let i = 0; round.deck.length > 3; i++) {
         handOf(round, order[i % order.length] as number).push(

@@ -6,6 +6,11 @@ import type {
   PresetDeal,
   RuleSet,
 } from "@mighty/engine";
+import {
+  FairHostTable,
+  type GroupName,
+  type Incident,
+} from "@mighty/fair-play";
 import { botName } from "@/game/bot-names";
 import type { GameKit, KitBot } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
@@ -21,8 +26,11 @@ import {
   CHAT_MAX_LENGTH,
   type ChatMessage,
   type Commitment,
+  type FairMessage,
   type GuestMessage,
   type HostMessage,
+  type IncidentReport,
+  isFairMessage,
   isGuestMessage,
   type LobbySeat,
   type LobbyState,
@@ -57,6 +65,19 @@ export interface HostRoomOptions<
   botNames?: readonly string[];
   /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
   pace?: (next: () => void) => void;
+  /**
+   * 멘탈 포커로 섞고 나눈다(마이티 3~7마). 방장 기기도 남의 패를 모른다.
+   * 없으면 예전처럼 방장 기기가 시드로 섞는다
+   */
+  fair?: { group: GroupName };
+}
+
+/** 내 기기가 찾은 부정(`own`) 또는 다른 사람이 알린 부정 */
+export interface IncidentNotice {
+  reporter: number;
+  seat: number | null;
+  reason: string;
+  own: boolean;
 }
 
 interface GuestSeat {
@@ -99,6 +120,12 @@ export class HostRoom<
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
   private chatListeners = new Set<(message: ChatMessage) => void>();
   private reportListeners = new Set<(report: AuditReport) => void>();
+  private incidentListeners = new Set<(notice: IncidentNotice) => void>();
+  private readonly fairOption: { group: GroupName } | null;
+  /** 멘탈 포커 진행(이 판이 멘탈 포커일 때) */
+  fair: FairHostTable | null = null;
+  /** 오간 멘탈 포커 메시지. 다시 연결된 참가자에게 다시 보낸다 */
+  private readonly fpLog: { from: number; message: FairMessage }[] = [];
   /** 자리별 마지막 채팅 시각. 도배를 막는다 */
   private readonly lastChat = new Map<number, number>();
   private commitments: Commitment[] = [];
@@ -131,6 +158,7 @@ export class HostRoom<
     this.botLevel = options.botLevel ?? null;
     this.pace = options.pace ?? null;
     this.botNames = options.botNames ?? [];
+    this.fairOption = options.fair ?? null;
     void commit(this.hostSecret).then((hash) => {
       this.hostCommit = hash;
     });
@@ -183,7 +211,42 @@ export class HostRoom<
       ...(this.botLevel !== null ? { botLevel: this.botLevel } : {}),
       seats,
       started: this.match !== null,
+      ...(this.fairGroup()
+        ? { fair: { group: this.fairGroup() as GroupName } }
+        : {}),
     };
+  }
+
+  /** 이 방이 멘탈 포커로 하는가(마이티 3~7마이고 방장이 켰을 때) */
+  private fairGroup(): GroupName | null {
+    if (!this.fairOption || this.kit.id !== "mighty") return null;
+    const count = this.kit.playerCount(this.rules);
+    return count >= 3 ? this.fairOption.group : null;
+  }
+
+  /** 부정 알림(내 기기가 찾은 것과 다른 사람이 알린 것) */
+  onIncident(listener: (notice: IncidentNotice) => void): () => void {
+    this.incidentListeners.add(listener);
+    return () => this.incidentListeners.delete(listener);
+  }
+
+  /** 내 기기가 부정을 찾았다: 판을 멈추고 모두에게 알린다 */
+  private raiseIncident(incident: Incident): void {
+    this.match?.halt(incident.reason);
+    const report: IncidentReport = {
+      t: "incident",
+      reporter: 0,
+      seat: incident.seat,
+      reason: incident.reason,
+    };
+    this.send(report);
+    for (const l of this.incidentListeners)
+      l({
+        reporter: 0,
+        seat: incident.seat,
+        reason: incident.reason,
+        own: true,
+      });
   }
 
   onLobby(listener: (lobby: LobbyState) => void): () => void {
@@ -276,16 +339,28 @@ export class HostRoom<
     const derived = await deriveSeed(this.commitments, this.reveals());
     if (!derived.ok) throw new Error(derived.reason);
 
-    const match = new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
-      kit: this.kit,
-      rules: this.rules,
-      seed: derived.seed,
-      humanSeat: 0,
-      humanSeats: [0, ...this.guests.keys()],
-      ...(this.bot ? { bot: this.bot } : {}),
-      ...(this.pace ? { pace: this.pace } : {}),
-    });
+    const group = this.fairGroup();
+    const match = group
+      ? this.startFair(derived.seed, group)
+      : new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
+          kit: this.kit,
+          rules: this.rules,
+          seed: derived.seed,
+          humanSeat: 0,
+          humanSeats: [0, ...this.guests.keys()],
+          ...(this.bot ? { bot: this.bot } : {}),
+          ...(this.pace ? { pace: this.pace } : {}),
+        });
     this.match = match;
+    if (this.fair) {
+      // 시드는 덱을 정하지 않으므로 바로 공개한다(참가자가 판마다 진행을 다시 계산한다).
+      this.send({
+        t: "seed",
+        reveals: this.reveals(),
+        commitments: this.commitments,
+      });
+      this.fair.begin(match.created as never);
+    }
     const startEvents = this.kit.startEvents(match.viewFor(0));
     for (const [seat, guest] of this.guests) {
       match.subscribeSeat(seat, (snapshot) => {
@@ -301,6 +376,68 @@ export class HostRoom<
     }
     this.broadcastLobby();
     return match;
+  }
+
+  /** 멘탈 포커 판: 엔진은 자리 표를 든 채 진행하고, 증명은 FairHostTable이 모은다 */
+  private startFair(
+    seed: number,
+    group: GroupName,
+  ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
+    type Mighty = LocalMatch;
+    let match: Mighty | null = null;
+    const get = () => match as Mighty;
+    const table = new FairHostTable({
+      rules: this.rules as unknown as RuleSet,
+      seed,
+      guestSeats: [...this.guests.keys()],
+      group,
+      hooks: {
+        patch: (fn) => get().patchState(fn),
+        state: () => get().rawState(),
+        log: () => get().actionLog(),
+        refresh: () => get().refresh(),
+        broadcast: (message) => {
+          this.fpLog.push({ from: 0, message });
+          this.send(message as never);
+        },
+        onIncident: (incident) => this.raiseIncident(incident),
+      },
+    });
+    this.fair = table;
+    match = new LocalMatch({
+      rules: this.rules as unknown as RuleSet,
+      seed,
+      humanSeat: 0,
+      humanSeats: [0, ...this.guests.keys()],
+      presetDeal: table.presetDeal(),
+      ...(this.bot
+        ? { bot: this.bot as unknown as KitBot<PlayerView, Action> }
+        : {}),
+      ...(this.pace ? { pace: this.pace } : {}),
+      step: (state, seat, action) => table.step(state, seat, action),
+      prepare: (state, seat, action) => table.prepare(state, seat, action),
+      revealView: (seat, view) => table.viewFor(seat, view),
+      // 카드를 아직 못 열었으면 손패와 결정을 숨긴다(자리 표로 결정하지 않게).
+      maskView: (_seat, view) => ({
+        ...view,
+        hand: [],
+        discarded: null,
+        decision: null,
+      }),
+      afterStep: (state, events) => table.after(state, events),
+      onLateError: (seat, error) => {
+        const peerId = this.guests.get(seat)?.peerId;
+        if (peerId) this.send({ t: "rejected", error }, peerId);
+      },
+    });
+    return match as unknown as LocalMatch<
+      Rules,
+      State,
+      View,
+      ActionT,
+      Event,
+      Extra
+    >;
   }
 
   /** 게임을 끝내며 검증용 기록을 공개한다 */
@@ -373,8 +510,42 @@ export class HostRoom<
     return null;
   }
 
+  /** 참가자 기기의 멘탈 포커 메시지 */
+  private onFairMessage(message: FairMessage, from: string): void {
+    const seat = this.seatOf(from);
+    const table = this.fair;
+    if (seat === null || !table) return;
+    this.fpLog.push({ from: seat, message });
+    switch (message.k) {
+      case "chain":
+      case "keys":
+        table.receive(message, seat);
+        break;
+      case "answer":
+        if (message.from === seat)
+          table.answer(seat, message.id, message.have === true, message.slot);
+        break;
+    }
+  }
+
   private onMessage(message: GuestMessage<ActionT>, from: string): void {
+    if (isFairMessage(message)) {
+      this.onFairMessage(message, from);
+      return;
+    }
     switch (message.t) {
+      case "incident": {
+        const seat = this.seatOf(from);
+        if (seat === null || typeof message.reason !== "string") return;
+        for (const l of this.incidentListeners)
+          l({
+            reporter: seat,
+            seat: typeof message.seat === "number" ? message.seat : null,
+            reason: message.reason.slice(0, 200),
+            own: false,
+          });
+        break;
+      }
       case "join":
         // 입장 요청은 하나씩 처리한다. 동시에 처리하면 한 연결이 여러 자리를 받을 수 있다.
         this.joinQueue = this.joinQueue.then(() =>
@@ -494,6 +665,18 @@ export class HostRoom<
         if (this.match) {
           this.match.setStandIn(seat, false);
           this.send({ t: "started", commitments: this.commitments }, peerId);
+          if (this.fair) {
+            this.send(
+              {
+                t: "seed",
+                reveals: this.reveals(),
+                commitments: this.commitments,
+              },
+              peerId,
+            );
+            // 끊긴 동안 오간 멘탈 포커 메시지를 다시 보낸다(이미 받은 것은 참가자가 건너뛴다).
+            this.send({ t: "fpRelay", items: [...this.fpLog] }, peerId);
+          }
           this.send(
             { t: "snapshot", view: this.match.viewFor(seat), events: [] },
             peerId,
@@ -538,7 +721,8 @@ export class HostRoom<
       // 시작 전에 나가면 자리를 비운다.
       this.guests.delete(seat);
       this.names.delete(seat);
-    } else {
+    } else if (!this.fair) {
+      // 멘탈 포커 판은 그 사람 카드를 아무도 열 수 없어 컴퓨터가 대신 둘 수 없다. 돌아오기를 기다린다.
       guest.standInTimer = setTimeout(
         () => this.match?.setStandIn(seat, true),
         this.standInDelayMs,
