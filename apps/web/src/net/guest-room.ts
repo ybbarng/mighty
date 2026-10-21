@@ -1,13 +1,15 @@
-import {
-  type Action,
-  decodeRuleString,
-  type LoggedAction,
-  type PlayerView,
-  replay,
-  viewOf,
+import type {
+  Action,
+  GameEvent,
+  MatchState,
+  PlayerView,
+  PresetDeal,
+  RuleSet,
 } from "@mighty/engine";
 
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
+import type { GameKit, KitLoggedAction } from "@/game/kit";
+import { mightyKit } from "@/game/mighty-kit";
 
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
@@ -25,49 +27,65 @@ import type { Transport } from "./transport";
 export type AuditResult = { ok: true } | { ok: false; reason: string };
 
 /** 참가자 화면이 아는 대국. 행동은 방장에게 보내고, 방장이 보낸 스냅숏을 받는다 */
-export class RemoteMatch implements MatchHost {
-  private last: PlayerView;
-  private readonly listeners = new Set<(snapshot: Snapshot) => void>();
-  private readonly pending: Snapshot[] = [];
+export class RemoteMatch<
+  View extends { decision: unknown } = PlayerView,
+  ActionT = Action,
+  Event = GameEvent,
+> implements MatchHost<View, ActionT, Event>
+{
+  private last: View;
+  private readonly listeners = new Set<
+    (snapshot: Snapshot<View, Event>) => void
+  >();
+  private readonly pending: Snapshot<View, Event>[] = [];
 
   constructor(
     readonly seat: number,
-    first: Snapshot,
-    private readonly sendAction: (action: Action) => void,
+    first: Snapshot<View, Event>,
+    private readonly sendAction: (action: ActionT) => void,
   ) {
     this.last = first.view;
     this.pending.push(first);
   }
 
-  current(): PlayerView {
+  current(): View {
     return this.last;
   }
 
-  drain(): Snapshot[] {
+  drain(): Snapshot<View, Event>[] {
     return this.pending.splice(0);
   }
 
   /** 결과는 방장 엔진이 정한다. 거절되면 `rejected` 메시지로 알려 온다 */
-  submit(action: Action): SubmitResult {
+  submit(action: ActionT): SubmitResult {
     if (this.last.decision === null)
       return { ok: false, error: "지금은 차례가 아니다" };
     this.sendAction(action);
     return { ok: true };
   }
 
-  subscribe(listener: (snapshot: Snapshot) => void): () => void {
+  subscribe(listener: (snapshot: Snapshot<View, Event>) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  receive(snapshot: Snapshot): void {
+  receive(snapshot: Snapshot<View, Event>): void {
     this.last = snapshot.view;
     if (this.listeners.size === 0) this.pending.push(snapshot);
     for (const l of this.listeners) l(snapshot);
   }
 }
 
-export interface GuestRoomOptions {
+export interface GuestRoomOptions<
+  Rules = RuleSet,
+  State = MatchState,
+  View = PlayerView,
+  ActionT = Action,
+  Event = GameEvent,
+  Extra = PresetDeal,
+> {
+  /** 어떤 게임의 방인가. 없으면 마이티. 판 끝 검증도 이 게임 엔진으로 한다 */
+  kit?: GameKit<Rules, State, View, ActionT, Event, Extra>;
   transport: Transport;
   name: string;
   /** 재접속용. 같은 방에 다시 들어올 때 같은 자리를 받는다 */
@@ -81,17 +99,44 @@ export interface GuestRoomOptions {
 /** 방장과의 연결 상태 */
 export type ConnectionState = "connected" | "reconnecting";
 
+/** 참가자 방에서 받을 수 있는 알림 */
+export interface GuestEvents<
+  View extends { decision: unknown },
+  ActionT,
+  Event,
+> {
+  lobby: (lobby: LobbyState) => void;
+  seat: (seat: number, token: string) => void;
+  match: (match: RemoteMatch<View, ActionT, Event>) => void;
+  rejected: (error: string) => void;
+  full: () => void;
+  kicked: () => void;
+  chat: (message: ChatMessage) => void;
+  report: (report: AuditReport) => void;
+  hostLeft: () => void;
+  connection: (state: ConnectionState) => void;
+  audit: (result: AuditResult) => void;
+}
+
 /**
  * 참가자 기기의 방. 방장을 찾아 들어가고, 대기실 정보와 대국 스냅숏을 받는다.
  * 게임이 끝나면 방장이 공개한 비밀 값과 기록으로 시드와 진행을 직접 다시 계산해 확인한다.
  */
-export class GuestRoom {
+export class GuestRoom<
+  Rules = RuleSet,
+  State = MatchState,
+  View extends { decision: unknown } = PlayerView,
+  ActionT = Action,
+  Event = GameEvent,
+  Extra = PresetDeal,
+> {
   readonly transport: Transport;
+  readonly kit: GameKit<Rules, State, View, ActionT, Event, Extra>;
   readonly secret: string;
   seat: number | null = null;
   token: string | null;
   lobby: LobbyState | null = null;
-  match: RemoteMatch | null = null;
+  match: RemoteMatch<View, ActionT, Event> | null = null;
   private hostId: string | null = null;
   private commitments: Commitment[] = [];
   private readonly name: string;
@@ -102,21 +147,37 @@ export class GuestRoom {
   private hostClosed = false;
   private readonly reconnectTimeoutMs: number;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly listeners = {
-    lobby: new Set<(lobby: LobbyState) => void>(),
-    seat: new Set<(seat: number, token: string) => void>(),
-    match: new Set<(match: RemoteMatch) => void>(),
-    rejected: new Set<(error: string) => void>(),
-    full: new Set<() => void>(),
-    kicked: new Set<() => void>(),
-    chat: new Set<(message: ChatMessage) => void>(),
-    report: new Set<(report: AuditReport) => void>(),
-    hostLeft: new Set<() => void>(),
-    connection: new Set<(state: ConnectionState) => void>(),
-    audit: new Set<(result: AuditResult) => void>(),
+  private readonly listeners: {
+    [K in keyof GuestEvents<View, ActionT, Event>]: Set<
+      GuestEvents<View, ActionT, Event>[K]
+    >;
+  } = {
+    lobby: new Set(),
+    seat: new Set(),
+    match: new Set(),
+    rejected: new Set(),
+    full: new Set(),
+    kicked: new Set(),
+    chat: new Set(),
+    report: new Set(),
+    hostLeft: new Set(),
+    connection: new Set(),
+    audit: new Set(),
   };
 
-  constructor(options: GuestRoomOptions) {
+  constructor(
+    options: GuestRoomOptions<Rules, State, View, ActionT, Event, Extra>,
+  ) {
+    this.kit =
+      options.kit ??
+      (mightyKit as unknown as GameKit<
+        Rules,
+        State,
+        View,
+        ActionT,
+        Event,
+        Extra
+      >);
     this.transport = options.transport;
     this.name = options.name;
     this.token = options.token;
@@ -146,13 +207,14 @@ export class GuestRoom {
       );
     });
     this.transport.onMessage((message, from) => {
-      if (isHostMessage(message)) void this.onMessage(message, from);
+      if (isHostMessage<View, Event, ActionT>(message))
+        void this.onMessage(message, from);
     });
   }
 
-  on<K extends keyof GuestRoom["listeners"]>(
+  on<K extends keyof GuestEvents<View, ActionT, Event>>(
     event: K,
-    listener: GuestRoom["listeners"][K] extends Set<infer L> ? L : never,
+    listener: GuestEvents<View, ActionT, Event>[K],
   ): () => void {
     const set = this.listeners[event] as Set<typeof listener>;
     set.add(listener);
@@ -189,11 +251,14 @@ export class GuestRoom {
     );
   }
 
-  private send(message: GuestMessage, to: string): void {
+  private send(message: GuestMessage<ActionT>, to: string): void {
     this.transport.send(message, to);
   }
 
-  private async onMessage(message: HostMessage, from: string): Promise<void> {
+  private async onMessage(
+    message: HostMessage<View, Event, ActionT>,
+    from: string,
+  ): Promise<void> {
     if (this.kicked) return;
     switch (message.t) {
       case "welcome": {
@@ -223,6 +288,13 @@ export class GuestRoom {
         break;
       case "lobby":
         if (this.hostId !== null && from !== this.hostId) return;
+        // 다른 게임(마이티 방에 하트로 들어오는 등)의 방이면 나간다.
+        if (message.lobby.game && message.lobby.game !== this.kit.id) {
+          this.kicked = true;
+          this.transport.leave();
+          for (const l of this.listeners.rejected) l("다른 게임의 방입니다");
+          return;
+        }
         this.lobby = message.lobby;
         for (const l of this.listeners.lobby) l(message.lobby);
         break;
@@ -238,9 +310,13 @@ export class GuestRoom {
         if (this.match) {
           this.match.receive(snapshot);
         } else {
-          this.match = new RemoteMatch(this.seat, snapshot, (action) => {
-            if (this.hostId) this.send({ t: "action", action }, this.hostId);
-          });
+          this.match = new RemoteMatch<View, ActionT, Event>(
+            this.seat,
+            snapshot,
+            (action) => {
+              if (this.hostId) this.send({ t: "action", action }, this.hostId);
+            },
+          );
           for (const l of this.listeners.match) l(this.match);
         }
         break;
@@ -277,7 +353,7 @@ export class GuestRoom {
   /** 방장이 공개한 값으로 시드와 진행을 다시 계산해 내가 본 것과 맞춰 본다 */
   private async verify(
     reveals: Reveal[],
-    log: LoggedAction[],
+    log: KitLoggedAction<ActionT>[],
   ): Promise<AuditResult> {
     if (this.seat === null || !this.lobby || !this.match)
       return { ok: false, reason: "대국 정보가 없다" };
@@ -290,15 +366,15 @@ export class GuestRoom {
     }
     const seed = await deriveSeed(this.commitments, reveals);
     if (!seed.ok) return seed;
-    const rules = decodeRuleString(this.lobby.ruleCode);
+    const rules = this.kit.decodeRules(this.lobby.ruleCode);
     if (!rules.ok) return { ok: false, reason: rules.reason };
-    const replayed = replay({ rules: rules.rules, seed: seed.seed }, log);
+    const replayed = this.kit.replay(rules.rules, seed.seed, log);
     if (!replayed.ok)
       return {
         ok: false,
         reason: `기록 ${replayed.index + 1}번째 행동이 규칙에 맞지 않는다`,
       };
-    const expected = viewOf(replayed.state, this.seat);
+    const expected = this.kit.viewOf(replayed.state, this.seat);
     if (JSON.stringify(expected) !== JSON.stringify(this.match.current())) {
       return { ok: false, reason: "다시 계산한 결과가 내가 본 화면과 다르다" };
     }

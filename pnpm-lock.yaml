@@ -196,6 +196,12 @@ importers:
       '@mighty/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@mighty/hearts-ai':
+        specifier: workspace:*
+        version: link:../../packages/hearts-ai
+      '@mighty/hearts-engine':
+        specifier: workspace:*
+        version: link:../../packages/hearts-engine
       clsx:
         specifier: 2.1.1
         version: 2.1.1

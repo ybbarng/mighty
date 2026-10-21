@@ -1,9 +1,6 @@
-import type {
-  Action,
-  GameEvent,
-  LoggedAction,
-  PlayerView,
-} from "@mighty/engine";
+import type { Action, GameEvent, PlayerView } from "@mighty/engine";
+
+import type { KitLoggedAction } from "@/game/kit";
 
 /** 대기실 자리 하나 */
 export interface LobbySeat {
@@ -15,7 +12,9 @@ export interface LobbySeat {
 }
 
 export interface LobbyState {
-  /** 원작 규칙 문자열 */
+  /** 어떤 게임의 방인가(게임 키트 id: mighty, hearts). 다른 게임의 방에는 들어가지 않는다 */
+  game?: string;
+  /** 규칙 문자열(마이티는 원작 형식, 하트는 h1-…) */
   ruleCode: string;
   /** 방장이 붙인 규칙 이름(내 규칙). 기본 규칙이면 없다 */
   ruleName?: string;
@@ -56,17 +55,17 @@ export interface Reveal {
   secret: string;
 }
 
-/** 참가자 → 방장 */
-export type GuestMessage =
+/** 참가자 → 방장. `A`는 게임의 행동(기본 마이티) */
+export type GuestMessage<A = Action> =
   | { t: "join"; name: string; token: string | null; commit: string }
-  | { t: "action"; action: Action }
+  | { t: "action"; action: A }
   | { t: "reveal"; secret: string }
   | { t: "chat"; text: string }
   | AuditReport
   | { t: "leave" };
 
-/** 방장 → 참가자 */
-export type HostMessage =
+/** 방장 → 참가자. `V`·`E`·`A`는 게임의 화면·이벤트·행동(기본 마이티) */
+export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
   | { t: "welcome"; seat: number; token: string }
   | { t: "full" }
   /** 방장이 대기실에서 내보냈다. 같은 방에는 다시 들어올 수 없다 */
@@ -76,10 +75,10 @@ export type HostMessage =
   | { t: "lobby"; lobby: LobbyState }
   /** 게임 시작: 방장 것까지 모든 약속(해시)을 먼저 알린다. 참가자는 이걸 받은 뒤 비밀 값을 방장에게만 보낸다 */
   | { t: "started"; commitments: Commitment[] }
-  | { t: "snapshot"; view: PlayerView; events: GameEvent[] }
+  | { t: "snapshot"; view: V; events: E[] }
   | { t: "rejected"; error: string }
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
-  | { t: "audit"; reveals: Reveal[]; log: LoggedAction[] }
+  | { t: "audit"; reveals: Reveal[]; log: KitLoggedAction<A>[] }
   /** 채팅. 방장이 받은 말을 모두에게 다시 보낸다(이름은 방장이 붙인다) */
   | { t: "chat"; message: ChatMessage }
   | AuditReport;
@@ -93,10 +92,14 @@ function hasTag(value: unknown): boolean {
 }
 
 /** 받은 값이 메시지 모양인지만 본다. 내용 검증은 받는 쪽(방장 엔진)이 한다 */
-export function isGuestMessage(value: unknown): value is GuestMessage {
+export function isGuestMessage<A = Action>(
+  value: unknown,
+): value is GuestMessage<A> {
   return hasTag(value);
 }
 
-export function isHostMessage(value: unknown): value is HostMessage {
+export function isHostMessage<V = PlayerView, E = GameEvent, A = Action>(
+  value: unknown,
+): value is HostMessage<V, E, A> {
   return hasTag(value);
 }

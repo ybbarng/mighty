@@ -1,7 +1,15 @@
-import type { Bot } from "@mighty/ai";
-import { encodeRuleString, type RuleSet } from "@mighty/engine";
+import type {
+  Action,
+  GameEvent,
+  MatchState,
+  PlayerView,
+  PresetDeal,
+  RuleSet,
+} from "@mighty/engine";
 import { botName } from "@/game/bot-names";
+import type { GameKit, KitBot } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
+import { mightyKit } from "@/game/mighty-kit";
 import { commit, deriveSeed, newSecret } from "./fairness";
 import {
   type AuditReport,
@@ -17,10 +25,19 @@ import {
 } from "./protocol";
 import { randomId, type Transport } from "./transport";
 
-export interface HostRoomOptions {
+export interface HostRoomOptions<
+  Rules = RuleSet,
+  State = MatchState,
+  View = PlayerView,
+  ActionT = Action,
+  Event = GameEvent,
+  Extra = PresetDeal,
+> {
+  /** 어떤 게임의 방인가. 없으면 마이티 */
+  kit?: GameKit<Rules, State, View, ActionT, Event, Extra>;
   transport: Transport;
   hostName: string;
-  rules: RuleSet;
+  rules: Rules;
   /** 방장이 저장해 둔 내 규칙이면 그 이름 */
   ruleName?: string;
   /** 사람이 연결이 끊긴 뒤 컴퓨터가 대신 두기까지 기다리는 시간 */
@@ -28,7 +45,7 @@ export interface HostRoomOptions {
   /** 시작할 때 참가자의 비밀 값을 기다리는 시간 */
   revealTimeoutMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
-  bot?: Bot;
+  bot?: KitBot<View, ActionT>;
   /** 빈자리 컴퓨터 이름(1번 자리부터). 비면 기본 이름 */
   botNames?: readonly string[];
   /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
@@ -47,9 +64,17 @@ interface GuestSeat {
  * 방장 기기에서 도는 방. 대기실(이름·자리·빈자리 컴퓨터)과 대국 진행을 맡는다.
  * 엔진은 방장 기기에만 있고, 참가자에게는 그 자리에서 보이는 정보만 보낸다(docs/07-security.md).
  */
-export class HostRoom {
+export class HostRoom<
+  Rules = RuleSet,
+  State = MatchState,
+  View = PlayerView,
+  ActionT = Action,
+  Event = GameEvent,
+  Extra = PresetDeal,
+> {
   readonly transport: Transport;
-  private rules: RuleSet;
+  readonly kit: GameKit<Rules, State, View, ActionT, Event, Extra>;
+  private rules: Rules;
   private ruleName: string | null;
   private readonly hostName: string;
   private readonly guests = new Map<number, GuestSeat>();
@@ -58,7 +83,7 @@ export class HostRoom {
   private hostCommit: string | null = null;
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
-  private readonly bot: Bot | null;
+  private readonly bot: KitBot<View, ActionT> | null;
   private readonly pace: ((next: () => void) => void) | null;
   private readonly botNames: readonly string[];
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
@@ -70,9 +95,21 @@ export class HostRoom {
   /** 내보낸 사람. 같은 기기로 다시 들어오려 하면 막는다 */
   private readonly kickedPeers = new Set<string>();
   private readonly kickedTokens = new Set<string>();
-  match: LocalMatch | null = null;
+  match: LocalMatch<Rules, State, View, ActionT, Event, Extra> | null = null;
 
-  constructor(options: HostRoomOptions) {
+  constructor(
+    options: HostRoomOptions<Rules, State, View, ActionT, Event, Extra>,
+  ) {
+    this.kit =
+      options.kit ??
+      (mightyKit as unknown as GameKit<
+        Rules,
+        State,
+        View,
+        ActionT,
+        Event,
+        Extra
+      >);
     this.transport = options.transport;
     this.rules = options.rules;
     this.ruleName = options.ruleName ?? null;
@@ -89,13 +126,13 @@ export class HostRoom {
     this.transport.onPeerJoin(() => this.broadcastLobby());
     this.transport.onPeerLeave((peerId) => this.onPeerLeave(peerId));
     this.transport.onMessage((message, from) => {
-      if (isGuestMessage(message)) this.onMessage(message, from);
+      if (isGuestMessage<ActionT>(message)) this.onMessage(message, from);
     });
   }
 
   lobby(): LobbyState {
     const seats: LobbySeat[] = Array.from(
-      { length: this.rules.playerCount },
+      { length: this.kit.playerCount(this.rules) },
       (_, seat) => {
         if (seat === 0)
           return { seat, name: this.hostName, kind: "host", connected: true };
@@ -116,7 +153,8 @@ export class HostRoom {
       },
     );
     return {
-      ruleCode: encodeRuleString(this.rules),
+      game: this.kit.id,
+      ruleCode: this.kit.encodeRules(this.rules),
       ...(this.ruleName ? { ruleName: this.ruleName } : {}),
       seats,
       started: this.match !== null,
@@ -130,13 +168,13 @@ export class HostRoom {
   }
 
   /** 대기실에서 규칙을 바꾼다. `name`은 내 규칙 이름(참가자 화면에 보인다) */
-  setRules(rules: RuleSet, name?: string): void {
+  setRules(rules: Rules, name?: string): void {
     if (this.match) return;
     this.rules = rules;
     this.ruleName = name?.trim() || null;
     // 인원이 줄면 넘치는 자리의 참가자는 내보낸다.
     for (const seat of [...this.guests.keys()]) {
-      if (seat >= rules.playerCount) {
+      if (seat >= this.kit.playerCount(rules)) {
         const guest = this.guests.get(seat);
         if (guest?.peerId) this.send({ t: "full" }, guest.peerId);
         this.guests.delete(seat);
@@ -190,7 +228,9 @@ export class HostRoom {
   }
 
   /** 대기실을 닫고 게임을 시작한다. 참가자의 비밀 값을 모아 시드를 만든다 */
-  async start(): Promise<LocalMatch> {
+  async start(): Promise<
+    LocalMatch<Rules, State, View, ActionT, Event, Extra>
+  > {
     if (this.match) return this.match;
     const hostCommit = this.hostCommit ?? (await commit(this.hostSecret));
     this.hostCommit = hostCommit;
@@ -211,7 +251,8 @@ export class HostRoom {
     const derived = await deriveSeed(this.commitments, this.reveals());
     if (!derived.ok) throw new Error(derived.reason);
 
-    const match = new LocalMatch({
+    const match = new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
+      kit: this.kit,
       rules: this.rules,
       seed: derived.seed,
       humanSeat: 0,
@@ -220,20 +261,12 @@ export class HostRoom {
       ...(this.pace ? { pace: this.pace } : {}),
     });
     this.match = match;
-    const first = match.viewFor(0);
-    const startEvents = [
-      {
-        type: "roundStarted" as const,
-        roundNumber: first.roundNumber,
-        beginner: first.beginner,
-      },
-      { type: "dealt" as const, handSize: first.hand.length },
-    ];
+    const startEvents = this.kit.startEvents(match.viewFor(0));
     for (const [seat, guest] of this.guests) {
       match.subscribeSeat(seat, (snapshot) => {
         if (guest.peerId)
           this.send({ t: "snapshot", ...snapshot }, guest.peerId);
-        if (snapshot.view.phase === "gameOver") this.sendAudit();
+        if (this.kit.isOver(snapshot.view)) this.sendAudit();
       });
       if (guest.peerId)
         this.send(
@@ -289,7 +322,7 @@ export class HostRoom {
     });
   }
 
-  private send(message: HostMessage, to?: string): void {
+  private send(message: HostMessage<View, Event, ActionT>, to?: string): void {
     this.transport.send(message, to);
   }
 
@@ -305,7 +338,7 @@ export class HostRoom {
     return null;
   }
 
-  private onMessage(message: GuestMessage, from: string): void {
+  private onMessage(message: GuestMessage<ActionT>, from: string): void {
     switch (message.t) {
       case "join":
         this.onJoin(from, message.name, message.token, message.commit);
@@ -384,7 +417,7 @@ export class HostRoom {
       return;
     }
     const free = Array.from(
-      { length: this.rules.playerCount },
+      { length: this.kit.playerCount(this.rules) },
       (_, s) => s,
     ).find((s) => s !== 0 && !this.guests.has(s));
     if (free === undefined) {

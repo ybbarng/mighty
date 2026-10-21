@@ -13,6 +13,8 @@
   "dependencies": {
     "@mighty/ai": "workspace:*",
     "@mighty/engine": "workspace:*",
+    "@mighty/hearts-ai": "workspace:*",
+    "@mighty/hearts-engine": "workspace:*",
     "clsx": "2.1.1",
     "next": "16.4.2",
     "qrcode-generator": "^2.0.4",

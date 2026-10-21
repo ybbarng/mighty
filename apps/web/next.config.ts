@@ -5,7 +5,12 @@ const nextConfig: NextConfig = {
   output: "export",
   // 왼쪽 아래 개발 모드 표시가 게임 화면을 가리지 않게 한다.
   devIndicators: false,
-  transpilePackages: ["@mighty/engine", "@mighty/ai"],
+  transpilePackages: [
+    "@mighty/engine",
+    "@mighty/ai",
+    "@mighty/hearts-engine",
+    "@mighty/hearts-ai",
+  ],
 };
 
 export default nextConfig;
