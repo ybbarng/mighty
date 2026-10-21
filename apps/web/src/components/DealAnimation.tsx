@@ -16,6 +16,8 @@ interface DealAnimationProps {
   kittyCount: number;
   /** 다른 연출(딜미스 알림 등)이 끝난 뒤 시작한다 */
   startDelay: number;
+  /** 한 사람에게 주는 묶음 크기(없으면 마이티 2·3·3·2) */
+  pattern?: readonly number[];
 }
 
 type Stage =
@@ -35,10 +37,11 @@ export function DealAnimation({
   handSize,
   kittyCount,
   startDelay,
+  pattern,
 }: DealAnimationProps) {
   const [stage, setStage] = useState<Stage>("stack");
   const total = handSize * targets.length;
-  const { flights } = dealPlan(handSize, targets.length);
+  const { flights } = dealPlan(handSize, targets.length, pattern);
   const lastFlight = flights.at(-1)?.delay ?? 0;
 
   useEffect(() => {

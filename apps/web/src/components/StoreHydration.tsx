@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { useSettings } from "@/game/settings";
+import { useHeartsSettings } from "@/hearts/settings";
 import { useTutorialProgress } from "@/tutorial/progress";
 
 /**
@@ -13,6 +14,7 @@ export function StoreHydration() {
   useEffect(() => {
     void useSettings.persist.rehydrate();
     void useTutorialProgress.persist.rehydrate();
+    void useHeartsSettings.persist.rehydrate();
   }, []);
   return null;
 }

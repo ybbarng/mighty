@@ -8,12 +8,15 @@ export const SETTLE_MS = 400;
 /** 원작처럼 2장·3장·3장·2장 묶음으로 나눈다(6마 2·3·3, 7마 2·3·2) */
 const PACKET_PATTERN = [2, 3, 3, 2];
 
-/** 한 사람이 받는 묶음 크기들 */
-export function dealPackets(handSize: number): number[] {
+/** 한 사람이 받는 묶음 크기들. `pattern`이 없으면 마이티(2·3·3·2) */
+export function dealPackets(
+  handSize: number,
+  pattern: readonly number[] = PACKET_PATTERN,
+): number[] {
   const packets: number[] = [];
   let left = handSize;
   for (let i = 0; left > 0; i++) {
-    const size = Math.min(PACKET_PATTERN[i % PACKET_PATTERN.length] ?? 2, left);
+    const size = Math.min(pattern[i % pattern.length] ?? 2, left);
     packets.push(size);
     left -= size;
   }
@@ -32,8 +35,9 @@ const PACKET_PAUSE_MS = 40;
 export function dealPlan(
   handSize: number,
   players: number,
+  pattern?: readonly number[],
 ): { flights: { player: number; delay: number }[]; duration: number } {
-  const packets = dealPackets(handSize);
+  const packets = dealPackets(handSize, pattern);
   // 원작(MFSM_Server, PlayerHuman::OnDeal)은 묶음 하나를 날리고 도착할 때까지 기다린 뒤 다음 묶음을 날린다.
   const flights: { player: number; delay: number }[] = [];
   let at = 0;

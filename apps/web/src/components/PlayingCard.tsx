@@ -39,6 +39,8 @@ interface PlayingCardProps {
   hint?: boolean;
   /** 바닥 카드에서 막 들어온 카드: "바닥" 표를 단다 */
   fresh?: boolean;
+  /** `fresh` 표의 글자(하트는 "받음") */
+  freshLabel?: string;
   interactive?: boolean;
   onActivate?: (pointerType: string) => void;
   /** 움직이는 시간(ms). 기본 300 */
@@ -70,6 +72,7 @@ export function PlayingCard({
   highlight = false,
   hint = false,
   fresh = false,
+  freshLabel = "바닥",
   interactive = false,
   onActivate,
   onHover,
@@ -148,8 +151,8 @@ export function PlayingCard({
           }}
         >
           {fresh && (
-            <span className="rounded-full bg-emerald-400 px-[0.5em] py-[0.25em] text-black shadow">
-              바닥
+            <span className="whitespace-nowrap rounded-full bg-emerald-400 px-[0.5em] py-[0.25em] text-black shadow">
+              {freshLabel}
             </span>
           )}
           {hint && (
