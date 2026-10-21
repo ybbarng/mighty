@@ -1,8 +1,14 @@
-import { presetRules, RULE_PRESETS } from "@mighty/engine";
+import {
+  createRng,
+  createScenario,
+  presetRules,
+  RULE_PRESETS,
+  viewOf,
+} from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
 import { estimatePoints } from "./hand";
-import { heuristicBot } from "./heuristic-bot";
+import { createRuleBot, heuristicBot } from "./heuristic-bot";
 import { randomBot } from "./random-bot";
 import { simulate } from "./simulate";
 
@@ -97,5 +103,62 @@ describe("규칙 기반 봇의 실력", () => {
     // 너무 낮으면 공약을 무리하게 부르고, 너무 높으면 너무 소심하게 부른다는 뜻이다.
     expect(rate).toBeGreaterThan(0.3);
     expect(rate).toBeLessThan(0.9);
+  });
+});
+
+describe("정석", () => {
+  const rules = presetRules("standard5");
+
+  it("마공: 야당이 선이면 마이티 무늬의 낮은 카드를 낸다", () => {
+    const state = createScenario({
+      rules,
+      phase: "play",
+      declarer: 0,
+      goal: { kiruda: "H", score: 13 },
+      friend: { kind: "card", card: "HA" },
+      leader: 2,
+      hands: [
+        ["SA", "H2"],
+        ["HA", "H3"],
+        ["S9", "D3"],
+        ["C5", "C6"],
+        ["C7", "C8"],
+      ],
+    });
+    const view = viewOf(state, 2);
+    expect(
+      createRuleBot({ book: ["mightyAttack"] }).decide(view, createRng(1)),
+    ).toMatchObject({
+      type: "play",
+      card: "S9",
+    });
+    expect(createRuleBot().decide(view, createRng(1))).toMatchObject({
+      type: "play",
+      card: "D3",
+    });
+  });
+
+  it("무늬 비우기: A 없는 짧은 무늬를 통째로 묻는다", () => {
+    const state = createScenario({
+      rules,
+      phase: "exchange",
+      declarer: 0,
+      goal: { kiruda: "S", score: 13 },
+      hands: [
+        ["SA", "SK", "SQ", "S10", "S5", "HA", "HK", "H4", "D9", "D8"],
+        [],
+        [],
+        [],
+        [],
+      ],
+      kitty: ["CQ", "H7", "D2"],
+    });
+    const action = createRuleBot({ book: ["voidSuit"] }).decide(
+      viewOf(state, 0),
+      createRng(1),
+    );
+    expect(action.type).toBe("exchange");
+    // ♣Q 한 장뿐인 ♣를 비운다.
+    if (action.type === "exchange") expect(action.discard).toContain("CQ");
   });
 });

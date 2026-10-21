@@ -1,7 +1,7 @@
 # 09. 컴퓨터 플레이어와 마이티 전략
 
 나무위키 "마이티/전술 및 전략"(2026-10-20 확인, CC BY-NC-SA 2.0 KR)의 요점을 컴퓨터 플레이어 관점에서 정리했다. 문장은 옮기지 않고 요점만 적는다.
-봇 코드는 `packages/ai/src/` (`heuristic-bot.ts` = 1단계 "보통", `search-bot.ts` = 2단계 "고수", `hand.ts` = 패 평가).
+봇 코드는 `packages/ai/src/` (`heuristic-bot.ts` = 규칙 봇: 입문·보통, `search-bot.ts` = 고수, `hand.ts` = 패 평가). 단계 구현 결과는 [10-ai-levels-plan.md](./10-ai-levels-plan.md) 8절.
 
 ---
 

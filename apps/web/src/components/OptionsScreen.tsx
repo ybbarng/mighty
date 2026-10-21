@@ -337,12 +337,13 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
                   {level.label}
                 </button>
               ))}
-              <span className="ml-auto text-xs opacity-60">
-                {settings.botLevel === 2
-                  ? "남의 패를 추측해 수를 읽는다"
-                  : "정해진 요령대로 둔다"}
-              </span>
             </div>
+            <p className="text-xs opacity-60">
+              {
+                BOT_LEVELS.find((l) => l.value === settings.botLevel)
+                  ?.description
+              }
+            </p>
           </Section>
 
           <Section title="진행 속도">

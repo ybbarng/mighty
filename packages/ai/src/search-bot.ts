@@ -63,6 +63,8 @@ interface Sim {
   jokerUsed: boolean;
   scored: number[];
   discardedPoints: number;
+  /** 끝난 턴에 나온 카드. 1단계 봇이 마이티·기루다를 셀 때 쓴다 */
+  played: Card[];
   done: boolean;
 }
 
@@ -72,6 +74,7 @@ function cloneSim(sim: Sim): Sim {
     hands: sim.hands.map((h) => [...h]),
     trick: { ...sim.trick, plays: [...sim.trick.plays] },
     scored: [...sim.scored],
+    played: [...sim.played],
   };
 }
 
@@ -121,6 +124,16 @@ function viewIn(sim: Sim, seat: number, decision: PlayDecision): PlayerView {
     friend: knowsFriend ? sim.friend : null,
     friendRevealed: sim.friendRevealed,
     hand: sim.hands[seat] ?? [],
+    friendDeclaration: sim.friendDeclaration,
+    tricks: [
+      {
+        leader: sim.declarer,
+        winner: sim.declarer,
+        jokerSuit: null,
+        jokerCalled: false,
+        plays: sim.played.map((card) => ({ seat: -1, card })),
+      },
+    ],
     trickIndex: sim.trickIndex,
     trick: sim.trick,
     jokerUsed: sim.jokerUsed,
@@ -163,6 +176,7 @@ function apply(sim: Sim, seat: number, action: PlayAction): void {
   )
     sim.friendRevealed = true;
   sim.scored[winner] = (sim.scored[winner] ?? 0) + points;
+  sim.played.push(...sim.trick.plays.map((p) => p.card));
   if (sim.trickIndex >= lastTrickIndex(sim.rules)) {
     sim.done = true;
     return;
@@ -319,6 +333,7 @@ function baseSim(view: PlayerView): Sim {
     jokerUsed: view.jokerUsed,
     scored,
     discardedPoints: view.discarded ? countPoints(view.discarded) : 0,
+    played: view.tricks.flatMap((t) => t.plays.map((p) => p.card)),
     done: false,
   };
 }
@@ -408,6 +423,7 @@ function roundStart(
     jokerUsed: false,
     scored: money.map(() => 0),
     discardedPoints: countPoints(discarded),
+    played: [],
     done: false,
   };
 }

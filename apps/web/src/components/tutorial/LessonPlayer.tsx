@@ -1,5 +1,6 @@
 "use client";
 
+import { beginnerBot } from "@mighty/ai";
 import { type Card, createScenario, type GameEvent } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_BOT_NAMES } from "@/game/bot-names";
@@ -92,7 +93,8 @@ export function LessonPlayer({
             ...step.scenario,
           }),
         })
-      : new LocalMatch({ rules: TUTORIAL_RULES, seed });
+      : // 실전 한 판은 입문 컴퓨터와 한다. 추천 카드는 보통 기준이다.
+        new LocalMatch({ rules: TUTORIAL_RULES, seed, bot: beginnerBot });
     attachOnline(match, NAMES);
     setAttempt((a) => a + 1);
     setPlaying(true);
