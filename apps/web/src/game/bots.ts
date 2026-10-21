@@ -1,6 +1,6 @@
 import { type Bot, beginnerBot, heuristicBot, searchBot } from "@mighty/ai";
 
-/** 0 입문, 1 보통, 2 고수. 저장해 둔 값(1 보통, 2 고수)이 그대로 이어지도록 입문을 0에 둔다 */
+/** 0 입문, 1 중수, 2 고수. 저장해 둔 값(1 중수, 2 고수)이 그대로 이어지도록 입문을 0에 둔다 */
 export type BotLevel = 0 | 1 | 2;
 
 export const BOT_LEVELS: readonly {
@@ -15,7 +15,7 @@ export const BOT_LEVELS: readonly {
   },
   {
     value: 1,
-    label: "보통",
+    label: "중수",
     description: "마공·무늬 비우기 같은 정석대로 둔다",
   },
   {
@@ -25,7 +25,7 @@ export const BOT_LEVELS: readonly {
   },
 ];
 
-/** 입문은 실수를 섞은 규칙 봇, 보통은 정석 규칙 봇, 고수는 남의 패를 추측해 끝까지 둬 보는 봇 */
+/** 입문은 실수를 섞은 규칙 봇, 중수는 정석 규칙 봇, 고수는 남의 패를 추측해 끝까지 둬 보는 봇 */
 export function botFor(level: BotLevel): Bot {
   return level === 2 ? searchBot : level === 0 ? beginnerBot : heuristicBot;
 }

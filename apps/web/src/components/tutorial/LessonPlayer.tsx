@@ -93,7 +93,7 @@ export function LessonPlayer({
             ...step.scenario,
           }),
         })
-      : // 실전 한 판은 입문 컴퓨터와 한다. 추천 카드는 보통 기준이다.
+      : // 실전 한 판은 입문 컴퓨터와 한다. 추천 카드는 중수 기준이다.
         new LocalMatch({ rules: TUTORIAL_RULES, seed, bot: beginnerBot });
     attachOnline(match, NAMES);
     setAttempt((a) => a + 1);

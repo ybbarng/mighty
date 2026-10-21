@@ -487,7 +487,7 @@ export const beginnerBot: Bot = createRuleBot({
   mistakes: 0.3,
 });
 
-/** 보통: 정석대로 둔다. 2단계 탐색의 시뮬레이션 상대이기도 하다 */
+/** 중수: 정석대로 둔다. 2단계 탐색의 시뮬레이션 상대이기도 하다 */
 export const heuristicBot: Bot = createRuleBot({
   name: "normal",
   book: NORMAL_BOOK,

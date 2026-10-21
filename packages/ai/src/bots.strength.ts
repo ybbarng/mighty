@@ -38,15 +38,15 @@ function duel(challenger: Bot, baseline: Bot, seeds: number, rounds = 6) {
 
 /*
  * 2026-10-21 측정(판당 돈, 같은 판을 자리 바꿔 두 번):
- * - 보통 vs 입문 +0.46 (6000판)
- * - 고수 vs 보통 +1.25 (480판)
+ * - 중수 vs 입문 +0.46 (6000판)
+ * - 고수 vs 중수 +1.25 (480판)
  */
 describe("실력 단계 사이의 세기 (pnpm --filter @mighty/ai bench)", () => {
-  it("보통은 입문보다 판당 돈을 더 번다", () => {
+  it("중수은 입문보다 판당 돈을 더 번다", () => {
     expect(duel(heuristicBot, beginnerBot, 300)).toBeGreaterThan(0.25);
   });
 
-  it("고수는 보통보다 판당 돈을 더 번다", () => {
+  it("고수는 중수보다 판당 돈을 더 번다", () => {
     expect(duel(createSearchBot(), heuristicBot, 60)).toBeGreaterThan(0.8);
   });
 });
