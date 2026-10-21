@@ -55,6 +55,15 @@ export function tokenDeal(rules: RuleSet): {
   size: number;
 } {
   const size = deckFor(rules).length;
+  if (rules.playerCount === 2) {
+    // 2마는 고르기로 받는다: 덱 순서만 정하고(맨 뒤부터 두 장씩), 누가 가질지는 고를 때 정해진다.
+    const deck = Array.from({ length: size }, (_, slot) => tokenOf(slot));
+    return {
+      deal: { hands: [[], []], kitty: [], deck },
+      owners: Array.from({ length: size }, () => -1),
+      size,
+    };
+  }
   const handSize = handSizeFor(rules.playerCount);
   const owners = Array.from({ length: size }, (_, slot) =>
     slot < handSize * rules.playerCount ? Math.floor(slot / handSize) : -1,

@@ -153,7 +153,8 @@ export interface MatchState {
 export type GameEvent =
   | { type: "roundStarted"; roundNumber: number; beginner: number }
   | { type: "dealt"; handSize: number }
-  | { type: "picked"; seat: number }
+  /** 2마: 앞면(0)과 뒷면(1) 중 무엇을 골랐는지는 모두가 본다 */
+  | { type: "picked"; seat: number; index: 0 | 1 }
   | { type: "bid"; seat: number; goal: Goal }
   | { type: "passed"; seat: number }
   | { type: "dealMiss"; seat: number; hand: Card[] }
@@ -182,4 +183,6 @@ export type GameEvent =
 export interface PresetDeal {
   hands: Card[][];
   kitty: Card[];
+  /** 2마: 고르기에 쓸 덱(맨 뒤부터 두 장씩 보여 준다). 있으면 `hands`·`kitty` 대신 쓴다 */
+  deck?: Card[];
 }

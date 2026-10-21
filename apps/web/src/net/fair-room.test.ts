@@ -110,6 +110,7 @@ async function playRounds(
         view.turn,
         view.dead,
         view.killFailed,
+        view.handCounts,
       ]);
       if (submitted.get(key) === stamp) return;
       submitted.set(key, stamp);
@@ -129,6 +130,7 @@ async function playRounds(
 
 describe("멘탈 포커 온라인 대전", () => {
   it.each([
+    ["2마", "standard2", 1],
     ["5마", "standard5", 2],
     ["6마", "standard6", 3],
   ] as const)(
@@ -235,6 +237,37 @@ describe("멘탈 포커 온라인 대전", () => {
     );
     expect(scored).toBe(1);
     await until(() => verified.length > 0);
+  }, 180_000);
+
+  it("방장이 잠깐 끊겼다 돌아오면 참가자는 기다렸다 같은 판을 이어 간다", async () => {
+    const { net, host, guests, incidents } = await setup(
+      presetRules("standard5"),
+      2,
+    );
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    const states: string[] = [];
+    for (const g of guests) g.on("connection", (s) => states.push(s));
+    const match = host.match;
+    for (let i = 0; i < 400 && (match?.actionLog().length ?? 0) < 10; i++) {
+      for (const [view, submit] of [
+        [match?.current(), (a: never) => match?.submit(a)],
+        ...guests.map((g) => [
+          g.match?.current(),
+          (a: never) => g.match?.submit(a),
+        ]),
+      ] as [PlayerView | undefined, (a: never) => void][])
+        if (view?.decision)
+          submit(heuristicBot.decide(view, { seed: 5 }) as never);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    net.disconnect("host");
+    await until(() => states.filter((s) => s === "reconnecting").length === 2);
+    net.reconnect("host");
+    await until(() => states.filter((s) => s === "connected").length === 2);
+    const scored = await playRounds(host, guests, 1, incidents);
+    expect(incidents.map((i) => i.reason)).toEqual([]);
+    expect(scored).toBe(1);
   }, 180_000);
 
   describe("고친 프로그램으로 부정하는 참가자(나머지는 정상)", () => {

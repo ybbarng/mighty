@@ -49,6 +49,8 @@ const OWN_SLOT_REASONS: readonly RevealReason[] = [
 ];
 
 export interface PartySnapshot {
+  /** 하트: 넘겨받은 열쇠(자리, 넘겨준 기기, 열쇠) */
+  handed?: [number, number, string][];
   id: number;
   passes: [string, string][];
   slotKeys: [number, string][];

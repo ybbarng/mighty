@@ -6,6 +6,7 @@ import {
   countPoints,
   createRng,
   type Decision,
+  deckFor,
   isJoker,
   lastTrickIndex,
   type PlayerView,
@@ -34,6 +35,7 @@ import { useChat } from "@/net/chat";
 import { ChatBox } from "./ChatBox";
 import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
+import { FairOverlays } from "./FairOverlays";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
 import { ExchangePanel } from "./panels/ExchangePanel";
@@ -804,6 +806,7 @@ export function GameTable({
                 handSize={dealing.handSize}
                 kittyCount={view.kittyCount}
                 startDelay={dealing.startDelay}
+                shuffleMs={dealing.shuffleMs}
               />
             )}
             {/* 바닥 카드: 공약 동안 덱 자리에 두었다가 당선되면 주공에게 간다(원작 OnDeal 10) */}
@@ -964,7 +967,7 @@ export function GameTable({
               )}
 
             {/* 판 가운데 행동 패널 */}
-            {(showPanel || leadChoice) && (
+            {(showPanel || leadChoice) && !shuffling && (
               <div
                 className="panel-area absolute z-[200] flex items-end justify-center"
                 style={{
@@ -1138,64 +1141,21 @@ export function GameTable({
               />
             )}
 
-            {incident && (
-              <div
-                role="alert"
-                className="absolute inset-x-0 z-[345] mx-auto w-fit max-w-[94%] rounded-xl border border-rose-300/60 bg-rose-800/95 px-4 py-2 text-center text-sm shadow-2xl"
-                style={{ top: layout.hud.y + layout.hud.h + 6 }}
-              >
-                <div className="font-bold">
-                  ⚠ 부정 감지 —{" "}
-                  {incident.seat === null
-                    ? "누군지는 가릴 수 없습니다"
-                    : incident.seat === view.seat
-                      ? "내 자리"
-                      : seatName(incident.seat)}
-                </div>
-                <div className="mt-0.5 text-xs opacity-90">
-                  {incident.reason}
-                </div>
-                <div className="mt-1 text-[11px] opacity-75">
-                  {incident.own
-                    ? "내 기기가 직접 확인한 것입니다. 이 판을 멈췄습니다."
-                    : "판을 진행하는 방장 기기가 찾아 판을 멈췄습니다(내 기기는 따로 확인하지 못했습니다)."}
-                </div>
-              </div>
-            )}
-            {shuffling && !incident && (
-              <div
-                role="status"
-                className="pointer-events-none absolute z-[330] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-4 py-2 text-center text-sm shadow-xl"
-                style={{ left: stage.width / 2, top: stage.height * 0.42 }}
-              >
-                <div className="flex items-center gap-2 font-semibold">
-                  <span className="inline-block size-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  모두 함께 섞는 중…
-                </div>
-                <div className="mt-0.5 text-[11px] opacity-70">
-                  멘탈 포커: 방장도 남의 카드를 볼 수 없습니다
-                </div>
-              </div>
-            )}
-            {fair && offlineSeats.length > 0 && !incident && (
-              <div
-                role="status"
-                className="absolute inset-x-0 bottom-28 z-[340] mx-auto flex w-fit max-w-[92%] flex-wrap items-center justify-center gap-2 rounded-2xl bg-black/85 px-4 py-2 text-center text-sm shadow-2xl"
-              >
-                {offlineSeats.map((s) => seatName(s)).join(", ")}님 연결이
-                끊겼습니다. 그 사람 카드는 그 사람만 열 수 있어 돌아오기를
-                기다립니다.
-                {endGame && (
-                  <button
-                    type="button"
-                    onClick={endGame}
-                    className="rounded-lg bg-rose-500 px-3 py-1 font-semibold"
-                  >
-                    게임 끝내기
-                  </button>
-                )}
-              </div>
-            )}
+            <FairOverlays
+              incident={incident}
+              shuffling={dealing ? null : shuffling}
+              fair={fair}
+              offlineNames={offlineSeats.map((s) => seatName(s))}
+              endGame={endGame}
+              whoName={(seat) =>
+                seat === view.seat ? "내 자리" : seatName(seat)
+              }
+              center={tableCenter}
+              card={layout.trick.card}
+              deckCount={deckFor(rules).length}
+              top={layout.hud.y + layout.hud.h + 6}
+              stageWidth={stage.width}
+            />
             {invalid && (
               <div
                 role="alert"

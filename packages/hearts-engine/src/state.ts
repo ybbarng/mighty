@@ -54,6 +54,8 @@ export interface MatchState {
   history: number[][];
   roundNumber: number;
   round: RoundState;
+  /** 다음 판을 시작할 정해진 패(자리 순서). 멘탈 포커로 섞은 패를 넣는다. 쓰고 나면 지운다 */
+  presetHands?: Card[][];
 }
 
 export type Action =

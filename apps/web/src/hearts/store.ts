@@ -1,4 +1,5 @@
 import type { Card } from "@mighty/engine";
+import type { BusyReason } from "@mighty/fair-play";
 import {
   type Action,
   type CompletedTrick,
@@ -8,13 +9,14 @@ import {
   QUEEN_OF_SPADES,
 } from "@mighty/hearts-engine";
 import { create } from "zustand";
+import type { IncidentState } from "@/components/FairOverlays";
 
 import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { useSettings } from "@/game/settings";
 import { type Cue, play as playCue } from "@/game/sound";
-import { dealPlan, prefersReducedMotion } from "@/game/timing";
+import { dealPlan, prefersReducedMotion, SHUFFLE_MS } from "@/game/timing";
 
 import { heartsBotFor } from "./bots";
 import { heartsKit } from "./kit";
@@ -30,9 +32,9 @@ export type HeartsLocalMatch = LocalMatch<
   PlayerView,
   Action,
   GameEvent,
-  undefined
+  Card[][]
 >;
-export type HeartsSaved = SavedMatch<HeartsRules, Action, undefined>;
+export type HeartsSaved = SavedMatch<HeartsRules, Action, Card[][]>;
 
 /** 하트는 4·4·5장씩 세 바퀴에 나눠 준다 */
 export const HEARTS_DEAL_PATTERN = [4, 4, 5] as const;
@@ -104,7 +106,13 @@ interface HeartsStore {
   queue: HeartsSnapshot[];
   shownTrick: CompletedTrick | null;
   collecting: boolean;
-  dealing: { key: number; handSize: number; startDelay: number } | null;
+  dealing: {
+    key: number;
+    handSize: number;
+    startDelay: number;
+    /** 섞는 연출 시간(멘탈 포커로 이미 섞는 연출을 보였으면 남은 만큼) */
+    shuffleMs: number;
+  } | null;
   busy: boolean;
   notice: string | null;
   audit: { ok: true } | { ok: false; reason: string } | null;
@@ -112,6 +120,14 @@ interface HeartsStore {
   reconnecting: boolean;
   offlineSeats: number[];
   invalid: string | null;
+  /** 멘탈 포커: 부정을 찾아 판을 멈췄다(GameStore와 같다) */
+  incident: IncidentState | null;
+  /** 멘탈 포커: 내 카드를 아직 다 열지 못한 까닭 */
+  shuffling: BusyReason | null;
+  shuffleStartedAt: number | null;
+  setShuffling(reason: BusyReason | null): void;
+  fair: boolean;
+  endGame: (() => void) | null;
   network: boolean;
   newGame(options: { rules: HeartsRules; seed?: number }): void;
   resume(saved: HeartsSaved): void;
@@ -165,15 +181,25 @@ export const useHearts = create<HeartsStore>((set, get) => {
 
     const dealt = next.events.find((e) => e.type === "dealt");
     if (dealt && !prefersReducedMotion()) {
+      // 멘탈 포커로 실제로 섞는 동안 섞는 연출을 보였으면 최소 시간에서 남은 만큼만 더 섞는다.
+      const since = get().shuffleStartedAt;
+      const shuffleMs =
+        since === null
+          ? SHUFFLE_MS
+          : Math.max(0, SHUFFLE_MS - (Date.now() - since));
       set({
         dealing: {
           key: (get().dealing?.key ?? 0) + 1,
           handSize: dealt.handSize,
           startDelay: 0,
+          shuffleMs,
         },
+        shuffleStartedAt: null,
       });
       wait(
-        dealPlan(dealt.handSize, 4, HEARTS_DEAL_PATTERN).duration,
+        dealPlan(dealt.handSize, 4, HEARTS_DEAL_PATTERN).duration -
+          SHUFFLE_MS +
+          shuffleMs,
         () => {
           set({ dealing: null });
           advance();
@@ -230,6 +256,9 @@ export const useHearts = create<HeartsStore>((set, get) => {
       seatNames: options.seatNames,
       network: options.network ?? false,
       invalid: null,
+      incident: null,
+      shuffling: null,
+      shuffleStartedAt: null,
     });
     const persist = () => {
       if (options.save && host instanceof LocalMatch)
@@ -276,6 +305,19 @@ export const useHearts = create<HeartsStore>((set, get) => {
     reconnecting: false,
     offlineSeats: [],
     invalid: null,
+    incident: null,
+    shuffling: null,
+    shuffleStartedAt: null,
+    setShuffling(reason) {
+      const { shuffling, shuffleStartedAt } = get();
+      const starting = reason === "deal" && shuffling !== "deal";
+      set({
+        shuffling: reason,
+        shuffleStartedAt: starting ? Date.now() : shuffleStartedAt,
+      });
+    },
+    fair: false,
+    endGame: null,
     network: false,
 
     newGame(options) {
@@ -286,6 +328,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
         ),
         { save: true, seatNames: null },
       );
+      set({ fair: false, endGame: null });
     },
 
     resume(saved) {

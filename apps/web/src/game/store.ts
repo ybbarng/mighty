@@ -7,6 +7,7 @@ import type {
   RuleSet,
 } from "@mighty/engine";
 import { isJoker, mightyOf } from "@mighty/engine";
+import type { BusyReason } from "@mighty/fair-play";
 import { create } from "zustand";
 import { botFor, browserPace } from "./bots";
 import { cuesFor } from "./cues";
@@ -15,7 +16,7 @@ import { LocalMatch, type SavedMatch } from "./local-match";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
 import { play as playCue } from "./sound";
-import { dealPlan, prefersReducedMotion } from "./timing";
+import { dealPlan, prefersReducedMotion, SHUFFLE_MS } from "./timing";
 
 /** 화면에 붙일 수 있는 대국. 처음 쌓인 진행을 넘겨 줄 수 있어야 한다 */
 export type AttachableHost = MatchHost & { drain(): Snapshot[] };
@@ -66,7 +67,13 @@ interface GameStore {
   shownTrick: CompletedTrick | null;
   collecting: boolean;
   /** 판 시작 섞기·나눠 주기 연출 중. `key`가 바뀌면 연출을 새로 시작한다 */
-  dealing: { key: number; handSize: number; startDelay: number } | null;
+  dealing: {
+    key: number;
+    handSize: number;
+    startDelay: number;
+    /** 섞는 연출 시간(멘탈 포커로 이미 섞는 연출을 보였으면 남은 만큼) */
+    shuffleMs: number;
+  } | null;
   /** 판 시작 때의 돈. 결과 화면에서 변화를 보여 준다 */
   roundStartMoney: number[];
   busy: boolean;
@@ -86,8 +93,14 @@ interface GameStore {
    * `seat`가 null이면 누군지 가릴 수 없다
    */
   incident: { seat: number | null; reason: string; own: boolean } | null;
-  /** 멘탈 포커 판: 모두 함께 섞고 나누는 중이라 내 카드를 아직 다 열지 못했다 */
-  shuffling: boolean;
+  /**
+   * 멘탈 포커 판: 내 카드를 아직 다 열지 못했다. 판 시작 섞기(`deal`), 6·7마 다시 섞기(`redeal`),
+   * 그 밖에 바닥 카드·증명을 기다리는 중(`wait`)
+   */
+  shuffling: BusyReason | null;
+  /** 섞는 연출(`ShuffleLoop`)을 시작한 시각. 나눠 줄 때 남은 섞기 연출 시간을 정한다 */
+  shuffleStartedAt: number | null;
+  setShuffling(reason: BusyReason | null): void;
   /** 멘탈 포커 판인가(연결이 끊긴 사람을 컴퓨터가 대신하지 않고 기다린다) */
   fair: boolean;
   /** 방장: 연결이 끊긴 사람을 더 기다리지 않고 게임을 끝낸다(멘탈 포커) */
@@ -161,17 +174,27 @@ export const useGame = create<GameStore>((set, get) => {
         0,
         ...others.map((e) => EVENT_DELAY[e.type] ?? 150),
       );
+      // 멘탈 포커로 실제로 섞는 동안 섞는 연출을 보였으면 최소 시간에서 남은 만큼만 더 섞는다.
+      const since = get().shuffleStartedAt;
+      const shuffleMs =
+        since === null
+          ? SHUFFLE_MS
+          : Math.max(0, SHUFFLE_MS - (Date.now() - since));
       set({
         dealing: {
           key: (get().dealing?.key ?? 0) + 1,
           handSize: dealt.handSize,
           startDelay,
+          shuffleMs,
         },
+        shuffleStartedAt: null,
       });
       // 연출 컴포넌트가 실제 시간으로 돌기 때문에 빨리 감지 않는다.
       wait(
         startDelay +
-          dealPlan(dealt.handSize, next.view.players.length).duration,
+          dealPlan(dealt.handSize, next.view.players.length).duration -
+          SHUFFLE_MS +
+          shuffleMs,
         () => {
           set({ dealing: null });
           advance();
@@ -238,7 +261,8 @@ export const useGame = create<GameStore>((set, get) => {
       network: options.network ?? false,
       invalid: null,
       incident: null,
-      shuffling: false,
+      shuffling: null,
+      shuffleStartedAt: null,
     });
     const persist = () => {
       if (options.save && host instanceof LocalMatch) saveGame(host.save());
@@ -271,7 +295,17 @@ export const useGame = create<GameStore>((set, get) => {
     network: false,
     invalid: null,
     incident: null,
-    shuffling: false,
+    shuffling: null,
+    shuffleStartedAt: null,
+    setShuffling(reason) {
+      const { shuffling, shuffleStartedAt } = get();
+      // 판 시작 섞기를 시작할 때 섞는 연출 시작 시각을 적는다(다 나눠 줄 때까지 둔다).
+      const starting = reason === "deal" && shuffling !== "deal";
+      set({
+        shuffling: reason,
+        shuffleStartedAt: starting ? Date.now() : shuffleStartedAt,
+      });
+    },
     fair: false,
     endGame: null,
 

@@ -105,8 +105,9 @@ describe("방장이 고친 경우", () => {
       }
       return original(seat, action);
     };
-    // 카드를 낼 때까지(모두 포기해 다시 나누는 판이 있을 수 있다) 몇 판 둔다.
-    await playRounds(host, a, 3);
+    // 카드를 낼 때까지(모두 포기해 다시 나누는 판이 있을 수 있다) 바꿔치기가 생길 때까지 둔다.
+    for (let rounds = 3; rounds < 15 && !swapped; rounds += 3)
+      await playRounds(host, a, rounds);
     host.finish();
     await until(() => audits.length === 1);
     expect(swapped).toBe(true);

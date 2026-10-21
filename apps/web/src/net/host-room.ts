@@ -1,5 +1,6 @@
 import type {
   Action,
+  Card,
   GameEvent,
   MatchState,
   PlayerView,
@@ -9,8 +10,16 @@ import type {
 import {
   FairHostTable,
   type GroupName,
+  HeartsHostTable,
   type Incident,
 } from "@mighty/fair-play";
+import type {
+  Action as HeartsAction,
+  GameEvent as HeartsEvent,
+  HeartsRules,
+  MatchState as HeartsState,
+  PlayerView as HeartsView,
+} from "@mighty/hearts-engine";
 import { botName } from "@/game/bot-names";
 import type { GameKit, KitBot } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
@@ -124,7 +133,7 @@ export class HostRoom<
   private errorListeners = new Set<(error: string) => void>();
   private fairOption: { group: GroupName } | null;
   /** 멘탈 포커 진행(이 판이 멘탈 포커일 때) */
-  fair: FairHostTable | null = null;
+  fair: FairHostTable | HeartsHostTable | null = null;
   /** 오간 멘탈 포커 메시지. 다시 연결된 참가자에게 다시 보낸다 */
   private readonly fpLog: { from: number; message: FairMessage }[] = [];
   /** 자리별 마지막 채팅 시각. 도배를 막는다 */
@@ -218,11 +227,11 @@ export class HostRoom<
     };
   }
 
-  /** 이 방이 멘탈 포커로 하는가(마이티 3~7마이고 방장이 켰을 때) */
+  /** 이 방이 멘탈 포커로 하는가(방장이 켰을 때) */
   private fairGroup(): GroupName | null {
-    if (!this.fairOption || this.kit.id !== "mighty") return null;
+    if (!this.fairOption) return null;
     const count = this.kit.playerCount(this.rules);
-    return count >= 3 ? this.fairOption.group : null;
+    return count >= 2 ? this.fairOption.group : null;
   }
 
   /** 방장 자기 행동이 준비하다 거절됐다(멘탈 포커는 비동기라 내기 뒤에 알게 된다) */
@@ -402,6 +411,7 @@ export class HostRoom<
     seed: number,
     group: GroupName,
   ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
+    if (this.kit.id === "hearts") return this.startFairHearts(seed, group);
     type Mighty = LocalMatch;
     let match: Mighty | null = null;
     const get = () => match as Mighty;
@@ -443,6 +453,91 @@ export class HostRoom<
         discarded: null,
         decision: null,
       }),
+      afterStep: (state, events) => table.after(state, events),
+      onLateError: (seat, error) => {
+        if (seat === 0) for (const l of this.errorListeners) l(error);
+        const peerId = this.guests.get(seat)?.peerId;
+        if (peerId) this.send({ t: "rejected", error }, peerId);
+      },
+    });
+    return match as unknown as LocalMatch<
+      Rules,
+      State,
+      View,
+      ActionT,
+      Event,
+      Extra
+    >;
+  }
+
+  /** 하트 멘탈 포커 판. 넘긴 카드 열쇠는 받는 기기에게만 직접 보낸다 */
+  private startFairHearts(
+    seed: number,
+    group: GroupName,
+  ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
+    type H = LocalMatch<
+      HeartsRules,
+      HeartsState,
+      HeartsView,
+      HeartsAction,
+      HeartsEvent,
+      Card[][]
+    >;
+    let match: H | null = null;
+    const get = () => match as H;
+    const table = new HeartsHostTable({
+      rules: this.rules as unknown as HeartsRules,
+      seed,
+      guestSeats: [...this.guests.keys()],
+      group,
+      hooks: {
+        patch: (fn) => get().patchState(fn),
+        state: () => get().rawState(),
+        log: () => get().actionLog(),
+        refresh: () => get().refresh(),
+        broadcast: (message) => {
+          this.fpLog.push({ from: 0, message });
+          this.send(message as never);
+        },
+        // 넘긴 카드 열쇠: 받는 참가자에게만. 다시 보내기 기록(fpLog)에도 남기지 않는다.
+        sendTo: (message, device) => {
+          const peerId = this.guests.get(device)?.peerId;
+          if (peerId) this.send(message as never, peerId);
+        },
+        onIncident: (incident) => this.raiseIncident(incident),
+      },
+    });
+    this.fair = table;
+    const kit = this.kit as unknown as GameKit<
+      HeartsRules,
+      HeartsState,
+      HeartsView,
+      HeartsAction,
+      HeartsEvent,
+      Card[][]
+    >;
+    match = new LocalMatch({
+      kit,
+      rules: this.rules as unknown as HeartsRules,
+      seed,
+      humanSeat: 0,
+      humanSeats: [0, ...this.guests.keys()],
+      presetDeal: table.presetHands(),
+      ...(this.bot
+        ? { bot: this.bot as unknown as KitBot<HeartsView, HeartsAction> }
+        : {}),
+      ...(this.pace ? { pace: this.pace } : {}),
+      step: (state, seat, action) => table.step(state, seat, action),
+      prepare: (state, seat, action) => table.prepare(state, seat, action),
+      revealView: (seat, view) => table.viewFor(seat, view),
+      maskView: (_seat, view) => ({
+        ...view,
+        hand: [],
+        myPass: null,
+        received: [],
+        decision: null,
+      }),
+      pendingSeats: (state) => table.pendingSeats(state, kit.pendingSeats),
       afterStep: (state, events) => table.after(state, events),
       onLateError: (seat, error) => {
         if (seat === 0) for (const l of this.errorListeners) l(error);
@@ -535,14 +630,16 @@ export class HostRoom<
     const seat = this.seatOf(from);
     const table = this.fair;
     if (seat === null || !table) return;
-    this.fpLog.push({ from: seat, message });
+    // 넘긴 카드 열쇠(하트)는 받는 사람만 봐야 하므로 다시 보내기 기록에 남기지 않는다.
+    if (message.k !== "handover") this.fpLog.push({ from: seat, message });
     switch (message.k) {
       case "chain":
       case "keys":
+      case "handover":
         table.receive(message, seat);
         break;
       case "answer":
-        if (message.from === seat)
+        if (message.from === seat && table instanceof FairHostTable)
           table.answer(seat, message.id, message.have === true, message.slot);
         break;
     }

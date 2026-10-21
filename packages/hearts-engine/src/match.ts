@@ -85,7 +85,10 @@ function newRound(
   preset?: Card[][],
 ): { round: RoundState; events: GameEvent[] } {
   const direction = directionFor(state.rules, roundNumber);
-  const hands = deal(state.rng, preset);
+  // 다음 판을 정해진 패(멘탈 포커로 섞은 자리 표)로 시작한다. 쓰고 나면 지운다.
+  const next = preset ?? state.presetHands;
+  delete state.presetHands;
+  const hands = deal(state.rng, next);
   const round: RoundState = {
     phase: "passing",
     direction,
@@ -112,16 +115,25 @@ function newRound(
   };
 }
 
-/** ♣2를 가진 사람이 첫 턴의 선이다 */
+/**
+ * ♣2를 가진 사람이 첫 턴의 선이다. 차례는 비워 두고(`turn: null`, `leader: -1`) ♣2를 가진 사람만 낼 수 있다.
+ * 엔진이 남의 패를 모를 때(멘탈 포커)도 가진 사람이 내면서 드러나도록 이렇게 한다
+ */
 function startPlay(round: RoundState): void {
-  const leader = Math.max(
-    0,
-    round.hands.findIndex((h) => h.includes(TWO_OF_CLUBS)),
-  );
   round.phase = "play";
   round.trickIndex = 0;
-  round.trick = { leader, plays: [] };
-  round.turn = leader;
+  round.trick = { leader: -1, plays: [] };
+  round.turn = null;
+}
+
+/** 첫 턴 첫 카드(♣2)를 기다리는 중인가 */
+export function awaitingOpening(round: RoundState): boolean {
+  return (
+    round.phase === "play" &&
+    round.trickIndex === 0 &&
+    round.turn === null &&
+    (round.trick?.plays.length ?? 0) === 0
+  );
 }
 
 export function createMatch(options: CreateMatchOptions): {
@@ -201,7 +213,10 @@ export function decisionFor(state: MatchState, seat: number): Decision | null {
         ? { kind: "pass", direction: round.direction, count: rules.passCount }
         : null;
     case "play": {
-      if (round.turn !== seat || round.trick === null) return null;
+      if (round.trick === null) return null;
+      if (awaitingOpening(round)) {
+        if (!(round.hands[seat] ?? []).includes(TWO_OF_CLUBS)) return null;
+      } else if (round.turn !== seat) return null;
       return {
         kind: "play",
         cards: playableCards(
@@ -328,6 +343,8 @@ export function step(
         (action.slot as number) < hand.length
           ? (action.slot as number)
           : null;
+      if (round.trick.plays.length === 0 && round.trick.leader < 0)
+        round.trick.leader = seat;
       round.hands[seat] = hand.filter((c) => c !== card);
       round.trick.plays.push({ seat, card });
       events.push({ type: "played", seat, card, slot });

@@ -60,7 +60,14 @@ function cloneSim(sim: Sim): Sim {
 
 function turnOf(sim: Sim): number {
   const last = sim.trick.plays[sim.trick.plays.length - 1];
-  return last ? (last.seat + 1) % 4 : sim.trick.leader;
+  if (last) return (last.seat + 1) % 4;
+  // 첫 턴 첫 카드는 ♣2를 가진 사람이 낸다.
+  if (sim.trick.leader < 0)
+    return Math.max(
+      0,
+      sim.hands.findIndex((h) => h.includes("C2" as Card)),
+    );
+  return sim.trick.leader;
 }
 
 /** 중수에게 넘길 화면. 중수가 읽는 칸만 채운다 */

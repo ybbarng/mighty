@@ -135,6 +135,7 @@ export class FairHostTable {
   private publicOf(state: MatchState): PublicView {
     return {
       players: [...state.round.players],
+      turn: state.round.turn,
       declarer: state.round.declarer,
       goal: state.round.goal,
     };
@@ -513,12 +514,22 @@ export function revealSeatView(
   };
   const hand = view.hand.map(swap);
   const discarded = view.discarded?.map(swap) ?? null;
-  if (hand.includes(null) || discarded?.includes(null)) return null;
+  // 2마: 차례인 사람에게 보여 주는 앞면 카드
+  const faceUp = view.pickFaceUp === null ? null : swap(view.pickFaceUp);
+  if (
+    hand.includes(null) ||
+    discarded?.includes(null) ||
+    (view.pickFaceUp !== null && faceUp === null)
+  )
+    return null;
   const real: PlayerView = {
     ...view,
     hand: hand as Card[],
     discarded: discarded as Card[] | null,
+    pickFaceUp: faceUp,
   };
+  if (real.decision?.kind === "pick" && faceUp !== null)
+    real.decision = { ...real.decision, faceUp };
   const declaration = view.friendDeclaration;
   if (
     declaration?.kind === "card" &&

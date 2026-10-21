@@ -60,6 +60,8 @@ export interface LocalMatchOptions<
   revealView?: (seat: number, view: View) => View | null;
   /** 아직 보여 줄 수 없는 화면 대신 쓸 것(결정을 숨긴 화면). 없으면 마지막으로 보낸 화면 */
   maskView?: (seat: number, view: View) => View;
+  /** 행동할 자리(없으면 `kit.pendingSeats`). 하트 멘탈 포커의 첫 선처럼 엔진이 모르는 자리를 알려 준다 */
+  pendingSeats?: (state: State) => number[];
   /** 엔진 걸음 뒤 */
   afterStep?: (state: State, events: Event[]) => void;
   /** 준비하다 거절된 행동(비동기라 `submitAs`가 돌려준 뒤에 알게 된다) */
@@ -442,7 +444,10 @@ export class LocalMatch<
   /** 봇 한 수. 둘 봇이 없으면 `false` */
   private stepBot(): boolean {
     if (this.haltedReason || this.botBusy) return false;
-    const seat = this.kit.pendingSeats(this.state).find((s) => this.isBot(s));
+    const pending = this.options.pendingSeats
+      ? this.options.pendingSeats(this.state)
+      : this.kit.pendingSeats(this.state);
+    const seat = pending.find((s) => this.isBot(s));
     if (seat === undefined) return false;
     const raw = this.kit.viewOf(this.state, seat);
     const view = this.options.revealView

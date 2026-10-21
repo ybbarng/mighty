@@ -271,6 +271,9 @@ importers:
       '@mighty/engine':
         specifier: workspace:*
         version: link:../engine
+      '@mighty/hearts-engine':
+        specifier: workspace:*
+        version: link:../hearts-engine
     devDependencies:
       '@mighty/ai':
         specifier: workspace:*

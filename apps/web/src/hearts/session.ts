@@ -1,3 +1,4 @@
+import type { Card } from "@mighty/engine";
 import type {
   Action,
   GameEvent,
@@ -16,7 +17,7 @@ export type HeartsHostRoom = HostRoom<
   PlayerView,
   Action,
   GameEvent,
-  undefined
+  Card[][]
 >;
 export type HeartsGuestRoom = GuestRoom<
   HeartsRules,
@@ -24,7 +25,7 @@ export type HeartsGuestRoom = GuestRoom<
   PlayerView,
   Action,
   GameEvent,
-  undefined
+  Card[][]
 >;
 
 /** 지금 들어가 있는 하트 온라인 방. 화면이 바뀌어도(대기실 → 게임) 연결은 이어진다 */

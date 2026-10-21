@@ -40,7 +40,21 @@ export type FairWire =
       k: "keys";
       deal: number;
       from: number;
+      /**
+       * 누구의 열쇠인가(없으면 보낸 기기). 하트에서 넘겨받은 카드를 낼 때 넘겨준 사람 열쇠를 대신 공개한다.
+       * 틀린 열쇠면 카드가 열리지 않아 드러난다
+       */
+      of?: number;
       reason: RevealReason;
+      keys: [number, string][];
+    }
+  /** 하트 카드 넘기기: 넘기는 카드의 내 열쇠를 받는 기기에게만 직접 보낸다(방장을 거치지 않는다) */
+  | {
+      t: "fp";
+      k: "handover";
+      deal: number;
+      from: number;
+      to: number;
       keys: [number, string][];
     };
 
@@ -75,12 +89,16 @@ interface DealCtx {
   mine: Map<number, Card>;
   initial: Card[];
   done: Set<string>;
+  /** 넘겨받은 카드: 자리 → 넘겨준 기기와 그 열쇠 */
+  handed: Map<number, { of: number; key: bigint }>;
 }
 
 export interface FairDeviceOptions {
   id: number;
   group: GroupName;
   send: (message: FairWire) => void;
+  /** 한 기기에게만 보낸다(하트 카드 넘기기 열쇠) */
+  sendTo?: (message: FairWire, device: number) => void;
   /** 새로고침 전에 남겨 둔 열쇠(`snapshotAll`) */
   restore?: Record<number, PartySnapshot>;
 }
@@ -89,6 +107,7 @@ export class FairDevice {
   readonly id: number;
   readonly g: SraGroup;
   private readonly send: (message: FairWire) => void;
+  private readonly sendTo: ((message: FairWire, device: number) => void) | null;
   private readonly deals = new Map<number, DealCtx>();
   private work: Promise<void> = Promise.resolve();
   private readonly listeners: {
@@ -107,6 +126,7 @@ export class FairDevice {
     this.id = options.id;
     this.g = GROUPS[options.group];
     this.send = options.send;
+    this.sendTo = options.sendTo ?? null;
     this.restored = new Map(
       Object.entries(options.restore ?? {}).map(([deal, snap]) => [
         Number(deal),
@@ -118,7 +138,15 @@ export class FairDevice {
   /** 모든 판의 내 열쇠(새로고침에 대비해 남긴다) */
   snapshotAll(): Record<number, PartySnapshot> {
     const out: Record<number, PartySnapshot> = {};
-    for (const [deal, ctx] of this.deals) out[deal] = ctx.party.snapshot();
+    for (const [deal, ctx] of this.deals)
+      out[deal] = {
+        ...ctx.party.snapshot(),
+        handed: [...ctx.handed].map(([slot, h]) => [
+          slot,
+          h.of,
+          h.key.toString(16),
+        ]),
+      };
     return out;
   }
 
@@ -198,7 +226,14 @@ export class FairDevice {
       mine: new Map(),
       initial: [...cards],
       done: new Set(),
+      handed: new Map(),
     };
+    // 새로고침 전에 넘겨받은 열쇠를 되살린다(장부에 자리가 생기면 들어간다).
+    for (const [slot, of, hex] of this.restored.get(deal)?.handed ?? []) {
+      const key = BigInt(`0x${hex}`);
+      ctx.handed.set(slot, { of, key });
+      this.pendingKeys.push({ deal, slot, from: of, key });
+    }
     this.deals.set(deal, ctx);
     // 시작 명령보다 먼저 온 사슬 결과·열쇠를 먼저 넣는다. 새로고침 뒤라면 내가 전에 보낸 결과도
     // 여기 들어 있어서, 내 차례를 다시 계산하지 않는다(다시 섞으면 남들이 쓴 덱과 달라진다).
@@ -238,6 +273,61 @@ export class FairDevice {
     void this.queue(() => this.publishGrants(ctx));
   }
 
+  /**
+   * 하트 카드 넘기기: 내 자리 몇 개를 다른 기기에게 넘긴다. 그 자리 내 열쇠를 그 기기에게만 직접 보낸다.
+   * 나머지 기기 열쇠는 처음 나눠 줄 때 이미 공개됐으므로 받는 기기만 연다
+   */
+  handover(deal: number, slots: readonly number[], to: number): void {
+    const ctx = this.deals.get(deal);
+    // 같은 기기 안에서 넘기면(방장과 컴퓨터 사이) 카드는 그대로 이 기기에 있다.
+    if (!ctx || slots.length === 0 || to === this.id) return;
+    // 넘긴 카드도 내가 본 카드로 남긴다(화면의 "넘긴 카드"). 낼 수 있는지는 손패 자리 표로 따진다.
+    for (const slot of slots) {
+      ctx.owners.set(slot, to);
+      ctx.party.mySlots.delete(slot);
+    }
+    const keys: [number, string][] = slots.map((slot) => [
+      slot,
+      ctx.party.revealKey(slot, "audit").toString(16),
+    ]);
+    this.sendTo?.(
+      { t: "fp", k: "handover", deal, from: this.id, to, keys },
+      to,
+    );
+  }
+
+  /** 넘겨받은 열쇠. `from`은 부르는 쪽이 연결로 확인한 기기 */
+  receiveHandover(
+    message: Extract<FairWire, { k: "handover" }>,
+    from: number,
+  ): void {
+    if (message.to !== this.id || message.from !== from) return;
+    void this.queue(() => {
+      const ctx = this.deals.get(message.deal);
+      if (!ctx) return;
+      for (const [slot, hex] of message.keys) {
+        let key: bigint;
+        try {
+          key = BigInt(`0x${hex}`);
+        } catch {
+          continue;
+        }
+        ctx.handed.set(slot, { of: from, key });
+        ctx.owners.set(slot, this.id);
+        ctx.party.mySlots.add(slot);
+        if (ctx.ledger.keys.has(slot)) ctx.ledger.publish(slot, from, key);
+        else this.pendingKeys.push({ deal: ctx.id, slot, from, key });
+      }
+      this.emit("persist");
+      this.openMine(ctx);
+    });
+  }
+
+  /** 넘겨받은 자리(하트). 낼 때 넘겨준 사람 열쇠도 함께 공개한다 */
+  handedSlots(deal: number): ReadonlySet<number> {
+    return new Set(this.deals.get(deal)?.handed.keys() ?? []);
+  }
+
   /** 내 자리 열쇠를 공개한다(낼 때·증명·딜미스·판 끝) */
   reveal(deal: number, slots: readonly number[], reason: RevealReason): void {
     const ctx = this.deals.get(deal);
@@ -254,6 +344,27 @@ export class FairDevice {
       }
       if (keys.length > 0)
         this.send({ t: "fp", k: "keys", deal, from: this.id, reason, keys });
+      // 넘겨받은 카드를 낼 때는 넘겨준 사람 열쇠도 공개해야 모두가 연다.
+      if (reason === "play" || reason === "proof") {
+        const byOwner = new Map<number, [number, string][]>();
+        for (const slot of slots) {
+          const h = ctx.handed.get(slot);
+          if (!h) continue;
+          const list = byOwner.get(h.of) ?? [];
+          list.push([slot, h.key.toString(16)]);
+          byOwner.set(h.of, list);
+        }
+        for (const [of, list] of byOwner)
+          this.send({
+            t: "fp",
+            k: "keys",
+            deal,
+            from: this.id,
+            of,
+            reason,
+            keys: list,
+          });
+      }
       this.emit(
         "keys",
         deal,
@@ -307,6 +418,10 @@ export class FairDevice {
   /** 다른 기기의 메시지. `from`은 부르는 쪽이 연결 아이디로 확인한 기기 번호 */
   receive(message: FairWire, from: number): void {
     const ctx = this.deals.get(message.deal);
+    if (message.k === "handover") {
+      this.receiveHandover(message, from);
+      return;
+    }
     if (message.k === "keys") {
       if (message.from !== from) return;
       void this.queue(() => this.onKeys(message, from));
@@ -500,6 +615,7 @@ export class FairDevice {
       return;
     }
     const slots: number[] = [];
+    const of = typeof message.of === "number" ? message.of : from;
     for (const [slot, hex] of message.keys) {
       let key: bigint;
       try {
@@ -508,7 +624,7 @@ export class FairDevice {
         this.emit("problem", ctx.id, "열쇠 값이 숫자가 아니다", from);
         continue;
       }
-      const known = ctx.ledger.keys.get(slot)?.get(from);
+      const known = ctx.ledger.keys.get(slot)?.get(of);
       if (known !== undefined && known !== key) {
         this.emit(
           "problem",
@@ -520,10 +636,10 @@ export class FairDevice {
       }
       if (!ctx.ledger.keys.has(slot)) {
         // 아직 장부에 없는 자리(사슬이 덜 끝남): 자리를 미리 만들어 둔다.
-        this.pendingKeys.push({ deal: ctx.id, slot, from, key });
+        this.pendingKeys.push({ deal: ctx.id, slot, from: of, key });
         continue;
       }
-      ctx.ledger.publish(slot, from, key);
+      ctx.ledger.publish(slot, of, key);
       slots.push(slot);
     }
     this.openMine(ctx);

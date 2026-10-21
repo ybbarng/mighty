@@ -1,0 +1,170 @@
+import { heartsNormalBot } from "@mighty/hearts-ai";
+import { WINDOWS_RULES } from "@mighty/hearts-engine";
+import { describe, expect, it } from "vitest";
+
+import { type AuditResult, GuestRoom } from "@/net/guest-room";
+import { HostRoom, type IncidentNotice } from "@/net/host-room";
+import { MemoryNetwork } from "@/net/transport";
+
+import { heartsKit } from "./kit";
+
+async function until(condition: () => boolean, ms = 60_000): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > ms)
+      throw new Error("조건을 기다리다 시간이 지났다");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+async function setup(guestCount: number) {
+  const net = new MemoryNetwork();
+  const host = new HostRoom({
+    kit: heartsKit,
+    transport: net.join("host"),
+    hostName: "방장",
+    rules: { ...WINDOWS_RULES, endScore: 40 },
+    bot: heartsNormalBot,
+    botLevel: 1,
+    revealTimeoutMs: 500,
+    fair: { group: "1024" },
+  });
+  const guests: GuestRoom<
+    typeof WINDOWS_RULES,
+    never,
+    never,
+    never,
+    never,
+    never
+  >[] = [];
+  for (let i = 0; i < guestCount; i++) {
+    const guest = new GuestRoom({
+      kit: heartsKit,
+      transport: net.join(`g${i}`),
+      name: `손님${i}`,
+      token: null,
+    });
+    await until(() => guest.seat !== null);
+    guests.push(guest as never);
+  }
+  await until(() => guests.every((g) => g.lobby?.seats.length === 4));
+  const incidents: IncidentNotice[] = [];
+  host.onIncident((n) => incidents.push(n));
+  for (const g of guests) g.on("incident", (n) => incidents.push(n));
+  return { net, host, guests, incidents };
+}
+
+/** 사람 자리도 중수 컴퓨터처럼 둔다. 같은 화면이면 다시 내지 않는다 */
+async function playUntil(
+  host: HostRoom<never, never, never, never, never, never>,
+  guests: GuestRoom<never, never, never, never, never, never>[],
+  done: () => boolean,
+  incidents: IncidentNotice[],
+): Promise<void> {
+  const match = host.match;
+  if (!match) throw new Error("시작하지 않았다");
+  const stamps = new Map<string, string>();
+  const offs = guests.map((g, i) =>
+    g.on("rejected", () => stamps.delete(`g${i}`)),
+  );
+  const start = Date.now();
+  while (!done() && incidents.length === 0) {
+    if (Date.now() - start > 150_000) {
+      const raw = (
+        match as unknown as {
+          rawState(): {
+            round: {
+              phase: string;
+              turn: number | null;
+              trickIndex: number;
+              trick: unknown;
+              passes: unknown;
+              hands: string[][];
+            };
+            roundNumber: number;
+          };
+        }
+      ).rawState();
+      const hv = match.current() as unknown as {
+        decision: unknown;
+        hand: string[];
+      };
+      throw new Error(
+        `끝나지 않는다: ${JSON.stringify({ round: raw.roundNumber, phase: raw.round.phase, turn: raw.round.turn, trick: raw.round.trick, passes: raw.round.passes, hands: raw.round.hands.map((h) => h.length), hostDecision: hv.decision, hostHand: hv.hand, guests: guests.map((g) => ({ seat: g.seat, waiting: (g.fair as unknown as { waiting: boolean })?.waiting, decision: (g.match?.current() as unknown as { decision: unknown })?.decision })) })}`,
+      );
+    }
+    const act = (key: string, view: never, submit: (a: never) => void) => {
+      const v = view as {
+        decision: unknown;
+        roundNumber: number;
+        phase: string;
+        trickIndex: number;
+        handCounts: number[];
+        trick: { plays: unknown[] } | null;
+      };
+      if (!v?.decision) return;
+      const stamp = JSON.stringify([
+        v.roundNumber,
+        v.phase,
+        v.trickIndex,
+        v.trick?.plays.length,
+        v.handCounts,
+      ]);
+      if (stamps.get(key) === stamp) return;
+      stamps.set(key, stamp);
+      submit(heartsNormalBot.decide(view, { seed: 9 }) as never);
+    };
+    act("host", match.current(), (a) => match.submit(a));
+    for (const [i, g] of guests.entries())
+      if (g.match) act(`g${i}`, g.match.current(), (a) => g.match?.submit(a));
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+  for (const off of offs) off();
+}
+
+describe("하트 멘탈 포커 온라인 대전", () => {
+  it("방장도 남의 패를 모른 채 카드를 넘기고 게임을 끝까지 두며, 판마다 모두가 다시 계산해 확인한다", async () => {
+    const { host, guests, incidents } = await setup(2);
+    const verified: number[] = [];
+    for (const g of guests) g.on("roundVerified", (d) => verified.push(d));
+    const audits: AuditResult[] = [];
+    for (const g of guests) g.on("audit", (r) => audits.push(r));
+    const seen: string[] = [];
+    guests[0]?.transport.onMessage((m) => seen.push(JSON.stringify(m)));
+
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    const match = host.match as unknown as {
+      rawState(): { round: { hands: string[][] } };
+      current(): { phase: string; roundNumber: number };
+    };
+    // 방장 엔진에는 참가자 카드가 자리 표로만 있다.
+    for (const g of guests)
+      expect(
+        match
+          .rawState()
+          .round.hands[g.seat as number]?.every((c) => c.startsWith("?_")),
+      ).toBe(true);
+
+    await playUntil(
+      host as never,
+      guests as never,
+      () => match.current().phase === "gameOver",
+      incidents,
+    );
+    expect(incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`)).toEqual(
+      [],
+    );
+    const rounds = match.current().roundNumber;
+    await until(() => audits.length === guests.length);
+    expect(audits.filter((a) => !a.ok)).toEqual([]);
+    expect(verified.length).toBeGreaterThanOrEqual(rounds * guests.length);
+    // 참가자가 받은 메시지에 손패 전체가 없다. 넘긴 카드 열쇠는 받는 사람에게만 갔다.
+    expect(seen.some((m) => m.includes('"hands"'))).toBe(false);
+    expect(
+      seen
+        .filter((m) => m.includes('"handover"'))
+        .every((m) => m.includes(`"to":${guests[0]?.seat}`)),
+    ).toBe(true);
+  }, 200_000);
+});

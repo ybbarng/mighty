@@ -4,6 +4,12 @@ import { type HeartsRules, PLAYER_COUNT } from "@mighty/hearts-engine";
 import { useEffect, useRef, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
+import {
+  announceRoundVerified,
+  bindFair,
+  FairLine,
+  reportIncident,
+} from "@/components/FairLine";
 import { InviteQr } from "@/components/InviteQr";
 import { ActionButton } from "@/components/panels/common";
 import { useSettings } from "@/game/settings";
@@ -14,6 +20,7 @@ import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
 import type { LobbyState } from "@/net/protocol";
 import {
+  fairStoreFor,
   hostFingerprintFromUrl,
   inviteUrl,
   loadSeatToken,
@@ -120,6 +127,9 @@ export function HeartsOnlineScreen({
           botLevel: useHeartsSettings.getState().level,
           botNames: useSettings.getState().botNames,
           pace: (next) => setTimeout(next, 0),
+          ...(useSettings.getState().fairPlay
+            ? { fair: { group: "2048" as const } }
+            : {}),
         });
         heartsSession.host = host;
         setFingerprint(await host.fingerprint());
@@ -127,6 +137,10 @@ export function HeartsOnlineScreen({
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
         host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
+        host.onIncident((n) =>
+          reportIncident(n, seatNamesOf(host.lobby()), useHearts),
+        );
+        host.onOwnError((error) => useHearts.setState({ notice: error }));
         host.onLobby(syncLobby);
         setPhase("lobby");
       } else {
@@ -140,6 +154,7 @@ export function HeartsOnlineScreen({
           ...(hostFingerprintFromUrl()
             ? { hostFingerprint: hostFingerprintFromUrl() as string }
             : {}),
+          fairStore: fairStoreFor(roomCode),
         });
         heartsSession.guest = guest;
         useChat.getState().reset();
@@ -177,6 +192,16 @@ export function HeartsOnlineScreen({
           onAuditReport("나", result.ok, result.ok ? undefined : result.reason);
         });
         guest.on("report", (r) => onAuditReport(r.name, r.ok, r.reason));
+        guest.on("incident", (n) =>
+          reportIncident(
+            n,
+            seatNamesOf(
+              guest.lobby ?? { seats: [], ruleCode: "", started: true },
+            ),
+            useHearts,
+          ),
+        );
+        guest.on("roundVerified", announceRoundVerified);
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -187,6 +212,7 @@ export function HeartsOnlineScreen({
             ),
             { network: true },
           );
+          bindFair(useHearts, guest.fair?.coordinator, null);
           onPlaying();
         });
       }
@@ -203,6 +229,7 @@ export function HeartsOnlineScreen({
     try {
       const match = await host.start();
       attachOnline(match, seatNamesOf(host.lobby()), { network: true });
+      bindFair(useHearts, host.fair?.coordinator, () => host.abandon());
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -305,6 +332,11 @@ export function HeartsOnlineScreen({
                 </div>
               </div>
             )}
+            <FairLine
+              lobby={lobby}
+              isHost={isHost}
+              setFair={(fair) => heartsSession.host?.setFair(fair)}
+            />
             <p className="text-[11px] opacity-50">
               규칙 문자열{" "}
               <span className="select-all font-mono">{lobby.ruleCode}</span>

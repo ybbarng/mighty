@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
 import { DealAnimation } from "@/components/DealAnimation";
+import { FairOverlays } from "@/components/FairOverlays";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { botName } from "@/game/bot-names";
@@ -70,6 +71,10 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
   const reconnecting = useHearts((s) => s.reconnecting);
   const offlineSeats = useHearts((s) => s.offlineSeats);
   const invalid = useHearts((s) => s.invalid);
+  const incident = useHearts((s) => s.incident);
+  const shuffling = useHearts((s) => s.shuffling);
+  const fair = useHearts((s) => s.fair);
+  const endGame = useHearts((s) => s.endGame);
   const submit = useHearts((s) => s.submit);
   const clearNotice = useHearts((s) => s.clearNotice);
   const botNames = useSettings((s) => s.botNames);
@@ -417,10 +422,18 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
                     합 {view.scores[seat] ?? 0}
                   </span>
                 </div>
-                {offlineSeats.includes(seat) && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-[10px] shadow">
-                    연결 끊김 · 컴퓨터가 대신
+                {incident?.seat === seat ? (
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-bold text-[10px] shadow">
+                    ⚠ 부정 감지
                   </div>
+                ) : (
+                  offlineSeats.includes(seat) && (
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-[10px] shadow">
+                      {fair
+                        ? "연결 끊김 · 기다리는 중"
+                        : "연결 끊김 · 컴퓨터가 대신"}
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -436,8 +449,23 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
               kittyCount={0}
               startDelay={dealing.startDelay}
               pattern={HEARTS_DEAL_PATTERN}
+              shuffleMs={dealing.shuffleMs}
             />
           )}
+
+          <FairOverlays
+            incident={incident}
+            shuffling={dealing ? null : shuffling}
+            fair={fair}
+            offlineNames={offlineSeats.map((s) => seatName(s))}
+            endGame={endGame}
+            whoName={(seat) => (seat === me ? "내 자리" : seatName(seat))}
+            center={tableCenter}
+            card={layout.trick.card}
+            deckCount={52}
+            top={layout.hud.y + layout.hud.h + 6}
+            stageWidth={stage.width}
+          />
 
           {[
             ...(dealing ? [] : hand).map((card, i) => {
@@ -521,8 +549,8 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
             }),
           ]}
 
-          {/* 가운데 패널: 넘기기, 판 결과 */}
-          {showPanel && (
+          {/* 가운데 패널: 넘기기, 판 결과(섞는 동안은 지난 화면이라 숨긴다) */}
+          {showPanel && !shuffling && (
             <div
               className="panel-area absolute z-[200] flex items-end justify-center"
               style={{

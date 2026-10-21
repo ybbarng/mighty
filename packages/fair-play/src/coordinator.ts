@@ -25,6 +25,9 @@ import { RenegeWatch } from "./renege";
  * - 마지막 턴 시작: 모두 열쇠를 공개한다(판 전체를 진짜 카드로 다시 계산, audit.ts)
  */
 
+/** 카드를 기다리는 까닭: 판 시작 섞기, 6·7마 다시 섞기, 그 밖(바닥 카드·증명 등) */
+export type BusyReason = "deal" | "redeal" | "wait";
+
 export interface Incident {
   /** 탓할 자리. 누군지 가릴 수 없으면 null */
   seat: number | null;
@@ -34,6 +37,8 @@ export interface Incident {
 /** 엔진 사건을 처리할 때 함께 보는 공개 정보 */
 export interface PublicView {
   players: readonly number[];
+  /** 지금 차례(2마 고르기에서 앞면 카드를 보여 줄 사람) */
+  turn: number | null;
   declarer: number | null;
   goal: { kiruda: Kiruda } | null;
 }
@@ -129,6 +134,10 @@ export class FairCoordinator {
       switch (event.type) {
         case "roundStarted":
           this.startDeal(event.roundNumber);
+          if (this.rules.playerCount === 2) this.offerPick(view.turn);
+          break;
+        case "picked":
+          this.onPicked(event.seat, event.index, view.turn);
           break;
         case "kittyTaken":
           if (!redealt) this.giveSlots(this.kitty, event.seat);
@@ -169,10 +178,13 @@ export class FairCoordinator {
     const plan = tokenDeal(this.rules);
     this.tokenDeals.set(deal, plan);
     this.kitty = [];
+    this.pick = { count: 0, faceUp: -1, faceDown: -1, seat: -1 };
     const owners = new Map<number, number>();
+    // 2마는 26번 고르고 남는 맨 아래 한 장이 바닥 카드다.
+    if (this.rules.playerCount === 2) this.kitty = [0];
     plan.owners.forEach((seat, slot) => {
       if (seat < 0) {
-        this.kitty.push(slot);
+        if (this.rules.playerCount !== 2) this.kitty.push(slot);
         return;
       }
       this.seatOwners.set(slot, seat);
@@ -183,25 +195,73 @@ export class FairCoordinator {
     this.updateBusy();
   }
 
-  private busy = false;
-  private busyListeners = new Set<(busy: boolean) => void>();
-  /** 내 기기가 받을 카드를 아직 다 열지 못했다(섞고 나누는 중) */
-  onBusy(listener: (busy: boolean) => void): () => void {
+  /** 2마: 지금 보여 준 두 장(덱 맨 뒤부터)과 몇 번째 고르기인지 */
+  private pick = { count: 0, faceUp: -1, faceDown: -1, seat: -1 };
+
+  /** 2마: 다음 두 장을 내놓고, 앞면 카드는 차례인 사람만 열게 한다 */
+  private offerPick(turn: number | null): void {
+    const size = this.tokenDeals.get(this.deal)?.size ?? 0;
+    const top = size - 1 - this.pick.count * 2;
+    if (turn === null || top < 1) return;
+    this.pick = { ...this.pick, faceUp: top, faceDown: top - 1, seat: turn };
+    this.device.assign(this.deal, new Map([[top, this.deviceOf(turn)]]));
+    this.updateBusy();
+  }
+
+  private onPicked(seat: number, index: 0 | 1, turn: number | null): void {
+    const { faceUp, faceDown } = this.pick;
+    const slot = index === 0 ? faceUp : faceDown;
+    this.seatOwners.set(slot, seat);
+    if (index === 1)
+      this.device.assign(this.deal, new Map([[slot, this.deviceOf(seat)]]));
+    this.pick.count++;
+    if (this.pick.count < 26) this.offerPick(turn);
+    else this.pick.seat = -1;
+  }
+
+  private busy: BusyReason | null = null;
+  private busyListeners = new Set<(busy: BusyReason | null) => void>();
+  /** 내 기기가 받을 카드를 아직 다 열지 못했다. 왜 기다리는지(처음 섞기, 다시 섞기, 그 밖) */
+  onBusy(listener: (busy: BusyReason | null) => void): () => void {
     this.busyListeners.add(listener);
     listener(this.busy);
     return () => this.busyListeners.delete(listener);
   }
 
-  /** 다시 섞는 중이거나, 내 기기 자리 카드 중 아직 못 연 것이 있으면 바쁘다 */
   private updateBusy(): void {
     const me = this.device.id;
     const mine = this.device.myCards(this.deal);
-    let waiting = this.redealPlan !== null && !this.redeals.has(this.deal);
-    for (const [slot, seat] of this.seatOwners)
-      if (this.deviceOf(seat) === me && !mine.has(slot)) waiting = true;
-    if (waiting === this.busy) return;
-    this.busy = waiting;
-    for (const l of this.busyListeners) l(waiting);
+    const initial = this.tokenDeals.get(this.deal)?.owners;
+    let reason: BusyReason | null =
+      this.redealPlan !== null && !this.redeals.has(this.deal)
+        ? "redeal"
+        : null;
+    // 아직 섞기 사슬이 끝나지 않았다.
+    const ledger = this.device.ledger(this.deal);
+    if (
+      (ledger?.deck.length ?? 0) < (this.tokenDeals.get(this.deal)?.size ?? 0)
+    )
+      reason ??= "deal";
+    // 2마: 내가 볼 앞면 카드를 아직 못 열었다.
+    if (
+      this.pick.seat >= 0 &&
+      this.deviceOf(this.pick.seat) === me &&
+      !mine.has(this.pick.faceUp)
+    )
+      reason ??= "wait";
+    for (const [slot, seat] of this.seatOwners) {
+      if (this.deviceOf(seat) !== me || mine.has(slot)) continue;
+      const dealt =
+        (initial?.[slot] ?? -1) >= 0 && slot < (initial?.length ?? 0);
+      reason ??= dealt
+        ? "deal"
+        : this.redeals.get(this.deal)?.includes(slot)
+          ? "redeal"
+          : "wait";
+    }
+    if (reason === this.busy) return;
+    this.busy = reason;
+    for (const l of this.busyListeners) l(reason);
   }
 
   private giveSlots(slots: readonly number[], seat: number): void {
@@ -365,6 +425,7 @@ export function roundDealOf(
     deal: {
       hands: plan.deal.hands.map((h) => h.map(real)),
       kitty: plan.deal.kitty.map(real),
+      ...(plan.deal.deck ? { deck: plan.deal.deck.map(real) } : {}),
     },
     ...(redeal ? { redeal: redeal.map((s) => cards.get(s) as Card) } : {}),
     cards,

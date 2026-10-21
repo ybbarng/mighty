@@ -9,16 +9,23 @@ import {
 } from "@mighty/engine";
 
 import {
+  checkHeartsReplay,
   FairGuestSeat,
   type FairLogged,
+  HeartsGuestSeat,
   type Incident,
   type PartySnapshot,
+  realHeartsAction,
 } from "@mighty/fair-play";
+import {
+  type HeartsRules,
+  viewOf as heartsViewOf,
+} from "@mighty/hearts-engine";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import type { GameKit, KitLoggedAction } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 
-import { verifyFairLog } from "./fair-verify";
+import { type FairReplayGame, verifyFairLog } from "./fair-verify";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import { verifyHostProof, welcomeStatement } from "./identity";
 import {
@@ -249,7 +256,7 @@ export class GuestRoom<
     roundVerified: new Set(),
   };
   /** 멘탈 포커 진행(이 방이 멘탈 포커일 때, 첫 화면을 받으면 만든다) */
-  fair: FairGuestSeat | null = null;
+  fair: FairGuestSeat | HeartsGuestSeat | null = null;
   /** 멘탈 포커 판: 시작하자마자 공개된 시드 */
   private fairSeed: number | null = null;
   /** 진행을 만들기 전에 온 멘탈 포커 메시지 */
@@ -411,7 +418,16 @@ export class GuestRoom<
   }
 
   /** 첫 화면을 받으면 멘탈 포커 진행을 만든다 */
-  private ensureFair(): FairGuestSeat | null {
+  /** 기기 번호(자리)로 연결 아이디. 방장 기기는 0 */
+  private peerOfDevice(device: number): string | null {
+    if (device === 0) return this.hostId;
+    return (
+      this.lobby?.seats.find((s) => s.seat === device && s.kind === "guest")
+        ?.peerId ?? null
+    );
+  }
+
+  private ensureFair(): FairGuestSeat | HeartsGuestSeat | null {
     if (this.fair) return this.fair;
     const lobby = this.lobby;
     if (!lobby?.fair || this.seat === null) return null;
@@ -419,23 +435,44 @@ export class GuestRoom<
     if (!rules.ok) return null;
     const seat = this.seat;
     const saved = this.fairStore?.load() ?? null;
-    const fair = new FairGuestSeat({
-      rules: rules.rules as unknown as RuleSet,
+    const common = {
       seat,
       guestSeats: lobby.seats
         .filter((s) => s.kind === "guest")
         .map((s) => s.seat),
       group: lobby.fair.group,
-      broadcast: (message) => this.transport.send(message),
-      onIncident: (incident) => this.raiseIncident(incident),
-      onSnapshot: (view, events) =>
-        this.deliver({
-          view: view as unknown as View,
-          events: events as unknown as Event[],
-        }),
-      onVerify: (deal, log) => void this.verifyRound(deal, log),
+      broadcast: (message: FairMessage) => this.transport.send(message),
+      onIncident: (incident: Incident) => this.raiseIncident(incident),
       ...(saved ? { restore: saved.snapshots } : {}),
-    });
+    };
+    const fair =
+      this.kit.id === "hearts"
+        ? new HeartsGuestSeat({
+            ...common,
+            rules: rules.rules as unknown as HeartsRules,
+            // 넘긴 카드 열쇠는 받는 기기에게만 직접 보낸다(방장을 거치지 않는다).
+            sendTo: (message, device) => {
+              const peer = this.peerOfDevice(device);
+              if (peer) this.transport.send(message, peer);
+            },
+            onSnapshot: (view, events) =>
+              this.deliver({
+                view: view as unknown as View,
+                events: events as unknown as Event[],
+              }),
+            onVerify: (deal, log) =>
+              void this.verifyRound(deal, log as unknown as FairLogged[]),
+          })
+        : new FairGuestSeat({
+            ...common,
+            rules: rules.rules as unknown as RuleSet,
+            onSnapshot: (view, events) =>
+              this.deliver({
+                view: view as unknown as View,
+                events: events as unknown as Event[],
+              }),
+            onVerify: (deal, log) => void this.verifyRound(deal, log),
+          });
     this.fair = fair;
     this.restoredSent = saved?.sent ?? [];
     fair.device.on("persist", () => this.persistFair());
@@ -507,6 +544,7 @@ export class GuestRoom<
     const bot =
       level !== undefined && this.kit.botFor ? this.kit.botFor(level) : null;
     return {
+      ...(this.kit.id === "hearts" ? { game: this.heartsReplay() } : {}),
       rules: rules.rules as unknown as RuleSet,
       seed: this.fairSeed,
       seat: this.seat,
@@ -518,6 +556,27 @@ export class GuestRoom<
       bot: bot as never,
       sent: this.match.sent,
       seen: this.match.seen,
+    };
+  }
+
+  /** 하트 판 다시 계산하기 */
+  private heartsReplay(): FairReplayGame {
+    const kit = this.kit;
+    return {
+      check: (rules, seed, log, deals) =>
+        checkHeartsReplay(
+          rules as HeartsRules,
+          seed,
+          log as never,
+          deals as never,
+        ),
+      viewOf: (state, seat) => heartsViewOf(state as never, seat),
+      realAction: (action, cards) =>
+        realHeartsAction(action as never, cards as never),
+      annotate: (view, action) =>
+        kit.annotateBotAction
+          ? kit.annotateBotAction(view as View, action as ActionT)
+          : action,
     };
   }
 
@@ -666,8 +725,8 @@ export class GuestRoom<
         // 멘탈 포커: 자리 표를 내가 연 카드로 바꿔 넘긴다(못 열었으면 열 때까지 미룬다).
         if (fair)
           fair.snapshot(
-            message.view as unknown as PlayerView,
-            message.events as unknown as GameEvent[],
+            message.view as never,
+            message.events as never,
             message.resync === true,
           );
         else this.deliver(snapshot);

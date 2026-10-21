@@ -95,9 +95,12 @@ describe("하트 엔진", () => {
     for (const c of chosen[0] as Card[])
       expect(state.round.hands[1]).toContain(c);
     expect(viewOf(state, 1).received).toEqual(chosen[0]);
-    const leader = state.round.turn as number;
-    expect(state.round.hands[leader]).toContain("C2");
+    // 첫 선은 비워 두고 ♣2를 가진 사람만 낼 수 있다.
+    expect(state.round.turn).toBeNull();
+    const leader = state.round.hands.findIndex((h) => h.includes("C2"));
     expect(decisionFor(state, leader)).toMatchObject({ cards: ["C2"] });
+    for (const s of [0, 1, 2, 3].filter((s) => s !== leader))
+      expect(decisionFor(state, s)).toBeNull();
   });
 
   it("3장이 아니거나 손에 없는 카드는 넘길 수 없다", () => {

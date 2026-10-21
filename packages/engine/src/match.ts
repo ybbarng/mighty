@@ -134,6 +134,13 @@ function startRound(
 
   const preset = state.presetDeal;
   state.presetDeal = null;
+  if (preset?.deck && seatCount === 2) {
+    // 2마를 정해진 순서(멘탈 포커로 섞은 자리 표)로 고르기 시작한다.
+    round.deck = [...preset.deck];
+    round.phase = "pick";
+    offerPick(round);
+    return;
+  }
   if (preset) {
     round.hands = preset.hands.map((h) => [...h]);
     round.deck = [...preset.kitty];
@@ -391,7 +398,7 @@ export function step(
       handOf(round, seat).push(picked);
       round.pickOffer = null;
       round.pickCount++;
-      events.push({ type: "picked", seat });
+      events.push({ type: "picked", seat, index: action.index });
       if (round.pickCount >= 26) {
         round.phase = "election";
         round.turn = round.beginner;

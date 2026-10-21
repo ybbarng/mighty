@@ -1,3 +1,4 @@
+import type { Card } from "@mighty/engine";
 import {
   type Action,
   createMatch,
@@ -13,7 +14,6 @@ import {
   step,
   viewOf,
 } from "@mighty/hearts-engine";
-
 import type { GameKit } from "@/game/kit";
 
 import { heartsBotFor } from "./bots";
@@ -27,16 +27,19 @@ export type HeartsKit = GameKit<
   PlayerView,
   Action,
   GameEvent,
-  undefined
+  Card[][]
 >;
 
 /** 하트 엔진을 대국 진행·온라인 방에 잇는다 */
 export const heartsKit: HeartsKit = {
   id: "hearts",
-  createMatch: (rules, seed) => createMatch({ rules, seed }),
+  // 정해진 패(멘탈 포커의 자리 표)로 시작할 수 있다.
+  createMatch: (rules, seed, presetHands) =>
+    createMatch({ rules, seed, ...(presetHands ? { presetHands } : {}) }),
   step,
   viewOf,
-  replay: (rules, seed, log) => replay({ rules, seed }, log),
+  replay: (rules, seed, log, presetHands) =>
+    replay({ rules, seed, ...(presetHands ? { presetHands } : {}) }, log),
   pendingSeats,
   playerCount: () => PLAYER_COUNT,
   encodeRules: encodeHeartsRules,

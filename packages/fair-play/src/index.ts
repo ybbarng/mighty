@@ -4,6 +4,8 @@ export * from "./coordinator";
 export * from "./device";
 export * from "./dropout";
 export * from "./guest-seat";
+export * from "./hearts";
+export * from "./hearts-table";
 export * from "./host-table";
 export * from "./messages";
 export * from "./protocol";

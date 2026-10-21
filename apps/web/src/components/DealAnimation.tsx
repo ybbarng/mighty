@@ -18,6 +18,11 @@ interface DealAnimationProps {
   startDelay: number;
   /** 한 사람에게 주는 묶음 크기(없으면 마이티 2·3·3·2) */
   pattern?: readonly number[];
+  /**
+   * 섞는 연출 시간. 멘탈 포커처럼 실제로 섞는 동안 이미 섞는 연출(`ShuffleLoop`)을 보였으면
+   * 최소 시간(`SHUFFLE_MS`)에서 남은 만큼만 섞고 바로 나눠 준다
+   */
+  shuffleMs?: number;
 }
 
 type Stage =
@@ -38,6 +43,7 @@ export function DealAnimation({
   kittyCount,
   startDelay,
   pattern,
+  shuffleMs = SHUFFLE_MS,
 }: DealAnimationProps) {
   const [stage, setStage] = useState<Stage>("stack");
   const total = handSize * targets.length;
@@ -45,18 +51,24 @@ export function DealAnimation({
   const lastFlight = flights.at(-1)?.delay ?? 0;
 
   useEffect(() => {
-    const step = SHUFFLE_MS / 4;
+    const step = shuffleMs / 4;
+    const shuffles: [Stage, number][] =
+      shuffleMs > 0
+        ? [
+            ["split", startDelay],
+            ["merge", startDelay + step],
+            ["split2", startDelay + step * 2],
+            ["merge2", startDelay + step * 3],
+          ]
+        : [];
     const plan: [Stage, number][] = [
-      ["split", startDelay],
-      ["merge", startDelay + step],
-      ["split2", startDelay + step * 2],
-      ["merge2", startDelay + step * 3],
-      ["deal", startDelay + SHUFFLE_MS],
-      ["settle", startDelay + SHUFFLE_MS + lastFlight + FLIGHT_MS],
+      ...shuffles,
+      ["deal", startDelay + shuffleMs],
+      ["settle", startDelay + shuffleMs + lastFlight + FLIGHT_MS],
     ];
     const timers = plan.map(([s, at]) => setTimeout(() => setStage(s), at));
     return () => timers.forEach(clearTimeout);
-  }, [startDelay, lastFlight]);
+  }, [startDelay, lastFlight, shuffleMs]);
 
   const count = total + kittyCount;
   const split = stage === "split" || stage === "split2";
@@ -96,6 +108,51 @@ export function DealAnimation({
             z={dealt ? 100 + (total - order) : 10 + i}
             delay={dealt ? (flight?.delay ?? 0) : 0}
             duration={dealt ? FLIGHT_MS : 400}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * 멘탈 포커: 모두가 실제로 섞는 동안 가운데 덱이 갈라졌다 합쳐지기를 되풀이한다.
+ * 섞기가 끝나면 나눠 주기 연출(`DealAnimation`)이 이어받는다
+ */
+export function ShuffleLoop({
+  center,
+  card,
+  count,
+}: {
+  center: Point;
+  card: Size;
+  count: number;
+}) {
+  const [split, setSplit] = useState(false);
+  useEffect(() => {
+    const timer = setInterval(() => setSplit((s) => !s), SHUFFLE_MS / 4);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => {
+        const half = i % 2 === 0 ? -1 : 1;
+        return (
+          <PlayingCard
+            // biome-ignore lint/suspicious/noArrayIndexKey: 덱 연출용 뒷면 카드는 순서가 곧 정체다
+            key={i}
+            card={null}
+            width={card.w}
+            height={card.h}
+            at={{
+              x: center.x + (split ? half * card.w * 0.62 : 0),
+              y: center.y - i * 0.35,
+              scale: 1,
+            }}
+            rotate={split ? half * 6 : 0}
+            z={10 + i}
+            delay={0}
+            duration={400}
           />
         );
       })}
