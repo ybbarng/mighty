@@ -35,7 +35,7 @@ import { useChat } from "@/net/chat";
 import { ChatBox } from "./ChatBox";
 import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
-import { FairOverlays } from "./FairOverlays";
+import { FairOverlays, FairStatus } from "./FairOverlays";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
 import { ExchangePanel } from "./panels/ExchangePanel";
@@ -645,16 +645,20 @@ export function GameTable({
                   </>
                 )}
               </span>
-              <span
-                className="shrink-0 tabular-nums opacity-80"
-                title="턴 진행과 아직 나오지 않은 점수 카드 수"
-              >
-                {view.phase === "play"
-                  ? compactHud
-                    ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
-                    : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}턴 · 남은 점수 ${20 - pointsTaken}`
-                  : `${view.roundNumber}판`}
-              </span>
+              {shuffling && !dealing && !incident ? (
+                <FairStatus shuffling={shuffling} />
+              ) : (
+                <span
+                  className="shrink-0 tabular-nums opacity-80"
+                  title="턴 진행과 아직 나오지 않은 점수 카드 수"
+                >
+                  {view.phase === "play"
+                    ? compactHud
+                      ? `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1} · ${20 - pointsTaken}점`
+                      : `${view.trickIndex + 1}/${lastTrickIndex(rules) + 1}턴 · 남은 점수 ${20 - pointsTaken}`
+                    : `${view.roundNumber}판`}
+                </span>
+              )}
               {network && (
                 <button
                   type="button"
@@ -1154,7 +1158,6 @@ export function GameTable({
               card={layout.trick.card}
               deckCount={deckFor(rules).length}
               top={layout.hud.y + layout.hud.h + 6}
-              stageWidth={stage.width}
             />
             {invalid && (
               <div

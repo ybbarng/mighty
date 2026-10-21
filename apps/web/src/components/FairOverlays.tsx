@@ -17,7 +17,7 @@ export interface IncidentState {
 /**
  * 멘탈 포커 판의 화면 위 표시. 마이티와 하트가 함께 쓴다.
  * - 부정 감지: 누가, 무엇을. 내 기기가 찾은 것과 방장이 알린 것을 구분한다
- * - 모두 함께 섞는 동안: 가운데 덱이 갈라졌다 합쳐지기를 되풀이한다(글은 띄우지 않는다)
+ * - 모두 함께 섞는 동안: 가운데 덱이 갈라졌다 합쳐지기를 되풀이한다. 무엇을 하는지는 위 상태 막대에 쓴다(`FairStatus`)
  * - 연결이 끊긴 사람: 컴퓨터가 대신할 수 없어 기다린다. 방장은 게임을 끝낼 수 있다
  */
 export function FairOverlays({
@@ -31,7 +31,6 @@ export function FairOverlays({
   card,
   deckCount,
   top,
-  stageWidth,
 }: {
   incident: IncidentState | null;
   /** 섞는 중(나눠 주는 연출 중이면 null로 넘긴다) */
@@ -45,7 +44,6 @@ export function FairOverlays({
   deckCount: number;
   /** 경고를 띄울 높이(위 막대 아래) */
   top: number;
-  stageWidth: number;
 }) {
   return (
     <>
@@ -69,28 +67,16 @@ export function FairOverlays({
           </div>
         </div>
       )}
-      {shuffling && !incident && (
-        <>
-          {shuffling !== "wait" && !prefersReducedMotion() && (
-            <ShuffleLoop
-              center={center}
-              card={card}
-              count={shuffling === "deal" ? deckCount : 13}
-            />
-          )}
-          {/* 섞는 애니메이션으로 충분하므로 글은 화면 낭독기에만 알린다. 애니메이션이 없는 짧은 기다림은 회전 표시만 */}
-          <div role="status" data-shuffling={shuffling} className="sr-only">
-            {shuffling === "wait" ? "카드를 여는 중" : "모두 함께 섞는 중"}
-          </div>
-          {(shuffling === "wait" || prefersReducedMotion()) && (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute z-[330] inline-block size-5 -translate-x-1/2 animate-spin rounded-full border-2 border-white/30 border-t-white"
-              style={{ left: stageWidth / 2, top: center.y - 10 }}
-            />
-          )}
-        </>
-      )}
+      {shuffling &&
+        !incident &&
+        shuffling !== "wait" &&
+        !prefersReducedMotion() && (
+          <ShuffleLoop
+            center={center}
+            card={card}
+            count={shuffling === "deal" ? deckCount : 13}
+          />
+        )}
       {fair && offlineNames.length > 0 && !incident && (
         <div
           role="status"
@@ -110,5 +96,26 @@ export function FairOverlays({
         </div>
       )}
     </>
+  );
+}
+
+/** 위 상태 막대에 쓰는 멘탈 포커 진행 상황. 섞는 동안은 지난 판 정보 대신 이것을 보인다 */
+export function FairStatus({ shuffling }: { shuffling: BusyReason }) {
+  return (
+    <span
+      role="status"
+      data-shuffling={shuffling}
+      className="flex shrink-0 items-center gap-1.5 text-amber-200"
+    >
+      <span
+        aria-hidden
+        className="inline-block size-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
+      />
+      {shuffling === "wait"
+        ? "카드 여는 중"
+        : shuffling === "redeal"
+          ? "다시 섞는 중"
+          : "섞는 중"}
+    </span>
   );
 }

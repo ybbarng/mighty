@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
 import { DealAnimation } from "@/components/DealAnimation";
-import { FairOverlays } from "@/components/FairOverlays";
+import { FairOverlays, FairStatus } from "@/components/FairOverlays";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { botName } from "@/game/bot-names";
@@ -286,14 +286,20 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
             }}
           >
             <span className="shrink-0 font-bold text-red-300">♥ 하트</span>
-            <span className="min-w-0 flex-1 truncate opacity-80">
-              {view.roundNumber}판 ·{" "}
-              {view.phase === "passing"
-                ? `넘기기: ${directionLabel(view.direction)}`
-                : view.phase === "play"
-                  ? `${view.trickIndex + 1}/13턴${view.heartsBroken ? " · 하트 깨짐" : ""}`
-                  : "판 끝"}
-            </span>
+            {shuffling && !dealing && !incident ? (
+              <span className="min-w-0 flex-1">
+                <FairStatus shuffling={shuffling} />
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate opacity-80">
+                {view.roundNumber}판 ·{" "}
+                {view.phase === "passing"
+                  ? `넘기기: ${directionLabel(view.direction)}`
+                  : view.phase === "play"
+                    ? `${view.trickIndex + 1}/13턴${view.heartsBroken ? " · 하트 깨짐" : ""}`
+                    : "판 끝"}
+              </span>
+            )}
             <span
               className="shrink-0 tabular-nums opacity-90"
               title="내 이번 판 점수와 합계"
@@ -464,7 +470,6 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
             card={layout.trick.card}
             deckCount={52}
             top={layout.hud.y + layout.hud.h + 6}
-            stageWidth={stage.width}
           />
 
           {[
