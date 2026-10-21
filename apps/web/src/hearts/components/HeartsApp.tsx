@@ -405,6 +405,10 @@ function HeartsRulesScreen({ onBack }: { onBack: () => void }) {
         </dl>
         <p className="text-center text-xs opacity-50">
           윈도우 하트의 규칙을 따랐습니다. 규칙은 옵션에서 바꿀 수 있습니다.
+          친구와 할 때의 공정성은{" "}
+          <a href="/security" className="underline">
+            어떻게 지켜지나요?
+          </a>
         </p>
         <ActionButton onClick={onBack}>처음으로</ActionButton>
       </div>

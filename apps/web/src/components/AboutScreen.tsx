@@ -39,6 +39,17 @@ export function AboutScreen({
         </section>
 
         <section className="flex flex-col gap-1.5 text-xs leading-relaxed opacity-80">
+          <h2 className="font-semibold text-sm">친구와 할 때 안전한가요?</h2>
+          <p>
+            서버 없이 기기끼리 이어지는데도 섞기 조작, 결과 조작, 방장 사칭을
+            어떻게 막는지 실제 코드로 해 볼 수 있게 정리했습니다.{" "}
+            <a href="/security" className="text-sky-300 underline">
+              어떻게 지켜지나요?
+            </a>
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-1.5 text-xs leading-relaxed opacity-80">
           <h2 className="font-semibold text-sm">이 게임은</h2>
           <p>
             윈도우용{" "}

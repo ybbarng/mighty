@@ -363,6 +363,14 @@ export function HeartsOnlineScreen({
           </p>
         )}
 
+        <a
+          href="/security"
+          target="_blank"
+          rel="noreferrer"
+          className="text-center text-xs text-sky-300 underline opacity-80"
+        >
+          이 방은 어떻게 지켜지나요?
+        </a>
         <button
           type="button"
           onClick={onBack}
