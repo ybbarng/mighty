@@ -17,7 +17,7 @@ async function prepare(page: Page) {
       "mighty-settings",
       JSON.stringify({ state: { speed: 2, sound: false }, version: 0 }),
     );
-    // "모두 함께 섞는 중"이 보인 시간을 잰다.
+    // 섞는 중(섞는 애니메이션)이 보인 시간을 잰다.
     const w = window as unknown as {
       __shuffles: number[];
       __since: number | null;
@@ -25,7 +25,7 @@ async function prepare(page: Page) {
     w.__shuffles = [];
     w.__since = null;
     new MutationObserver(() => {
-      const on = document.body?.innerText.includes("모두 함께 섞는 중");
+      const on = document.querySelector("[data-shuffling]") !== null;
       if (on && w.__since === null) w.__since = performance.now();
       if (!on && w.__since !== null) {
         w.__shuffles.push(performance.now() - w.__since);
@@ -60,6 +60,23 @@ function stepScript(bidder: boolean): string {
     return what;
   };
   if (/부정 감지 —/.test(text)) return "incident";
+  // 하트: 넘길 카드 세 장을 고르고 넘긴다.
+  const passButton = [...document.querySelectorAll("button")].find(
+    (b) => visible(b) && (b.textContent ?? "").trim() === "넘기기",
+  );
+  if (passButton) {
+    if (!passButton.disabled) return click(passButton, "pass3");
+    const card = buttons.find(
+      (b) =>
+        b.hasAttribute("data-card") &&
+        !b.className.includes("0_0_0_3px") &&
+        !b.className.includes("brightness"),
+    );
+    return click(card, "passPick");
+  }
+  // 2마: 보이는 카드와 안 보이는 카드 중 하나
+  if (text.includes("한 장을 고르세요"))
+    return click(byText(/안 보이는 카드/), "pick");
   const next = byText(/^다음 판$/);
   if (next) return click(next, "next");
   if (text.includes("이번 판에서 뺄 사람")) {
@@ -70,7 +87,8 @@ function stepScript(bidder: boolean): string {
     return click(byText(/지목$/), "kill");
   }
   if (text.includes("당선을 축하합니다")) {
-    if (!/\(3\/3\)/.test(text)) {
+    // 버릴 카드를 다 골랐는가(2마 1장, 그 밖 3장): "(3/3)", "(1/1)"
+    if (!/\((\d)\/\1\)/.test(text)) {
       const card = buttons.find(
         (b) =>
           /^[♠♥◆♣]|조커/.test(b.getAttribute("aria-label") ?? "") &&
@@ -111,7 +129,7 @@ async function step(page: Page, bidder: boolean): Promise<string> {
 async function openTable(
   context: BrowserContext,
   players: number,
-  preset: string,
+  preset: string | null,
   /** 탭을 열기 전에(고친 프로그램 내려보내기 등) */
   before?: (index: number, page: Page) => Promise<void>,
 ) {
@@ -131,11 +149,17 @@ async function openTable(
     pages.push(p);
   }
   const host = pages[0] as Page;
-  await host.goto("/?net=local");
-  await host.getByRole("button", { name: "옵션", exact: true }).click();
-  await host.getByRole("button", { name: preset, exact: true }).click();
-  await host.getByRole("button", { name: "처음으로" }).click();
-  await host.getByRole("button", { name: /다함께 마이티/ }).click();
+  if (preset === null) {
+    // 하트
+    await host.goto("/hearts?net=local");
+    await host.getByRole("button", { name: /다함께 하트/ }).click();
+  } else {
+    await host.goto("/?net=local");
+    await host.getByRole("button", { name: "옵션", exact: true }).click();
+    await host.getByRole("button", { name: preset, exact: true }).click();
+    await host.getByRole("button", { name: "처음으로" }).click();
+    await host.getByRole("button", { name: /다함께 마이티/ }).click();
+  }
   await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();
   const link = await host.locator("input[readonly]").inputValue();
@@ -151,10 +175,12 @@ async function openTable(
 }
 
 for (const [preset, players] of [
+  ["표준 2마", 2],
   ["표준 5마", 5],
   ["표준 6마", 6],
+  [null, 4],
 ] as const) {
-  test(`${preset}: 사람 ${players}명이 멘탈 포커로 두 판을 끝까지 둔다`, async ({
+  test(`${preset ?? "하트"}: 사람 ${players}명이 멘탈 포커로 두 판을 끝까지 둔다`, async ({
     context,
   }, info) => {
     test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
@@ -176,12 +202,21 @@ for (const [preset, players] of [
     let shot = 0;
     let lastAction = Date.now();
     let lastSig = "";
+    let shuffleShot = false;
     let lastChange = Date.now();
     for (let i = 0; i < 20_000 && rounds.length < 2; i++) {
       let ended = false;
       const texts = await Promise.all(
         pages.map((p) => p.evaluate(() => document.body.innerText)),
       );
+      // 섞는 애니메이션(실제로 섞는 동안)을 한 번 찍는다.
+      if (
+        !shuffleShot &&
+        (await pages[1]?.locator('[data-shuffling="deal"]').count()) === 1
+      ) {
+        shuffleShot = true;
+        await pages[1]?.screenshot({ path: info.outputPath("shuffling.png") });
+      }
       const sig = texts.join("|");
       if (sig !== lastSig) {
         lastSig = sig;
@@ -254,7 +289,7 @@ for (const [preset, players] of [
       ),
     );
     const report = {
-      preset,
+      preset: preset ?? "하트",
       players,
       totalSec: Math.round((Date.now() - started) / 1000),
       roundsSec: rounds.map((r) => Math.round(r / 1000)),
@@ -279,9 +314,11 @@ test("고친 프로그램: 다른 카드라고 속여 내면 방장 화면에 �
   test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
   test.setTimeout(5 * 60_000);
   // 1번 참가자 탭에만 고친 프로그램을 내려보낸다: 낼 카드 대신 내 다른 자리 열쇠를 공개한다.
-  const original = 'return this.device.reveal(t,[r],"play"),{...e,deckSlot:r}';
-  const forged =
-    'return r=[...this.coordinator.seatOwners].find(([s,o])=>o===this.seat&&s!==r&&!this.coordinator.playedSlots.has(s))?.[0]??r,this.device.reveal(t,[r],"play"),{...e,deckSlot:r}';
+  // 압축된 코드라 변수 이름은 빌드마다 바뀐다. 모양으로 찾는다.
+  const original =
+    /return this\.device\.reveal\((\w+),\[(\w+)\],"play"\),\{\.\.\.(\w+),deckSlot:\2\}/;
+  const forged = (_: string, deal: string, slot: string, action: string) =>
+    `return ${slot}=[...this.coordinator.seatOwners].find(([q,o])=>o===this.seat&&q!==${slot}&&!this.coordinator.playedSlots.has(q))?.[0]??${slot},this.device.reveal(${deal},[${slot}],"play"),{...${action},deckSlot:${slot}}`;
   let patched = false;
   const { pages, host } = await openTable(
     context,
@@ -292,7 +329,7 @@ test("고친 프로그램: 다른 카드라고 속여 내면 방장 화면에 �
       await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
         const response = await route.fetch();
         let body = await response.text();
-        if (body.includes(original)) {
+        if (original.test(body)) {
           body = body.replace(original, forged);
           patched = true;
         }
