@@ -83,7 +83,7 @@ export function OnlineScreen({
   const [name, setName] = useState(savedName);
   const [phase, setPhase] = useState<Phase>("name");
   const [lobby, setLobby] = useState<LobbyState | null>(null);
-  const [roomCode] = useState(() => roomFromUrl ?? randomId(6));
+  const [roomCode] = useState(() => roomFromUrl ?? randomId(16));
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,16 +100,28 @@ export function OnlineScreen({
   }, [savedName, name]);
 
   /** 판 끝 검증 결과(내 것과 다른 사람이 알린 것)를 채팅에 남기고, 실패면 게임을 무효로 표시한다 */
+  /**
+   * 판 끝 검증 결과를 채팅에 남긴다. 게임을 무효로 표시하는 것은 **내 기기의 검증**뿐이다.
+   * 다른 사람의 실패 알림은 그 사람의 주장으로만 보여 준다. 판 끝 기록은 모두 같은 것을 받으므로,
+   * 남이 거짓으로 "실패"라고 알려 게임을 무효로 만드는 것을 막는다(모의 침투 B3).
+   */
   const onAuditReport = (who: string, ok: boolean, reason?: string) => {
+    const own = who === "나";
     const failure = ok ? null : `${who}: ${reason ?? "알 수 없는 문제"}`;
     useChat.getState().receive({
       id: randomId(8),
       seat: -1,
       name: "검증",
-      text: ok ? `${who} — 문제없음 ✓` : `${who} — 실패 ⚠ ${reason ?? ""}`,
+      text: ok
+        ? `${who} — 문제없음 ✓`
+        : own
+          ? `${who} — 실패 ⚠ ${reason ?? ""}`
+          : `${who}의 주장 — 실패 ⚠ ${reason ?? ""} (내 검증과 따로 봅니다)`,
     });
-    if (failure) useGame.setState({ invalid: failure });
-    recordAudit(roomCode, failure);
+    if (own) {
+      if (failure) useGame.setState({ invalid: failure });
+      recordAudit(roomCode, failure);
+    }
   };
 
   const enter = async () => {
@@ -126,6 +138,7 @@ export function OnlineScreen({
           rules,
           ...(initialRuleName ? { ruleName: initialRuleName } : {}),
           bot: botFor(useSettings.getState().botLevel),
+          botLevel: useSettings.getState().botLevel,
           botNames: useSettings.getState().botNames,
           pace: browserPace,
         });

@@ -10,7 +10,7 @@ import { botName } from "@/game/bot-names";
 import type { GameKit, KitBot } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
 import { mightyKit } from "@/game/mighty-kit";
-import { commit, deriveSeed, newSecret } from "./fairness";
+import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import {
   createHostIdentity,
   type HostIdentity,
@@ -51,6 +51,8 @@ export interface HostRoomOptions<
   revealTimeoutMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
   bot?: KitBot<View, ActionT>;
+  /** 그 컴퓨터의 실력 단계. 대기실에 알려 참가자가 판 끝에 컴퓨터 수를 다시 계산하게 한다 */
+  botLevel?: number;
   /** 빈자리 컴퓨터 이름(1번 자리부터). 비면 기본 이름 */
   botNames?: readonly string[];
   /** 컴퓨터 수 사이에 차례를 넘기는 방법(`LocalMatchOptions.pace`) */
@@ -91,6 +93,7 @@ export class HostRoom<
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
   private readonly bot: KitBot<View, ActionT> | null;
+  private readonly botLevel: number | null;
   private readonly pace: ((next: () => void) => void) | null;
   private readonly botNames: readonly string[];
   private lobbyListeners = new Set<(lobby: LobbyState) => void>();
@@ -103,6 +106,7 @@ export class HostRoom<
   private readonly kickedPeers = new Set<string>();
   private readonly kickedTokens = new Set<string>();
   match: LocalMatch<Rules, State, View, ActionT, Event, Extra> | null = null;
+  private joinQueue: Promise<void> = Promise.resolve();
 
   constructor(
     options: HostRoomOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -124,6 +128,7 @@ export class HostRoom<
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
     this.bot = options.bot ?? null;
+    this.botLevel = options.botLevel ?? null;
     this.pace = options.pace ?? null;
     this.botNames = options.botNames ?? [];
     void commit(this.hostSecret).then((hash) => {
@@ -175,6 +180,7 @@ export class HostRoom<
       game: this.kit.id,
       ruleCode: this.kit.encodeRules(this.rules),
       ...(this.ruleName ? { ruleName: this.ruleName } : {}),
+      ...(this.botLevel !== null ? { botLevel: this.botLevel } : {}),
       seats,
       started: this.match !== null,
     };
@@ -316,6 +322,7 @@ export class HostRoom<
       t: "audit",
       reveals: this.reveals(),
       log: this.match.actionLog(),
+      commitments: this.commitments,
     });
   }
 
@@ -341,8 +348,17 @@ export class HostRoom<
     });
   }
 
+  /**
+   * `to`가 없으면 앉아 있는 참가자에게만 하나씩 보낸다. 링크만 알고 자리가 없는 사람(대기실이 찼거나
+   * 시작한 뒤 들어온 사람)은 대기실·채팅·판 끝 기록을 받지 못한다.
+   */
   private send(message: HostMessage<View, Event, ActionT>, to?: string): void {
-    this.transport.send(message, to);
+    if (to !== undefined) {
+      this.transport.send(message, to);
+      return;
+    }
+    for (const guest of this.guests.values())
+      if (guest.peerId) this.transport.send(message, guest.peerId);
   }
 
   private broadcastLobby(): void {
@@ -360,23 +376,40 @@ export class HostRoom<
   private onMessage(message: GuestMessage<ActionT>, from: string): void {
     switch (message.t) {
       case "join":
-        void this.onJoin(
-          from,
-          message.name,
-          message.token,
-          message.commit,
-          typeof message.nonce === "string" ? message.nonce : null,
+        // 입장 요청은 하나씩 처리한다. 동시에 처리하면 한 연결이 여러 자리를 받을 수 있다.
+        this.joinQueue = this.joinQueue.then(() =>
+          this.onJoin(
+            from,
+            typeof message.name === "string" ? message.name : "손님",
+            typeof message.tokenProof === "string" ? message.tokenProof : null,
+            typeof message.commit === "string" ? message.commit : "",
+            typeof message.nonce === "string" ? message.nonce : null,
+          ),
         );
         break;
       case "reveal": {
         const seat = this.seatOf(from);
         const guest = seat === null ? undefined : this.guests.get(seat);
-        if (guest && guest.secret === null) guest.secret = message.secret;
+        if (
+          !guest ||
+          guest.secret !== null ||
+          typeof message.secret !== "string"
+        )
+          return;
+        // 약속과 맞는 값만 받는다. 틀린 값은 안 낸 것으로 쳐서 시작이 막히지 않게 한다.
+        void commit(message.secret).then((hash) => {
+          if (hash === guest.commit && guest.secret === null)
+            guest.secret = message.secret;
+        });
         break;
       }
       case "action": {
         const seat = this.seatOf(from);
         if (seat === null || !this.match) return;
+        if (this.kit.guestMayAct && !this.kit.guestMayAct(message.action)) {
+          this.send({ t: "rejected", error: "할 수 없는 행동" }, from);
+          return;
+        }
         const result = this.match.submitAs(seat, message.action);
         if (!result.ok) this.send({ t: "rejected", error: result.error }, from);
         break;
@@ -429,20 +462,31 @@ export class HostRoom<
   private async onJoin(
     peerId: string,
     name: string,
-    token: string | null,
+    proof: string | null,
     commitHash: string,
     nonce: string | null,
   ): Promise<void> {
-    if (
-      this.kickedPeers.has(peerId) ||
-      (token !== null && this.kickedTokens.has(token))
-    ) {
+    const me = this.transport.selfId;
+    const matches = async (token: string) =>
+      proof !== null && (await tokenProof(token, me)) === proof;
+    let kickedToken = false;
+    for (const token of this.kickedTokens)
+      if (await matches(token)) kickedToken = true;
+    if (this.kickedPeers.has(peerId) || kickedToken) {
       this.send({ t: "kicked" }, peerId);
       return;
     }
-    // 재접속: 같은 토큰이면 같은 자리로 돌려보낸다.
+    // 이미 앉은 연결이 다시 요청하면 새 자리를 주지 않고 같은 자리를 다시 알린다(한 연결로 여러 자리).
+    const already = this.seatOf(peerId);
+    if (already !== null) {
+      const guest = this.guests.get(already);
+      if (guest) await this.welcome(peerId, already, guest.token, nonce);
+      return;
+    }
+    // 재접속: 토큰 증명이 맞으면 같은 자리로 돌려보낸다.
     for (const [seat, guest] of this.guests) {
-      if (token !== null && guest.token === token) {
+      if (await matches(guest.token)) {
+        const token = guest.token;
         guest.peerId = peerId;
         if (guest.standInTimer) clearTimeout(guest.standInTimer);
         guest.standInTimer = null;

@@ -13,6 +13,8 @@ export type StepOutcome<State, Event> =
 export interface KitLoggedAction<Action> {
   seat: number;
   action: Action;
+  /** 컴퓨터가 둔 수. 판 끝 검증에서 같은 컴퓨터로 다시 계산해 맞춰 본다 */
+  bot?: true;
 }
 
 /**
@@ -48,6 +50,10 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
   isOver(view: View): boolean;
   /** 봇이 둘 수 있는 화면인가. 튜토리얼 장면처럼 낼 카드가 떨어지면 멈춘다 */
   botCanAct?(view: View): boolean;
+  /** 온라인 참가자가 보낼 수 있는 행동인가(마이티의 그만두기처럼 혼자 할 때만 쓰는 것을 막는다) */
+  guestMayAct?(action: Action): boolean;
+  /** 실력 단계의 컴퓨터. 온라인 판 끝 검증에서 컴퓨터 수를 다시 계산한다 */
+  botFor?(level: number): KitBot<View, Action>;
   /** 봇 행동 다듬기(손패 위치 같은 연출 정보) */
   annotateBotAction?(view: View, action: Action): Action;
 }

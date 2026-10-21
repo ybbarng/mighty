@@ -20,6 +20,8 @@ export interface LobbyState {
   ruleCode: string;
   /** 방장이 붙인 규칙 이름(내 규칙). 기본 규칙이면 없다 */
   ruleName?: string;
+  /** 빈자리 컴퓨터의 실력 단계. 판 끝에 컴퓨터 수를 다시 계산해 방장이 조종하지 않았는지 본다 */
+  botLevel?: number;
   seats: LobbySeat[];
   started: boolean;
 }
@@ -62,7 +64,11 @@ export type GuestMessage<A = Action> =
   | {
       t: "join";
       name: string;
-      token: string | null;
+      /**
+       * 재접속 증명: SHA-256("mighty-token|토큰|받는 사람 연결 아이디"). 토큰 자체는 보내지 않는다.
+       * 받는 사람마다 값이 달라서, 방에 있는 다른 사람이 엿들어 방장에게 다시 보내도 쓸 수 없다.
+       */
+      tokenProof: string | null;
       commit: string;
       /** 방장 서명에 넣을 임의의 값(identity.ts) */
       nonce?: string;
@@ -93,7 +99,13 @@ export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
   | { t: "snapshot"; view: V; events: E[] }
   | { t: "rejected"; error: string }
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
-  | { t: "audit"; reveals: Reveal[]; log: KitLoggedAction<A>[] }
+  | {
+      t: "audit";
+      reveals: Reveal[];
+      log: KitLoggedAction<A>[];
+      /** 실제로 시드에 쓴 약속(값을 내지 않아 빠진 자리를 뺀 것) */
+      commitments?: Commitment[];
+    }
   /** 채팅. 방장이 받은 말을 모두에게 다시 보낸다(이름은 방장이 붙인다) */
   | { t: "chat"; message: ChatMessage }
   | AuditReport;

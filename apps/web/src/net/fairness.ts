@@ -19,6 +19,11 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
+/** 재접속 증명. 받는 사람 연결 아이디에 묶어 엿들은 값을 다른 데서 못 쓰게 한다 */
+export function tokenProof(token: string, recipient: string): Promise<string> {
+  return sha256Hex(`mighty-token|${token}|${recipient}`);
+}
+
 export function commit(secret: string): Promise<string> {
   return sha256Hex(`mighty-commit:${secret}`);
 }

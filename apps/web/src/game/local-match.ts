@@ -235,11 +235,11 @@ export class LocalMatch<
     return JSON.stringify(this.state);
   }
 
-  private apply(seat: number, action: ActionT): SubmitResult {
+  private apply(seat: number, action: ActionT, bot = false): SubmitResult {
     const result = this.kit.step(this.state, seat, action);
     if (!result.ok) return result;
     this.state = result.state;
-    this.log.push({ seat, action });
+    this.log.push(bot ? { seat, action, bot: true } : { seat, action });
     for (const [listenerSeat, set] of this.listeners) {
       if (set.size === 0) continue;
       const snapshot = {
@@ -291,7 +291,7 @@ export class LocalMatch<
     const action = this.kit.annotateBotAction
       ? this.kit.annotateBotAction(view, decided)
       : decided;
-    const result = this.apply(seat, action);
+    const result = this.apply(seat, action, true);
     if (!result.ok)
       throw new Error(`봇(${seat})이 잘못된 행동을 했다: ${result.error}`);
     return true;

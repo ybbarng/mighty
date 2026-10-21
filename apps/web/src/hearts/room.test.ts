@@ -23,6 +23,7 @@ describe("하트 온라인 방", () => {
       hostName: "방장",
       rules: { ...WINDOWS_RULES, endScore: 30 },
       bot: heartsNormalBot,
+      botLevel: 1,
       revealTimeoutMs: 500,
     });
     const guest = new GuestRoom({

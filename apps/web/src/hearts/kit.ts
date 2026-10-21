@@ -16,6 +16,9 @@ import {
 
 import type { GameKit } from "@/game/kit";
 
+import { heartsBotFor } from "./bots";
+import type { HeartsLevel } from "./settings";
+
 import { sortHearts } from "./terms";
 
 export type HeartsKit = GameKit<
@@ -47,6 +50,7 @@ export const heartsKit: HeartsKit = {
     { type: "dealt", handSize: 13 },
   ],
   isOver: (view) => view.phase === "gameOver",
+  botFor: (level) => heartsBotFor(level as HeartsLevel),
   annotateBotAction: (view, action) =>
     action.type === "play" && action.slot === undefined
       ? { ...action, slot: sortHearts(view.hand).indexOf(action.card) }

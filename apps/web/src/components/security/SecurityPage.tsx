@@ -106,12 +106,101 @@ const THREATS: {
     link: "limits",
   },
   {
+    attack: "시드에서 참가자 값 빼기",
+    who: "방장",
+    status: "잡아냄",
+    how: "참가자가 자기 약속이 시작·판 끝 목록에 있는지 확인",
+    link: "pentest",
+  },
+  {
+    attack: "참가자 행동 바꿔치기",
+    who: "방장",
+    status: "잡아냄",
+    how: "참가자가 보낸 행동과 기록 속 내 행동을 대조",
+    link: "pentest",
+  },
+  {
+    attack: "컴퓨터 자리 조종",
+    who: "방장",
+    status: "잡아냄",
+    how: "같은 컴퓨터·같은 난수로 컴퓨터 수를 다시 계산",
+    link: "pentest",
+  },
+  {
+    attack: "판 끝 기록 숨기기",
+    who: "방장",
+    status: "잡아냄",
+    how: "기록 없이 나가면 검증 못 함으로 알림",
+    link: "pentest",
+  },
+  {
+    attack: "재접속 토큰 가로채기",
+    who: "링크를 아는 사람",
+    status: "막음",
+    how: "토큰 대신 받는 사람에 묶인 해시만 보냄",
+    link: "pentest",
+  },
+  {
     attack: "엿듣기",
     who: "릴레이·네트워크",
     status: "막음",
     how: "연결 정보는 방 코드로 암호화, 게임 데이터는 WebRTC(DTLS)",
     link: "network",
   },
+];
+
+/** 모의 침투에서 실제로 통했던 공격과 고친 방법 */
+const PENTEST: [string, string, string][] = [
+  [
+    "방장이 참가자 약속을 빼고 시드 고르기",
+    "참가자는 목록에 자기 약속이 없으면 확인을 건너뛰었다",
+    "시작 알림과 판 끝 공개의 약속 목록에 내 것이 그대로 있는지 확인",
+  ],
+  [
+    "방장이 판 끝 기록을 숨기고 나가기",
+    "기록이 안 와도 아무 경고가 없었다",
+    '게임을 했는데 기록 없이 나가면 "검증하지 못했다"로 알림',
+  ],
+  [
+    "방장이 참가자 카드를 바꿔 넣기",
+    "기록과 화면이 서로 맞으면 통과했다",
+    "내가 보낸 행동과 기록 속 내 행동을 대조",
+  ],
+  [
+    "방장이 컴퓨터 자리를 조종",
+    "컴퓨터 수는 규칙에만 맞으면 통과했다",
+    "알린 실력의 컴퓨터로 같은 난수를 써서 다시 계산해 대조",
+  ],
+  [
+    "새로고침한 사람의 토큰을 엿들어 자리 빼앗기",
+    "입장 요청이 방 안 모두에게 토큰째로 갔다",
+    "SHA-256(토큰·받는 사람 연결 아이디)만 보냄",
+  ],
+  [
+    "한 연결로 여러 자리 차지",
+    "동시에 온 입장 요청을 따로 처리했다",
+    "입장을 하나씩 처리, 이미 앉은 연결이면 같은 자리",
+  ],
+  [
+    "참가자가 게임 강제 종료(그만두기)",
+    "엔진이 차례와 상관없이 그만두기를 받았다",
+    "온라인 참가자에게는 그만두기를 막음",
+  ],
+  [
+    "모르는 행동으로 기록 부풀리기",
+    "마이티 엔진에 모르는 행동을 거절하는 갈래가 없었다",
+    "엔진이 모르는 행동을 거절",
+  ],
+  [
+    "약속과 다른 값으로 시작 막기",
+    "값이 틀리면 시작이 예외로 멈췄다",
+    "받을 때 확인하고 틀리면 시드에서 뺌",
+  ],
+  [
+    "자리 없는 사람이 채팅·기록 엿듣기, 방 코드 맞히기",
+    '"모두에게" 보내기가 방 안 모든 연결에 갔다, 방 코드가 6글자였다',
+    "앉은 참가자에게만 보냄, 방 코드 16글자",
+  ],
 ];
 
 const RESOURCES: { title: string; url: string; note: string }[] = [
@@ -191,6 +280,7 @@ export function SecurityPage() {
               ["replay", "판 끝 검증"],
               ["identity", "방장 확인"],
               ["chat", "채팅"],
+              ["pentest", "모의 침투"],
               ["limits", "한계"],
               ["learn", "더 공부하기"],
             ].map(([id, label]) => (
@@ -471,6 +561,46 @@ export function SecurityPage() {
           <ChatRoutingDemo />
         </Section>
 
+        <Section id="pentest" title="모의 침투: 고친 프로그램으로 해 본 공격">
+          <P>
+            소스 코드를 다 가진 공격자 한 명이 자기 프로그램을 고친다고
+            가정하고(나머지는 정상 프로그램), 별도 에이전트가 공격 방법을
+            찾았습니다. 항목마다 공격을 실제로 해 보는 시험을 먼저 만들어 정말
+            통하는지 확인하고, 고친 뒤 같은 시험이 막히는지 봤습니다(
+            <code>apps/web/src/net/attacks.test.ts</code>). 처음에는 아래
+            공격들이 실제로 통했습니다.
+          </P>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="opacity-60">
+                <tr>
+                  <th className="py-1 pr-2">공격</th>
+                  <th className="pr-2">원인</th>
+                  <th>고친 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PENTEST.map(([attack, cause, fix]) => (
+                  <tr
+                    key={attack}
+                    className="border-white/10 border-t align-top"
+                  >
+                    <td className="py-1.5 pr-2 font-semibold">{attack}</td>
+                    <td className="pr-2 opacity-80">{cause}</td>
+                    <td className="opacity-90">{fix}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <P>
+            그대로 둔 것: 다른 사람이 손패 몇 번째에서 카드를 뽑았는지(
+            <code>slot</code>)는 보입니다. 오프라인에서 보는 것과 같은 정보라서
+            일부러 남겼습니다. 전체 목록:{" "}
+            <code>docs/12-redteam-2026-10-21.md</code>.
+          </P>
+        </Section>
+
         <Section id="limits" title="한계: 아직 못 막는 것">
           <ul className="list-disc pl-5 text-sm leading-relaxed opacity-90">
             <li>
@@ -486,13 +616,8 @@ export function SecurityPage() {
               거칩니다. 참가자마다 서명 열쇠를 두면 막을 수 있습니다.
             </li>
             <li>
-              방장이 참가자의 행동을 다른 합법 행동으로 바꿔치기하면, 그 참가자
-              화면에 바로 보이지만 자동으로 잡아내지는 않습니다.
-            </li>
-            <li>
-              판 끝 검증은 방장이 기록을 공개해야 할 수 있습니다. 방장이
-              공개하지 않고 나가면 검증 결과가 나오지 않습니다(그 자체가
-              신호입니다).
+              판 끝 검증은 게임이 끝날 때 한 번입니다. 조작은 잡아내지만 그
+              게임이 끝나야 알 수 있습니다.
             </li>
             <li>
               음성 통화로 패를 알려 주는 짜고 치기, 나온 카드를 세 주는 도움
@@ -501,8 +626,8 @@ export function SecurityPage() {
             </li>
           </ul>
           <P>
-            설계 문서: <code>docs/07-security.md</code> · 모의 침투 결과는 이
-            페이지의 "점검" 절에 정리합니다.
+            설계 문서: <code>docs/07-security.md</code>, 모의 침투:{" "}
+            <code>docs/12-redteam-2026-10-21.md</code>.
           </P>
         </Section>
 

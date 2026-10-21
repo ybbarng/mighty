@@ -385,6 +385,8 @@ export function step(
     case "pick": {
       if (decision.kind !== "pick" || round.pickOffer === null)
         return fail("고를 차례가 아니다");
+      if (action.index !== 0 && action.index !== 1)
+        return fail("0이나 1만 고를 수 있다");
       const picked = round.pickOffer[action.index];
       handOf(round, seat).push(picked);
       round.pickOffer = null;
@@ -627,6 +629,10 @@ export function step(
       }
       break;
     }
+
+    default:
+      // 고친 클라이언트가 보낸 모르는 행동이 기록에 쌓이지 않게 한다.
+      return fail("알 수 없는 행동");
   }
 
   return { ok: true, state, events };

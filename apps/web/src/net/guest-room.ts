@@ -1,17 +1,18 @@
-import type {
-  Action,
-  GameEvent,
-  MatchState,
-  PlayerView,
-  PresetDeal,
-  RuleSet,
+import {
+  type Action,
+  createRng,
+  type GameEvent,
+  type MatchState,
+  type PlayerView,
+  type PresetDeal,
+  type RuleSet,
 } from "@mighty/engine";
 
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import type { GameKit, KitLoggedAction } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 
-import { commit, deriveSeed, newSecret } from "./fairness";
+import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import { verifyHostProof, welcomeStatement } from "./identity";
 import {
   type AuditReport,
@@ -41,6 +42,8 @@ export class RemoteMatch<
   private readonly pending: Snapshot<View, Event>[] = [];
   /** 받은 화면을 모두 적어 둔다. 판 끝 검증에서 기록을 다시 돌린 화면과 하나하나 맞춰 본다 */
   readonly seen: string[] = [];
+  /** 내가 보낸 행동. 판 끝 기록 속 내 자리 행동과 맞춰 본다(방장의 바꿔치기) */
+  readonly sent: string[] = [];
 
   constructor(
     readonly seat: number,
@@ -64,6 +67,7 @@ export class RemoteMatch<
   submit(action: ActionT): SubmitResult {
     if (this.last.decision === null)
       return { ok: false, error: "지금은 차례가 아니다" };
+    this.sent.push(JSON.stringify(action));
     this.sendAction(action);
     return { ok: true };
   }
@@ -164,6 +168,13 @@ export class GuestRoom<
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** 서명이 맞지 않아 무시한 "방장" 응답 수(시험·화면 표시용) */
   impostors = 0;
+  /** 시작할 때 방장이 알린 약속 */
+  private startedCommitments: Commitment[] = [];
+  /** 시작 때 방장이 내 약속을 빼거나 바꿨다 */
+  private startProblem: string | null = null;
+  /** 방장과 한 번이라도 끊겼다(그동안 컴퓨터가 대신 둘 수 있다) */
+  private everDisconnected = false;
+  private audited = false;
   private readonly listeners: {
     [K in keyof GuestEvents<View, ActionT, Event>]: Set<
       GuestEvents<View, ActionT, Event>[K]
@@ -216,6 +227,7 @@ export class GuestRoom<
         this.emitHostLeft();
         return;
       }
+      this.everDisconnected = true;
       // 잠깐 끊겼을 수 있으니 바로 끝내지 않고 다시 연결되기를 기다린다.
       for (const l of this.listeners.connection) l("reconnecting");
       if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -254,6 +266,15 @@ export class GuestRoom<
   private emitHostLeft(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    // 게임을 했는데 방장이 판 끝 기록을 공개하지 않고 나갔다(모의 침투 A2).
+    if (this.match && !this.audited) {
+      this.audited = true;
+      const result: AuditResult = {
+        ok: false,
+        reason: "방장이 판 끝 기록을 공개하지 않고 나가 검증하지 못했다",
+      };
+      for (const l of this.listeners.audit) l(result);
+    }
     for (const l of this.listeners.hostLeft) l();
   }
 
@@ -264,7 +285,8 @@ export class GuestRoom<
       {
         t: "join",
         name: this.name,
-        token: this.token,
+        // 토큰은 받는 사람 연결 아이디에 묶은 증명으로만 보낸다(엿들어도 다른 데서 못 쓴다).
+        tokenProof: this.token ? await tokenProof(this.token, peerId) : null,
         commit: await this.commitHash,
         nonce,
       },
@@ -365,12 +387,20 @@ export class GuestRoom<
         this.lobby = message.lobby;
         for (const l of this.listeners.lobby) l(message.lobby);
         break;
-      case "started":
+      case "started": {
         if (from !== this.hostId) return;
+        // 방장이 내 약속을 빼거나 바꿔 알리면 시드를 혼자 정하려는 것이다(모의 침투 A1).
+        const myHash = await this.commitHash;
+        const mine = message.commitments.find((c) => c.seat === this.seat);
+        if (mine?.hash !== myHash)
+          this.startProblem = "방장이 시작할 때 내 약속을 빼거나 바꿨다";
+        if (this.startedCommitments.length === 0)
+          this.startedCommitments = message.commitments;
         this.commitments = message.commitments;
         // 방장 것까지 모든 약속을 받은 뒤에야 비밀 값을 방장에게만 보낸다.
         this.send({ t: "reveal", secret: this.secret }, from);
         break;
+      }
       case "snapshot": {
         if (from !== this.hostId || this.seat === null) return;
         const snapshot = { view: message.view, events: message.events };
@@ -390,14 +420,28 @@ export class GuestRoom<
       }
       case "chat":
         if (from !== this.hostId) return;
+        // 자리 번호가 음수인 줄(검증 결과 같은 시스템 줄)은 내 기기에서만 만든다.
+        if (
+          typeof message.message?.seat !== "number" ||
+          message.message.seat < 0
+        )
+          return;
         for (const l of this.listeners.chat) l(message.message);
         break;
       case "rejected":
+        if (!this.fromHost(from)) return;
+        // 거절된 행동은 기록에 없으므로 보낸 목록에서 뺀다.
+        this.match?.sent.pop();
         for (const l of this.listeners.rejected) l(message.error);
         break;
       case "audit": {
-        if (from !== this.hostId) return;
-        const result = await this.verify(message.reveals, message.log);
+        if (from !== this.hostId || this.audited) return;
+        this.audited = true;
+        const result = await this.verify(
+          message.reveals,
+          message.log,
+          message.commitments,
+        );
         for (const l of this.listeners.audit) l(result);
         // 방장을 거치지 않고 모두에게 결과를 알린다.
         if (this.seat !== null)
@@ -414,7 +458,7 @@ export class GuestRoom<
         if (message.seat === this.seat) return;
         // 보낸 연결이 대기실에 적힌 그 자리의 연결인지 맞춰 본다(다른 자리 사칭).
         const owner = this.lobby?.seats.find((s) => s.seat === message.seat);
-        if (owner?.peerId && owner.peerId !== from) return;
+        if (!owner?.peerId || owner.peerId !== from) return;
         for (const l of this.listeners.report) l(message);
         break;
       }
@@ -425,9 +469,29 @@ export class GuestRoom<
   private async verify(
     reveals: Reveal[],
     log: KitLoggedAction<ActionT>[],
+    finalCommitments?: Commitment[],
   ): Promise<AuditResult> {
     if (this.seat === null || !this.lobby || !this.match)
       return { ok: false, reason: "대국 정보가 없다" };
+    if (this.startProblem) return { ok: false, reason: this.startProblem };
+    // 실제로 시드에 쓴 약속: 시작 때 알린 것 중에서만, 바꾸지 않고, 내 것과 방장 것은 반드시 들어 있어야 한다.
+    if (finalCommitments) {
+      for (const c of finalCommitments) {
+        const announced = this.startedCommitments.find(
+          (s) => s.seat === c.seat,
+        );
+        if (announced?.hash !== c.hash)
+          return {
+            ok: false,
+            reason: `${c.seat}번 자리 약속이 시작 때와 다르다`,
+          };
+      }
+      if (!finalCommitments.some((c) => c.seat === this.seat))
+        return { ok: false, reason: "방장이 내 값을 시드에서 뺐다" };
+      if (!finalCommitments.some((c) => c.seat === 0))
+        return { ok: false, reason: "방장 약속이 없다" };
+      this.commitments = finalCommitments;
+    }
     const mine = reveals.find((r) => r.seat === this.seat);
     if (
       this.commitments.some((c) => c.seat === this.seat) &&
@@ -440,9 +504,39 @@ export class GuestRoom<
     const rules = this.kit.decodeRules(this.lobby.ruleCode);
     if (!rules.ok) return { ok: false, reason: rules.reason };
     // 기록을 한 걸음씩 다시 돌리며 매 걸음 내 자리 화면을 만든다.
+    // 컴퓨터 수는 같은 컴퓨터·같은 난수로 다시 계산해 기록과 맞춰 본다(방장의 컴퓨터 조종, 모의 침투 A4).
+    const level = this.lobby.botLevel;
+    const bot =
+      level !== undefined && this.kit.botFor ? this.kit.botFor(level) : null;
+    const botRng = createRng(seed.seed ^ 0x2545f491);
+    const botSeats = new Set(
+      this.lobby.seats.filter((s) => s.kind === "bot").map((s) => s.seat),
+    );
     let { state } = this.kit.createMatch(rules.rules, seed.seed);
     const replayedViews = [JSON.stringify(this.kit.viewOf(state, this.seat))];
-    for (const [index, { seat, action }] of log.entries()) {
+    for (const [index, entry] of log.entries()) {
+      const { seat, action } = entry;
+      if (bot) {
+        if (botSeats.has(seat) && !entry.bot)
+          return {
+            ok: false,
+            reason: `기록 ${index + 1}번째: 컴퓨터 자리를 사람이 뒀다`,
+          };
+        if (entry.bot) {
+          const view = this.kit.viewOf(state, seat);
+          const decided = bot.decide(view, botRng);
+          const expected = this.kit.annotateBotAction
+            ? this.kit.annotateBotAction(view, decided)
+            : decided;
+          if (JSON.stringify(expected) !== JSON.stringify(action))
+            return {
+              ok: false,
+              reason: `기록 ${index + 1}번째: 컴퓨터가 둘 수와 다르다(방장이 컴퓨터를 조종했다)`,
+            };
+          // 고수 컴퓨터는 생각이 길어 중간중간 화면에 차례를 넘긴다.
+          if (index % 8 === 0) await new Promise((r) => setTimeout(r, 0));
+        }
+      }
       const result = this.kit.step(state, seat, action);
       if (!result.ok)
         return {
@@ -454,6 +548,24 @@ export class GuestRoom<
     }
     if (replayedViews.at(-1) !== JSON.stringify(this.match.current())) {
       return { ok: false, reason: "다시 계산한 결과가 내가 본 화면과 다르다" };
+    }
+    // 기록 속 내 자리 행동이 내가 보낸 행동과 같아야 한다(방장의 바꿔치기, 모의 침투 A3).
+    // 끊긴 적이 있으면 그동안 컴퓨터가 대신 둔 수가 끼어 있을 수 있으므로, 내가 보낸 것이 빠짐없이 차례대로 들어 있는지만 본다.
+    const mineInLog = log
+      .filter((entry) => entry.seat === this.seat)
+      .map((entry) => JSON.stringify(entry.action));
+    const sent = this.match.sent;
+    if (!this.everDisconnected) {
+      if (JSON.stringify(mineInLog) !== JSON.stringify(sent))
+        return { ok: false, reason: "기록 속 내 행동이 내가 보낸 것과 다르다" };
+    } else {
+      let at = 0;
+      for (const action of mineInLog) if (action === sent[at]) at++;
+      if (at < sent.length)
+        return {
+          ok: false,
+          reason: "내가 보낸 행동이 기록에서 빠졌거나 바뀌었다",
+        };
     }
     // 게임 중 받은 화면이 모두 다시 돌린 화면 중에 차례대로 있어야 한다(중간 화면 조작).
     let cursor = 0;
