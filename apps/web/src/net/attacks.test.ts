@@ -168,6 +168,7 @@ describe("컴퓨터 자리", () => {
     await until(() => a.match !== null);
     // 알린 실력(중수)과 다르게 두는 컴퓨터로 바꿔 둔다(모든 패를 보고 두는 것과 같은 효과).
     // 고를 수 있는 카드가 둘 이상이면 중수가 고른 것과 늘 다른 카드를 낸다.
+    let rigs = 0;
     const rigged = {
       name: "rigged",
       decide(
@@ -178,13 +179,19 @@ describe("컴퓨터 자리", () => {
         const d = view.decision;
         if (action.type === "play" && d?.kind === "play") {
           const other = d.cards.find((c) => c !== action.card && c !== "JK");
-          if (other) return { type: "play" as const, card: other };
+          if (other) {
+            rigs++;
+            return { type: "play" as const, card: other };
+          }
         }
         return action;
       },
     };
     (host.match as unknown as { bot: unknown }).bot = rigged;
-    await playRounds(host, a, 2);
+    // 모두 포기해 카드를 한 장도 안 내는 판만 이어지면 조종할 일이 없다. 조종이 생길 때까지 둔다.
+    for (let rounds = 2; rounds < 12 && rigs === 0; rounds += 2)
+      await playRounds(host, a, rounds);
+    expect(rigs).toBeGreaterThan(0);
     host.finish();
     await until(() => audits.length === 1, 20_000);
     expect(audits[0]?.ok).toBe(false);
