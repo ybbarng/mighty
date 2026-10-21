@@ -8,6 +8,7 @@ import {
   ChatRoutingDemo,
   CommitRevealDemo,
   HostSignatureDemo,
+  MentalPokerDemo,
   ReplayAuditDemo,
   ViewFilterDemo,
 } from "./demos";
@@ -52,29 +53,50 @@ const THREATS: {
   {
     attack: "남의 패 엿보기",
     who: "방장",
-    status: "못 막음",
-    how: "엔진이 방장 기기에서 돈다. 멘탈 포커가 필요하다",
-    link: "limits",
+    status: "막음",
+    how: "멘탈 포커: 방장 기기에도 자리 표만 있다(컴퓨터 자리 패는 예외)",
+    link: "mental-poker",
   },
   {
     attack: "섞기 조작(원하는 패 받기)",
     who: "방장·참가자",
     status: "막음",
-    how: "commit-reveal: 모두의 비밀 값으로 시드를 만든다",
-    link: "shuffle",
+    how: "멘탈 포커: 모두가 차례로 잠그고 섞는다. 한 사람만 정직해도 아무도 순서를 모른다",
+    link: "mental-poker",
   },
   {
-    attack: "규칙 위반(없는 카드, 무늬 안 따르기)",
+    attack: "내 카드가 아닌 카드 내기",
     who: "참가자",
     status: "막음",
-    how: "방장 엔진의 step이 거절한다",
-    link: "replay",
+    how: "낸 사람 열쇠로 연 카드가 그 카드여야 한다",
+    link: "mental-poker",
+  },
+  {
+    attack: "무늬 안 따르기·조커콜 숨기기",
+    who: "참가자",
+    status: "잡아냄",
+    how: "숨긴 카드가 드러나는 순간 그 자리를 찍고 판을 멈춘다",
+    link: "mental-poker",
+  },
+  {
+    attack: "6마 죽이기·프렌드 거짓말",
+    who: "참가자",
+    status: "잡아냄",
+    how: "마지막 턴에 판 전체를 진짜 카드로 다시 계산한다",
+    link: "mental-poker",
+  },
+  {
+    attack: "카드 주인 떠보기",
+    who: "방장",
+    status: "잡아냄",
+    how: "죽이기 없이 물으면 다음 화면에서 바로 드러난다",
+    link: "mental-poker",
   },
   {
     attack: "규칙 위반 눈감기·결과 조작",
     who: "방장",
     status: "잡아냄",
-    how: "판 끝에 기록을 공개하고 참가자가 다시 돌린다",
+    how: "판마다(멘탈 포커) 또는 게임 끝에 참가자가 기록을 다시 돌린다",
     link: "replay",
   },
   {
@@ -144,7 +166,7 @@ const THREATS: {
     attack: "엿듣기",
     who: "릴레이·네트워크",
     status: "막음",
-    how: "연결 정보는 방 코드로 암호화, 게임 데이터는 WebRTC(DTLS)",
+    how: "연결 정보는 방 코드로 암호화, 게임 데이터는 WebRTC(DTLS, 순방향 비밀성)",
     link: "network",
   },
 ];
@@ -215,6 +237,21 @@ const RESOURCES: { title: string; url: string; note: string }[] = [
     note: "방장도 남의 패를 못 보게 하는 방법. Shamir·Rivest·Adleman의 교환 가능한 암호",
   },
   {
+    title: "Barnett & Smart, Mental Poker Revisited (2003)",
+    url: "https://doi.org/10.1007/978-3-540-40974-8_29",
+    note: "타원곡선 ElGamal + 증명으로 하는 표준 멘탈 포커",
+  },
+  {
+    title: "Bultel & Lafourcade, Secure Trick-Taking Game Protocols (FC 2019)",
+    url: "https://eprint.iacr.org/2019/375",
+    note: "트릭 게임(스페이드)에서 무늬 안 따르기를 그 자리에서 막는 영지식 증명",
+  },
+  {
+    title: "Bella et al., French Tarot 멘탈 포커 (FC 2023)",
+    url: "https://eprint.iacr.org/2023/309",
+    note: "따로 두는 카드(독)를 다룬다. 마이티 바닥 카드와 구조가 같다",
+  },
+  {
     title: "Web Crypto API (MDN)",
     url: "https://developer.mozilla.org/ko/docs/Web/API/Web_Crypto_API",
     note: "브라우저의 SHA-256, ECDSA. 이 게임이 쓰는 API",
@@ -277,6 +314,7 @@ export function SecurityPage() {
               ["network", "연결"],
               ["view", "보이는 정보"],
               ["shuffle", "섞기"],
+              ["mental-poker", "멘탈 포커"],
               ["replay", "판 끝 검증"],
               ["identity", "방장 확인"],
               ["chat", "채팅"],
@@ -491,9 +529,194 @@ export function SecurityPage() {
           <P>
             r<sub>i</sub>를 시작할 때 모두에게 공개하지 않는 이유: 그러면
             참가자도 시드를 계산해 덱 전체를 알 수 있습니다. 방장은 시드를 알게
-            되므로 남의 패를 볼 수는 있습니다(한계 참고).
+            되므로 남의 패를 볼 수는 있습니다. 그래서 마이티는 이 위에 멘탈
+            포커를 씁니다(아래). 멘탈 포커 판의 시드는 덱을 정하지 않으므로
+            시작하자마자 공개합니다.
           </P>
           <CommitRevealDemo />
+        </Section>
+
+        <Section id="mental-poker" title="멘탈 포커: 방장도 남의 패를 모르게">
+          <P>
+            commit-reveal로는 아무도 시드를 마음대로 정할 수 없지만, 엔진을
+            돌리는 방장 기기는 시드를 알아서 모든 패를 볼 수 있습니다. 멘탈
+            포커는 아예 아무도 덱을 혼자 볼 수 없게 합니다. 마이티 3~7마 친구와
+            하기는 이 방식이 기본입니다(대기실에서 끌 수 있습니다).
+          </P>
+          <P>
+            바탕은 Shamir·Rivest·Adleman(1979)의 교환 가능한 암호(SRA)입니다.
+            안전 소수 p(RFC 3526의 2048비트)에서 카드 m을 열쇠 k로 잠그면 m
+            <sup>k</sup> mod p이고, 지수끼리 곱해지므로 잠근 순서와 상관없이 풀
+            수 있습니다. 카드는 이차잉여 (i+2)<sup>2</sup>로 나타냅니다. 그렇지
+            않으면 잠가도 "이차잉여인가"가 남아 정보가 샙니다(SRA의 알려진
+            약점).
+          </P>
+          <ol className="list-decimal pl-5 text-sm leading-relaxed opacity-90">
+            <li>
+              섞기: 기기마다 차례로 덱 전체를 자기 열쇠로 잠그고 섞어 넘깁니다.
+            </li>
+            <li>
+              다시 잠그기: 각자 섞기 열쇠를 풀고 자리마다 다른 열쇠로 잠급니다.
+              그래야 한 자리 열쇠를 공개해도 다른 자리가 안전합니다.
+            </li>
+            <li>
+              나눠 주기: 자리 s를 j에게 줄 때 j를 뺀 모두가 s의 열쇠를
+              공개합니다. j만 마지막 자물쇠를 풀 수 있습니다.
+            </li>
+            <li>
+              내기: 낸 사람이 그 자리 열쇠를 공개하면 모두가 그 카드를 직접
+              엽니다. 남의 자리 카드는 열쇠가 없어서 낼 수 없습니다.
+            </li>
+            <li>
+              마지막 턴이 시작되면 모두 남은 열쇠를 공개합니다(남은 카드는 한
+              장씩이라 더 숨길 것이 없습니다). 각 기기가 판 전체를 진짜 카드로
+              처음부터 다시 계산해 맞춰 봅니다.
+            </li>
+          </ol>
+          <MentalPokerDemo />
+          <P>
+            <b>방장 엔진은 카드를 모른 채 어떻게 진행할까요?</b> 엔진 상태의
+            손패에 카드 대신 "자리 표"(<code>?_12</code> = 12번 자리의 카드)를
+            넣습니다. 자리 표는 무늬도 숫자도 없습니다. 각 기기는 받은 화면의
+            자리 표를 자기가 연 카드로 바꿔 봅니다. 누가 어느 자리를 갖는지는
+            엔진 사건(공개 정보)만 보고 모든 기기가 같은 방법으로 계산합니다.
+            그래서 방장이 자리를 더 가져갈 틈이 없습니다. 엔진이 남의 카드를
+            알아야 하는 순간에는 그 카드를 가진 기기가 증명을 보냅니다.
+          </P>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="opacity-60">
+                <tr>
+                  <th className="py-1 pr-2">순간</th>
+                  <th>증명</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  [
+                    "카드를 낼 때",
+                    "낸 사람이 그 자리 열쇠를 공개한다. 연 카드가 낸다고 한 카드여야 한다",
+                  ],
+                  [
+                    "딜미스",
+                    "패 전부의 열쇠를 공개한다(원래도 패를 보여 준다)",
+                  ],
+                  [
+                    "6·7마 죽이기",
+                    "불린 카드를 가진 사람이 그 자리 열쇠를 공개한다. 바닥 카드와 죽은 사람 카드는 새 자리로 다시 섞는다",
+                  ],
+                  [
+                    "프렌드가 점수를 땄을 때",
+                    "그 턴을 이긴 사람이 숨은 프렌드면 프렌드 카드 자리를 공개한다. 이긴 게 맞는지는 그 사람이 직접 계산해 본 뒤에 답한다",
+                  ],
+                  [
+                    "마지막 턴",
+                    "모두 열쇠를 공개하고, 각 기기가 판 전체를 진짜 카드로 다시 계산한다",
+                  ],
+                ].map(([when, proof]) => (
+                  <tr key={when} className="border-white/10 border-t align-top">
+                    <td className="py-1.5 pr-2 font-semibold">{when}</td>
+                    <td className="opacity-90">{proof}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <P>
+            <b>무늬 안 따르기는 어떻게 잡을까요?</b> 남의 남은 패를 모르니 그
+            자리에서는 확인할 수 없습니다. 하지만 마이티는 한 판 동안 손패를 다
+            냅니다. 카드 c가 나중에 드러나는 순간 "c는 앞선 턴에도 손에
+            있었다"가 확정됩니다. 그 사람이 앞선 턴에 낸 카드를 손패 {"{x, c}"}
+            만으로 다시 따져 위반이면 바로 멈춥니다. 엔진의 금지 규칙은 손에
+            카드가 늘어도 풀리지 않으므로, 정직한 사람을 잘못 잡는 일은
+            없습니다(
+            <code>packages/fair-play/src/renege.ts</code>).
+          </P>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="opacity-60">
+                <tr>
+                  <th className="py-1 pr-2">부정</th>
+                  <th className="pr-2">언제 잡나</th>
+                  <th>누구인지</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  [
+                    "내 카드가 아닌 카드 내기",
+                    "바로(방장이 열쇠로 열어 본다)",
+                    "그 사람",
+                  ],
+                  [
+                    "무늬 안 따르기·조커콜에 조커 숨기기",
+                    "숨긴 카드가 드러날 때, 늦어도 마지막 턴",
+                    "그 사람",
+                  ],
+                  ['6마 죽이기에 "없다" 거짓말', "마지막 턴", "그 사람"],
+                  [
+                    "숨은 프렌드가 점수를 따고도 숨기기",
+                    "마지막 턴",
+                    "그 사람",
+                  ],
+                  ["방장이 죽이기 없이 카드 주인 묻기", "다음 화면", "방장"],
+                  [
+                    "방장의 진행 조작·컴퓨터 조종·행동 바꿔치기",
+                    "마지막 턴",
+                    "방장",
+                  ],
+                  [
+                    "섞을 때 카드 바꿔치기, 틀린 열쇠",
+                    "카드가 안 열리거나 같은 카드가 두 장일 때",
+                    "가릴 수 없음",
+                  ],
+                ].map(([what, when, who]) => (
+                  <tr key={what} className="border-white/10 border-t align-top">
+                    <td className="py-1.5 pr-2 font-semibold">{what}</td>
+                    <td className="pr-2 opacity-90">{when}</td>
+                    <td
+                      className={cn(
+                        who === "가릴 수 없음" ? "text-rose-300" : "opacity-90",
+                      )}
+                    >
+                      {who}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <P>
+            찾으면 <b>찾은 기기의 화면</b>에 그 자리와 까닭이 크게 뜨고, 그
+            자리판에 "⚠ 부정 감지"가 붙고, 판이 멈춥니다. 그 기기는 다른
+            모두에게도 직접 알립니다. 받은 쪽은 이것을 "그 사람의 알림"으로
+            채팅에만 남깁니다. 거짓 알림으로 남의 판을 멈추지 못하게 하려는
+            것입니다. 정직한 기기는 같은 공개 정보로 같은 계산을 하므로 모두
+            같은 결과를 스스로 찾습니다.
+          </P>
+          <P>
+            <b>누가 나가면?</b> 그 사람 카드는 그 사람 열쇠로만 열리므로
+            컴퓨터가 대신할 수 없습니다. 열쇠는 탭(sessionStorage)에 남겨 두어,
+            새로고침이나 잠깐 끊김은 방장이 그동안의 메시지를 다시 보내 같은
+            판을 이어 갑니다. 돌아오지 않으면 방장이 게임을 끝낼 수 있습니다.
+          </P>
+          <P>
+            <b>얼마나 걸리나요?</b> 한 컴퓨터에 탭 5~6개를 띄워 모든 자리를
+            사람으로 채우고(섞기 사슬이 가장 긴 경우) 2048비트로 두어 보니, 판
+            시작에 "모두 함께 섞는 중"이 1.3~1.5초, 6마 죽이기 뒤 다시 섞기가
+            0.6초쯤 걸렸습니다. 카드를 낼 때는 열쇠 하나를 공개하고 여는
+            것뿐이라 느껴지지 않습니다.
+          </P>
+          <P>
+            <b>영지식 증명은?</b> 지금 방식은 "나중에 다 공개해서 확인"입니다.
+            비밀을 끝까지 숨긴 채 그 자리에서 확인하려면 영지식 증명이
+            필요합니다. 열쇠가 맞는지는 Chaum–Pedersen 증명(누가 틀렸는지 바로
+            가린다), 섞기가 맞는지는 섞기 증명(Neff, Bayer–Groth), "남은 카드에
+            선 무늬가 없다"는 Bultel·Lafourcade(FC 2019)의 방식이 있습니다.
+            표준적인 다음 단계는 Barnett·Smart(2003)의 타원곡선 ElGamal에 이
+            증명들을 붙이는 것입니다. 설계와 조사:{" "}
+            <code>docs/13-mental-poker.md</code>.
+          </P>
         </Section>
 
         <Section id="replay" title="판 끝 검증: 다시 돌려 맞춰 보기">
@@ -604,20 +827,28 @@ export function SecurityPage() {
         <Section id="limits" title="한계: 아직 못 막는 것">
           <ul className="list-disc pl-5 text-sm leading-relaxed opacity-90">
             <li>
-              <b>방장은 모든 패를 볼 수 있습니다.</b> 엔진이 방장 기기에서 돌기
-              때문입니다. 막으려면 멘탈 포커가 필요합니다. 카드를 각자 열쇠로
-              잠가(교환 가능한 암호, SRA) 아무도 혼자 덱을 볼 수 없게 하고, 무늬
-              따라내기 같은 규칙은 판 끝에 열쇠를 모두 공개해 확인합니다. 설계는
-              있지만 아직 만들지 않았습니다. 그래서 모르는 사람과 할 때는{" "}
-              <b>방장을 믿을 수 있는 사람에게</b> 맡기세요.
+              <b>컴퓨터 자리 패는 방장 기기가 봅니다.</b> 컴퓨터는 방장 기기에서
+              돌기 때문에 그 카드도 방장 기기가 엽니다. 모르는 사람과 할 때는
+              빈자리를 사람으로 채우세요. 멘탈 포커를 끈 방, 2마, 하트는
+              예전처럼 방장 기기가 모든 패를 압니다.
+            </li>
+            <li>
+              <b>섞기를 조작하거나 틀린 열쇠를 낸 사람은 가리지 못합니다.</b>{" "}
+              카드가 안 열리거나 같은 카드가 두 장 나와 판은 멈추지만, 누가
+              했는지는 영지식 증명(Chaum–Pedersen)이 있어야 압니다.
+            </li>
+            <li>
+              무늬 안 따르기는 그 자리에서 막지 못하고, 숨긴 카드가 드러날 때
+              잡습니다. 잡히면 판은 무효가 되고, 그때까지 드러난 카드는 이미
+              보인 뒤입니다.
             </li>
             <li>
               <b>방장은 채팅을 지어낼 수 있습니다.</b> 모든 말이 방장을
               거칩니다. 참가자마다 서명 열쇠를 두면 막을 수 있습니다.
             </li>
             <li>
-              판 끝 검증은 게임이 끝날 때 한 번입니다. 조작은 잡아내지만 그
-              게임이 끝나야 알 수 있습니다.
+              멘탈 포커를 끈 방의 판 끝 검증은 게임이 끝날 때 한 번입니다. 멘탈
+              포커 판은 판마다 마지막 턴에 확인합니다.
             </li>
             <li>
               음성 통화로 패를 알려 주는 짜고 치기, 나온 카드를 세 주는 도움

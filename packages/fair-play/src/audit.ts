@@ -9,7 +9,7 @@ import {
   step,
 } from "@mighty/engine";
 
-import { slotOfToken } from "./blind";
+import { cardText, slotOfToken } from "./blind";
 
 /*
  * 진짜 카드로 다시 계산하기. 마지막 턴에 모두 열쇠를 공개하면 그 판의 실제 패를 안다.
@@ -150,7 +150,7 @@ function blameOf(
   )
     return {
       seat: realKill.killed,
-      reason: `죽이기에 불린 ${realKill.card}를 갖고 있으면서 없다고 했다`,
+      reason: `죽이기에 불린 ${cardText(realKill.card)}를 갖고 있으면서 없다고 했다`,
     };
   const realFriend = real.find((e) => e.type === "friendRevealed");
   const seenFriend = seen.find((e) => e.type === "friendRevealed");

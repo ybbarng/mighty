@@ -81,8 +81,11 @@ interface GameStore {
   offlineSeats: number[];
   /** 판 끝 검증에서 누군가 문제를 찾았다. 이 게임은 무효로 본다 */
   invalid: string | null;
-  /** 내 기기가 부정을 찾아 판을 멈췄다(멘탈 포커). `seat`가 null이면 누군지 가릴 수 없다 */
-  incident: { seat: number | null; reason: string } | null;
+  /**
+   * 부정을 찾아 판을 멈췄다(멘탈 포커). `own`이면 내 기기가 찾은 것, 아니면 판을 진행하는 방장이 알린 것.
+   * `seat`가 null이면 누군지 가릴 수 없다
+   */
+  incident: { seat: number | null; reason: string; own: boolean } | null;
   /** 멘탈 포커 판: 모두 함께 섞고 나누는 중이라 내 카드를 아직 다 열지 못했다 */
   shuffling: boolean;
   /** 멘탈 포커 판인가(연결이 끊긴 사람을 컴퓨터가 대신하지 않고 기다린다) */

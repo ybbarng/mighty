@@ -79,9 +79,15 @@ export class RemoteMatch<
   submit(action: ActionT): SubmitResult {
     if (this.last.decision === null)
       return { ok: false, error: "지금은 차례가 아니다" };
+    // 보낸 행동의 결과(다음 화면이나 거절)가 오기 전에는 다음 행동을 보내지 않는다.
+    // 멘탈 포커에서는 낼 카드 열쇠를 공개하므로, 두 번 누르면 두 번째 카드까지 드러난다.
+    if (this.inFlight)
+      return { ok: false, error: "앞 행동을 처리하는 중입니다" };
     const outgoing = this.transform ? this.transform(action) : action;
-    if (outgoing === null) return { ok: false, error: "손에 없는 카드다" };
+    if (outgoing === null)
+      return { ok: false, error: "지금은 할 수 없습니다(섞고 나누는 중)" };
     this.sent.push(JSON.stringify(outgoing));
+    this.inFlight = true;
     this.sendAction(outgoing);
     return { ok: true };
   }
@@ -91,7 +97,17 @@ export class RemoteMatch<
     return () => this.listeners.delete(listener);
   }
 
+  /** 보낸 행동의 결과를 기다리는 중 */
+  private inFlight = false;
+
+  /** 보낸 행동이 거절됐다 */
+  rejected(): void {
+    this.inFlight = false;
+    this.sent.pop();
+  }
+
   receive(snapshot: Snapshot<View, Event>): void {
+    this.inFlight = false;
     this.last = snapshot.view;
     this.seen.push(JSON.stringify(snapshot.view));
     if (this.listeners.size === 0) this.pending.push(snapshot);
@@ -670,7 +686,7 @@ export class GuestRoom<
       case "rejected":
         if (!this.fromHost(from)) return;
         // 거절된 행동은 기록에 없으므로 보낸 목록에서 뺀다.
-        this.match?.sent.pop();
+        this.match?.rejected();
         for (const l of this.listeners.rejected) l(message.error);
         break;
       case "audit": {

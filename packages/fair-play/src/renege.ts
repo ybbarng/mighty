@@ -6,6 +6,7 @@ import {
   type TrickCards,
   unplayableReason,
 } from "@mighty/engine";
+import { cardText } from "./blind";
 
 /*
  * 무늬 안 따르기(renege) 즉시 잡기.
@@ -64,7 +65,7 @@ export class RenegeWatch {
     trick: Omit<PublicTrick, "trickIndex" | "plays">,
   ): Violation | { seat: number; reason: string } | null {
     if (this.revealed.has(card))
-      return { seat, reason: `${card}가 두 번 나왔다(섞기 조작)` };
+      return { seat, reason: `${cardText(card)}가 두 번 나왔다(섞기 조작)` };
     this.revealed.add(card);
 
     // 이 사람이 앞선 턴들에 낸 카드를 c가 손에 있었다는 사실로 다시 따져 본다.

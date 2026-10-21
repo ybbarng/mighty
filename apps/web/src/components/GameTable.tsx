@@ -1156,7 +1156,9 @@ export function GameTable({
                   {incident.reason}
                 </div>
                 <div className="mt-1 text-[11px] opacity-75">
-                  내 기기가 직접 확인한 것입니다. 이 판을 멈췄습니다.
+                  {incident.own
+                    ? "내 기기가 직접 확인한 것입니다. 이 판을 멈췄습니다."
+                    : "판을 진행하는 방장 기기가 찾아 판을 멈췄습니다(내 기기는 따로 확인하지 못했습니다)."}
                 </div>
               </div>
             )}

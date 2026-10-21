@@ -121,6 +121,7 @@ export class HostRoom<
   private chatListeners = new Set<(message: ChatMessage) => void>();
   private reportListeners = new Set<(report: AuditReport) => void>();
   private incidentListeners = new Set<(notice: IncidentNotice) => void>();
+  private errorListeners = new Set<(error: string) => void>();
   private fairOption: { group: GroupName } | null;
   /** 멘탈 포커 진행(이 판이 멘탈 포커일 때) */
   fair: FairHostTable | null = null;
@@ -222,6 +223,12 @@ export class HostRoom<
     if (!this.fairOption || this.kit.id !== "mighty") return null;
     const count = this.kit.playerCount(this.rules);
     return count >= 3 ? this.fairOption.group : null;
+  }
+
+  /** 방장 자기 행동이 준비하다 거절됐다(멘탈 포커는 비동기라 내기 뒤에 알게 된다) */
+  onOwnError(listener: (error: string) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   /** 대기실에서 멘탈 포커를 켜고 끈다 */
@@ -438,6 +445,7 @@ export class HostRoom<
       }),
       afterStep: (state, events) => table.after(state, events),
       onLateError: (seat, error) => {
+        if (seat === 0) for (const l of this.errorListeners) l(error);
         const peerId = this.guests.get(seat)?.peerId;
         if (peerId) this.send({ t: "rejected", error }, peerId);
       },

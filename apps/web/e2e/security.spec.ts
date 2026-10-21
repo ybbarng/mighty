@@ -28,6 +28,16 @@ test("보안 설명 페이지의 시연이 조작을 잡아낸다", async ({ pag
   await expect(page.getByText(/지문이 링크\(k=\)와 다르다/)).toBeVisible();
   await page.getByRole("button", { name: /진짜 방장이 답함/ }).click();
   await expect(page.getByText(/방장으로 믿는다/)).toBeVisible();
+  // 멘탈 포커: 방장 화면에는 남의 카드가 열리지 않고, 다른 카드라고 속이면 들킨다.
+  await page.getByRole("button", { name: "1. 섞기" }).click();
+  await page.getByRole("button", { name: "2. 자리마다 다시 잠그기" }).click();
+  await page.getByRole("button", { name: "3. 나눠 주기" }).click();
+  await expect(page.getByText(/받는 사람만 마지막 자물쇠/)).toBeVisible();
+  await expect(page.getByText("열 수 없음")).toHaveCount(6);
+  await page
+    .getByRole("button", { name: "고친 프로그램: 다른 카드라고 속여 내기" })
+    .click();
+  await expect(page.getByText(/철수의 부정으로 찍힌다/)).toBeVisible();
   await page.screenshot({
     path: info.outputPath("security.png"),
     fullPage: true,

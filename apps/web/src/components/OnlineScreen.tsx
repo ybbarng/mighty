@@ -143,8 +143,12 @@ export function OnlineScreen({
         ? `⚠ 내 기기가 찾음 — ${who}: ${n.reason}`
         : `${names[n.reporter] ?? `${n.reporter}번`}의 알림 — ${who}: ${n.reason} (내 기기 확인과 따로 봅니다)`,
     });
-    if (n.own)
-      useGame.setState({ incident: { seat: n.seat, reason: n.reason } });
+    // 판을 진행하는 방장이 알리면 판이 멈추므로 참가자 화면에도 띄운다(내 기기 확인과는 구분한다).
+    const current = useGame.getState().incident;
+    if (n.own || (n.reporter === 0 && !current))
+      useGame.setState({
+        incident: { seat: n.seat, reason: n.reason, own: n.own },
+      });
   };
 
   /** 멘탈 포커 판: 섞는 중 표시와 끊긴 사람 처리 */
@@ -188,6 +192,10 @@ export function OnlineScreen({
         host.onChat((m) => useChat.getState().receive(m));
         host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
         host.onIncident((n) => onIncident(n, seatNamesOf(host.lobby())));
+        host.onOwnError((error) => {
+          console.warn("[멘탈 포커] 방장 행동 거절:", error);
+          useGame.setState({ notice: error });
+        });
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));

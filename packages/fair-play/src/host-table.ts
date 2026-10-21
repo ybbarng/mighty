@@ -15,6 +15,7 @@ import {
 import { checkReplay, type FairLogged, type RoundDeal } from "./audit";
 import {
   blindStep,
+  cardText,
   revealInHand,
   slotOfToken,
   tokenDeal,
@@ -295,7 +296,7 @@ export class FairHostTable {
       if (opened !== action.card)
         return this.cheat(
           seat,
-          `낸다고 한 카드(${action.card})와 열쇠로 연 카드(${opened ?? "카드 아님"})가 다르다`,
+          `낸다고 한 카드(${cardText(action.card)})와 열쇠로 연 카드(${opened ? cardText(opened) : "카드 아님"})가 다르다`,
         );
     }
     const withSlot = { ...action, deckSlot: slot } as Action;

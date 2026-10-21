@@ -13,6 +13,12 @@ import {
   step,
   viewOf,
 } from "@mighty/engine";
+import {
+  encodedDeck,
+  GROUP_1024,
+  Party,
+  PublicLedger,
+} from "@mighty/fair-play";
 import { useEffect, useMemo, useState } from "react";
 
 import { cardLabel } from "@/game/terms";
@@ -625,6 +631,288 @@ export function ChatRoutingDemo() {
             ? "자기 이름으로 말했다"
             : `${people[sender]}가 ${people[claim]}인 척했지만 방장이 연결 기준으로 ${people[sender]}라고 붙였다`}
       </Result>
+    </Box>
+  );
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+const MP_CARDS: Card[] = [
+  "SA",
+  "JK",
+  "HK",
+  "D10",
+  "C7",
+  "S3",
+  "HQ",
+  "DA",
+  "C2",
+];
+const MP_PEOPLE = ["방장", "철수", "영희"];
+const MP_COLORS = ["text-amber-300", "text-sky-300", "text-pink-300"];
+
+type MpStage = "start" | "shuffled" | "relocked" | "dealt";
+
+interface MpState {
+  parties: Party[];
+  ledger: PublicLedger;
+  /** 단계별 덱(보여 주기용) */
+  decks: { label: string; deck: bigint[] }[];
+  stage: MpStage;
+  /** 자리 → 받은 사람 */
+  owners: number[];
+  log: string[];
+  /** 낸 카드: 자리 → 카드 */
+  played: Map<number, Card>;
+}
+
+function short(value: bigint): string {
+  const hex = value.toString(16);
+  return `${hex.slice(0, 6)}…${hex.slice(-4)}`;
+}
+
+/** 멘탈 포커: 세 사람이 9장을 섞고 나누고 낸다. 게임의 실제 SRA 코드(packages/fair-play)를 돌린다 */
+export function MentalPokerDemo() {
+  const g = GROUP_1024;
+  const [state, setState] = useState<MpState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState(0);
+
+  const reset = () => {
+    const parties = MP_PEOPLE.map((_, id) => new Party(id, g));
+    setState({
+      parties,
+      ledger: new PublicLedger(g),
+      decks: [
+        { label: "처음(카드 번호를 수로)", deck: encodedDeck(g, MP_CARDS) },
+      ],
+      stage: "start",
+      owners: MP_CARDS.map((_, i) => i % 3),
+      log: [],
+      played: new Map(),
+    });
+  };
+  useEffect(reset, []);
+  if (!state) return null;
+
+  const run = async (task: (s: MpState) => Promise<Partial<MpState>>) => {
+    setBusy(true);
+    const t0 = performance.now();
+    const next = await task(state);
+    const ms = Math.round(performance.now() - t0);
+    setState({
+      ...state,
+      ...next,
+      log: [...(next.log ?? state.log), `  (${ms}ms)`],
+    });
+    setBusy(false);
+  };
+
+  const shuffle = () =>
+    run(async (s) => {
+      const decks = [...s.decks];
+      let deck = decks.at(-1)?.deck ?? [];
+      for (const p of s.parties) {
+        deck = await p.lockAndShuffle(deck, "shuffle");
+        decks.push({ label: `${MP_PEOPLE[p.id]}이 잠그고 섞음`, deck });
+      }
+      return {
+        decks,
+        stage: "shuffled",
+        log: [
+          ...s.log,
+          "1. 셋이 차례로 자기 열쇠로 잠그고 섞었다. 이제 누구도 어느 자리가 무슨 카드인지 모른다.",
+        ],
+      };
+    });
+
+  const relock = () =>
+    run(async (s) => {
+      let deck = s.decks.at(-1)?.deck ?? [];
+      const slots = deck.map((_, i) => i);
+      for (const p of s.parties)
+        deck = await p.relock(deck, slots, ["shuffle"]);
+      s.ledger.extend(deck);
+      return {
+        decks: [...s.decks, { label: "자리마다 다른 열쇠로 다시 잠금", deck }],
+        stage: "relocked",
+        log: [
+          ...s.log,
+          "2. 각자 섞기 열쇠를 풀고 자리마다 다른 열쇠로 다시 잠갔다. 한 자리 열쇠를 공개해도 다른 자리는 안전하다.",
+        ],
+      };
+    });
+
+  const deal = () =>
+    run(async (s) => {
+      s.owners.forEach((owner, slot) => {
+        for (const other of s.parties)
+          if (other.id !== owner)
+            s.ledger.publish(slot, other.id, other.revealKey(slot, "deal"));
+        const party = s.parties[owner] as Party;
+        party.receive(
+          slot,
+          s.ledger.deck[slot] as bigint,
+          s.parties
+            .filter((p) => p.id !== owner)
+            .map((p) => s.ledger.keys.get(slot)?.get(p.id) as bigint),
+        );
+      });
+      return {
+        stage: "dealt",
+        log: [
+          ...s.log,
+          "3. 자리마다 받을 사람을 뺀 둘이 열쇠를 공개했다. 받는 사람만 마지막 자물쇠를 풀어 자기 카드를 본다.",
+        ],
+      };
+    });
+
+  const play = (slot: number, claim?: Card) =>
+    run(async (s) => {
+      const owner = s.owners[slot] as number;
+      const party = s.parties[owner] as Party;
+      const real = party.hand.get(slot) as Card;
+      s.ledger.publish(slot, owner, party.revealKey(slot, "play"));
+      const opened = s.ledger.open(slot, [0, 1, 2]);
+      const said = claim ?? real;
+      const played = new Map(s.played);
+      if (opened === said) played.set(slot, opened);
+      return {
+        played,
+        log: [
+          ...s.log,
+          opened === said
+            ? `4. ${MP_PEOPLE[owner]}이 ${slot}번 자리 열쇠를 공개하고 ${cardLabel(said)}를 냈다. 모두가 열어 보니 ${cardLabel(opened as Card)} — 맞다.`
+            : `⚠ ${MP_PEOPLE[owner]}이 ${cardLabel(said)}를 낸다고 했지만 열쇠로 연 ${slot}번 자리는 ${opened ? cardLabel(opened) : "카드가 아님"} — 모두의 화면에 ${MP_PEOPLE[owner]}의 부정으로 찍힌다.`,
+        ],
+      };
+    });
+
+  const deck = state.decks.at(-1)?.deck ?? [];
+  const viewer = state.parties[view] as Party;
+  const canSee = (slot: number): Card | null => {
+    const played = state.played.get(slot);
+    if (played) return played;
+    if (state.stage === "dealt" && state.owners[slot] === view)
+      return viewer.hand.get(slot) ?? null;
+    return null;
+  };
+
+  return (
+    <Box title="멘탈 포커(세 사람, 카드 9장)">
+      <div className="flex flex-wrap gap-1.5">
+        <Btn
+          onClick={() => void shuffle()}
+          disabled={busy || state.stage !== "start"}
+        >
+          1. 섞기
+        </Btn>
+        <Btn
+          onClick={() => void relock()}
+          disabled={busy || state.stage !== "shuffled"}
+        >
+          2. 자리마다 다시 잠그기
+        </Btn>
+        <Btn
+          onClick={() => void deal()}
+          disabled={busy || state.stage !== "relocked"}
+        >
+          3. 나눠 주기
+        </Btn>
+        <Btn onClick={reset} disabled={busy}>
+          처음부터
+        </Btn>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="opacity-70">누구 화면으로 볼까:</span>
+        {MP_PEOPLE.map((name, i) => (
+          <Btn key={name} onClick={() => setView(i)} active={view === i}>
+            {name}
+          </Btn>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left font-mono text-[11px]">
+          <thead className="opacity-60">
+            <tr>
+              <th className="pr-2">자리</th>
+              <th className="pr-2">덱의 값(공개 정보)</th>
+              <th className="pr-2">받은 사람</th>
+              <th>{MP_PEOPLE[view]} 화면</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deck.map((value, slot) => {
+              const seen = canSee(slot);
+              const owner = state.owners[slot] as number;
+              return (
+                <tr
+                  key={value.toString(16)}
+                  className="border-white/10 border-t"
+                >
+                  <td className="py-1 pr-2">{slot}</td>
+                  <td className="pr-2 opacity-80">{short(value)}</td>
+                  <td className={cn("pr-2", MP_COLORS[owner])}>
+                    {state.stage === "dealt" ? MP_PEOPLE[owner] : "—"}
+                  </td>
+                  <td>
+                    {seen ? (
+                      <CardChip card={seen} />
+                    ) : (
+                      <span className="opacity-40">열 수 없음</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {state.stage === "dealt" && (
+        <div className="flex flex-col gap-1.5 text-xs">
+          <div className="opacity-70">
+            철수 차례: 카드를 내 보세요(정직하게, 또는 고친 프로그램으로).
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {state.owners
+              .map((o, slot) => ({ o, slot }))
+              .filter(({ o, slot }) => o === 1 && !state.played.has(slot))
+              .map(({ slot }) => {
+                const real = state.parties[1]?.hand.get(slot) as Card;
+                return (
+                  <Btn
+                    key={slot}
+                    onClick={() => void play(slot)}
+                    disabled={busy}
+                  >
+                    {cardLabel(real)} 내기
+                  </Btn>
+                );
+              })}
+            {state.owners.some(
+              (o, slot) => o === 1 && !state.played.has(slot),
+            ) && (
+              <Btn
+                onClick={() => {
+                  const slot = state.owners.findIndex(
+                    (o, s) => o === 1 && !state.played.has(s),
+                  );
+                  const real = state.parties[1]?.hand.get(slot);
+                  void play(slot, real === "SA" ? "HK" : "SA");
+                }}
+                disabled={busy}
+              >
+                고친 프로그램: 다른 카드라고 속여 내기
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+      <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
+        {state.log.length === 0
+          ? "1번부터 눌러 보세요. 방장 화면으로 봐도 남의 카드는 '열 수 없음'입니다."
+          : state.log.join("\n")}
+      </pre>
     </Box>
   );
 }

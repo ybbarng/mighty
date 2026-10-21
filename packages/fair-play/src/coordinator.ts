@@ -9,7 +9,7 @@ import {
 } from "@mighty/engine";
 
 import type { RoundDeal } from "./audit";
-import { redealOwners, slotOfToken, tokenDeal } from "./blind";
+import { cardText, redealOwners, slotOfToken, tokenDeal } from "./blind";
 import type { FairDevice } from "./device";
 import { RenegeWatch } from "./renege";
 
@@ -279,7 +279,7 @@ export class FairCoordinator {
     if (violation) {
       const detail =
         "heldCard" in violation
-          ? `${violation.trickIndex + 1}번째 턴에 ${violation.played}를 냈는데, 그때 ${violation.heldCard}가 손에 있었다: ${violation.reason}`
+          ? `${violation.trickIndex + 1}번째 턴에 ${cardText(violation.played)}를 냈는데, 그때 ${cardText(violation.heldCard)}가 손에 있었다: ${violation.reason}`
           : violation.reason;
       this.incident({ seat: violation.seat, reason: detail });
       return;

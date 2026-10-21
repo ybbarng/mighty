@@ -9,7 +9,7 @@ import {
 } from "@mighty/engine";
 
 import type { FairLogged, RoundDeal } from "./audit";
-import { tokenOf } from "./blind";
+import { cardText, tokenOf } from "./blind";
 import {
   FairCoordinator,
   type Incident,
@@ -127,7 +127,7 @@ export class FairGuestSeat {
       if (!events.some((e) => e.type === "killAttempt" && e.card === card))
         this.coordinator.incident({
           seat: 0,
-          reason: `방장이 죽이기 없이 ${card}의 주인을 물었다(남의 카드 떠보기)`,
+          reason: `방장이 죽이기 없이 ${cardText(card)}의 주인을 물었다(남의 카드 떠보기)`,
         });
     }
     this.last = view;
@@ -168,8 +168,14 @@ export class FairGuestSeat {
       .map(([slot]) => slot);
   }
 
+  /** 아직 카드를 열지 못해 보여 주지 못한 화면이 있다(섞고 나누는 중) */
+  get waiting(): boolean {
+    return this.queue.length > 0;
+  }
+
   /** 방장에게 보낼 행동으로 바꾸고, 필요한 열쇠를 공개한다. 낼 수 없으면 null */
   outgoing(action: Action): Action | null {
+    if (this.waiting) return null;
     const deal = this.coordinator.deal;
     switch (action.type) {
       case "play": {

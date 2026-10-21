@@ -131,6 +131,8 @@ export class LocalMatch<
   private work: Promise<void> = Promise.resolve();
   /** 컴퓨터 행동을 준비하는 중 */
   private botBusy = false;
+  /** 행동을 준비 중인 사람 자리 */
+  private readonly preparing = new Set<number>();
   /** 아직 보여 줄 수 없어 미룬 화면(자리별) */
   private readonly held = new Map<number, Snapshot<View, Event>[]>();
   /** 자리별로 마지막에 보낸 화면 */
@@ -300,6 +302,12 @@ export class LocalMatch<
       return { ok: false, error: "사람 자리가 아니다" };
     if (this.haltedReason) return { ok: false, error: this.haltedReason };
     if (this.options.prepare) {
+      // 앞 행동을 준비하는 동안 같은 자리의 행동은 받지 않는다(두 번 누르면 헛다리 뒤 두 번째 지목이 들어간다).
+      if (this.preparing.has(seat))
+        return { ok: false, error: "앞 행동을 처리하는 중입니다" };
+      // 아직 보여 주지 못한 화면이 있으면(멘탈 포커로 섞고 나누는 중) 지난 화면을 보고 한 행동이다.
+      if (this.held.has(seat))
+        return { ok: false, error: "섞고 나누는 중입니다" };
       this.enqueue(seat, action, false);
       return { ok: true };
     }
@@ -314,12 +322,24 @@ export class LocalMatch<
     const prepare = this.options.prepare as NonNullable<
       LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>["prepare"]
     >;
+    const debug = (globalThis as { __FAIR_DEBUG?: boolean }).__FAIR_DEBUG
+      ? (...a: unknown[]) => console.info("[fair]", ...a)
+      : () => {};
+    debug("줄 섬", seat, JSON.stringify(action));
+    if (!bot) this.preparing.add(seat);
     this.work = this.work.then(async () => {
-      if (this.haltedReason) return;
+      if (this.haltedReason) {
+        this.preparing.delete(seat);
+        return;
+      }
+      debug("준비 시작", seat);
       const prepared = await prepare(this.state, seat, action);
+      debug("준비 끝", seat, JSON.stringify(prepared).slice(0, 200));
       const result = prepared.ok
         ? this.apply(seat, prepared.action, bot)
         : prepared;
+      debug("적용", seat, JSON.stringify(result).slice(0, 200));
+      if (!bot) this.preparing.delete(seat);
       if (bot) this.botBusy = false;
       if (!result.ok) {
         this.options.onLateError?.(seat, result.error);

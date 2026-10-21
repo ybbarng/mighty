@@ -170,3 +170,13 @@ export function revealView(
   const discarded = view.discarded ? view.discarded.map(swap) : null;
   return missing ? null : { ...view, hand, discarded };
 }
+
+const SUIT_TEXT: Record<string, string> = { S: "♠", D: "◆", H: "♥", C: "♣" };
+
+/** 알림 문장에 넣을 카드 이름(♠10, 조커) */
+export function cardText(card: string): string {
+  if (card === "JK") return "조커";
+  const slot = slotOfToken(card);
+  if (slot !== null) return `${slot}번 자리 카드`;
+  return `${SUIT_TEXT[card[0] as string] ?? card[0]}${card.slice(1)}`;
+}
