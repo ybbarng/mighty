@@ -103,6 +103,10 @@ export interface HeartsSummary {
   recent: number[];
   /** 게임 순위 분포(1~4등) */
   ranks: number[];
+  /** 먹은 턴 합(판을 처음부터 본 것만) */
+  tricks: number;
+  /** 받은 점수 합 */
+  points: number;
 }
 
 export function summarizeHearts(
@@ -134,5 +138,7 @@ export function summarizeHearts(
       ended.length === 0 ? null : Math.min(...ended.map((g) => g.score)),
     recent: all.slice(-30).map((r) => r.points),
     ranks,
+    tricks: all.filter((r) => !r.partial).reduce((n, r) => n + r.tricks, 0),
+    points: all.reduce((n, r) => n + r.points, 0),
   };
 }

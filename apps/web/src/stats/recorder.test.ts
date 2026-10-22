@@ -44,6 +44,57 @@ describe("내 기록", () => {
     // 판마다 번 돈을 더하면 지금 내 돈에서 처음 돈을 뺀 것과 같다.
     expect(summary.money).toBe((match.current().money[0] ?? 0) - startMoney);
     expect(summary.recent.length).toBe(4);
+    const c = summary.counts;
+    expect(c.rounds).toBe(4);
+    expect(c.won + c.lost + c.out).toBe(4);
+    expect(c.declarer + c.friend + c.opposition).toBe(c.won + c.lost);
+    expect(c.jokerCallHits).toBeLessThanOrEqual(c.jokerCalls);
+  });
+
+  it("마이티: 조커콜 턴마다 조커가 누구에게서 끌려 나왔고 어느 편이 먹었는지 남긴다", () => {
+    // 5마, 나는 0번(야당), 주공 1번·프렌드 2번. 내가 조커콜로 선을 잡고 2번이 조커를 냈다.
+    const match = new LocalMatch({
+      rules: presetRules("standard5"),
+      seed: 31,
+      bot: heuristicBot,
+    });
+    const view = match.current();
+    const end = {
+      ...view,
+      declarer: 1,
+      friend: 2,
+      goal: { kiruda: "S" as const, score: 14 },
+      friendDeclaration: { kind: "card" as const, card: "SA" as const },
+      result: {
+        rulingWon: false,
+        rulingPoints: 12,
+        oppositionPoints: 8,
+        base: 2,
+        staticRun: false,
+        multipliers: [],
+        moved: 2,
+        money: view.money,
+      },
+    };
+    const played = (seat: number, card: string, jokerCall = false) => ({
+      type: "played" as const,
+      seat,
+      card: card as never,
+      jokerSuit: null,
+      jokerCall,
+      slot: null,
+    });
+    const data = mightyKit.stats.round(null, end, [
+      played(0, "C3", true),
+      played(1, "C5"),
+      played(2, "JK"),
+      played(3, "C9"),
+      played(4, "CK"),
+      { type: "trickWon", seat: 2, trickIndex: 3, points: 1 },
+    ]) as { calls: unknown[] };
+    expect(data.calls).toEqual([
+      { trick: 3, from: 2, fromSide: "ruling", won: false, points: 1 },
+    ]);
   });
 
   it("하트: 판 점수와 게임 결과를 남긴다", () => {

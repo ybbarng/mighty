@@ -12,6 +12,7 @@ import { cn } from "@/lib/cn";
 import { clearStats, importStats, loadStats, type StatsBook } from "./records";
 import {
   Card,
+  Counts,
   Moments,
   pct,
   RateBar,
@@ -231,6 +232,7 @@ function Empty({ what }: { what: string }) {
 function MightyStats({ book }: { book: StatsBook }) {
   const s = summarizeMighty(book.rounds, book.games);
   if (s.rounds === 0) return <Empty what="마이티" />;
+  const c = s.counts;
   return (
     <>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -255,6 +257,31 @@ function MightyStats({ book }: { book: StatsBook }) {
           sub={`${s.firsts.won}/${s.firsts.n}게임`}
         />
       </div>
+
+      <Card title="숫자로 보기">
+        <Counts
+          items={[
+            { label: "총 판", value: c.rounds },
+            { label: "이긴 판", value: c.won },
+            { label: "진 판", value: c.lost },
+            ...(c.out > 0 ? [{ label: "죽어서 빠진 판", value: c.out }] : []),
+            { label: "주공", value: c.declarer, sub: `성공 ${c.declarerWon}` },
+            { label: "프렌드", value: c.friend, sub: `승 ${c.friendWon}` },
+            {
+              label: "야당",
+              value: c.opposition,
+              sub: `승 ${c.oppositionWon}`,
+            },
+            { label: "출마한 판", value: c.bids },
+            { label: "먹은 턴", value: c.tricks },
+            { label: "딴 점수 카드", value: c.points },
+            { label: "조커 낸 판", value: c.jokerPlays },
+            { label: "조커콜", value: c.jokerCalls },
+            { label: "조커콜로 조커 끌어냄", value: c.jokerCallHits },
+            { label: "조커콜 턴 먹음", value: c.jokerCallWins },
+          ]}
+        />
+      </Card>
 
       <Card title="역할별 승률">
         {(["declarer", "friend", "opposition"] as const).map((role) => (
@@ -386,6 +413,21 @@ function HeartsStats({ book }: { book: StatsBook }) {
           sub="끝난 게임의 가장 낮은 점수"
         />
       </div>
+      <Card title="숫자로 보기">
+        <Counts
+          items={[
+            { label: "총 판", value: s.rounds },
+            { label: "끝낸 게임", value: s.games },
+            { label: "이긴 게임", value: s.wins },
+            { label: "받은 점수", value: s.points },
+            { label: "먹은 턴", value: s.tricks },
+            { label: "0점 판", value: s.clean },
+            { label: "♠Q 먹은 판", value: s.queen },
+            { label: "문 슛 성공", value: s.moonMe },
+            { label: "문 슛 당함", value: s.moonOther },
+          ]}
+        />
+      </Card>
       <Card title="게임 순위">
         {s.ranks.map((count, i) => (
           <RateBar key={RANKS[i]} label={RANKS[i]} won={count} n={s.games} />

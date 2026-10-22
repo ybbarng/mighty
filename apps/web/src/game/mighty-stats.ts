@@ -39,9 +39,27 @@ export interface MightyRound {
   mighty: boolean;
   joker: boolean;
   jokerCall: boolean;
+  /**
+   * 내가 한 조커콜마다 그 턴에 일어난 일. 나중에 "효과적인 조커콜" 같은 지표를 지난 기록으로도 계산하려고
+   * 결과만이 아니라 판단 재료를 남긴다(없으면 이 필드가 생기기 전 기록)
+   */
+  calls?: JokerCallRecord[];
   /** 6·7마: 죽었다 / 내가 죽였다 */
   killed: boolean;
   killer: boolean;
+}
+
+export interface JokerCallRecord {
+  /** 몇 번째 턴(0부터) */
+  trick: number;
+  /** 조커가 끌려 나온 자리(안 나왔으면 null: 바닥에 버렸거나 내가 가졌다) */
+  from: number | null;
+  /** 끌려 나온 조커가 여당 것이었나 야당 것이었나(판 끝에 아는 편) */
+  fromSide: "ruling" | "opposition" | null;
+  /** 내 편이 그 턴을 먹었다 */
+  won: boolean;
+  /** 그 턴의 점수 카드 */
+  points: number;
 }
 
 export interface MightyGame {
@@ -86,6 +104,28 @@ export const mightyStats: KitStats<PlayerView, GameEvent> = {
     );
     const after = result.money[me] ?? 0;
     const before = start?.money[me];
+    // 판이 끝나면 편을 안다(프렌드는 끝난 화면에 보인다).
+    const sideOf = (seat: number) =>
+      seat === end.declarer || seat === end.friend ? "ruling" : "opposition";
+    const calls: JokerCallRecord[] = [];
+    let trick: Extract<GameEvent, { type: "played" }>[] = [];
+    for (const e of events) {
+      if (e.type === "played") trick.push(e);
+      if (e.type !== "trickWon") continue;
+      if (trick.some((p) => p.seat === me && p.jokerCall)) {
+        const pulled = trick.find(
+          (p) => p.seat !== me && isJoker(p.card as Card),
+        );
+        calls.push({
+          trick: e.trickIndex,
+          from: pulled?.seat ?? null,
+          fromSide: pulled ? sideOf(pulled.seat) : null,
+          won: sideOf(e.seat) === sideOf(me),
+          points: e.points,
+        });
+      }
+      trick = [];
+    }
     return {
       players: end.rules.playerCount,
       role,
@@ -107,6 +147,7 @@ export const mightyStats: KitStats<PlayerView, GameEvent> = {
       mighty: played.some((e) => e.card === mighty),
       joker: played.some((e) => isJoker(e.card as Card)),
       jokerCall: played.some((e) => e.jokerCall),
+      calls,
       killed: kills.some((e) => e.killed === me),
       killer: kills.some((e) => e.seat === me && e.killed !== null),
     };
@@ -163,6 +204,28 @@ export interface MightySummary {
   recent: { won: boolean; role: Exclude<MightyRound["role"], "out"> }[];
   /** 판마다 번 돈을 쌓은 흐름(최근 100판) */
   moneyLine: number[];
+  /** 숫자로 보기(판을 처음부터 본 것만 세는 항목은 그 판들에서) */
+  counts: {
+    rounds: number;
+    won: number;
+    lost: number;
+    out: number;
+    declarer: number;
+    declarerWon: number;
+    friend: number;
+    friendWon: number;
+    opposition: number;
+    oppositionWon: number;
+    bids: number;
+    tricks: number;
+    points: number;
+    jokerPlays: number;
+    jokerCalls: number;
+    /** 조커콜로 조커를 끌어냈다 */
+    jokerCallHits: number;
+    /** 조커콜 한 턴을 내 편이 먹었다 */
+    jokerCallWins: number;
+  };
   /** 명장면 횟수 */
   moments: {
     run: number;
@@ -250,6 +313,34 @@ export function summarizeMighty(
       role: r.role as Exclude<MightyRound["role"], "out">,
     })),
     moneyLine: line,
+    counts: {
+      rounds: every.length,
+      won: all.filter((r) => r.won).length,
+      lost: all.filter((r) => !r.won).length,
+      out: every.length - all.length,
+      declarer: declared.length,
+      declarerWon: declared.filter((r) => r.won).length,
+      friend: all.filter((r) => r.role === "friend").length,
+      friendWon: all.filter((r) => r.role === "friend" && r.won).length,
+      opposition: all.filter((r) => r.role === "opposition").length,
+      oppositionWon: all.filter((r) => r.role === "opposition" && r.won).length,
+      bids: full.filter((r) => r.bid !== null).length,
+      tricks: full.reduce((n, r) => n + r.tricks, 0),
+      points: full.reduce((n, r) => n + r.points, 0),
+      jokerPlays: full.filter((r) => r.joker).length,
+      jokerCalls: full.reduce(
+        (n, r) => n + (r.calls?.length ?? (r.jokerCall ? 1 : 0)),
+        0,
+      ),
+      jokerCallHits: full.reduce(
+        (n, r) => n + (r.calls?.filter((c) => c.from !== null).length ?? 0),
+        0,
+      ),
+      jokerCallWins: full.reduce(
+        (n, r) => n + (r.calls?.filter((c) => c.won).length ?? 0),
+        0,
+      ),
+    },
     moments: {
       // 런·백런은 내가 이긴 쪽일 때만 센다(내가 당한 것은 빼고).
       run: winsWith("run"),

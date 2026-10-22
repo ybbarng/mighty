@@ -310,3 +310,29 @@ export function Moments({
     </div>
   );
 }
+
+/** 숫자로 보기: 이름과 횟수(덧붙임이 있으면 작게) */
+export function Counts({
+  items,
+}: {
+  items: { label: string; value: number; sub?: string }[];
+}) {
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="flex items-baseline justify-between gap-2 border-white/10 border-b py-1"
+        >
+          <dt className="min-w-0 truncate text-white/70">{item.label}</dt>
+          <dd className="shrink-0 text-right tabular-nums">
+            <b className="text-white">{item.value.toLocaleString()}</b>
+            {item.sub && (
+              <span className="ml-1 text-white/50 text-xs">{item.sub}</span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
