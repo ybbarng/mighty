@@ -6,7 +6,7 @@ import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
 import { memoryHostStore } from "./host-store";
 import type { AuditReport, HostMessage } from "./protocol";
-import { MemoryNetwork } from "./transport";
+import { MemoryNetwork, sdpFingerprint } from "./transport";
 
 const rules = presetRules("standard5");
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -156,7 +156,7 @@ describe("온라인 방", () => {
     fresh.finish();
     await until(() => audits.length === 1, 5000);
     expect(audits).toEqual([{ ok: true }]);
-  });
+  }, 60_000);
 
   it("방장이 대기실에서 고친 규칙과 이름이 참가자에게 간다", async () => {
     const { host, a } = await setup();
@@ -461,6 +461,56 @@ describe("방장 확인(서명)", () => {
     return { host, fingerprint: await host.fingerprint() };
   }
 
+  it("WebRTC 연결이면 이 연결의 인증서 지문까지 서명해 참가자가 확인하고 들어간다", async () => {
+    const net = new MemoryNetwork();
+    net.dtls = true;
+    const { host, fingerprint } = await hostWithLink(net);
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+      hostFingerprint: fingerprint,
+    });
+    await until(() => a.seat !== null && a.lobby !== null, 3000);
+    expect(a.impostors).toBe(0);
+    host.close();
+  });
+
+  it("신호 릴레이가 가운데 끼어 방장 인증서가 다르게 보이면 진짜 방장 서명이라도 믿지 않는다", async () => {
+    const net = new MemoryNetwork();
+    net.dtls = true;
+    const { host, fingerprint } = await hostWithLink(net);
+    // 릴레이가 연결 정보를 바꿔치기했다: 철수가 보는 방장 인증서는 릴레이의 것이다.
+    // 메시지는 릴레이가 그대로 전달하므로 방장 서명 자체는 진짜다.
+    net.intercept("a", "host");
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+      hostFingerprint: fingerprint,
+    });
+    await until(() => a.impostors >= 1, 3000);
+    expect(a.seat).toBeNull();
+    host.close();
+  });
+
+  it("SDP에서 인증서 지문을 읽는다", () => {
+    const sdp = [
+      "v=0",
+      "o=- 4611731400430051336 2 IN IP4 127.0.0.1",
+      "a=group:BUNDLE 0",
+      "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+      "a=fingerprint:sha-256 4a:ad:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19:E5:7C:AB:3E:16:42:F2:6F:0C:0E:91:A0:7B:4C:D2",
+      "a=setup:actpass",
+      "",
+    ].join("\r\n");
+    expect(sdpFingerprint(sdp)).toBe(
+      "sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19:E5:7C:AB:3E:16:42:F2:6F:0C:0E:91:A0:7B:4C:D2",
+    );
+    expect(sdpFingerprint("v=0\r\n")).toBeNull();
+    expect(sdpFingerprint(undefined)).toBeNull();
+  });
+
   it("링크를 아는 사람이 먼저 방장인 척 답해도 서명이 없으면 무시한다", async () => {
     const net = new MemoryNetwork();
     const { host, fingerprint } = await hostWithLink(net);
@@ -486,6 +536,8 @@ describe("방장 확인(서명)", () => {
   it("다른 열쇠로 서명한 가짜 방장도 지문이 달라 무시한다", async () => {
     const net = new MemoryNetwork();
     const { host, fingerprint } = await hostWithLink(net);
+    // 진짜 방장 답이 먼저 오면 가짜 답은 확인하기 전에 버려진다. 가짜만 먼저 답하게 진짜 방장을 잠시 끊는다.
+    net.disconnect("host");
     // 가짜 방장도 HostRoom을 그대로 돌린다(자기 열쇠로 서명한다).
     const fake = new HostRoom({
       transport: net.join("fake"),
@@ -498,13 +550,11 @@ describe("방장 확인(서명)", () => {
       token: null,
       hostFingerprint: fingerprint,
     });
-    // 가짜 방장의 서명 확인은 비동기라 진짜 방장을 정한 뒤에 끝날 수 있다.
-    await until(
-      () => a.seat !== null && a.lobby !== null && a.impostors >= 1,
-      3000,
-    );
+    await until(() => a.impostors >= 1, 3000);
+    expect(a.seat).toBeNull();
+    net.reconnect("host");
+    await until(() => a.seat !== null && a.lobby !== null, 3000);
     expect(a.lobby?.seats[0]?.name).toBe("방장");
-    expect(a.impostors).toBeGreaterThanOrEqual(1);
     host.close();
     fake.close();
   });

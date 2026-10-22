@@ -11,6 +11,42 @@ export interface Transport {
   onPeerJoin(handler: (peerId: string) => void): void;
   onPeerLeave(handler: (peerId: string) => void): void;
   leave(): void;
+  /**
+   * 그 상대와의 연결을 암호화하는 인증서(DTLS)의 지문. 내 것과 상대 것.
+   * 신호 릴레이가 연결 정보를 바꿔치기해 가운데 끼면 상대 지문이 진짜 상대의 것과 달라진다(identity.ts).
+   * WebRTC가 아닌 연결(같은 브라우저 탭)은 없다. 연결이 아직이면 null
+   */
+  fingerprints?(peerId: string): Promise<ConnectionFingerprints | null>;
+}
+
+export interface ConnectionFingerprints {
+  local: string;
+  remote: string;
+}
+
+/** SDP의 인증서 지문(`a=fingerprint:sha-256 AB:CD:…`). 여러 줄이면 첫 줄(한 연결은 인증서 하나다) */
+export function sdpFingerprint(sdp: string | undefined): string | null {
+  const match = sdp?.match(/^a=fingerprint:(\S+) ([0-9A-Fa-f:]+)\s*$/m);
+  return match
+    ? `${(match[1] as string).toLowerCase()} ${(match[2] as string).toUpperCase()}`
+    : null;
+}
+
+/**
+ * 연결의 인증서 지문. 메시지는 오가는데 연결 정보가 아직 다 붙지 않았을 수 있어 잠깐(3초) 다시 본다.
+ * WebRTC가 아니면 바로 null
+ */
+export async function connectionFingerprints(
+  transport: Transport,
+  peerId: string,
+): Promise<ConnectionFingerprints | null> {
+  if (!transport.fingerprints) return null;
+  for (let i = 0; i < 30; i++) {
+    const found = await transport.fingerprints(peerId);
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
 }
 
 export function randomId(length = 12): string {
@@ -33,6 +69,14 @@ function emptyHandlers(): Handlers {
 /** 테스트용: 같은 프로세스 안의 여러 참가자를 메모리로 잇는다. 메시지는 비동기로 전달한다(실제 네트워크처럼) */
 export class MemoryNetwork {
   private readonly peers = new Map<string, Handlers>();
+  /** 시험: WebRTC처럼 연결마다 인증서 지문을 준다(`fingerprints`) */
+  dtls = false;
+  /** 시험: `a`가 보는 `b`의 인증서를 바꾼다(신호 릴레이가 가운데 낀 것) */
+  private readonly forged = new Map<string, string>();
+
+  intercept(a: string, b: string): void {
+    this.forged.set(`${a}>${b}`, `sha-256 CERT-OF-RELAY-${b}`);
+  }
   /** 연결이 잠시 끊긴 참가자. 메시지가 오가지 않는다 */
   private readonly down = new Set<string>();
 
@@ -90,6 +134,19 @@ export class MemoryNetwork {
       onMessage: (h) => handlers.message.push(h),
       onPeerJoin: (h) => handlers.join.push(h),
       onPeerLeave: (h) => handlers.leave.push(h),
+      ...(this.dtls
+        ? {
+            fingerprints: async (peerId: string) =>
+              this.peers.has(peerId)
+                ? {
+                    local: `sha-256 CERT-OF-${selfId}`,
+                    remote:
+                      this.forged.get(`${selfId}>${peerId}`) ??
+                      `sha-256 CERT-OF-${peerId}`,
+                  }
+                : null,
+          }
+        : {}),
       leave: () => {
         this.peers.delete(selfId);
         for (const other of this.peers.values()) {

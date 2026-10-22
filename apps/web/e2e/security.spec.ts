@@ -28,6 +28,9 @@ test("보안 설명 페이지의 시연이 조작을 잡아낸다", async ({ pag
   await expect(page.getByText(/지문이 링크\(k=\)와 다르다/)).toBeVisible();
   await page.getByRole("button", { name: /진짜 방장이 답함/ }).click();
   await expect(page.getByText(/방장으로 믿는다/)).toBeVisible();
+  // 신호 릴레이가 가운데 끼면 진짜 방장 서명이라도 인증서 지문이 달라 믿지 않는다.
+  await page.getByRole("button", { name: /신호 릴레이가 연결 정보를/ }).click();
+  await expect(page.getByText(/신호 릴레이가 가운데 낌/)).toBeVisible();
   // 멘탈 포커: 방장 화면에는 남의 카드가 열리지 않고, 다른 카드라고 속이면 들킨다.
   await page.getByRole("button", { name: "1. 섞기" }).click();
   await page.getByRole("button", { name: "2. 자리마다 다시 잠그기" }).click();

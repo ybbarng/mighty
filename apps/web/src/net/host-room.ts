@@ -47,7 +47,7 @@ import {
   type LobbyState,
   type Reveal,
 } from "./protocol";
-import { randomId, type Transport } from "./transport";
+import { connectionFingerprints, randomId, type Transport } from "./transport";
 
 export interface HostRoomOptions<
   Rules = RuleSet,
@@ -941,8 +941,16 @@ export class HostRoom<
       return;
     }
     const identity = await this.identity;
+    const dtls = await connectionFingerprints(this.transport, peerId);
     const sig = await identity.sign(
-      welcomeStatement({ game: this.kit.id, nonce, peerId, seat, token }),
+      welcomeStatement({
+        game: this.kit.id,
+        nonce,
+        peerId,
+        seat,
+        token,
+        dtls: dtls ? { host: dtls.local, guest: dtls.remote } : null,
+      }),
     );
     this.send(
       { t: "welcome", seat, token, proof: { key: identity.publicKey, sig } },

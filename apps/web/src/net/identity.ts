@@ -126,20 +126,29 @@ export async function verifyHostProof(
   }
 }
 
-/** 방장이 서명하는 환영 문장. 양쪽이 같은 함수로 만든다 */
+/**
+ * 방장이 서명하는 환영 문장. 양쪽이 같은 함수로 만든다.
+ * `dtls`: 이 연결을 암호화하는 인증서 지문(방장 것, 참가자 것). WebRTC 연결이면 넣는다.
+ * 신호 릴레이가 연결 정보를 바꿔치기해 가운데 끼면 참가자가 본 방장 인증서가 방장이 서명한 것과 달라 들킨다
+ */
 export function welcomeStatement(fields: {
   game: string;
   nonce: string;
   peerId: string;
   seat: number;
   token: string;
+  dtls?: { host: string; guest: string } | null;
 }): string {
-  return [
-    "mighty-welcome-v1",
+  const base = [
     fields.game,
     fields.nonce,
     fields.peerId,
     fields.seat,
     fields.token,
-  ].join("|");
+  ];
+  return fields.dtls
+    ? ["mighty-welcome-v2", ...base, fields.dtls.host, fields.dtls.guest].join(
+        "|",
+      )
+    : ["mighty-welcome-v1", ...base].join("|");
 }

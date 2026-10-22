@@ -486,15 +486,20 @@ export function HostSignatureDemo() {
   }, []);
   const guestPeer = "guest-peer-a1";
   const nonce = "n-8f3c1e";
+  // 이 연결의 인증서(DTLS) 지문. 실제로는 연결 정보(SDP)에서 읽는다.
+  const HOST_CERT = "sha-256 3F:A1:…:7C";
+  const GUEST_CERT = "sha-256 9C:07:…:E2";
+  const RELAY_CERT = "sha-256 D4:5B:…:10";
   const fields = {
     game: "mighty",
     nonce,
     peerId: guestPeer,
     seat: 1,
     token: "tok",
+    dtls: { host: HOST_CERT, guest: GUEST_CERT },
   };
 
-  const run = async (kind: "real" | "fake" | "mitm" | "none") => {
+  const run = async (kind: "real" | "fake" | "mitm" | "relay" | "none") => {
     if (!host || !fake) return;
     if (kind === "none") {
       setResult({
@@ -504,22 +509,34 @@ export function HostSignatureDemo() {
       return;
     }
     const signer = kind === "fake" ? fake : host;
+    // 신호 릴레이가 가운데 끼면 방장도 참가자도 릴레이와 연결한다. 방장은 자기가 본 대로 서명한다.
     const statement = welcomeStatement(
-      kind === "mitm" ? { ...fields, peerId: "attacker-peer-x9" } : fields,
+      kind === "mitm"
+        ? { ...fields, peerId: "attacker-peer-x9" }
+        : kind === "relay"
+          ? { ...fields, dtls: { host: HOST_CERT, guest: RELAY_CERT } }
+          : fields,
     );
     const sig = await signer.sign(statement);
+    // 참가자는 자기 연결에서 본 대로 확인한다.
+    const seen =
+      kind === "relay"
+        ? { ...fields, dtls: { host: RELAY_CERT, guest: GUEST_CERT } }
+        : fields;
     const ok = await verifyHostProof(
       host.fingerprint,
       { key: signer.publicKey, sig },
-      welcomeStatement(fields),
+      welcomeStatement(seen),
     );
     setResult({
       ok,
       text: ok
-        ? "지문 일치 · 서명 일치 · 서명된 연결 아이디가 내 것 → 방장으로 믿는다"
+        ? "지문 일치 · 서명 일치 · 서명된 연결 아이디와 인증서가 내 연결의 것 → 방장으로 믿는다"
         : kind === "fake"
           ? "공개 열쇠의 지문이 링크(k=)와 다르다 → 무시"
-          : "서명된 연결 아이디가 내 것이 아니다(중간자) → 무시",
+          : kind === "relay"
+            ? "내가 본 방장 인증서가 방장이 서명한 것과 다르다(신호 릴레이가 가운데 낌) → 무시"
+            : "서명된 연결 아이디가 내 것이 아니다(중간자) → 무시",
     });
   };
 
@@ -548,6 +565,9 @@ export function HostSignatureDemo() {
         </Btn>
         <Btn onClick={() => void run("mitm")} disabled={!host}>
           중간자가 진짜 방장 서명을 전달
+        </Btn>
+        <Btn onClick={() => void run("relay")} disabled={!host}>
+          신호 릴레이가 연결 정보를 바꿔치기
         </Btn>
       </div>
       {result && <Result ok={result.ok}>{result.text}</Result>}

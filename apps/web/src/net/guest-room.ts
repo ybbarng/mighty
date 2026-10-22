@@ -41,7 +41,7 @@ import {
   type LobbyState,
   type Reveal,
 } from "./protocol";
-import type { Transport } from "./transport";
+import { connectionFingerprints, type Transport } from "./transport";
 
 export type AuditResult = { ok: true } | { ok: false; reason: string };
 
@@ -404,6 +404,10 @@ export class GuestRoom<
     if (this.hostFingerprint === null) return true;
     const nonce = this.nonces.get(from);
     if (!nonce || !message.proof) return false;
+    // WebRTC 연결이면 내가 본 이 연결의 인증서가 방장이 서명한 것과 같아야 한다(신호 릴레이 중간자).
+    // 지문을 못 얻는 WebRTC 연결은 확인하지 못하므로 믿지 않는다(지문을 빼서 피해 가지 못하게).
+    const dtls = await connectionFingerprints(this.transport, from);
+    if (this.transport.fingerprints && !dtls) return false;
     return verifyHostProof(
       this.hostFingerprint,
       message.proof,
@@ -413,6 +417,7 @@ export class GuestRoom<
         peerId: this.transport.selfId,
         seat: message.seat,
         token: message.token,
+        dtls: dtls ? { host: dtls.remote, guest: dtls.local } : null,
       }),
     );
   }

@@ -1,6 +1,6 @@
 import { defaultRelayUrls, joinRoom, selfId } from "trystero/nostr";
 
-import type { Transport } from "./transport";
+import { sdpFingerprint, type Transport } from "./transport";
 
 /** 같은 앱끼리만 서로를 찾도록 쓰는 이름 */
 const APP_ID = "mighty-card-game-v1";
@@ -88,6 +88,14 @@ export function joinP2P(roomId: string): Transport {
     onPeerLeave: (h) => leaveHandlers.push(h),
     leave: () => {
       void room.leave();
+    },
+    // 연결 정보(SDP)의 인증서 지문. 브라우저는 상대 SDP의 지문과 실제 DTLS 인증서가 같은지 확인한 뒤에야
+    // 데이터를 주고받으므로, 메시지가 오가는 연결이면 이 값이 그 연결의 실제 인증서다.
+    fingerprints: async (peerId) => {
+      const pc = room.getPeers()[peerId];
+      const local = sdpFingerprint(pc?.localDescription?.sdp);
+      const remote = sdpFingerprint(pc?.remoteDescription?.sdp);
+      return local && remote ? { local, remote } : null;
     },
   };
 }
