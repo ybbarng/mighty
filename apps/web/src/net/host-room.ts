@@ -266,6 +266,9 @@ export class HostRoom<
 
   /** 멘탈 포커 메시지를 다시 보내기 기록에 남긴다. 같은 것은 한 번만(새로고침 뒤 다시 받은 것) */
   private logFair(from: number, message: FairMessage): void {
+    // 섞기 증명 약속(중간 덱 16벌, 수백 KB)은 다시 보내기·남기기에서 뺀다. 다시 들어온 기기는 그 판 증명을
+    // 확인하지 못할 뿐이다. 내 약속은 섞기 열쇠에서 다시 만든다.
+    if (message.k === "sproof" && message.commit) return;
     const key = JSON.stringify([from, message]);
     if (this.fpSeen.has(key)) return;
     this.fpSeen.add(key);
@@ -919,6 +922,8 @@ export class HostRoom<
       case "chain":
       case "keys":
       case "handover":
+      case "sproof":
+      case "cproof":
         table.receive(message, seat);
         break;
       case "answer":

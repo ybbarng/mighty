@@ -15,7 +15,11 @@ import {
 } from "@mighty/hearts-engine";
 
 import { isToken, slotOfToken, tokenOf } from "./blind";
-import type { BusyReason, Incident } from "./coordinator";
+import {
+  type BusyReason,
+  type Incident,
+  reportShuffleTamper,
+} from "./coordinator";
 import { FairDevice, type FairWire, type GroupName } from "./device";
 import {
   checkHeartsReplay,
@@ -181,6 +185,12 @@ export class HeartsCoordinator {
       broken: this.broken,
     });
     this.trick.plays.push({ seat, card });
+    if (violation?.duplicate) {
+      reportShuffleTamper(this.device, this.deal, violation.reason, (i) =>
+        this.incident(i),
+      );
+      return;
+    }
     if (violation) {
       this.incident(violation);
       return;
@@ -226,10 +236,12 @@ export class HeartsCoordinator {
     const cards = this.device.openAll(deal);
     if (!cards) return;
     if (new Set(cards.values()).size !== cards.size) {
-      this.incident({
-        seat: null,
-        reason: "열어 보니 같은 카드가 두 번 있다(누군가 섞기를 조작했다)",
-      });
+      reportShuffleTamper(
+        this.device,
+        deal,
+        "열어 보니 같은 카드가 두 번 있다",
+        (i) => this.incident(i),
+      );
       return;
     }
     this.openedDeals.set(deal, cards);
@@ -764,6 +776,8 @@ export class HeartsGuestSeat {
       case "chain":
       case "keys":
       case "handover":
+      case "sproof":
+      case "cproof":
         this.device.receive(message, from);
         break;
       case "log":

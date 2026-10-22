@@ -5,16 +5,17 @@ declare function setTimeout(callback: () => void, ms: number): unknown;
 
 import { tokenDeal } from "./blind";
 import { FairDevice, type FairWire } from "./device";
-import type { Party, RevealReason } from "./protocol";
+import { type Party, Party as PartyClass, type RevealReason } from "./protocol";
 
 /** 기기 셋을 메모리로 잇는다(메시지는 비동기로, 보낸 기기 번호와 함께) */
-function network(ids: number[]) {
+function network(ids: number[], proofTimeoutMs?: number) {
   const devices: FairDevice[] = [];
   for (const id of ids)
     devices.push(
       new FairDevice({
         id,
         group: "1024",
+        ...(proofTimeoutMs ? { proofTimeoutMs } : {}),
         send: (m: FairWire) => {
           for (const d of devices)
             if (d.id !== id) setTimeout(() => d.receive(m, id), 0);
@@ -129,5 +130,97 @@ describe("메시지로 하는 멘탈 포커", () => {
       expect(problems).toEqual([]);
       expect(devices[0]?.openAll(1)?.size).toBe(53);
     }, 60_000);
+  });
+
+  describe("섞기 증명: 섞을 때 카드를 바꾸면 그 기기를 짚는다", () => {
+    const stateOf = (d: FairDevice) =>
+      (
+        d as unknown as {
+          deals: Map<
+            number,
+            {
+              shuffles: Map<
+                string,
+                {
+                  checked: Map<number, Promise<boolean>>;
+                  commits: Map<number, unknown>;
+                  nonces: Map<number, unknown>;
+                  answers: Map<number, unknown>;
+                }
+              >;
+            }
+          >;
+        }
+      ).deals
+        .get(1)
+        ?.shuffles.get("0:shuffle");
+    const proofsDone = (devices: FairDevice[]) =>
+      devices.every((d) => (stateOf(d)?.checked.size ?? 0) === 2);
+
+    async function run(cheater: number | null) {
+      const rules = presetRules("standard5");
+      const devices = network([0, 1, 2], 8000);
+      const problems: { by: number; device: number | null; reason: string }[] =
+        [];
+      for (const d of devices)
+        d.on("problem", (_deal, reason, device) =>
+          problems.push({ by: d.id, device, reason }),
+        );
+      // 속이는 기기: 섞은 덱에서 한 장을 다른 카드의 복제로 바꾼다(그 카드를 엿볼 수 있게).
+      const real = PartyClass.prototype.lockAndShuffle;
+      PartyClass.prototype.lockAndShuffle = async function (
+        this: Party,
+        deck,
+        pass,
+      ) {
+        const out = await real.call(this, deck, pass);
+        if (this.id === cheater && pass === "shuffle")
+          out[1] = out[2] as bigint;
+        return out;
+      };
+      try {
+        const owners = new Map<number, number>();
+        tokenDeal(rules).owners.forEach((seat, slot) => {
+          if (seat >= 0) owners.set(slot, seat === 1 || seat === 2 ? seat : 0);
+        });
+        for (const d of devices) {
+          d.start(1, [0, 1, 2], deckFor(rules));
+          d.assign(1, owners);
+        }
+        await settle(devices);
+        // 섞기 증명은 판 진행 줄 밖에서 계산한다. 확인이 다 끝날 때까지 기다린다.
+        for (
+          let i = 0;
+          i < 400 && !proofsDone(devices) && problems.length < 2;
+          i++
+        )
+          await new Promise<void>((r) => setTimeout(() => r(), 25));
+        await settle(devices);
+      } finally {
+        PartyClass.prototype.lockAndShuffle = real;
+      }
+      return { devices, problems };
+    }
+
+    it("정직하면 모두가 서로의 섞기 증명을 확인하고 아무도 짚지 않는다", async () => {
+      const { devices, problems } = await run(null);
+      expect(problems).toEqual([]);
+      for (const d of devices) {
+        const results = await Promise.all(stateOf(d)?.checked.values() ?? []);
+        expect(results).toEqual([true, true]);
+      }
+    }, 120_000);
+
+    it("복제 카드를 넣고 섞으면 다른 두 기기가 섞기 증명으로 그 기기를 짚는다", async () => {
+      const { problems } = await run(1);
+      // 속인 덱으로는 응답을 만들 수 없다(정직한 응답 코드가 멈춘다). 응답하지 않아도 짚는다.
+      const shuffle = problems.filter(
+        (p) => p.by !== 1 && /섞기 증명/.test(p.reason),
+      );
+      expect(shuffle.map((p) => [p.by, p.device]).sort()).toEqual([
+        [0, 1],
+        [2, 1],
+      ]);
+    }, 120_000);
   });
 });

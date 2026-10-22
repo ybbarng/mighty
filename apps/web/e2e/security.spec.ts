@@ -54,6 +54,18 @@ test("보안 설명 페이지의 시연이 조작을 잡아낸다", async ({ pag
   await page
     .getByText(/열쇠 증명이 틀린 사람: 영희/)
     .screenshot({ path: info.outputPath("key-proof.png") });
+  // 섞기 증명: 정직하면 맞고, 한 장을 복제해 섞으면 맞지 않아 철수를 짚는다.
+  await page.getByRole("button", { name: "철수가 정직하게 섞기" }).click();
+  await expect(page.getByText(/✓ 섞기 증명이 맞다/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "고친 프로그램: 한 장 복제해 섞기" })
+    .click();
+  await expect(
+    page.getByText(/섞기 증명이 맞지 않는다 — 철수를/),
+  ).toBeVisible();
+  await page
+    .getByText(/섞기 증명이 맞지 않는다 — 철수를/)
+    .screenshot({ path: info.outputPath("shuffle-proof.png") });
   await page.screenshot({
     path: info.outputPath("security.png"),
     fullPage: true,

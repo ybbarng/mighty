@@ -467,6 +467,40 @@ describe("멘탈 포커 온라인 대전", () => {
       expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
     }, 180_000);
 
+    it("섞기 조작: 섞을 때 카드 한 장을 복제하면 섞기 증명으로 모두가 그 자리를 짚는다", async () => {
+      const { host, guests, incidents } = await setup(
+        presetRules("standard5"),
+        2,
+      );
+      const cheater = (guests[0] as GuestRoom).seat as number;
+      // 0번 참가자 프로그램: 섞은 덱에서 한 장을 다른 카드의 복제로 바꾼다(그 카드를 엿보려고).
+      const real = Party.prototype.lockAndShuffle;
+      Party.prototype.lockAndShuffle = async function (
+        this: Party,
+        deck,
+        pass,
+      ) {
+        const out = await real.call(this, deck, pass);
+        if (this.id === cheater && pass === "shuffle")
+          out[1] = out[2] as bigint;
+        return out;
+      };
+      try {
+        await host.start();
+        await until(() => guests.every((g) => g.match !== null));
+        await playRounds(host, guests, 1, incidents);
+        // 속인 기기 자신의 알림은 빼고 본다(실제로 속이는 프로그램은 알리지 않는다).
+        const honest = () =>
+          incidents.filter((i) => i.own && i.reporter !== cheater);
+        await until(() => honest().length >= 2, 90_000);
+      } finally {
+        Party.prototype.lockAndShuffle = real;
+      }
+      const own = incidents.filter((i) => i.own && i.reporter !== cheater);
+      expect(own.every((i) => i.seat === cheater)).toBe(true);
+      expect(own[0]?.reason).toMatch(/섞기 증명/);
+    }, 180_000);
+
     it("가짜 카드: 다른 자리 열쇠로 다른 카드를 낸다고 하면 방장이 바로 잡는다", async () => {
       const { host, guests, incidents } = await setup(
         presetRules("standard5"),

@@ -11,4 +11,5 @@ export * from "./messages";
 export * from "./proof";
 export * from "./protocol";
 export * from "./renege";
+export * from "./shuffle-proof";
 export * from "./sra";

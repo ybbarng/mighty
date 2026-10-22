@@ -156,3 +156,24 @@ export function encodeIndex(g: SraGroup, index: number): bigint {
 export function isQuadraticResidue(g: SraGroup, value: bigint): boolean {
   return modPow(value, g.q, g.p) === 1n;
 }
+
+/**
+ * 야코비 기호(a/n), n은 홀수. n이 소수면 르장드르 기호라 1이면 이차잉여다.
+ * 오일러 판정(거듭제곱 한 번)보다 수십 배 빠르다. 증명을 확인할 때 받은 값이 부분군에 있는지 본다
+ */
+export function jacobi(a: bigint, n: bigint): number {
+  let x = ((a % n) + n) % n;
+  let m = n;
+  let result = 1;
+  while (x !== 0n) {
+    while ((x & 1n) === 0n) {
+      x >>= 1n;
+      const r = m & 7n;
+      if (r === 3n || r === 5n) result = -result;
+    }
+    [x, m] = [m, x];
+    if ((x & 3n) === 3n && (m & 3n) === 3n) result = -result;
+    x %= m;
+  }
+  return m === 1n ? result : 0;
+}

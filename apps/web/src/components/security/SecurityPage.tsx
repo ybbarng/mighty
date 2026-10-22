@@ -11,6 +11,7 @@ import {
   KeyProofDemo,
   MentalPokerDemo,
   ReplayAuditDemo,
+  ShuffleProofDemo,
   ViewFilterDemo,
 } from "./demos";
 
@@ -745,11 +746,45 @@ export function SecurityPage() {
           </ol>
           <KeyProofDemo />
           <P>
-            <b>남은 영지식 증명은?</b> 섞기가 맞는지는 섞기 증명(Neff,
-            Bayer–Groth), "남은 카드에 선 무늬가 없다"는 Bultel·Lafourcade(FC
-            2019)의 방식이 있습니다. 표준적인 다음 단계는 Barnett·Smart(2003)의
-            타원곡선 ElGamal에 이 증명들을 붙이는 것입니다. 설계와 조사:{" "}
-            <code>docs/13-mental-poker.md</code>.
+            <b>섞을 때 카드를 바꿨다면?</b> 열쇠 증명은 열쇠 거짓말만 잡습니다.
+            섞을 때 카드를 바꿔치기하거나 복제하면(그 카드를 엿보려고) 순서가
+            섞여 카드끼리 짝이 없으니 다른 증명이 있어야 합니다. 섞은 사람마다{" "}
+            <b>섞기 증명</b>(cut-and-choose, Sako–Kilian 1995식)을 냅니다.
+          </P>
+          <ol className="list-decimal pl-5 text-sm leading-relaxed opacity-90">
+            <li>
+              증명할 것: 넘긴 덱 Y가 받은 덱 X를 같은 열쇠 e로 잠그고 순서만
+              바꾼 것(Y<sub>i</sub> = X<sub>π(i)</sub>
+              <sup>e</sup>). 바꿔치기·복제·빼기는 모두 이것을 깹니다.
+            </li>
+            <li>
+              중간 덱 Z = σ(X<sup>t</sup>)를 16벌 먼저 냅니다(σ는 무작위 순서,
+              t는 무작위 수). 도전이 0이면 σ와 t를 보여 X → Z를, 1이면 Z → Y를
+              열쇠 증명과 같은 방법으로 보입니다. 둘 다 보이면 e와 π가
+              드러나지만 한 쪽만 보이므로 아무것도 새지 않습니다. 거짓 덱은 둘
+              중 하나가 틀려 한 번에 ½로 들키고, 16번이면 빠져나갈 확률이 2
+              <sup>-16</sup>입니다.
+            </li>
+            <li>
+              도전값은 모두가 함께 정합니다. 섞을 때 비밀 값의 해시를 걸고,
+              모두의 중간 덱이 모인 뒤 비밀 값을 공개해 해시합니다. 한 사람만
+              정직해도 아무도 미리 알 수 없습니다.
+            </li>
+            <li>
+              섞은 덱은 바로 넘기고 증명은 뒤따라 보내 판 시작이 늦어지지
+              않습니다(2048비트에서 만들기 1.4초, 하나 확인 0.8초). 틀리거나
+              30초 안에 응답하지 않으면 그 사람을 짚습니다. 6·7마 다시 섞기도
+              같습니다.
+            </li>
+          </ol>
+          <ShuffleProofDemo />
+          <P>
+            <b>남은 영지식 증명은?</b> 더 강한 섞기 증명(Neff, Bayer–Groth)은 한
+            번에 거의 확실하게 증명하고, "남은 카드에 선 무늬가 없다"는
+            Bultel·Lafourcade(FC 2019)의 방식이 있습니다. 표준적인 다음 단계는
+            Barnett·Smart(2003)의 타원곡선 ElGamal에 이 증명들을 붙이는
+            것입니다. 설계와 조사: <code>docs/13-mental-poker.md</code>,{" "}
+            <code>docs/15-shuffle-proof.md</code>.
           </P>
         </Section>
 
@@ -883,9 +918,11 @@ export function SecurityPage() {
               것은 참가자가 기다렸다 이어 갑니다(60초).
             </li>
             <li>
-              <b>섞기를 조작한 사람은 가리지 못합니다.</b> 카드가 안 열리거나
-              같은 카드가 두 장 나와 판은 멈추지만, 누가 했는지는 섞기 증명이
-              있어야 압니다. 틀린 열쇠를 낸 사람은 열쇠 증명으로 짚습니다.
+              <b>
+                섞기 조작은 2<sup>-16</sup> 확률로 빠져나갈 수 있습니다.
+              </b>{" "}
+              그래도 판 끝에 같은 카드가 드러나 판은 멈춥니다. 틀린 열쇠와 섞기
+              조작은 증명으로 누가 했는지 짚습니다.
             </li>
             <li>
               무늬 안 따르기는 그 자리에서 막지 못하고, 숨긴 카드가 드러날 때

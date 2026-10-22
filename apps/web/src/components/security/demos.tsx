@@ -14,13 +14,18 @@ import {
   viewOf,
 } from "@mighty/engine";
 import {
+  answerShuffle,
+  challengeBits,
+  commitShuffle,
   encodedDeck,
   GROUP_1024,
   type KeyStatement,
   Party,
   PublicLedger,
   proveKeys,
+  type ShuffleAnswer,
   verifyKeys,
+  verifyShuffle,
 } from "@mighty/fair-play";
 import { useEffect, useMemo, useState } from "react";
 
@@ -1057,6 +1062,98 @@ export function KeyProofDemo() {
       </div>
       <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
         {log.join("\n")}
+      </pre>
+    </Box>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 섞기 증명(cut-and-choose)                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 섞기 증명: 철수가 카드 9장을 섞어 넘기고 16회짜리 증명을 낸다. 고친 프로그램으로 한 장을 복제하면
+ * 도전 1인 회에서 들킨다. 게임의 실제 코드(packages/fair-play shuffle-proof.ts)를 돌린다
+ */
+export function ShuffleProofDemo() {
+  const g = GROUP_1024;
+  const [log, setLog] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (cheat: boolean) => {
+    setBusy(true);
+    const t0 = performance.now();
+    const label = { device: 1, deal: 1, round: 0, stage: "shuffle" };
+    const party = new Party(1, g);
+    const input = encodedDeck(g, MP_CARDS);
+    const output = await party.lockAndShuffle(input, "shuffle");
+    // 고친 프로그램: 섞은 덱의 한 장을 다른 카드의 복제로 바꿔 넘긴다.
+    if (cheat) output[1] = output[2] as bigint;
+    const e = party.passKey("shuffle") as bigint;
+    const work = await commitShuffle(g, label, input, e);
+    // 모두가 함께 정하는 도전값(여기서는 세 사람의 무작위 nonce)
+    const nonces = MP_PEOPLE.map(() => Math.random().toString(16).slice(2));
+    const bits = await challengeBits(label, nonces, []);
+    let answers: ShuffleAnswer[];
+    let note: string;
+    try {
+      answers = await answerShuffle(g, label, input, output, e, work, bits);
+      note = "철수가 16회 모두 응답했다.";
+    } catch {
+      // 속인 덱은 도전 1에 응답할 수 없다. 도전 0만 정직하게 답하고 나머지는 지어낸다.
+      answers = bits.map((b, r) =>
+        b === 0
+          ? {
+              b: 0 as const,
+              sigma: work.sigmas[r] as number[],
+              t: (work.ts[r] as bigint).toString(16),
+            }
+          : {
+              b: 1 as const,
+              tau: input.map((_, i) => i),
+              proof: { a: "1", b: "1", z: "1" },
+            },
+      );
+      note = `철수는 도전 1인 ${bits.filter((b) => b === 1).length}회에 답할 수 없어 지어냈다.`;
+    }
+    const ok = await verifyShuffle(
+      g,
+      label,
+      input,
+      output,
+      work.commit,
+      bits,
+      answers,
+    );
+    const ms = Math.round(performance.now() - t0);
+    setLog([
+      cheat
+        ? "철수가 섞은 덱에서 한 장을 다른 카드의 복제로 바꿨다(그 카드를 엿보려고)."
+        : "철수가 9장을 자기 열쇠로 잠그고 섞었다.",
+      `약속: 중간 덱 Z 16벌과 D 16개를 먼저 냈다.`,
+      `도전 비트(셋의 nonce로): ${bits.join("")}  (0 = X→Z를 보여라, 1 = Z→Y를 증명하라)`,
+      note,
+      ok
+        ? `✓ 섞기 증명이 맞다. 덱은 원래 카드를 같은 열쇠로 잠그고 순서만 바꾼 것이다. (${ms}ms)`
+        : `⚠ 섞기 증명이 맞지 않는다 — 철수를 짚는다. 도전이 모두 0이어야 빠져나가는데 그 확률은 2^-16(6만 5천분의 1)이다. (${ms}ms)`,
+    ]);
+    setBusy(false);
+  };
+
+  return (
+    <Box title="섞기 증명(cut-and-choose)">
+      <div className="flex flex-wrap gap-1.5">
+        <Btn onClick={() => void run(false)} disabled={busy}>
+          철수가 정직하게 섞기
+        </Btn>
+        <Btn onClick={() => void run(true)} disabled={busy}>
+          고친 프로그램: 한 장 복제해 섞기
+        </Btn>
+      </div>
+      <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
+        {log.length === 0
+          ? "눌러 보세요. 9장을 섞고 16회짜리 증명을 만들어 확인합니다."
+          : log.join("\n")}
       </pre>
     </Box>
   );

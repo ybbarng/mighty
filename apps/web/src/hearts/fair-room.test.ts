@@ -172,7 +172,8 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     const rounds = match.current().roundNumber;
     await until(() => audits.length === guests.length);
     expect(audits.filter((a) => !a.ok)).toEqual([]);
-    expect(verified.length).toBeGreaterThanOrEqual(rounds * guests.length);
+    // 판마다 검증은 판 끝 기록을 받은 뒤 비동기로 끝난다.
+    await until(() => verified.length >= rounds * guests.length);
     // 참가자가 받은 메시지에 손패 전체가 없다. 넘긴 카드 열쇠는 받는 사람에게만 갔다.
     expect(seen.some((m) => m.includes('"hands"'))).toBe(false);
     expect(

@@ -207,6 +207,8 @@ export class FairGuestSeat {
     switch (message.k) {
       case "chain":
       case "keys":
+      case "sproof":
+      case "cproof":
         this.device.receive(message, from);
         break;
       case "query":

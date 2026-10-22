@@ -63,9 +63,14 @@ export class RenegeWatch {
     seat: number,
     card: Card,
     trick: Omit<PublicTrick, "trickIndex" | "plays">,
-  ): Violation | { seat: number; reason: string } | null {
+  ): Violation | { seat: number; reason: string; duplicate?: true } | null {
+    // 같은 카드가 두 번: 섞는 단계의 조작이다. 낸 사람이 아니라 섞기 증명으로 범인을 찾는다(`duplicate`).
     if (this.revealed.has(card))
-      return { seat, reason: `${cardText(card)}가 두 번 나왔다(섞기 조작)` };
+      return {
+        seat,
+        reason: `${cardText(card)}가 두 번 나왔다`,
+        duplicate: true,
+      };
     this.revealed.add(card);
 
     // 이 사람이 앞선 턴들에 낸 카드를 c가 손에 있었다는 사실로 다시 따져 본다.

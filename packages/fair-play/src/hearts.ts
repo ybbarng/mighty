@@ -144,11 +144,15 @@ export class HeartsRenegeWatch {
 
   constructor(private readonly rules: HeartsRules) {}
 
-  reveal(play: PastPlay): { seat: number; reason: string } | null {
+  reveal(
+    play: PastPlay,
+  ): { seat: number; reason: string; duplicate?: true } | null {
+    // 같은 카드가 두 번: 섞는 단계의 조작이다. 섞기 증명으로 범인을 찾는다(`duplicate`).
     if (this.revealed.has(play.card))
       return {
         seat: play.seat,
-        reason: `${cardText(play.card)}가 두 번 나왔다(섞기 조작)`,
+        reason: `${cardText(play.card)}가 두 번 나왔다`,
+        duplicate: true,
       };
     this.revealed.add(play.card);
     for (const past of this.plays) {

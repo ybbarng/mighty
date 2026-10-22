@@ -526,6 +526,8 @@ export class GuestRoom<
   /** 내가 보낸 멘탈 포커 메시지를 기억한다(묻는 말에 한 답은 그때뿐이라 뺀다) */
   private rememberOwn(message: FairMessage, to: number | null): void {
     if (message.k === "answer") return;
+    // 섞기 증명 약속은 크고, 섞기 열쇠에서 다시 만들 수 있어 기억하지 않는다.
+    if (message.k === "sproof" && message.commit) return;
     const key = JSON.stringify(message);
     if (this.ownFairSeen.has(key)) return;
     this.ownFairSeen.add(key);

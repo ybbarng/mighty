@@ -122,6 +122,11 @@ export class Party {
     return this.passes.has(name);
   }
 
+  /** 이미 만든 섞기 열쇠(없으면 null). 섞기 증명(shuffle-proof.ts)에 쓴다 */
+  passKey(name: string): bigint | null {
+    return this.passes.get(name) ?? null;
+  }
+
   hasSlotKey(slot: number): boolean {
     return this.slotKeys.has(slot);
   }

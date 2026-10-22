@@ -34,6 +34,28 @@ export interface Incident {
   reason: string;
 }
 
+/**
+ * 섞기 조작이 드러났다(같은 카드가 두 번 등): 섞기·바꾸기 증명으로 누군지 찾아 알린다.
+ * 기기 번호는 그 기기 사람의 자리 번호다
+ */
+export function reportShuffleTamper(
+  device: FairDevice,
+  deal: number,
+  what: string,
+  incident: (incident: Incident) => void,
+): void {
+  void device.shuffleCulprit(deal).then((culprit) =>
+    incident(
+      culprit
+        ? { seat: culprit.device, reason: `${what}: ${culprit.reason}` }
+        : {
+            seat: null,
+            reason: `${what}(섞기를 조작했는데 누군지 가리지 못했다)`,
+          },
+    ),
+  );
+}
+
 /** 엔진 사건을 처리할 때 함께 보는 공개 정보 */
 export interface PublicView {
   players: readonly number[];
@@ -345,6 +367,12 @@ export class FairCoordinator {
         jokerCalled: this.leadInfo.jokerCalled,
       },
     );
+    if (violation && "duplicate" in violation) {
+      reportShuffleTamper(this.device, this.deal, violation.reason, (i) =>
+        this.incident(i),
+      );
+      return;
+    }
     if (violation) {
       const detail =
         "heldCard" in violation
@@ -417,10 +445,12 @@ export class FairCoordinator {
       .liveSlots(deal)
       .map((slot) => cards.get(slot) as Card);
     if (new Set(values).size !== values.length) {
-      this.incident({
-        seat: null,
-        reason: "열어 보니 같은 카드가 두 번 있다(누군가 섞기를 조작했다)",
-      });
+      reportShuffleTamper(
+        this.device,
+        deal,
+        "열어 보니 같은 카드가 두 번 있다",
+        (i) => this.incident(i),
+      );
       return;
     }
     this.openedDeals.set(deal, cards);

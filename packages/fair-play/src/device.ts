@@ -1,6 +1,7 @@
 import type { Card } from "@mighty/engine";
 
 import {
+  GENERATOR,
   type KeyProof,
   type KeyStatement,
   proveKeys,
@@ -13,7 +14,25 @@ import {
   PublicLedger,
   type RevealReason,
 } from "./protocol";
-import { GROUP_1024, GROUP_2048, type SraGroup } from "./sra";
+import {
+  answerShuffle,
+  challengeBits,
+  commitShuffle,
+  nonceCommit,
+  type ShuffleAnswer,
+  type ShuffleCommit,
+  type ShuffleLabel,
+  type ShuffleWork,
+  shuffleNonce,
+  verifyShuffle,
+} from "./shuffle-proof";
+import {
+  GROUP_1024,
+  GROUP_2048,
+  modInverse,
+  modPow,
+  type SraGroup,
+} from "./sra";
 
 /*
  * 메시지로 하는 멘탈 포커. 기기마다 FairDevice 하나가 섞기 사슬에 끼고, 열쇠를 공개하고, 자기 카드를 연다.
@@ -21,6 +40,8 @@ import { GROUP_1024, GROUP_2048, type SraGroup } from "./sra";
  * 어느 자리를 누구에게 줄지는 부르는 쪽이 공개 정보(엔진 화면)로 정해 `assign`으로 알린다.
  * 기기는 거기에 맞춰서만 남의 자리 열쇠를 내준다.
  */
+
+declare function setTimeout(callback: () => void, ms: number): unknown;
 
 export type GroupName = "1024" | "2048";
 export const GROUPS: Record<GroupName, SraGroup> = {
@@ -40,8 +61,13 @@ export type FairWire =
       stage: Stage;
       index: number;
       deck: string[];
-      /** 다시 잠그는 단계(relock·poolRelock)에서 V = g^u. 공개한 자리 열쇠를 증명할 때 쓴다(proof.ts) */
+      /**
+       * 다시 잠그는 단계(relock·poolRelock)에서 V = g^u. 공개한 자리 열쇠를 증명할 때 쓴다(proof.ts).
+       * 다시 나누기 바꾸기(convert)에서는 V = g^(1/p)(p는 그 단계 섞기 열쇠)
+       */
       v?: string;
+      /** 섞는 단계(shuffle·poolShuffle)에서 섞기 증명의 nonce 해시(shuffle-proof.ts) */
+      nc?: string;
     }
   | {
       t: "fp";
@@ -68,7 +94,50 @@ export type FairWire =
       keys: [number, string][];
       /** 자리마다 열쇠 증명. 받은 기기가 그 카드를 낼 때 넘겨준 사람 열쇠와 함께 그대로 공개한다 */
       proofs?: [number, KeyProof][];
+    }
+  /**
+   * 섞기 증명(shuffle-proof.ts). 섞은 덱을 넘긴 뒤 따로 보낸다: 약속(중간 덱들) → 모두의 약속이 모이면
+   * nonce 공개 → 모두의 nonce로 정한 도전값에 응답. 판 진행은 이것을 기다리지 않는다
+   */
+  | {
+      t: "fp";
+      k: "sproof";
+      deal: number;
+      from: number;
+      round: number;
+      stage: "shuffle" | "poolShuffle";
+      commit?: ShuffleCommit;
+      nonce?: string;
+      answers?: ShuffleAnswer[];
+    }
+  /** 6·7마 바꾸기(convert) 증명: 판 끝에 공개한 자리 열쇠로 그 단계를 정직하게 했는지 */
+  | {
+      t: "fp";
+      k: "cproof";
+      deal: number;
+      from: number;
+      proof: KeyProof;
     };
+
+/** 섞는 단계 하나(`${round}:${stage}`)의 섞기 증명 진행 */
+interface ShuffleState {
+  round: number;
+  stage: "shuffle" | "poolShuffle";
+  /** 기기 → nonce 해시(사슬 메시지에 걸었다) */
+  nc: Map<number, string>;
+  commits: Map<number, ShuffleCommit>;
+  nonces: Map<number, string>;
+  answers: Map<number, ShuffleAnswer[]>;
+  bits: number[] | null;
+  /** 기기 → 확인 결과 */
+  checked: Map<number, Promise<boolean>>;
+  work: ShuffleWork | null;
+  proving: boolean;
+  sentNonce: boolean;
+  sentAnswer: boolean;
+  /** 도전값이 정해진 뒤 응답 기다리기가 끝났다 */
+  timedOut: boolean;
+}
 
 export interface DeviceEvents {
   /** 내 자리 카드를 열었다 */
@@ -109,6 +178,10 @@ interface DealCtx {
   proofs: Map<string, ProofRecord>;
   /** 이미 탓한 자리(같은 자리를 두 번 알리지 않는다) */
   blamed: Set<number>;
+  /** 섞는 단계마다 섞기 증명 진행 */
+  shuffles: Map<string, ShuffleState>;
+  /** 기기 → 바꾸기(convert) 증명 */
+  cproofs: Map<number, KeyProof>;
   /** 판 끝 공개를 했는데 섞기 사슬이 아직이다(새로고침 뒤 다시 처리할 때). 끝나면 공개한다 */
   auditPending: boolean;
   /** 계산해 보낸 사슬 차례. 새로고침 전 것이 없으면(예전 저장) null */
@@ -134,6 +207,8 @@ export interface FairDeviceOptions {
   sendTo?: (message: FairWire, device: number) => void;
   /** 새로고침 전에 남겨 둔 열쇠(`snapshotAll`) */
   restore?: Record<number, PartySnapshot>;
+  /** 섞기 증명 도전값이 정해진 뒤 응답을 기다리는 시간. 지나도 응답하지 않으면 그 기기를 짚는다 */
+  proofTimeoutMs?: number;
 }
 
 /** 다시 잠그는 단계에서 푸는 섞기 열쇠(그 단계의 V를 낸다) */
@@ -147,6 +222,7 @@ export class FairDevice {
   readonly g: SraGroup;
   private readonly send: (message: FairWire) => void;
   private readonly sendTo: ((message: FairWire, device: number) => void) | null;
+  private readonly proofTimeoutMs: number;
   private readonly deals = new Map<number, DealCtx>();
   private work: Promise<void> = Promise.resolve();
   private readonly listeners: {
@@ -166,6 +242,7 @@ export class FairDevice {
     this.g = GROUPS[options.group];
     this.send = options.send;
     this.sendTo = options.sendTo ?? null;
+    this.proofTimeoutMs = options.proofTimeoutMs ?? 30_000;
     this.restored = new Map(
       Object.entries(options.restore ?? {}).map(([deal, snap]) => [
         Number(deal),
@@ -270,6 +347,8 @@ export class FairDevice {
       commitments: new Map(),
       proofs: new Map(),
       blamed: new Set(),
+      shuffles: new Map(),
+      cproofs: new Map(),
       auditPending: false,
       sent: this.restored.has(deal)
         ? this.restored.get(deal)?.sent
@@ -476,6 +555,12 @@ export class FairDevice {
         ctx.ledger.deck.map((_, s) => s),
         "audit",
       );
+      // 다시 나눈 판이면 바꾸기(convert)를 정직하게 했다는 증명도 낸다.
+      void this.queue(async () => {
+        const proof = await this.proveConvert(ctx);
+        if (proof)
+          this.send({ t: "fp", k: "cproof", deal, from: this.id, proof });
+      });
     });
   }
 
@@ -525,6 +610,16 @@ export class FairDevice {
       void this.queue(() => this.onKeys(message, from));
       return;
     }
+    if (message.k === "sproof" || message.k === "cproof") {
+      if (message.from !== from) return;
+      if (!ctx) {
+        this.early.push({ message, from });
+        return;
+      }
+      if (message.k === "cproof") ctx.cproofs.set(from, message.proof);
+      else void this.queue(() => this.onShuffleProof(ctx, message, from));
+      return;
+    }
     if (!ctx) {
       // 아직 시작 명령을 받기 전에 온 사슬 결과는 잠시 맡아 둔다.
       this.early.push({ message, from });
@@ -533,13 +628,22 @@ export class FairDevice {
     void this.queue(() => this.onChain(ctx, message, from));
   }
 
-  private early: { message: FairWire; from: number }[] = [];
+  private early: {
+    message: Exclude<FairWire, { k: "keys" | "handover" }>;
+    from: number;
+  }[] = [];
 
   private onChain(
     ctx: DealCtx,
-    message: Extract<FairWire, { k: "chain" }>,
+    message: Exclude<FairWire, { k: "keys" | "handover" }>,
     from: number,
   ): Promise<void> | void {
+    if (message.k !== "chain") {
+      // 시작 명령보다 먼저 온 증명 메시지
+      if (message.k === "cproof") ctx.cproofs.set(from, message.proof);
+      else return this.onShuffleProof(ctx, message, from);
+      return;
+    }
     if (ctx.devices[message.index] !== from) {
       this.emit(
         "problem",
@@ -558,12 +662,18 @@ export class FairDevice {
       );
       if (typeof message.v === "string")
         ctx.commitments.set(
-          `${message.round}:${message.index}`,
+          commitmentKey(message.round, message.stage, message.index),
           BigInt(`0x${message.v}`),
         );
     } catch {
       this.emit("problem", ctx.id, "덱 값이 숫자가 아니다", from);
       return;
+    }
+    if (isShuffleStage(message.stage)) {
+      const state = this.shuffleState(ctx, message.round, message.stage);
+      if (typeof message.nc === "string") state.nc.set(from, message.nc);
+      // 새로고침 전에 보낸 내 섞기가 돌아왔으면 증명을 다시 만든다(섞기 열쇠에서 정해져 같다).
+      if (from === this.id) this.startShuffleProof(ctx, state);
     }
     return this.advance(ctx);
   }
@@ -593,8 +703,26 @@ export class FairDevice {
           const output = await this.compute(ctx, stage, input);
           ctx.chains.set(key, output);
           const passes = RELOCK_PASSES[stage];
-          const v = passes ? ctx.party.relockCommitment(passes) : null;
-          if (v !== null) ctx.commitments.set(`${round}:${index}`, v);
+          const v = passes
+            ? ctx.party.relockCommitment(passes)
+            : stage === "convert"
+              ? this.convertCommitment(ctx)
+              : null;
+          if (v !== null)
+            ctx.commitments.set(commitmentKey(round, stage, index), v);
+          const state = isShuffleStage(stage)
+            ? this.shuffleState(ctx, round, stage)
+            : null;
+          let nc: string | null = null;
+          if (state) {
+            nc = await nonceCommit(
+              await shuffleNonce(
+                ctx.party.passKey(stage) as bigint,
+                this.label(ctx, state, this.id),
+              ),
+            );
+            state.nc.set(this.id, nc);
+          }
           this.send({
             t: "fp",
             k: "chain",
@@ -604,9 +732,11 @@ export class FairDevice {
             index,
             deck: output.map((c) => c.toString(16)),
             ...(v !== null ? { v: v.toString(16) } : {}),
+            ...(nc !== null ? { nc } : {}),
           });
           ctx.sent?.add(key);
           this.emit("persist");
+          if (state) this.startShuffleProof(ctx, state);
         }
       }
       const doneKey = `${round}`;
@@ -855,7 +985,9 @@ export class FairDevice {
     keys: readonly [number, bigint][],
   ): KeyStatement | null {
     const index = ctx.devices.indexOf(device);
-    const v = ctx.commitments.get(`${round}:${index}`);
+    const v = ctx.commitments.get(
+      commitmentKey(round, round === 0 ? "relock" : "poolRelock", index),
+    );
     if (index < 0 || v === undefined) return null;
     const n = ctx.devices.length;
     const [before, relock] =
@@ -959,13 +1091,25 @@ export class FairDevice {
     ctx.blamed.add(slot);
     void this.queue(async () => {
       const culprit = await this.blame(ctx, slot);
-      this.emit(
-        "problem",
-        ctx.id,
-        culprit === null
-          ? `${what}(공개한 열쇠의 증명은 모두 맞다: 섞는 단계에서 조작했을 수 있다)`
-          : `${what}: 공개한 열쇠가 카드를 잠글 때 쓴 열쇠와 다르다(열쇠 증명 실패)`,
-        culprit,
+      if (culprit !== null) {
+        this.emit(
+          "problem",
+          ctx.id,
+          `${what}: 공개한 열쇠가 카드를 잠글 때 쓴 열쇠와 다르다(열쇠 증명 실패)`,
+          culprit,
+        );
+        return;
+      }
+      // 열쇠 증명이 모두 맞으면 섞는 단계를 본다. 섞기 증명이 끝나기를 기다릴 수 있어 작업 줄 밖에서 한다.
+      void this.chainCulprit(ctx).then((chain) =>
+        this.emit(
+          "problem",
+          ctx.id,
+          chain
+            ? `${what}: ${chain.reason}`
+            : `${what}(열쇠·섞기 증명으로 누군지 가리지 못했다)`,
+          chain?.device ?? null,
+        ),
       );
     });
   }
@@ -985,8 +1129,360 @@ export class FairDevice {
     return null;
   }
 
+  /* ---------- 섞기 증명(shuffle-proof.ts) ---------- */
+
+  private shuffleState(
+    ctx: DealCtx,
+    round: number,
+    stage: "shuffle" | "poolShuffle",
+  ): ShuffleState {
+    const key = `${round}:${stage}`;
+    let state = ctx.shuffles.get(key);
+    if (!state) {
+      state = {
+        round,
+        stage,
+        nc: new Map(),
+        commits: new Map(),
+        nonces: new Map(),
+        answers: new Map(),
+        bits: null,
+        checked: new Map(),
+        work: null,
+        proving: false,
+        sentNonce: false,
+        sentAnswer: false,
+        timedOut: false,
+      };
+      ctx.shuffles.set(key, state);
+    }
+    return state;
+  }
+
+  private label(
+    ctx: DealCtx,
+    state: ShuffleState,
+    device: number,
+  ): ShuffleLabel {
+    return { device, deal: ctx.id, round: state.round, stage: state.stage };
+  }
+
+  /** 그 기기가 그 단계에서 받은 덱과 넘긴 덱 */
+  private shuffleIO(
+    ctx: DealCtx,
+    state: ShuffleState,
+    device: number,
+  ): { input: bigint[]; output: bigint[] } | null {
+    const index = ctx.devices.indexOf(device);
+    const stages = this.stagesOf(state.round);
+    const si = stages.indexOf(state.stage);
+    if (index < 0 || si < 0) return null;
+    const input = this.inputOf(ctx, state.round, stages, si, index);
+    const output = ctx.chains.get(`${state.round}:${state.stage}:${index}`);
+    return input && output ? { input, output } : null;
+  }
+
+  /** 내 섞기의 약속을 만들어 보낸다(판 진행 줄 밖에서 계산한다) */
+  private startShuffleProof(ctx: DealCtx, state: ShuffleState): void {
+    if (state.proving) return;
+    const e = ctx.party.passKey(state.stage);
+    const io = this.shuffleIO(ctx, state, this.id);
+    if (e === null || !io) return;
+    state.proving = true;
+    void (async () => {
+      const work = await commitShuffle(
+        this.g,
+        this.label(ctx, state, this.id),
+        io.input,
+        e,
+      );
+      state.work = work;
+      state.commits.set(this.id, work.commit);
+      this.send({
+        t: "fp",
+        k: "sproof",
+        deal: ctx.id,
+        from: this.id,
+        round: state.round,
+        stage: state.stage,
+        commit: work.commit,
+      });
+      await this.queue(() => this.stepShuffle(ctx, state));
+    })().catch(() => {
+      // 내 섞기로 증명을 만들 수 없으면 보내지 않는다(남들이 응답 없음으로 알아챈다).
+    });
+  }
+
+  private onShuffleProof(
+    ctx: DealCtx,
+    message: Extract<FairWire, { k: "sproof" }>,
+    from: number,
+  ): Promise<void> {
+    if (message.stage !== "shuffle" && message.stage !== "poolShuffle")
+      return Promise.resolve();
+    const state = this.shuffleState(ctx, message.round, message.stage);
+    if (message.commit && !state.commits.has(from))
+      state.commits.set(from, message.commit);
+    if (typeof message.nonce === "string" && !state.nonces.has(from))
+      state.nonces.set(from, message.nonce);
+    if (Array.isArray(message.answers) && !state.answers.has(from))
+      state.answers.set(from, message.answers);
+    return this.stepShuffle(ctx, state);
+  }
+
+  /**
+   * 섞기 증명을 한 걸음씩: 모두의 약속이 모이면 내 nonce 공개 → 모두의 nonce가 모이면 도전값 →
+   * 내 응답 → 남의 응답 확인. 틀린 응답이면 그 기기를 바로 알린다
+   */
+  private async stepShuffle(ctx: DealCtx, state: ShuffleState): Promise<void> {
+    const e = ctx.party.passKey(state.stage);
+    const all = (map: Map<number, unknown>) =>
+      ctx.devices.every((d) => map.has(d));
+    // 모두가 약속한 뒤에야 nonce를 공개한다(도전값을 보고 약속을 고르지 못하게).
+    if (
+      !state.sentNonce &&
+      state.work &&
+      e !== null &&
+      all(state.commits) &&
+      all(state.nc)
+    ) {
+      state.sentNonce = true;
+      const nonce = await shuffleNonce(e, this.label(ctx, state, this.id));
+      state.nonces.set(this.id, nonce);
+      this.send({
+        t: "fp",
+        k: "sproof",
+        deal: ctx.id,
+        from: this.id,
+        round: state.round,
+        stage: state.stage,
+        nonce,
+      });
+    }
+    if (state.bits === null && all(state.nonces) && all(state.nc)) {
+      const nonces: string[] = [];
+      for (const d of ctx.devices) {
+        const nonce = state.nonces.get(d) as string;
+        if ((await nonceCommit(nonce)) !== state.nc.get(d)) {
+          this.emit(
+            "problem",
+            ctx.id,
+            "섞을 때 건 값과 다른 nonce를 공개했다(섞기 증명)",
+            d,
+          );
+          return;
+        }
+        nonces.push(nonce);
+      }
+      state.bits = await challengeBits(
+        { deal: ctx.id, round: state.round, stage: state.stage },
+        nonces,
+        [],
+      );
+      // 도전값이 정해진 뒤 오래 응답하지 않으면 그 기기를 짚는다. 속인 덱은 응답을 만들 수 없다.
+      setTimeout(() => {
+        state.timedOut = true;
+        for (const d of ctx.devices)
+          if (d !== this.id && !state.answers.has(d))
+            this.emit(
+              "problem",
+              ctx.id,
+              "섞기 증명에 응답하지 않았다(섞을 때 카드를 바꿨을 수 있다)",
+              d,
+            );
+      }, this.proofTimeoutMs);
+    }
+    const bits = state.bits;
+    if (bits === null) return;
+    if (!state.sentAnswer && state.work && e !== null) {
+      const io = this.shuffleIO(ctx, state, this.id);
+      if (io) {
+        state.sentAnswer = true;
+        const work = state.work;
+        void (async () => {
+          const answers = await answerShuffle(
+            this.g,
+            this.label(ctx, state, this.id),
+            io.input,
+            io.output,
+            e,
+            work,
+            bits,
+          );
+          state.answers.set(this.id, answers);
+          this.send({
+            t: "fp",
+            k: "sproof",
+            deal: ctx.id,
+            from: this.id,
+            round: state.round,
+            stage: state.stage,
+            answers,
+          });
+        })().catch(() => {
+          // 내 섞기 출력이 입력과 맞지 않으면 응답을 만들 수 없다.
+        });
+      }
+    }
+    for (const d of ctx.devices) {
+      if (d === this.id || state.checked.has(d)) continue;
+      const commit = state.commits.get(d);
+      const answers = state.answers.get(d);
+      const io = this.shuffleIO(ctx, state, d);
+      if (!commit || !answers || !io) continue;
+      // 확인은 한 번에 하나씩(계산이 겹쳐 화면이 멈추지 않게).
+      const check = this.checking.then(() =>
+        verifyShuffle(
+          this.g,
+          this.label(ctx, state, d),
+          io.input,
+          io.output,
+          commit,
+          bits,
+          answers,
+        ).catch(() => false),
+      );
+      this.checking = check.then(() => undefined);
+      state.checked.set(d, check);
+      void check.then((ok) => {
+        if (!ok)
+          this.emit(
+            "problem",
+            ctx.id,
+            "섞기 증명이 맞지 않는다(섞을 때 카드를 바꿨다)",
+            d,
+          );
+      });
+    }
+  }
+
+  private checking: Promise<void> = Promise.resolve();
+
+  /** 다시 나누기 바꾸기(convert)의 V = g^(1/p) */
+  private convertCommitment(ctx: DealCtx): bigint | null {
+    const p = ctx.party.passKey("pool");
+    return p === null
+      ? null
+      : modPow(GENERATOR, modInverse(p, this.g.q), this.g.p);
+  }
+
+  /**
+   * 바꾸기 문장: 그 기기는 떠나는 자리 i를 I_i → O_i = I_i^(p/k_i)로 바꿨다(k_i는 그 기기의 처음 자리 열쇠).
+   * O_i^k_i = I_i^p 이므로 열쇠 증명 꼴(입력 O, 출력 I, 열쇠 k, 지수 1/p)로 쓴다
+   */
+  private convertStatement(
+    ctx: DealCtx,
+    device: number,
+    keyOf: (slot: number) => bigint | undefined,
+  ): KeyStatement | null {
+    const index = ctx.devices.indexOf(device);
+    const pool = ctx.pool;
+    const v = ctx.commitments.get(commitmentKey(1, "convert", index));
+    if (!pool || index < 0 || v === undefined) return null;
+    const input =
+      index > 0
+        ? ctx.chains.get(`1:convert:${index - 1}`)
+        : pool.map((slot) => ctx.ledger.deck[slot] as bigint);
+    const output = ctx.chains.get(`1:convert:${index}`);
+    if (!input || !output) return null;
+    const items: KeyStatement["items"][number][] = [];
+    for (const [i, slot] of pool.entries()) {
+      const key = keyOf(slot);
+      const before = input[i];
+      const after = output[i];
+      if (key === undefined || before === undefined || after === undefined)
+        return null;
+      items.push({ slot, input: after, output: before, key });
+    }
+    // 다른 증명과 섞이지 않게 기기 번호를 크게 바꿔 해시에 넣는다.
+    return { device: 900_000 + ctx.id * 10 + device, v, items };
+  }
+
+  private async proveConvert(ctx: DealCtx): Promise<KeyProof | null> {
+    const p = ctx.party.passKey("pool");
+    if (p === null || !ctx.pool) return null;
+    const st = this.convertStatement(ctx, this.id, (slot) =>
+      ctx.party.revealKey(slot, "audit"),
+    );
+    return st ? proveKeys(this.g, st, modInverse(p, this.g.q)) : null;
+  }
+
+  /**
+   * 섞는 단계의 범인: 섞기·바꾸기 증명이 틀린 기기, 없으면 증명을 내지 않은 기기가 하나뿐일 때 그 기기.
+   * 정직한 기기는 증명을 낸다(새로고침 등으로 빠질 수는 있다)
+   */
+  private async chainCulprit(
+    ctx: DealCtx,
+  ): Promise<{ device: number; reason: string } | null> {
+    // 섞기 증명을 주고받는 중이면 끝날 때까지(응답 기다리는 시간까지) 기다린다.
+    const settled = () =>
+      [...ctx.shuffles.values()].every(
+        (state) =>
+          state.timedOut ||
+          (state.bits !== null &&
+            ctx.devices.every((d) => d === this.id || state.checked.has(d))),
+      );
+    const started = Date.now();
+    while (!settled() && Date.now() - started < this.proofTimeoutMs * 2)
+      await new Promise<void>((r) => setTimeout(r, 100));
+    for (const state of ctx.shuffles.values())
+      for (const [d, check] of state.checked)
+        if (!(await check))
+          return {
+            device: d,
+            reason: "섞기 증명이 맞지 않는다(섞을 때 카드를 바꿨다)",
+          };
+    if (ctx.pool)
+      for (const d of ctx.devices) {
+        const proof = ctx.cproofs.get(d);
+        if (d === this.id || !proof) continue;
+        const st = this.convertStatement(ctx, d, (slot) =>
+          ctx.ledger.keys.get(slot)?.get(d),
+        );
+        if (st && !(await verifyKeys(this.g, st, proof)))
+          return {
+            device: d,
+            reason: "다시 섞을 카드를 바꿀 때 값을 바꿨다(바꾸기 증명 실패)",
+          };
+      }
+    const missing = new Set<number>();
+    for (const state of ctx.shuffles.values())
+      for (const d of ctx.devices) {
+        if (d === this.id) continue;
+        const proved = state.bits === null ? state.commits : state.answers;
+        if (!proved.has(d)) missing.add(d);
+      }
+    if (missing.size === 1) {
+      const [device] = missing as Set<number> & Iterable<number>;
+      return {
+        device: device as number,
+        reason: "섞기 증명을 내지 않았다(정직한 기기는 낸다)",
+      };
+    }
+    return null;
+  }
+
+  /** 판 끝에 같은 카드가 두 번 나오는 등 섞기 조작이 드러났을 때: 증명으로 누군지 찾는다 */
+  async shuffleCulprit(
+    deal: number,
+  ): Promise<{ device: number; reason: string } | null> {
+    const ctx = this.deals.get(deal);
+    return ctx ? this.chainCulprit(ctx) : null;
+  }
+
   /** 재연결용 */
   snapshot(deal: number): PartySnapshot | null {
     return this.deals.get(deal)?.party.snapshot() ?? null;
   }
+}
+
+function isShuffleStage(stage: Stage): stage is "shuffle" | "poolShuffle" {
+  return stage === "shuffle" || stage === "poolShuffle";
+}
+
+/** 단계별 V 자리. 다시 잠그기는 예전처럼 `${round}:${index}` */
+function commitmentKey(round: number, stage: Stage, index: number): string {
+  return stage === "convert"
+    ? `${round}:convert:${index}`
+    : `${round}:${index}`;
 }

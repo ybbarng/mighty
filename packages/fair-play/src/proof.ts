@@ -1,4 +1,4 @@
-import { isQuadraticResidue, modPow, randomBelow, type SraGroup } from "./sra";
+import { jacobi, modPow, randomBelow, type SraGroup } from "./sra";
 
 /*
  * 열쇠 증명(Chaum–Pedersen, 1992). "같은 비밀 지수 u로 두 쌍이 이어져 있다"를 u를 보이지 않고 증명한다.
@@ -33,7 +33,8 @@ declare class TextEncoder {
   encode(text: string): Uint8Array;
 }
 
-async function hash(
+/** SHA-256(부분들을 |로 이은 글)을 수로. 증명의 도전값·가중치·결정적 난수에 쓴다 */
+export async function hash(
   parts: readonly (string | number | bigint)[],
 ): Promise<bigint> {
   const text = parts
@@ -129,7 +130,7 @@ export async function verifyKeys(
   if (st.items.length === 0) return false;
   const { A, B } = await combineStatement(g, st);
   // 크기 q 부분군 밖의 값을 섞어 짝수·홀수 도전값만 맞추는 속임을 막는다.
-  if (![st.v, a, b, A, B].every((x) => isQuadraticResidue(g, x))) return false;
+  if (![st.v, a, b, A, B].every((x) => jacobi(x, g.p) === 1)) return false;
   const c = await challenge(g, st, A, B, a, b);
   return (
     modPow(GENERATOR, z, g.p) === (a * modPow(st.v, c, g.p)) % g.p &&
