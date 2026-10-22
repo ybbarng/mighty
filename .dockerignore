@@ -3,5 +3,5 @@
 apps/web/out
 apps/web/test-results
 apps/web/playwright-report
-legacy
+assets/original-sounds
 .git

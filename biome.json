@@ -9,7 +9,6 @@
     "ignoreUnknown": true,
     "includes": [
       "**",
-      "!legacy",
       "!docs",
       "!**/.next",
       "!**/out",
