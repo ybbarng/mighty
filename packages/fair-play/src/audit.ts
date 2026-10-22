@@ -100,6 +100,8 @@ export function checkReplay(
     return { ok: false, index: -1, seat: 0, reason: "첫 판 패가 없다" };
   let state = createMatch({ rules, seed, presetDeal: first.deal }).state;
   const states = [state];
+  /** 바로 앞 걸음이 진짜 카드로는 성공한 죽이기였다(죽었어야 할 자리와 불린 카드) */
+  let lastKill: { killed: number; card: Card } | null = null;
   for (const [index, entry] of log.entries()) {
     const round = state.roundNumber;
     const current = deals.get(round);
@@ -112,13 +114,28 @@ export function checkReplay(
     const action = realAction(entry.action, current.cards);
     const opensRound = (s: MatchState) => s.roundNumber !== round;
     const result = step(state, entry.seat, action);
-    if (!result.ok)
+    if (!result.ok) {
+      // 걸음별 사건이 없는 기기(참가자): 진짜로는 죽이기가 성공했는데 기록에 죽이기가 또 있으면
+      // 자리 표 진행에서는 실패했다는 뜻이다. 불린 카드를 갖고도 없다고 한 자리 탓이다.
+      if (lastKill && action.type === "kill")
+        return {
+          ok: false,
+          index: index - 1,
+          seat: lastKill.killed,
+          reason: `죽이기에 불린 ${cardText(lastKill.card)}를 갖고 있으면서 없다고 했다`,
+        };
       return {
         ok: false,
         index,
         seat: entry.seat,
         reason: `진짜 카드로 다시 계산하니 규칙에 맞지 않는 행동이었다(${result.error})`,
       };
+    }
+    const kill = result.events.find((e) => e.type === "killAttempt");
+    lastKill =
+      kill?.type === "killAttempt" && kill.killed !== null
+        ? { killed: kill.killed, card: kill.card }
+        : null;
     if (opensRound(result.state) && !deals.has(result.state.roundNumber))
       return { ok: true, state, states, upTo: index };
     const seen = observed?.[index];

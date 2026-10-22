@@ -8,6 +8,7 @@ import {
   ChatRoutingDemo,
   CommitRevealDemo,
   HostSignatureDemo,
+  KeyProofDemo,
   MentalPokerDemo,
   ReplayAuditDemo,
   ViewFilterDemo,
@@ -699,7 +700,9 @@ export function SecurityPage() {
             <b>누가 나가면?</b> 그 사람 카드는 그 사람 열쇠로만 열리므로
             컴퓨터가 대신할 수 없습니다. 열쇠는 탭(sessionStorage)에 남겨 두어,
             새로고침이나 잠깐 끊김은 방장이 그동안의 메시지를 다시 보내 같은
-            판을 이어 갑니다. 돌아오지 않으면 방장이 게임을 끝낼 수 있습니다.
+            판을 이어 갑니다. 방장은 언제든 게임을 끝낼 수 있고, 60초가 지나도
+            돌아오지 않으면 남은 사람 모두에게 끝내기 투표가 열립니다. 과반이
+            끝내기를 고르면 끝납니다.
           </P>
           <P>
             <b>얼마나 걸리나요?</b> 한 컴퓨터에 탭 5~6개를 띄워 모든 자리를
@@ -709,13 +712,43 @@ export function SecurityPage() {
             것뿐이라 느껴지지 않습니다.
           </P>
           <P>
-            <b>영지식 증명은?</b> 지금 방식은 "나중에 다 공개해서 확인"입니다.
-            비밀을 끝까지 숨긴 채 그 자리에서 확인하려면 영지식 증명이
-            필요합니다. 열쇠가 맞는지는 Chaum–Pedersen 증명(누가 틀렸는지 바로
-            가린다), 섞기가 맞는지는 섞기 증명(Neff, Bayer–Groth), "남은 카드에
-            선 무늬가 없다"는 Bultel·Lafourcade(FC 2019)의 방식이 있습니다.
-            표준적인 다음 단계는 Barnett·Smart(2003)의 타원곡선 ElGamal에 이
-            증명들을 붙이는 것입니다. 설계와 조사:{" "}
+            <b>틀린 열쇠를 낸 사람은?</b> 열쇠를 공개했는데 카드가 열리지
+            않으면, 누가 틀린 열쇠를 냈는지 알아야 합니다. 그래서 공개하는
+            열쇠에 <b>Chaum–Pedersen 증명</b>(1992)을 붙입니다. "두 쌍이 같은
+            비밀 지수로 이어져 있다"를 그 지수를 보이지 않고 증명하는
+            방법입니다.
+          </P>
+          <ol className="list-decimal pl-5 text-sm leading-relaxed opacity-90">
+            <li>
+              자리마다 다시 잠글 때 각자 I → O = I<sup>u·k</sup>로 잠그고(u는
+              섞기 열쇠를 푸는 지수, k는 자리 열쇠), V = g<sup>u</sup>를 함께
+              공개합니다. V로는 u를 알 수 없습니다.
+            </li>
+            <li>
+              나중에 자리 열쇠 k를 공개할 때 A = I<sup>k</sup>, B = O로 두고 "B
+              = A<sup>u</sup>이고 V = g<sup>u</sup>"를 증명합니다. 무작위 r로 a
+              = g<sup>r</sup>, b = A<sup>r</sup>를 만들고, 도전값 c를 해시로
+              정해(Fiat–Shamir) z = r + c·u를 냅니다. 확인하는 쪽은 g
+              <sup>z</sup> = a·V<sup>c</sup>, A<sup>z</sup> = b·B<sup>c</sup>를
+              봅니다. u가 같지 않으면 두 식을 함께 맞출 수 없습니다.
+            </li>
+            <li>
+              열쇠 여러 개는 해시로 정한 가중치를 곱해 한 증명으로 묶습니다.
+              2048비트에서 열쇠 53개를 증명하는 데 0.1초, 확인하는 데 0.15초쯤
+              걸립니다.
+            </li>
+            <li>
+              평소에는 확인하지 않고, 카드가 열리지 않을 때만 그 자리 열쇠들의
+              증명을 확인해 틀린 사람을 짚습니다. 증명이 모두 맞으면 섞는
+              단계에서 조작한 것입니다(아래 한계).
+            </li>
+          </ol>
+          <KeyProofDemo />
+          <P>
+            <b>남은 영지식 증명은?</b> 섞기가 맞는지는 섞기 증명(Neff,
+            Bayer–Groth), "남은 카드에 선 무늬가 없다"는 Bultel·Lafourcade(FC
+            2019)의 방식이 있습니다. 표준적인 다음 단계는 Barnett·Smart(2003)의
+            타원곡선 ElGamal에 이 증명들을 붙이는 것입니다. 설계와 조사:{" "}
             <code>docs/13-mental-poker.md</code>.
           </P>
         </Section>
@@ -850,9 +883,9 @@ export function SecurityPage() {
               것은 참가자가 기다렸다 이어 갑니다(60초).
             </li>
             <li>
-              <b>섞기를 조작하거나 틀린 열쇠를 낸 사람은 가리지 못합니다.</b>{" "}
-              카드가 안 열리거나 같은 카드가 두 장 나와 판은 멈추지만, 누가
-              했는지는 영지식 증명(Chaum–Pedersen)이 있어야 압니다.
+              <b>섞기를 조작한 사람은 가리지 못합니다.</b> 카드가 안 열리거나
+              같은 카드가 두 장 나와 판은 멈추지만, 누가 했는지는 섞기 증명이
+              있어야 압니다. 틀린 열쇠를 낸 사람은 열쇠 증명으로 짚습니다.
             </li>
             <li>
               무늬 안 따르기는 그 자리에서 막지 못하고, 숨긴 카드가 드러날 때

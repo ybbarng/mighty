@@ -8,6 +8,7 @@ export * from "./hearts";
 export * from "./hearts-table";
 export * from "./host-table";
 export * from "./messages";
+export * from "./proof";
 export * from "./protocol";
 export * from "./renege";
 export * from "./sra";

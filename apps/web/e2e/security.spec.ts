@@ -41,6 +41,19 @@ test("보안 설명 페이지의 시연이 조작을 잡아낸다", async ({ pag
     .getByRole("button", { name: "고친 프로그램: 다른 카드라고 속여 내기" })
     .click();
   await expect(page.getByText(/철수의 부정으로 찍힌다/)).toBeVisible();
+  // 열쇠 증명: 정직하면 철수가 카드를 열고, 영희가 틀린 열쇠를 주면 증명이 틀려 영희를 짚는다.
+  await expect(page.getByText(/방장의 V = /)).toBeVisible();
+  await page
+    .getByRole("button", { name: "0번 자리를 철수에게(정직하게)" })
+    .click();
+  await expect(page.getByText(/철수가 0번 자리를 열었다/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "고친 프로그램: 영희가 틀린 열쇠 주기" })
+    .click();
+  await expect(page.getByText(/열쇠 증명이 틀린 사람: 영희/)).toBeVisible();
+  await page
+    .getByText(/열쇠 증명이 틀린 사람: 영희/)
+    .screenshot({ path: info.outputPath("key-proof.png") });
   await page.screenshot({
     path: info.outputPath("security.png"),
     fullPage: true,

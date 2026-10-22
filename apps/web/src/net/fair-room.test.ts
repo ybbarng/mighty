@@ -6,7 +6,7 @@ import {
   type RuleSet,
   suitOf,
 } from "@mighty/engine";
-import { isToken } from "@mighty/fair-play";
+import { isToken, Party } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
 
 import { type AuditResult, type FairSaved, GuestRoom } from "./guest-room";
@@ -439,6 +439,32 @@ describe("멘탈 포커 온라인 대전", () => {
       expect(own[0]?.reason).toMatch(/무늬|조커|규칙에 맞지 않는/);
       // 방장 대국도 멈췄다.
       expect(host.match?.halted).not.toBeNull();
+    }, 180_000);
+
+    it("틀린 열쇠: 나눠 줄 때 남의 자리에 잠글 때와 다른 열쇠를 공개하면 받은 사람들이 열쇠 증명으로 그 자리를 짚는다", async () => {
+      const { host, guests, incidents } = await setup(
+        presetRules("standard5"),
+        2,
+      );
+      const cheater = (guests[0] as GuestRoom).seat as number;
+      // 0번 참가자 프로그램(기기 번호는 자리 번호): 남에게 주는 자리 열쇠를 바꿔 낸다.
+      const real = Party.prototype.revealKey;
+      Party.prototype.revealKey = function (this: Party, slot, why) {
+        const key = real.call(this, slot, why);
+        return this.id === cheater && why === "deal" ? key + 1n : key;
+      };
+      try {
+        await host.start();
+        await until(() => incidents.filter((i) => i.own).length >= 2);
+      } finally {
+        Party.prototype.revealKey = real;
+      }
+      const own = incidents.filter((i) => i.own);
+      expect(own.every((i) => i.seat === cheater)).toBe(true);
+      expect(own.map((i) => i.reporter).sort()).toEqual(
+        [0, (guests[1] as GuestRoom).seat].sort(),
+      );
+      expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
     }, 180_000);
 
     it("가짜 카드: 다른 자리 열쇠로 다른 카드를 낸다고 하면 방장이 바로 잡는다", async () => {

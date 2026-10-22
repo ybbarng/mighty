@@ -16,8 +16,11 @@ import {
 import {
   encodedDeck,
   GROUP_1024,
+  type KeyStatement,
   Party,
   PublicLedger,
+  proveKeys,
+  verifyKeys,
 } from "@mighty/fair-play";
 import { useEffect, useMemo, useState } from "react";
 
@@ -932,6 +935,128 @@ export function MentalPokerDemo() {
         {state.log.length === 0
           ? "1번부터 눌러 보세요. 방장 화면으로 봐도 남의 카드는 '열 수 없음'입니다."
           : state.log.join("\n")}
+      </pre>
+    </Box>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 열쇠 증명(Chaum–Pedersen)                                           */
+/* ------------------------------------------------------------------ */
+
+interface KpState {
+  parties: Party[];
+  /** 기기마다 다시 잠그기 전·뒤 덱 */
+  steps: { input: bigint[]; output: bigint[] }[];
+  /** 기기마다 V = g^u */
+  commitments: bigint[];
+  deck: bigint[];
+}
+
+/** 철수에게 줄 0번 자리: 방장과 영희가 열쇠를 공개한다 */
+const KP_SLOT = 0;
+
+/**
+ * 열쇠 증명: 영희가 나눠 줄 때 공개하는 열쇠에 증명을 붙인다. 고친 프로그램으로 틀린 열쇠를 내면
+ * 철수 카드가 안 열리고, 증명을 확인해 영희를 짚는다. 게임의 실제 코드(packages/fair-play proof.ts)를 돌린다
+ */
+export function KeyProofDemo() {
+  const g = GROUP_1024;
+  const [state, setState] = useState<KpState | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const prepare = async () => {
+    setBusy(true);
+    const parties = MP_PEOPLE.map((_, id) => new Party(id, g));
+    let deck = encodedDeck(g, MP_CARDS);
+    for (const p of parties) deck = await p.lockAndShuffle(deck, "shuffle");
+    const steps: KpState["steps"] = [];
+    const commitments: bigint[] = [];
+    const slots = deck.map((_, i) => i);
+    for (const p of parties) {
+      const output = await p.relock(deck, slots, ["shuffle"]);
+      steps.push({ input: deck, output });
+      commitments.push(p.relockCommitment(["shuffle"]));
+      deck = output;
+    }
+    setState({ parties, steps, commitments, deck });
+    setLog([
+      "섞고 자리마다 다시 잠갔다. 다시 잠글 때 셋은 각자 V = g^u(u는 그때 쓴 비밀 지수)를 함께 공개했다.",
+      ...commitments.map((v, i) => `  ${MP_PEOPLE[i]}의 V = ${short(v)}`),
+    ]);
+    setBusy(false);
+  };
+  const start = () => {
+    void prepare();
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 처음 그릴 때 한 번만 준비한다
+  useEffect(start, []);
+  if (!state) return null;
+
+  const give = async (lie: boolean) => {
+    setBusy(true);
+    const lines: string[] = [];
+    const keys = new Map<number, bigint>();
+    let culprit: number | null = null;
+    for (const p of state.parties) {
+      if (p.id === 1) continue;
+      const real = p.revealKey(KP_SLOT, "deal");
+      // 고친 프로그램: 영희가 잠글 때와 다른 열쇠를 공개한다(증명도 그 열쇠로 만든다).
+      const key = lie && p.id === 2 ? real + 1n : real;
+      keys.set(p.id, key);
+      const step = state.steps[p.id] as KpState["steps"][number];
+      const st: KeyStatement = {
+        device: p.id,
+        v: state.commitments[p.id] as bigint,
+        items: [
+          {
+            slot: KP_SLOT,
+            input: step.input[KP_SLOT] as bigint,
+            output: step.output[KP_SLOT] as bigint,
+            key,
+          },
+        ],
+      };
+      const proof = await proveKeys(g, st, p.unlockOf(["shuffle"]));
+      const ok = await verifyKeys(g, st, proof);
+      if (!ok) culprit = p.id;
+      lines.push(
+        `${MP_PEOPLE[p.id]}: 열쇠 ${short(key)} 공개, 증명 a=${proof.a.slice(0, 6)}… z=${proof.z.slice(0, 6)}… → ${ok ? "맞다 ✓" : "맞지 않는다 ✗"}`,
+      );
+    }
+    const cheolsu = state.parties[1] as Party;
+    const card = cheolsu.receive(
+      KP_SLOT,
+      state.deck[KP_SLOT] as bigint,
+      [0, 2].map((id) => keys.get(id) as bigint),
+    );
+    lines.push(
+      card
+        ? `철수가 0번 자리를 열었다: ${cardLabel(card)}`
+        : culprit !== null
+          ? `⚠ 철수의 0번 자리가 카드로 열리지 않는다. 열쇠 증명이 틀린 사람: ${MP_PEOPLE[culprit]}`
+          : "⚠ 철수의 0번 자리가 열리지 않는다. 증명은 모두 맞다(섞는 단계 조작).",
+    );
+    setLog((l) => [...l, "", ...lines]);
+    setBusy(false);
+  };
+
+  return (
+    <Box title="열쇠 증명(Chaum–Pedersen)">
+      <div className="flex flex-wrap gap-1.5">
+        <Btn onClick={() => void give(false)} disabled={busy}>
+          0번 자리를 철수에게(정직하게)
+        </Btn>
+        <Btn onClick={() => void give(true)} disabled={busy}>
+          고친 프로그램: 영희가 틀린 열쇠 주기
+        </Btn>
+        <Btn onClick={start} disabled={busy}>
+          처음부터
+        </Btn>
+      </div>
+      <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
+        {log.join("\n")}
       </pre>
     </Box>
   );

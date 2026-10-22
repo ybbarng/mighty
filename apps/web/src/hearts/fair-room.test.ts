@@ -1,3 +1,4 @@
+import { Party } from "@mighty/fair-play";
 import { heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
@@ -243,5 +244,33 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     await until(() =>
       guests.slice(1).every((g) => phase(g.match) === "gameOver"),
     );
+  }, 120_000);
+
+  it("넘기는 카드에 잠글 때와 다른 열쇠를 주면 받은 사람이 열쇠 증명으로 그 자리를 짚는다", async () => {
+    const { host, guests, incidents } = await setup(3);
+    const cheater = guests[0]?.seat as number;
+    // 0번 참가자 프로그램: 카드를 넘길 때 주는 자기 열쇠를 바꾼다(넘기기 열쇠는 "audit"으로 꺼낸다).
+    const real = Party.prototype.revealKey;
+    let passing = true;
+    Party.prototype.revealKey = function (this: Party, slot, why) {
+      const key = real.call(this, slot, why);
+      return passing && this.id === cheater && why === "audit" ? key + 1n : key;
+    };
+    try {
+      await host.start();
+      await until(() => guests.every((g) => g.match !== null));
+      await playUntil(
+        host as never,
+        guests as never,
+        () => incidents.some((i) => i.own),
+        incidents,
+      );
+    } finally {
+      passing = false;
+      Party.prototype.revealKey = real;
+    }
+    const own = incidents.filter((i) => i.own);
+    expect(own[0]?.seat).toBe(cheater);
+    expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
   }, 120_000);
 });

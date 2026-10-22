@@ -726,8 +726,9 @@ export class GuestRoom<
         const restarted = this.lastHostId !== null && this.lastHostId !== from;
         this.hostId = from;
         this.lastHostId = from;
-        if (restarted) {
-          // 방장이 새로고침했다: 끊긴 동안이나 그 전에 보낸 멘탈 포커 메시지를 다시 보내고,
+        if (restarted || reconnected) {
+          // 방장이 새로고침했거나 잠깐 끊겼다: 끊긴 동안 보낸 것은 방장에게 가지 못했다(새로고침이면 그 전 것도 없다).
+          // 내가 보낸 멘탈 포커 메시지를 다시 보내고(방장은 같은 것을 한 번만 받는다),
           // 받지 못한 행동이 있는지 지금 화면에서 확인한다.
           this.checkLost = true;
           this.resendOwnFair(from);

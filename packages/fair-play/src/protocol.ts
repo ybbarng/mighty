@@ -1,10 +1,10 @@
 import { type Card, fullDeck } from "@mighty/engine";
 
+import { GENERATOR, type KeyProof } from "./proof";
 import {
   combine,
   encodeIndex,
   modPow,
-  newKey,
   newShortKey,
   randomBelow,
   type SraGroup,
@@ -49,8 +49,8 @@ const OWN_SLOT_REASONS: readonly RevealReason[] = [
 ];
 
 export interface PartySnapshot {
-  /** 하트: 넘겨받은 열쇠(자리, 넘겨준 기기, 열쇠) */
-  handed?: [number, number, string][];
+  /** 하트: 넘겨받은 열쇠(자리, 넘겨준 기기, 열쇠, 그 열쇠 증명) */
+  handed?: [number, number, string, KeyProof?][];
   /** 계산해 보낸 섞기 사슬 차례(`round:stage:index`). 새로고침 뒤 이것만 다시 계산하지 않는다 */
   sent?: string[];
   id: number;
@@ -110,7 +110,8 @@ export class Party {
   private slotKey(slot: number): bigint {
     let key = this.slotKeys.get(slot);
     if (key === undefined) {
-      key = newKey(this.g);
+      // 짧은 열쇠: 공개한 열쇠를 증명할 때(proof.ts) 거듭제곱이 짧아진다. 섞기 열쇠와 같은 크기라 안전하다.
+      key = newShortKey();
       this.slotKeys.set(slot, key);
     }
     return key;
@@ -139,16 +140,26 @@ export class Party {
     return locked;
   }
 
+  /** 다시 잠그기에서 섞기 열쇠들을 푸는 지수 u. 열쇠 증명(proof.ts)의 비밀이다 */
+  unlockOf(passes: readonly string[]): bigint {
+    return combine(
+      this.g,
+      passes.map((name) => unlockExponent(this.g, this.pass(name))),
+    );
+  }
+
+  /** 다시 잠그기와 함께 내는 V = g^u. 나중에 공개한 자리 열쇠가 이때 쓴 것인지 증명한다 */
+  relockCommitment(passes: readonly string[]): bigint {
+    return modPow(GENERATOR, this.unlockOf(passes), this.g.p);
+  }
+
   /** 다시 잠그기: 섞기 열쇠들을 풀고 `slots[i]`의 자리 열쇠로 잠근다. `deck[i]`가 새 자리 `slots[i]`다 */
   async relock(
     deck: readonly bigint[],
     slots: readonly number[],
     passes: readonly string[],
   ): Promise<bigint[]> {
-    const unlock = combine(
-      this.g,
-      passes.map((name) => unlockExponent(this.g, this.pass(name))),
-    );
+    const unlock = this.unlockOf(passes);
     return powEach(
       deck,
       (i) => combine(this.g, [unlock, this.slotKey(slots[i] as number)]),
@@ -258,7 +269,14 @@ export class PublicLedger {
 
   publish(slot: number, party: number, key: bigint): void {
     this.keys.get(slot)?.set(party, key);
+    this.opened.delete(slot);
   }
+
+  /** 연 결과(자리 → 연 기기들과 카드). 같은 자리를 여러 번 열 때 거듭제곱을 다시 하지 않는다 */
+  private readonly opened = new Map<
+    number,
+    { by: string; card: Card | null }
+  >();
 
   has(slot: number, party: number): boolean {
     return this.keys.get(slot)?.has(party) ?? false;
@@ -270,11 +288,16 @@ export class PublicLedger {
     const cipher = this.deck[slot];
     if (!known || cipher === undefined || parties.some((s) => !known.has(s)))
       return null;
+    const by = parties.join(",");
+    const cached = this.opened.get(slot);
+    if (cached?.by === by) return cached.card;
     const exponent = combine(
       this.g,
       parties.map((s) => unlockExponent(this.g, known.get(s) as bigint)),
     );
-    return decode(this.g, modPow(cipher, exponent, this.g.p));
+    const card = decode(this.g, modPow(cipher, exponent, this.g.p));
+    this.opened.set(slot, { by, card });
+    return card;
   }
 }
 
