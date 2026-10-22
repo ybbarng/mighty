@@ -93,6 +93,8 @@ interface DealCtx {
   handed: Map<number, { of: number; key: bigint }>;
   /** 판 끝 공개를 했는데 섞기 사슬이 아직이다(새로고침 뒤 다시 처리할 때). 끝나면 공개한다 */
   auditPending: boolean;
+  /** 계산해 보낸 사슬 차례. 새로고침 전 것이 없으면(예전 저장) null */
+  sent: Set<string> | null;
 }
 
 export interface FairDeviceOptions {
@@ -148,6 +150,7 @@ export class FairDevice {
           h.of,
           h.key.toString(16),
         ]),
+        sent: [...(ctx.sent ?? [])],
       };
     return out;
   }
@@ -230,6 +233,11 @@ export class FairDevice {
       done: new Set(),
       handed: new Map(),
       auditPending: false,
+      sent: this.restored.has(deal)
+        ? this.restored.get(deal)?.sent
+          ? new Set(this.restored.get(deal)?.sent)
+          : null
+        : new Set(),
     };
     // 새로고침 전에 넘겨받은 열쇠를 되살린다(장부에 자리가 생기면 들어간다).
     for (const [slot, of, hex] of this.restored.get(deal)?.handed ?? []) {
@@ -501,11 +509,12 @@ export class FairDevice {
           const input = this.inputOf(ctx, round, stages, si, index);
           if (input === null) return;
           if (ctx.devices[index] !== this.id) return;
-          // 새로고침 전에 이미 계산해 보낸 차례면 다시 하지 않고 그 결과가 다시 오기를 기다린다.
-          if (this.alreadyDone(ctx, stage)) return;
+          // 새로고침 전에 이미 계산해 보낸 차례면 다시 하지 않고 그 결과가 다시 오기를 기다린다
+          // (다시 섞으면 남들이 쓴 덱과 달라진다). 계산만 하고 보내지 못했으면 아무도 못 봤으니 다시 한다.
+          if (ctx.sent ? ctx.sent.has(key) : this.alreadyDone(ctx, stage))
+            return;
           const output = await this.compute(ctx, stage, input);
           ctx.chains.set(key, output);
-          this.emit("persist");
           this.send({
             t: "fp",
             k: "chain",
@@ -515,6 +524,8 @@ export class FairDevice {
             index,
             deck: output.map((c) => c.toString(16)),
           });
+          ctx.sent?.add(key);
+          this.emit("persist");
         }
       }
       const doneKey = `${round}`;

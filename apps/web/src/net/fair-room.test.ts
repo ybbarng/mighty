@@ -336,7 +336,9 @@ describe("멘탈 포커 온라인 대전", () => {
         current.fair?.coordinator.onBusy((b) => {
           busy = b;
         });
-        await until(() => busy === null);
+        await until(() => busy === null, 20_000).catch(() => {
+          throw new Error(`섞는 중이 꺼지지 않는다: ${String(busy)}`);
+        });
       }
       const scored = await playRounds(current, guests, 2, incidents);
       expect(

@@ -51,6 +51,8 @@ const OWN_SLOT_REASONS: readonly RevealReason[] = [
 export interface PartySnapshot {
   /** 하트: 넘겨받은 열쇠(자리, 넘겨준 기기, 열쇠) */
   handed?: [number, number, string][];
+  /** 계산해 보낸 섞기 사슬 차례(`round:stage:index`). 새로고침 뒤 이것만 다시 계산하지 않는다 */
+  sent?: string[];
   id: number;
   passes: [string, string][];
   slotKeys: [number, string][];
