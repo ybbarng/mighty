@@ -7,6 +7,7 @@ import type { SavedMatch } from "@/game/local-match";
 import { clearGame, loadGame } from "@/game/persistence";
 import { chosenRules, useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
+import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { endOnlineSession } from "@/net/session";
 
 import { AboutScreen } from "./AboutScreen";
@@ -20,7 +21,12 @@ import { TutorialHome } from "./tutorial/TutorialHome";
 
 type Screen =
   | { kind: "start" }
-  | { kind: "online"; rules: RuleSet; room: string | null }
+  | {
+      kind: "online";
+      rules: RuleSet;
+      room: string | null;
+      resume?: { room: string; restore: HostRestore };
+    }
   | { kind: "playing" }
   | { kind: "tutorial" }
   | { kind: "lesson"; lessonId: string }
@@ -40,11 +46,22 @@ export function MightyApp() {
 
   useEffect(() => {
     const room = new URLSearchParams(window.location.search).get("room");
-    if (room)
+    if (room) {
       setScreen({
         kind: "online",
         rules: chosenRules(useSettings.getState().ruleCode),
         room,
+      });
+      return;
+    }
+    // 이 탭에서 연 방이 있으면(방장이 새로고침) 그 방을 이어 간다.
+    const hosted = hostedRoom("mighty");
+    if (hosted)
+      setScreen({
+        kind: "online",
+        rules: chosenRules(useSettings.getState().ruleCode),
+        room: null,
+        resume: hosted,
       });
   }, []);
 
@@ -71,6 +88,7 @@ export function MightyApp() {
       <OnlineScreen
         rules={screen.rules}
         roomFromUrl={screen.room}
+        {...(screen.resume ? { resume: screen.resume } : {})}
         onBack={backToStart}
         onPlaying={() => setScreen({ kind: "playing" })}
       />

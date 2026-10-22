@@ -91,6 +91,8 @@ interface DealCtx {
   done: Set<string>;
   /** 넘겨받은 카드: 자리 → 넘겨준 기기와 그 열쇠 */
   handed: Map<number, { of: number; key: bigint }>;
+  /** 판 끝 공개를 했는데 섞기 사슬이 아직이다(새로고침 뒤 다시 처리할 때). 끝나면 공개한다 */
+  auditPending: boolean;
 }
 
 export interface FairDeviceOptions {
@@ -227,6 +229,7 @@ export class FairDevice {
       initial: [...cards],
       done: new Set(),
       handed: new Map(),
+      auditPending: false,
     };
     // 새로고침 전에 넘겨받은 열쇠를 되살린다(장부에 자리가 생기면 들어간다).
     for (const [slot, of, hex] of this.restored.get(deal)?.handed ?? []) {
@@ -235,6 +238,10 @@ export class FairDevice {
       this.pendingKeys.push({ deal, slot, from: of, key });
     }
     this.deals.set(deal, ctx);
+    // 새로고침 전에 연 카드는 그대로 쓴다. 넘긴 카드(하트)는 이제 남의 자리라 다시 열 수 없지만 화면에는 남는다.
+    for (const [slot, card] of ctx.party.hand) ctx.mine.set(slot, card);
+    if (ctx.mine.size > 0)
+      void this.queue(() => this.emit("cards", deal, ctx.mine));
     // 시작 명령보다 먼저 온 사슬 결과·열쇠를 먼저 넣는다. 새로고침 뒤라면 내가 전에 보낸 결과도
     // 여기 들어 있어서, 내 차례를 다시 계산하지 않는다(다시 섞으면 남들이 쓴 덱과 달라진다).
     const early = this.early.filter((e) => e.message.deal === deal);
@@ -379,6 +386,10 @@ export class FairDevice {
     const ctx = this.deals.get(deal);
     if (!ctx) return;
     void this.queue(() => {
+      if (!this.chainsDone(ctx)) {
+        ctx.auditPending = true;
+        return;
+      }
       // 다시 섞어 떠난 자리도 연다(처음 나눈 패를 알아야 판을 다시 계산한다).
       this.reveal(
         deal,
@@ -386,6 +397,13 @@ export class FairDevice {
         "audit",
       );
     });
+  }
+
+  /** 시작한 섞기 사슬(다시 나누기 포함)이 모두 끝났다 */
+  private chainsDone(ctx: DealCtx): boolean {
+    for (let round = 0; round <= ctx.round; round++)
+      if (!ctx.done.has(`${round}`)) return false;
+    return true;
   }
 
   /** 다시 섞어 떠난 자리를 뺀, 지금 쓰는 자리들 */
@@ -405,7 +423,7 @@ export class FairDevice {
   /** 열쇠가 모두 공개되면 이 판의 모든 자리(떠난 자리 포함) → 카드. 아직이면 null */
   openAll(deal: number): Map<number, Card> | null {
     const ctx = this.deals.get(deal);
-    if (!ctx) return null;
+    if (!ctx || !this.chainsDone(ctx)) return null;
     const cards = new Map<number, Card>();
     for (let slot = 0; slot < ctx.ledger.deck.length; slot++) {
       const card = ctx.ledger.open(slot, ctx.devices);
@@ -508,6 +526,10 @@ export class FairDevice {
         const base = ctx.ledger.extend(final);
         this.emit("slots", ctx.id, base, final.length);
         await this.publishGrants(ctx);
+        if (ctx.auditPending && this.chainsDone(ctx)) {
+          ctx.auditPending = false;
+          this.revealAll(ctx.id);
+        }
       }
     }
   }
@@ -586,6 +608,8 @@ export class FairDevice {
     for (const [slot, device] of ctx.owners) {
       if (slot >= ctx.ledger.deck.length) continue;
       if (device === this.id || ctx.published.has(slot)) continue;
+      // 하트에서 넘겨받은 자리는 이제 내 자리다. 새로고침 뒤 처음 나눈 주인으로 다시 처리해도 내 열쇠는 이미 냈다.
+      if (ctx.party.mySlots.has(slot)) continue;
       const reason: RevealReason = "deal";
       const key = ctx.party.revealKey(slot, reason);
       reasons.add(reason);

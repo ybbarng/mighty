@@ -33,6 +33,8 @@ export interface HostIdentity {
   /** 초대 링크에 넣는 지문 */
   fingerprint: string;
   sign(text: string): Promise<string>;
+  /** 새로고침해도 같은 열쇠로 이어 가도록 탭에 남길 개인 열쇠(JWK) */
+  exportPrivate(): Promise<JsonWebKey>;
 }
 
 /** 공개 열쇠의 지문: SHA-256의 앞 16바이트(base64url 22글자) */
@@ -49,8 +51,38 @@ export async function createHostIdentity(): Promise<HostIdentity> {
     "sign",
     "verify",
   ]);
+  return identityOf(pair.privateKey, pair.publicKey);
+}
+
+/** 남겨 둔 개인 열쇠로 같은 신원을 되살린다(방장 새로고침) */
+export async function restoreHostIdentity(
+  jwk: JsonWebKey,
+): Promise<HostIdentity> {
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    ALGORITHM,
+    true,
+    ["sign"],
+  );
+  // 개인 열쇠 JWK에는 공개 열쇠 좌표(x, y)도 들어 있다.
+  const { d: _, key_ops: __, ...pub } = jwk;
+  const publicKey = await crypto.subtle.importKey(
+    "jwk",
+    { ...pub, key_ops: ["verify"] },
+    ALGORITHM,
+    true,
+    ["verify"],
+  );
+  return identityOf(privateKey, publicKey);
+}
+
+async function identityOf(
+  privateKey: CryptoKey,
+  publicKeyHandle: CryptoKey,
+): Promise<HostIdentity> {
   const raw = new Uint8Array(
-    await crypto.subtle.exportKey("raw", pair.publicKey),
+    await crypto.subtle.exportKey("raw", publicKeyHandle),
   );
   const publicKey = toBase64Url(raw);
   return {
@@ -59,11 +91,12 @@ export async function createHostIdentity(): Promise<HostIdentity> {
     async sign(text) {
       const sig = await crypto.subtle.sign(
         SIGN,
-        pair.privateKey,
+        privateKey,
         new TextEncoder().encode(text),
       );
       return toBase64Url(new Uint8Array(sig));
     },
+    exportPrivate: () => crypto.subtle.exportKey("jwk", privateKey),
   };
 }
 

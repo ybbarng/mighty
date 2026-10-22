@@ -133,8 +133,11 @@ export type HostMessage<V = PlayerView, E = GameEvent, A = Action> =
   | { t: "lobby"; lobby: LobbyState }
   /** 게임 시작: 방장 것까지 모든 약속(해시)을 먼저 알린다. 참가자는 이걸 받은 뒤 비밀 값을 방장에게만 보낸다 */
   | { t: "started"; commitments: Commitment[] }
-  /** `resync`: 다시 연결한 참가자에게 보내는 지금 화면(사건 없음) */
-  | { t: "snapshot"; view: V; events: E[]; resync?: boolean }
+  /**
+   * `resync`: 다시 연결한 참가자에게 보내는 지금 화면(사건 없음).
+   * `mine`: 기록에 든 그 자리 행동 수. 새로고침한 방장이 받지 못한 행동을 참가자가 다시 보낸다
+   */
+  | { t: "snapshot"; view: V; events: E[]; resync?: boolean; mine?: number }
   | { t: "rejected"; error: string }
   /** 게임이 끝나면 모든 비밀 값과 행동 기록을 공개한다. 참가자가 시드와 진행을 직접 다시 계산해 확인한다 */
   | {

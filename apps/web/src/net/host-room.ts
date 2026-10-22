@@ -25,9 +25,11 @@ import type { GameKit, KitBot } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
 import { mightyKit } from "@/game/mighty-kit";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
+import type { HostRestore, HostSaved, HostStore } from "./host-store";
 import {
   createHostIdentity,
   type HostIdentity,
+  restoreHostIdentity,
   welcomeStatement,
 } from "./identity";
 import {
@@ -79,6 +81,10 @@ export interface HostRoomOptions<
    * 없으면 예전처럼 방장 기기가 시드로 섞는다
    */
   fair?: { group: GroupName };
+  /** 방장 새로고침에 대비해 방과 진행을 남길 곳 */
+  store?: HostStore;
+  /** 새로고침 전에 남긴 방(`store.load()`). 있으면 그 방을 이어 간다 */
+  restore?: HostRestore;
 }
 
 /** 내 기기가 찾은 부정(`own`) 또는 다른 사람이 알린 부정 */
@@ -116,9 +122,14 @@ export class HostRoom<
   private readonly hostName: string;
   private readonly guests = new Map<number, GuestSeat>();
   private readonly names = new Map<number, string>();
-  private readonly hostSecret = newSecret();
+  private readonly hostSecret: string;
   /** 방장 서명 열쇠. 지문을 초대 링크에 넣는다 */
-  private readonly identity: Promise<HostIdentity> = createHostIdentity();
+  private readonly identity: Promise<HostIdentity>;
+  /** 남길 서명 열쇠(내보내기가 비동기라 받아 둔다) */
+  private identityJwk: JsonWebKey | null = null;
+  private readonly store: HostStore | null;
+  /** 이 판 시드 */
+  private seed: number | null = null;
   private hostCommit: string | null = null;
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
@@ -169,15 +180,182 @@ export class HostRoom<
     this.pace = options.pace ?? null;
     this.botNames = options.botNames ?? [];
     this.fairOption = options.fair ?? null;
+    this.store = options.store ?? null;
+    const restore = options.restore?.saved ?? null;
+    this.hostSecret = restore?.hostSecret ?? newSecret();
+    this.identity = restore
+      ? restoreHostIdentity(restore.identity)
+      : createHostIdentity();
+    void this.identity
+      .then((identity) => identity.exportPrivate())
+      .then((jwk) => {
+        this.identityJwk = jwk;
+        this.persist();
+      });
     void commit(this.hostSecret).then((hash) => {
       this.hostCommit = hash;
     });
+    if (options.restore) this.restoreRoom(options.restore);
 
     this.transport.onPeerJoin(() => this.broadcastLobby());
     this.transport.onPeerLeave((peerId) => this.onPeerLeave(peerId));
     this.transport.onMessage((message, from) => {
       if (isGuestMessage<ActionT>(message)) this.onMessage(message, from);
     });
+  }
+
+  private persistScheduled = false;
+  /** 바뀐 판(방장 기기가 보낸 멘탈 포커 메시지) */
+  private readonly dirtyDeals = new Set<number>();
+  /** 판별 방장 기기가 보낸 멘탈 포커 메시지 */
+  private readonly ownFair = new Map<number, FairMessage[]>();
+
+  /** 방과 진행을 남긴다. 한 차례에 여러 번 바뀌어도 한 번만 쓴다 */
+  private persist(): void {
+    if (!this.store || this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => {
+      this.persistScheduled = false;
+      this.writeStore();
+    });
+  }
+
+  private writeStore(): void {
+    const store = this.store;
+    if (!store || !this.identityJwk) return;
+    for (const deal of this.dirtyDeals)
+      store.saveOwn(deal, this.ownFair.get(deal) ?? []);
+    this.dirtyDeals.clear();
+    const saved: HostSaved = {
+      v: 1,
+      game: this.kit.id,
+      hostName: this.hostName,
+      rules: this.rules,
+      ruleName: this.ruleName,
+      fair: this.fairOption,
+      identity: this.identityJwk,
+      hostSecret: this.hostSecret,
+      guests: [...this.guests].map(([seat, g]) => ({
+        seat,
+        token: g.token,
+        commit: g.commit,
+        secret: g.secret,
+        name: this.names.get(seat) ?? "손님",
+      })),
+      kickedTokens: [...this.kickedTokens],
+      commitments: this.commitments,
+      match:
+        this.match && this.seed !== null
+          ? {
+              seed: this.seed,
+              resume: this.match.resumeState() as never,
+              audited: this.audited,
+              table: this.fair ? (this.fair.snapshot() as never) : null,
+            }
+          : null,
+    };
+    store.save(saved);
+  }
+
+  /** 멘탈 포커 메시지를 다시 보내기 기록에 남긴다. 같은 것은 한 번만(새로고침 뒤 다시 받은 것) */
+  private logFair(from: number, message: FairMessage): void {
+    const key = JSON.stringify([from, message]);
+    if (this.fpSeen.has(key)) return;
+    this.fpSeen.add(key);
+    this.fpLog.push({ from, message });
+    if (from !== 0) return;
+    const deal = fairDealOf(message);
+    const list = this.ownFair.get(deal) ?? [];
+    list.push(message);
+    this.ownFair.set(deal, list);
+    this.dirtyDeals.add(deal);
+    this.persist();
+  }
+
+  private readonly fpSeen = new Set<string>();
+
+  /** 새로고침 전에 남긴 방을 되살린다. 참가자는 토큰으로 같은 자리에 다시 들어온다 */
+  private restoreRoom({ saved, own }: HostRestore): void {
+    this.rules = saved.rules as Rules;
+    this.ruleName = saved.ruleName;
+    this.fairOption = saved.fair;
+    for (const g of saved.guests) {
+      this.guests.set(g.seat, {
+        peerId: null,
+        token: g.token,
+        commit: g.commit,
+        secret: g.secret,
+        standInTimer: null,
+      });
+      this.names.set(g.seat, g.name);
+    }
+    for (const t of saved.kickedTokens) this.kickedTokens.add(t);
+    this.commitments = saved.commitments;
+    const resumed = saved.match;
+    if (!resumed) return;
+    this.seed = resumed.seed;
+    this.audited = resumed.audited;
+    const group = this.fairGroup();
+    const resume = resumed.resume as never;
+    let match: LocalMatch<Rules, State, View, ActionT, Event, Extra>;
+    if (group && resumed.table) {
+      match = this.startFair(resumed.seed, group, {
+        resume,
+        device: resumed.table.device,
+      });
+      this.match = match;
+      const table = this.fair as FairHostTable | HeartsHostTable;
+      // 내가 보냈던 메시지를 내 기기에 다시 넣는다(섞기 사슬을 다시 계산하지 않게).
+      for (const message of own) {
+        this.logFair(0, message);
+        if (message.k === "chain" || message.k === "keys")
+          table.receive(message as never, 0);
+      }
+      table.resume(resumed.table as never);
+    } else {
+      match = new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
+        kit: this.kit,
+        rules: this.rules,
+        seed: resumed.seed,
+        humanSeat: 0,
+        humanSeats: [0, ...this.guests.keys()],
+        ...(this.bot ? { bot: this.bot } : {}),
+        ...(this.pace ? { pace: this.pace } : {}),
+        afterStep: () => this.persist(),
+        resume,
+      });
+      this.match = match;
+      // 멘탈 포커가 아니면 돌아오지 않는 사람 자리는 전처럼 컴퓨터가 대신 둔다.
+      for (const [seat, guest] of this.guests)
+        guest.standInTimer = setTimeout(
+          () => this.match?.setStandIn(seat, true),
+          this.standInDelayMs,
+        );
+    }
+    this.subscribeGuests(match);
+    match.refresh();
+  }
+
+  /** 참가자 자리마다 화면을 보낸다 */
+  private subscribeGuests(
+    match: LocalMatch<Rules, State, View, ActionT, Event, Extra>,
+  ): void {
+    for (const [seat, guest] of this.guests)
+      match.subscribeSeat(seat, (snapshot) => {
+        if (guest.peerId)
+          this.send({ t: "snapshot", ...snapshot }, guest.peerId);
+        if (this.kit.isOver(snapshot.view)) this.sendAudit();
+      });
+  }
+
+  /** 되살린 방이 게임 중인가(화면을 바로 게임으로 옮긴다) */
+  get resumed(): boolean {
+    return this.match !== null;
+  }
+
+  /** 방을 끝내며 남긴 것을 지운다 */
+  forget(): void {
+    this.store?.clear();
   }
 
   /** 초대 링크에 넣을 방장 공개 열쇠 지문 */
@@ -367,6 +545,7 @@ export class HostRoom<
     const derived = await deriveSeed(this.commitments, this.reveals());
     if (!derived.ok) throw new Error(derived.reason);
 
+    this.seed = derived.seed;
     const group = this.fairGroup();
     const match = group
       ? this.startFair(derived.seed, group)
@@ -378,6 +557,7 @@ export class HostRoom<
           humanSeats: [0, ...this.guests.keys()],
           ...(this.bot ? { bot: this.bot } : {}),
           ...(this.pace ? { pace: this.pace } : {}),
+          afterStep: () => this.persist(),
         });
     this.match = match;
     if (this.fair) {
@@ -390,12 +570,8 @@ export class HostRoom<
       this.fair.begin(match.created as never);
     }
     const startEvents = this.kit.startEvents(match.viewFor(0));
+    this.subscribeGuests(match);
     for (const [seat, guest] of this.guests) {
-      match.subscribeSeat(seat, (snapshot) => {
-        if (guest.peerId)
-          this.send({ t: "snapshot", ...snapshot }, guest.peerId);
-        if (this.kit.isOver(snapshot.view)) this.sendAudit();
-      });
       if (guest.peerId)
         this.send(
           { t: "snapshot", view: match.viewFor(seat), events: startEvents },
@@ -403,6 +579,7 @@ export class HostRoom<
         );
     }
     this.broadcastLobby();
+    this.persist();
     return match;
   }
 
@@ -410,8 +587,10 @@ export class HostRoom<
   private startFair(
     seed: number,
     group: GroupName,
+    restore?: FairResume,
   ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
-    if (this.kit.id === "hearts") return this.startFairHearts(seed, group);
+    if (this.kit.id === "hearts")
+      return this.startFairHearts(seed, group, restore);
     type Mighty = LocalMatch;
     let match: Mighty | null = null;
     const get = () => match as Mighty;
@@ -420,19 +599,24 @@ export class HostRoom<
       seed,
       guestSeats: [...this.guests.keys()],
       group,
+      ...(restore ? { restore: restore.device } : {}),
       hooks: {
-        patch: (fn) => get().patchState(fn),
+        patch: (fn) => {
+          get().patchState(fn);
+          this.persist();
+        },
         state: () => get().rawState(),
         log: () => get().actionLog(),
         refresh: () => get().refresh(),
         broadcast: (message) => {
-          this.fpLog.push({ from: 0, message });
+          this.logFair(0, message);
           this.send(message as never);
         },
         onIncident: (incident) => this.raiseIncident(incident),
       },
     });
     this.fair = table;
+    table.device.on("persist", () => this.persist());
     match = new LocalMatch({
       rules: this.rules as unknown as RuleSet,
       seed,
@@ -453,12 +637,16 @@ export class HostRoom<
         discarded: null,
         decision: null,
       }),
-      afterStep: (state, events) => table.after(state, events),
+      afterStep: (state, events) => {
+        table.after(state, events);
+        this.persist();
+      },
       onLateError: (seat, error) => {
         if (seat === 0) for (const l of this.errorListeners) l(error);
         const peerId = this.guests.get(seat)?.peerId;
         if (peerId) this.send({ t: "rejected", error }, peerId);
       },
+      ...(restore ? { resume: restore.resume as never } : {}),
     });
     return match as unknown as LocalMatch<
       Rules,
@@ -474,6 +662,7 @@ export class HostRoom<
   private startFairHearts(
     seed: number,
     group: GroupName,
+    restore?: FairResume,
   ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
     type H = LocalMatch<
       HeartsRules,
@@ -490,13 +679,17 @@ export class HostRoom<
       seed,
       guestSeats: [...this.guests.keys()],
       group,
+      ...(restore ? { restore: restore.device } : {}),
       hooks: {
-        patch: (fn) => get().patchState(fn),
+        patch: (fn) => {
+          get().patchState(fn);
+          this.persist();
+        },
         state: () => get().rawState(),
         log: () => get().actionLog(),
         refresh: () => get().refresh(),
         broadcast: (message) => {
-          this.fpLog.push({ from: 0, message });
+          this.logFair(0, message);
           this.send(message as never);
         },
         // 넘긴 카드 열쇠: 받는 참가자에게만. 다시 보내기 기록(fpLog)에도 남기지 않는다.
@@ -508,6 +701,7 @@ export class HostRoom<
       },
     });
     this.fair = table;
+    table.device.on("persist", () => this.persist());
     const kit = this.kit as unknown as GameKit<
       HeartsRules,
       HeartsState,
@@ -538,12 +732,16 @@ export class HostRoom<
         decision: null,
       }),
       pendingSeats: (state) => table.pendingSeats(state, kit.pendingSeats),
-      afterStep: (state, events) => table.after(state, events),
+      afterStep: (state, events) => {
+        table.after(state, events);
+        this.persist();
+      },
       onLateError: (seat, error) => {
         if (seat === 0) for (const l of this.errorListeners) l(error);
         const peerId = this.guests.get(seat)?.peerId;
         if (peerId) this.send({ t: "rejected", error }, peerId);
       },
+      ...(restore ? { resume: restore.resume as never } : {}),
     });
     return match as unknown as LocalMatch<
       Rules,
@@ -564,12 +762,14 @@ export class HostRoom<
     // 연결이 잠깐 끊긴 것과 구별하도록 닫는다고 먼저 알린다.
     this.send({ t: "closed" });
     this.transport.leave();
+    this.forget();
   }
 
   private audited = false;
   private sendAudit(): void {
     if (!this.match || this.audited) return;
     this.audited = true;
+    this.persist();
     this.send({
       t: "audit",
       reveals: this.reveals(),
@@ -617,6 +817,7 @@ export class HostRoom<
     const lobby = this.lobby();
     this.send({ t: "lobby", lobby });
     for (const l of this.lobbyListeners) l(lobby);
+    this.persist();
   }
 
   private seatOf(peerId: string): number | null {
@@ -631,7 +832,7 @@ export class HostRoom<
     const table = this.fair;
     if (seat === null || !table) return;
     // 넘긴 카드 열쇠(하트)는 받는 사람만 봐야 하므로 다시 보내기 기록에 남기지 않는다.
-    if (message.k !== "handover") this.fpLog.push({ from: seat, message });
+    if (message.k !== "handover") this.logFair(seat, message);
     switch (message.k) {
       case "chain":
       case "keys":
@@ -686,8 +887,10 @@ export class HostRoom<
           return;
         // 약속과 맞는 값만 받는다. 틀린 값은 안 낸 것으로 쳐서 시작이 막히지 않게 한다.
         void commit(message.secret).then((hash) => {
-          if (hash === guest.commit && guest.secret === null)
+          if (hash === guest.commit && guest.secret === null) {
             guest.secret = message.secret;
+            this.persist();
+          }
         });
         break;
       }
@@ -806,6 +1009,8 @@ export class HostRoom<
               view: this.match.viewFor(seat),
               events: [],
               resync: true,
+              mine: this.match.actionLog().filter((e) => e.seat === seat)
+                .length,
             },
             peerId,
           );
@@ -858,4 +1063,16 @@ export class HostRoom<
     }
     this.broadcastLobby();
   }
+}
+
+/** 새로고침한 방장이 멘탈 포커 판을 이어 갈 때 */
+interface FairResume {
+  resume: unknown;
+  device: Record<number, import("@mighty/fair-play").PartySnapshot>;
+}
+
+/** 멘탈 포커 메시지가 속한 판 */
+function fairDealOf(message: FairMessage): number {
+  const m = message as { deal?: number; query?: { deal?: number } };
+  return m.deal ?? m.query?.deal ?? 0;
 }

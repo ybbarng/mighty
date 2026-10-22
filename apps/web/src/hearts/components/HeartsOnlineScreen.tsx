@@ -18,6 +18,11 @@ import { recordAudit } from "@/net/audit-history";
 import { useChat } from "@/net/chat";
 import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
+import {
+  type HostRestore,
+  sessionHostStore,
+  setHostingRoom,
+} from "@/net/host-store";
 import type { LobbyState } from "@/net/protocol";
 import {
   fairStoreFor,
@@ -51,11 +56,14 @@ function offlineSeatsOf(lobby: LobbyState): number[] {
 export function HeartsOnlineScreen({
   rules,
   roomFromUrl,
+  resume,
   onBack,
   onPlaying,
 }: {
   rules: HeartsRules;
   roomFromUrl: string | null;
+  /** 방장이 새로고침했으면 이 탭이 연 방과 남긴 것 */
+  resume?: { room: string; restore: HostRestore };
   onBack: () => void;
   onPlaying: () => void;
 }) {
@@ -68,7 +76,9 @@ export function HeartsOnlineScreen({
   const [name, setName] = useState(savedName);
   const [phase, setPhase] = useState<Phase>("name");
   const [lobby, setLobby] = useState<LobbyState | null>(null);
-  const [roomCode] = useState(() => roomFromUrl ?? randomId(16));
+  const [roomCode] = useState(
+    () => roomFromUrl ?? resume?.room ?? randomId(16),
+  );
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +90,14 @@ export function HeartsOnlineScreen({
   useEffect(() => {
     if (savedName && !name) setName(savedName);
   }, [savedName, name]);
+
+  // 방장이 새로고침했으면 이름을 다시 묻지 않고 그 방을 다시 연다.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!resume || resumed.current) return;
+    resumed.current = true;
+    void enter();
+  });
 
   /**
    * 판 끝 검증 결과를 채팅에 남긴다. 게임을 무효로 표시하는 것은 **내 기기의 검증**뿐이다.
@@ -121,8 +139,10 @@ export function HeartsOnlineScreen({
         const host = new HostRoom({
           kit: heartsKit,
           transport,
-          hostName: trimmed,
+          hostName: resume?.restore.saved.hostName ?? trimmed,
           rules,
+          store: sessionHostStore(roomCode),
+          ...(resume ? { restore: resume.restore } : {}),
           bot: heartsBotFor(useHeartsSettings.getState().level),
           botLevel: useHeartsSettings.getState().level,
           botNames: useSettings.getState().botNames,
@@ -142,7 +162,16 @@ export function HeartsOnlineScreen({
         );
         host.onOwnError((error) => useHearts.setState({ notice: error }));
         host.onLobby(syncLobby);
+        setHostingRoom("hearts", roomCode);
         setPhase("lobby");
+        if (host.match) {
+          started.current = true;
+          attachOnline(host.match, seatNamesOf(host.lobby()), {
+            network: true,
+          });
+          bindFair(useHearts, host.fair?.coordinator, () => host.abandon());
+          onPlaying();
+        }
       } else {
         const saved = loadSeatToken(roomCode);
         const guest = new GuestRoom({

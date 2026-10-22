@@ -14,7 +14,7 @@ import {
   TWO_OF_CLUBS,
 } from "@mighty/hearts-engine";
 
-import { slotOfToken, tokenOf } from "./blind";
+import { isToken, slotOfToken, tokenOf } from "./blind";
 import type { BusyReason, Incident } from "./coordinator";
 import { FairDevice, type FairWire, type GroupName } from "./device";
 import {
@@ -79,6 +79,7 @@ export class HeartsCoordinator {
     this.onIncident = options.onIncident;
     this.watch = new HeartsRenegeWatch(this.rules);
     this.device.on("cards", () => this.updateBusy());
+    this.device.on("slots", () => this.updateBusy());
     this.device.on("keys", (deal) => {
       if (deal === this.deal) this.checkPlays();
       this.tryOpenAll(deal);
@@ -319,6 +320,8 @@ export class HeartsHostTable {
     guestSeats: readonly number[];
     group: GroupName;
     hooks: HeartsHostHooks;
+    /** 새로고침 전에 남겨 둔 방장 기기 열쇠 */
+    restore?: Record<number, PartySnapshot>;
   }) {
     this.rules = options.rules;
     this.seed = options.seed;
@@ -329,6 +332,7 @@ export class HeartsHostTable {
       group: options.group,
       send: (m) => this.hooks.broadcast(m),
       sendTo: (m, device) => this.hooks.sendTo(m, device),
+      ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new HeartsCoordinator({
       rules: this.rules,
@@ -368,8 +372,63 @@ export class HeartsHostTable {
 
   begin(events: readonly GameEvent[]): void {
     const pub = this.publicOf(this.hooks.state());
-    this.history.push({ events: [...events], pub: { ...pub, myPasses: [] } });
+    this.record(events, pub);
     this.coordinator.handle(events, pub);
+  }
+
+  /** 걸음별 사건. 참가자에게 보내는 것에는 방장 기기 자리가 넘긴 카드를 뺀다 */
+  private record(events: readonly GameEvent[], pub: HeartsPublic): void {
+    this.history.push({ events: [...events], pub: { ...pub, myPasses: [] } });
+    this.ownPubs.push(pub);
+  }
+
+  /** 방장 기기만 아는 공개 정보(넘긴 카드 포함). 새로고침 뒤 다시 처리할 때 쓴다 */
+  private readonly ownPubs: HeartsPublic[] = [];
+
+  /** 새로고침에 대비해 남길 것(이 기기 안에만 남으므로 넘긴 카드도 넣는다) */
+  snapshot(): {
+    history: { events: GameEvent[]; pub: HeartsPublic }[];
+    device: Record<number, PartySnapshot>;
+  } {
+    return {
+      history: this.history.map((h, i) => ({
+        events: h.events,
+        pub: this.ownPubs[i] ?? h.pub,
+      })),
+      device: this.device.snapshotAll(),
+    };
+  }
+
+  /** 새로고침한 방장: 남긴 걸음별 사건을 다시 처리해 되살린다(`FairHostTable.resume`과 같다) */
+  resume(saved: ReturnType<HeartsHostTable["snapshot"]>): void {
+    for (const [i, item] of saved.history.entries()) {
+      this.record(item.events, item.pub);
+      if (i > 0) this.observed.push([...item.events]);
+      this.coordinator.handle(item.events, item.pub);
+    }
+    void this.device.idle().then(() => this.resumeGate());
+  }
+
+  private resumeGate(): void {
+    const state = this.hooks.state();
+    const deal = this.coordinator.deal;
+    if (
+      this.openGate ||
+      state.round.phase !== "play" ||
+      !this.coordinator.revealedDeals.has(deal) ||
+      !state.round.hands.some((h) => h.some(isToken))
+    )
+      return;
+    this.gate = new Promise((resolve) => {
+      this.openGate = resolve;
+    });
+    this.hooks.broadcast({
+      t: "fp",
+      k: "log",
+      deal,
+      log: [...this.hooks.log()] as never,
+    });
+    if (this.coordinator.openedDeals.has(deal)) this.onOpened(deal);
   }
 
   /** 방장 기기 자리 화면을 내 카드로 바꾼다 */
@@ -421,7 +480,7 @@ export class HeartsHostTable {
   after(state: MatchState, events: readonly GameEvent[]): void {
     this.observed.push([...events]);
     const pub = this.publicOf(state);
-    this.history.push({ events: [...events], pub: { ...pub, myPasses: [] } });
+    this.record(events, pub);
     this.coordinator.handle(events, pub);
     const deal = this.coordinator.deal;
     if (

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { type AuditResult, type FairSaved, GuestRoom } from "./guest-room";
 import { HostRoom, type IncidentNotice } from "./host-room";
+import { type HostStore, memoryHostStore } from "./host-store";
 import { MemoryNetwork } from "./transport";
 
 const _flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -35,16 +36,23 @@ function memoryStore() {
   };
 }
 
-async function setup(rules: RuleSet, guestCount: number) {
-  const net = new MemoryNetwork();
-  const host = new HostRoom({
-    transport: net.join("host"),
+function hostOptions(rules: RuleSet, store?: HostStore) {
+  return {
     hostName: "방장",
     rules,
     revealTimeoutMs: 500,
     bot: heuristicBot,
     botLevel: 1,
-    fair: { group: "1024" },
+    fair: { group: "1024" as const },
+    ...(store ? { store } : {}),
+  };
+}
+
+async function setup(rules: RuleSet, guestCount: number, store?: HostStore) {
+  const net = new MemoryNetwork();
+  const host = new HostRoom({
+    transport: net.join("host"),
+    ...hostOptions(rules, store),
   });
   const guests: GuestRoom[] = [];
   for (let i = 0; i < guestCount; i++) {
@@ -270,6 +278,79 @@ describe("멘탈 포커 온라인 대전", () => {
     expect(scored).toBe(1);
   }, 180_000);
 
+  /** 행동 기록이 `count`개가 될 때까지 모두 봇처럼 둔다 */
+  async function advance(host: HostRoom, guests: GuestRoom[], count: number) {
+    const match = host.match;
+    for (let i = 0; i < 2000 && (match?.actionLog().length ?? 0) < count; i++) {
+      for (const [view, submit] of [
+        [match?.current(), (a: never) => match?.submit(a)],
+        ...guests.map((g) => [
+          g.match?.current(),
+          (a: never) => g.match?.submit(a),
+        ]),
+      ] as [PlayerView | undefined, (a: never) => void][])
+        if (view?.decision)
+          submit(heuristicBot.decide(view, { seed: 5 }) as never);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  it.each([
+    ["5마", "standard5", 2, [8, 30]],
+    ["6마", "standard6", 3, [14, 40]],
+  ] as const)(
+    "%s: 방장이 판 중간에 새로고침해도 남긴 방으로 이어 가고, 모두의 검증을 통과한다",
+    async (_name, preset, guestCount, points) => {
+      const rules = presetRules(preset);
+      const store = memoryHostStore();
+      const { net, host, guests, incidents } = await setup(
+        rules,
+        guestCount,
+        store,
+      );
+      const audits: AuditResult[] = [];
+      for (const g of guests) g.on("audit", (r) => audits.push(r));
+      const verified: number[] = [];
+      for (const g of guests) g.on("roundVerified", (d) => verified.push(d));
+      await host.start();
+      await until(() => guests.every((g) => g.match !== null));
+      let current = host;
+      for (const [k, point] of points.entries()) {
+        await advance(current, guests, point);
+        const before = current.match?.actionLog().length ?? 0;
+        // 새로고침: 방장 기기 메모리는 사라지고, 남긴 것으로 새 연결에서 방을 다시 연다.
+        net.disconnect(k === 0 ? "host" : `host${k}`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const restore = store.load();
+        expect(restore?.saved.match).not.toBeNull();
+        current = new HostRoom({
+          transport: net.join(`host${k + 1}`),
+          ...hostOptions(rules, store),
+          ...(restore ? { restore } : {}),
+        });
+        current.onIncident((n) => incidents.push(n));
+        expect(current.match?.actionLog().length).toBe(before);
+        await until(() => current.lobby().seats.every((s) => s.connected));
+        // 섞기 사슬이 다시 모이면 "섞는 중"이 꺼진다(방장 화면이 판 끝 결과를 가리지 않게).
+        let busy: unknown = "모름";
+        current.fair?.coordinator.onBusy((b) => {
+          busy = b;
+        });
+        await until(() => busy === null);
+      }
+      const scored = await playRounds(current, guests, 2, incidents);
+      expect(
+        incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`),
+      ).toEqual([]);
+      expect(scored).toBe(2);
+      current.finish();
+      await until(() => audits.length === guestCount);
+      expect(audits.filter((a) => !a.ok)).toEqual([]);
+      expect(verified.length).toBeGreaterThanOrEqual(2 * guestCount);
+    },
+    240_000,
+  );
+
   describe("고친 프로그램으로 부정하는 참가자(나머지는 정상)", () => {
     it("무늬 안 따르기: 그 무늬 카드가 나중에 드러나는 순간 모두의 화면에 그 자리가 찍힌다", async () => {
       const { host, guests, incidents } = await setup(
@@ -307,7 +388,7 @@ describe("멘탈 포커 온라인 대전", () => {
       const own = incidents.filter((i) => i.own);
       expect(own.length).toBeGreaterThan(0);
       expect(own.every((i) => i.seat === cheater)).toBe(true);
-      expect(own[0]?.reason).toMatch(/무늬|규칙에 맞지 않는/);
+      expect(own[0]?.reason).toMatch(/무늬|조커|규칙에 맞지 않는/);
       // 방장 대국도 멈췄다.
       expect(host.match?.halted).not.toBeNull();
     }, 180_000);

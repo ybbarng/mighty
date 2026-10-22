@@ -72,6 +72,14 @@ export class FairCoordinator {
   private dead: number[] = [];
   private pool: number[] | null = null;
   private redealPlan: { players: number[]; declarer: number } | null = null;
+  /**
+   * 판별 다시 나누기 계획. 새로고침 뒤 사건을 한꺼번에 다시 처리하면 앞 판의 다시 섞기 사슬이
+   * 다음 판으로 넘어간 뒤에 끝나므로 판별로 기억한다
+   */
+  private readonly redealPlans = new Map<
+    number,
+    { players: number[]; declarer: number }
+  >();
   /** 낸 카드 중 아직 열쇠로 확인하지 못한 것 */
   private pendingPlays: PendingPlay[] = [];
   /** 열어서 확인한(이미 낸) 자리 */
@@ -99,9 +107,11 @@ export class FairCoordinator {
     this.deviceOf = options.deviceOf;
     this.devices = options.devices;
     this.onIncident = options.onIncident;
-    this.device.on("slots", (deal, base, count) =>
-      this.onSlots(deal, base, count),
-    );
+    this.device.on("slots", (deal, base, count) => {
+      this.onSlots(deal, base, count);
+      // 새로고침 뒤에는 카드를 미리 알아서 사슬이 끝나도 새로 여는 카드가 없을 수 있다.
+      this.updateBusy();
+    });
     this.device.on("keys", (deal) => {
       if (deal === this.deal) this.checkPlays();
       this.tryOpenAll(deal);
@@ -287,6 +297,7 @@ export class FairCoordinator {
     if (view.declarer === null) return;
     this.pool = this.poolSlots();
     this.redealPlan = { players: [...view.players], declarer: view.declarer };
+    this.redealPlans.set(this.deal, this.redealPlan);
     for (const slot of this.pool) this.seatOwners.delete(slot);
     this.device.reshuffle(this.deal, this.pool);
     this.updateBusy();
@@ -298,20 +309,18 @@ export class FairCoordinator {
   }
 
   private onSlots(deal: number, base: number, count: number): void {
-    if (deal !== this.deal || base === 0 || !this.redealPlan) return;
+    const redealPlan = this.redealPlans.get(deal);
+    if (base === 0 || !redealPlan) return;
     const slots = this.newSlotsFor(base, count);
     this.redeals.set(deal, slots);
-    const plan = redealOwners(
-      this.redealPlan.players,
-      this.redealPlan.declarer,
-      slots,
-    );
+    const plan = redealOwners(redealPlan.players, redealPlan.declarer, slots);
     const owners = new Map<number, number>();
     for (const [slot, seat] of plan) {
-      this.seatOwners.set(slot, seat);
+      if (deal === this.deal) this.seatOwners.set(slot, seat);
       owners.set(slot, this.deviceOf(seat));
     }
     this.device.assign(deal, owners);
+    if (this.revealedDeals.has(deal)) this.device.revealAll(deal);
     this.updateBusy();
   }
 
@@ -378,7 +387,14 @@ export class FairCoordinator {
   revealDeal(deal: number): void {
     if (this.revealedDeals.has(deal)) return;
     this.revealedDeals.add(deal);
+    // 다시 섞기 사슬이 아직이면(새로고침 뒤 다시 처리할 때) 새 자리까지 생긴 뒤에 공개한다.
+    if (this.redealPending(deal)) return;
     this.device.revealAll(deal);
+  }
+
+  /** 다시 나누기를 시작했는데 새 자리가 아직 생기지 않았다 */
+  private redealPending(deal: number): boolean {
+    return this.redealPlans.has(deal) && !this.redeals.has(deal);
   }
 
   private openListeners = new Set<(deal: number) => void>();
@@ -389,7 +405,12 @@ export class FairCoordinator {
   }
 
   private tryOpenAll(deal: number): void {
-    if (!this.revealedDeals.has(deal) || this.openedDeals.has(deal)) return;
+    if (
+      !this.revealedDeals.has(deal) ||
+      this.openedDeals.has(deal) ||
+      this.redealPending(deal)
+    )
+      return;
     const cards = this.device.openAll(deal);
     if (!cards) return;
     const values = this.device

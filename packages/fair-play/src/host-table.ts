@@ -16,6 +16,7 @@ import { checkReplay, type FairLogged, type RoundDeal } from "./audit";
 import {
   blindStep,
   cardText,
+  isToken,
   revealInHand,
   slotOfToken,
   tokenDeal,
@@ -29,6 +30,7 @@ import {
 } from "./coordinator";
 import { FairDevice, type FairWire, type GroupName } from "./device";
 import type { FairControl, FairQuery } from "./messages";
+import type { PartySnapshot } from "./protocol";
 
 /*
  * 방장 기기 쪽 멘탈 포커 진행. 대국 진행(LocalMatch)에 끼워 쓴다.
@@ -60,6 +62,14 @@ export interface HostTableOptions {
   hooks: HostTableHooks;
   /** 참가자 답을 기다리는 시간 */
   answerTimeoutMs?: number;
+  /** 새로고침 전에 남겨 둔 방장 기기 열쇠(`snapshot`) */
+  restore?: Record<number, PartySnapshot>;
+}
+
+/** 방장 새로고침에 대비해 남기는 것: 걸음별 사건과 방장 기기 열쇠 */
+export interface HostTableSaved<Pub = PublicView> {
+  history: { events: GameEvent[]; pub: Pub }[];
+  device: Record<number, PartySnapshot>;
 }
 
 type Prepared = { ok: true; action: Action } | { ok: false; error: string };
@@ -96,6 +106,7 @@ export class FairHostTable {
       id: 0,
       group: options.group,
       send: (m) => this.hooks.broadcast(m),
+      ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new FairCoordinator({
       rules: this.rules,
@@ -130,6 +141,47 @@ export class FairHostTable {
 
   get halted(): boolean {
     return this.coordinator.halted;
+  }
+
+  /** 새로고침에 대비해 남길 것 */
+  snapshot(): HostTableSaved {
+    return { history: [...this.history], device: this.device.snapshotAll() };
+  }
+
+  /**
+   * 새로고침한 방장: 남긴 걸음별 사건을 처음부터 다시 처리해 자리 주인·카드·검증 상태를 되살린다.
+   * 다른 기기 메시지(`receive`)를 먼저 넣고 부른다. 열쇠는 되살린 것을 쓰므로 섞기를 다시 하지 않는다
+   */
+  resume(saved: HostTableSaved): void {
+    for (const [i, item] of saved.history.entries()) {
+      this.history.push(item);
+      if (i > 0) this.observed.push([...item.events]);
+      this.coordinator.handle(item.events, item.pub);
+    }
+    void this.device.idle().then(() => this.resumeGate());
+  }
+
+  /** 마지막 턴 검증을 기다리던 중에 새로고침했으면 다시 기다린다 */
+  private resumeGate(): void {
+    const state = this.hooks.state();
+    const deal = this.coordinator.deal;
+    if (
+      this.openGate ||
+      state.round.phase !== "play" ||
+      !this.coordinator.revealedDeals.has(deal) ||
+      !state.round.hands.some((h) => h.some(isToken))
+    )
+      return;
+    this.gate = new Promise((resolve) => {
+      this.openGate = resolve;
+    });
+    this.hooks.broadcast({
+      t: "fp",
+      k: "log",
+      deal,
+      log: [...this.hooks.log()],
+    });
+    if (this.coordinator.openedDeals.has(deal)) this.onOpened(deal);
   }
 
   private publicOf(state: MatchState): PublicView {

@@ -113,8 +113,22 @@ export class RemoteMatch<
     this.sent.pop();
   }
 
+  /**
+   * 새로고침한 방장의 기록에 내 행동이 `mine`개뿐이다: 결과를 기다리던 행동을 받지 못했다.
+   * 그 행동을 그대로 다시 보낸다(카드 열쇠는 이미 공개했다)
+   */
+  resendLost(mine: number): void {
+    if (!this.inFlight || this.sent.length !== mine + 1) return;
+    this.resent = true;
+    this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
+  }
+
+  /** 다시 보낸 행동의 결과가 아직이다(바로 뒤에 오는 지금 화면은 그 결과가 아니다) */
+  private resent = false;
+
   receive(snapshot: Snapshot<View, Event>): void {
-    this.inFlight = false;
+    if (this.resent) this.resent = false;
+    else this.inFlight = false;
     this.last = snapshot.view;
     this.seen.push(JSON.stringify(snapshot.view));
     if (this.listeners.size === 0) this.pending.push(snapshot);
@@ -227,6 +241,15 @@ export class GuestRoom<
   /** 방장 확인(서명 검사)이 끝나기 전에 온 대기실 정보. 확인되면 그 연결의 것을 쓴다 */
   private readonly unverifiedLobby = new Map<string, LobbyState>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 지금 보이는 상대들. 방장이 끊긴 사이 새로 보인 상대도 기억해 끊김을 안 뒤 들어가 본다 */
+  private readonly peers = new Set<string>();
+  /** 마지막으로 확인한 방장 연결. 다른 연결로 돌아오면 방장이 새로고침한 것이다 */
+  private lastHostId: string | null = null;
+  /** 새로고침한 방장이 보낼 지금 화면에서 받지 못한 내 행동을 확인한다 */
+  private checkLost = false;
+  /** 내 기기가 보낸 멘탈 포커 메시지. 새로고침한 방장에게 다시 보낸다 */
+  private readonly ownFair: { message: FairMessage; to: number | null }[] = [];
+  private readonly ownFairSeen = new Set<string>();
   /** 서명이 맞지 않아 무시한 "방장" 응답 수(시험·화면 표시용) */
   impostors = 0;
   /** 시작할 때 방장이 알린 약속 */
@@ -285,14 +308,19 @@ export class GuestRoom<
     this.fairStore = options.fairStore ?? null;
 
     this.transport.onPeerJoin((peerId) => {
+      this.peers.add(peerId);
       // 누가 방장인지 모르므로 새로 보이는 상대에게 들어가겠다고 알린다. 방장만 답한다.
       // 방장과 끊긴 뒤라면 다시 보이는 상대에게 토큰으로 들어가 같은 자리를 받는다.
       if (this.seat === null || this.hostId === null || this.hostId === peerId)
         void this.sendJoin(peerId);
     });
     this.transport.onPeerLeave((peerId) => {
+      this.peers.delete(peerId);
       if (peerId !== this.hostId) return;
       this.hostId = null;
+      // 새로고침한 방장이 끊김을 알기 전에 먼저 보였을 수 있다. 보이는 상대 모두에게 들어가 본다.
+      if (!this.hostClosed && this.seat !== null)
+        for (const peer of this.peers) void this.sendJoin(peer);
       if (this.hostClosed) {
         this.emitHostLeft();
         return;
@@ -441,7 +469,10 @@ export class GuestRoom<
         .filter((s) => s.kind === "guest")
         .map((s) => s.seat),
       group: lobby.fair.group,
-      broadcast: (message: FairMessage) => this.transport.send(message),
+      broadcast: (message: FairMessage) => {
+        this.rememberOwn(message, null);
+        this.transport.send(message);
+      },
       onIncident: (incident: Incident) => this.raiseIncident(incident),
       ...(saved ? { restore: saved.snapshots } : {}),
     };
@@ -452,6 +483,7 @@ export class GuestRoom<
             rules: rules.rules as unknown as HeartsRules,
             // 넘긴 카드 열쇠는 받는 기기에게만 직접 보낸다(방장을 거치지 않는다).
             sendTo: (message, device) => {
+              if (device === 0) this.rememberOwn(message, 0);
               const peer = this.peerOfDevice(device);
               if (peer) this.transport.send(message, peer);
             },
@@ -479,6 +511,21 @@ export class GuestRoom<
     for (const { message, from } of this.fairEarly.splice(0))
       fair.receive(message, from);
     return fair;
+  }
+
+  /** 내가 보낸 멘탈 포커 메시지를 기억한다(묻는 말에 한 답은 그때뿐이라 뺀다) */
+  private rememberOwn(message: FairMessage, to: number | null): void {
+    if (message.k === "answer") return;
+    const key = JSON.stringify(message);
+    if (this.ownFairSeen.has(key)) return;
+    this.ownFairSeen.add(key);
+    this.ownFair.push({ message, to });
+  }
+
+  /** 새로고침한 방장에게 내가 보냈던 멘탈 포커 메시지를 다시 보낸다(방장은 자기 것만 남긴다) */
+  private resendOwnFair(hostId: string): void {
+    for (const { message } of this.ownFair)
+      this.transport.send(message, hostId);
   }
 
   /** 새로고침 전에 보낸 행동(되살린 대국의 `sent` 앞에 붙인다) */
@@ -649,8 +696,11 @@ export class GuestRoom<
       case "fpRelay": {
         if (from !== this.hostId || !Array.isArray(message.items)) return;
         for (const item of message.items)
-          if (isFairMessage(item.message) && typeof item.from === "number")
+          if (isFairMessage(item.message) && typeof item.from === "number") {
+            // 내가 새로고침했으면 내가 보냈던 것도 여기서 다시 안다.
+            if (item.from === this.seat) this.rememberOwn(item.message, null);
             this.onFair(item.message, item.from);
+          }
         break;
       }
       case "welcome": {
@@ -663,7 +713,15 @@ export class GuestRoom<
         const reconnected = this.reconnectTimer !== null;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
+        const restarted = this.lastHostId !== null && this.lastHostId !== from;
         this.hostId = from;
+        this.lastHostId = from;
+        if (restarted) {
+          // 방장이 새로고침했다: 끊긴 동안이나 그 전에 보낸 멘탈 포커 메시지를 다시 보내고,
+          // 받지 못한 행동이 있는지 지금 화면에서 확인한다.
+          this.checkLost = true;
+          this.resendOwnFair(from);
+        }
         this.seat = message.seat;
         this.token = message.token;
         for (const l of this.listeners.seat) l(message.seat, message.token);
@@ -720,6 +778,11 @@ export class GuestRoom<
       }
       case "snapshot": {
         if (from !== this.hostId || this.seat === null) return;
+        if (message.resync && this.checkLost) {
+          this.checkLost = false;
+          if (typeof message.mine === "number")
+            this.match?.resendLost(message.mine);
+        }
         const snapshot = { view: message.view, events: message.events };
         const fair = this.ensureFair();
         // 멘탈 포커: 자리 표를 내가 연 카드로 바꿔 넘긴다(못 열었으면 열 때까지 미룬다).

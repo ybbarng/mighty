@@ -9,6 +9,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { ActionButton } from "@/components/panels/common";
 import { cn } from "@/lib/cn";
+import { type HostRestore, hostedRoom } from "@/net/host-store";
 
 import { HEARTS_LEVELS } from "../bots";
 import { endHeartsSession } from "../session";
@@ -19,7 +20,11 @@ import { HeartsTable } from "./HeartsTable";
 
 type Screen =
   | { kind: "start" }
-  | { kind: "online"; room: string | null }
+  | {
+      kind: "online";
+      room: string | null;
+      resume?: { room: string; restore: HostRestore };
+    }
   | { kind: "playing" }
   | { kind: "options" }
   | { kind: "rules" };
@@ -75,7 +80,12 @@ export function HeartsApp() {
 
   useEffect(() => {
     const room = new URLSearchParams(window.location.search).get("room");
-    if (room) setScreen({ kind: "online", room });
+    if (room) {
+      setScreen({ kind: "online", room });
+      return;
+    }
+    const hosted = hostedRoom("hearts");
+    if (hosted) setScreen({ kind: "online", room: null, resume: hosted });
   }, []);
 
   const backToStart = () => {
@@ -102,6 +112,7 @@ export function HeartsApp() {
       <HeartsOnlineScreen
         rules={rules}
         roomFromUrl={screen.room}
+        {...(screen.resume ? { resume: screen.resume } : {})}
         onBack={backToStart}
         onPlaying={() => setScreen({ kind: "playing" })}
       />

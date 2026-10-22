@@ -66,6 +66,19 @@ export interface LocalMatchOptions<
   afterStep?: (state: State, events: Event[]) => void;
   /** 준비하다 거절된 행동(비동기라 `submitAs`가 돌려준 뒤에 알게 된다) */
   onLateError?: (seat: number, error: string) => void;
+  /**
+   * 새로고침한 방장: 남겨 둔 엔진 상태·기록·컴퓨터 난수에서 이어 간다. 컴퓨터는 `refresh`를 부를 때 깨운다
+   * (멘탈 포커 진행을 되살린 뒤에)
+   */
+  resume?: ResumeState<State, ActionT>;
+}
+
+/** 방장 새로고침에 대비해 남기는 진행. 멘탈 포커는 증명으로 고친 상태라 기록만으로 되살릴 수 없어 상태째 남긴다 */
+export interface ResumeState<State = MatchState, ActionT = Action> {
+  state: State;
+  log: KitLoggedAction<ActionT>[];
+  /** 컴퓨터 난수 상태. 참가자가 같은 난수로 컴퓨터 수를 다시 계산한다 */
+  rng: number;
 }
 
 /** 브라우저에 남기는 저장 내용. 상태 대신 시작 조건과 행동 기록만 남기고 `replay`로 되살린다 */
@@ -170,6 +183,16 @@ export class LocalMatch<
     this.stepper =
       options.step ?? ((st, seat, a) => this.kit.step(st, seat, a));
 
+    if (options.resume) {
+      this.state = options.resume.state;
+      this.log.push(...options.resume.log);
+      this.rng.seed = options.resume.rng;
+      this.hold(this.seat, {
+        view: this.kit.viewOf(this.state, this.seat),
+        events: [],
+      });
+      return;
+    }
     if (savedLog && savedLog.length > 0) {
       const replayed = this.kit.replay(
         this.rules,
@@ -383,6 +406,11 @@ export class LocalMatch<
       ...(this.presetDeal ? { presetDeal: this.presetDeal } : {}),
       log: [...this.log],
     };
+  }
+
+  /** 방장 새로고침에 대비해 남길 진행 */
+  resumeState(): ResumeState<State, ActionT> {
+    return { state: this.state, log: [...this.log], rng: this.rng.seed };
   }
 
   /** 판 끝 검증용 행동 기록 */

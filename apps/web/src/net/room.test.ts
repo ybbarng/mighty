@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
+import { memoryHostStore } from "./host-store";
 import type { AuditReport, HostMessage } from "./protocol";
 import { MemoryNetwork } from "./transport";
 
@@ -101,6 +102,60 @@ describe("온라인 방", () => {
     // 게임 중에는 비밀 값이 오가지 않는다(감사 때 처음 공개된다).
     const beforeAudit = seen.filter((m) => !m.includes('"t":"audit"'));
     expect(beforeAudit.some((m) => m.includes(a.secret))).toBe(false);
+  });
+
+  it("방장이 게임 중에 새로고침해도 남긴 방으로 이어 가고, 판 끝 검증을 통과한다", async () => {
+    const net = new MemoryNetwork();
+    const store = memoryHostStore();
+    const options = {
+      hostName: "방장",
+      rules,
+      revealTimeoutMs: 500,
+      bot: heuristicBot,
+      botLevel: 1,
+      store,
+    };
+    const host = new HostRoom({ transport: net.join("host"), ...options });
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      name: "철수",
+      token: null,
+    });
+    await until(() => a.seat !== null);
+    const audits: AuditResult[] = [];
+    a.on("audit", (r) => audits.push(r));
+    await host.start();
+    await until(() => a.match !== null);
+    const match = host.match;
+    for (let i = 0; i < 2000 && (match?.actionLog().length ?? 0) < 20; i++) {
+      const hv = match?.current();
+      if (hv?.decision) match?.submit(heuristicBot.decide(hv, { seed: i }));
+      const gv = a.match?.current();
+      if (gv?.decision) a.match?.submit(heuristicBot.decide(gv, { seed: i }));
+      await flush();
+    }
+    const before = match?.serialize();
+    net.disconnect("host");
+    await flush();
+    const restore = store.load();
+    const fresh = new HostRoom({
+      transport: net.join("host-reloaded"),
+      ...options,
+      ...(restore ? { restore } : {}),
+    });
+    // 같은 서명 열쇠라 초대 링크의 지문이 그대로 맞는다.
+    expect(await fresh.fingerprint()).toBe(await host.fingerprint());
+    expect(fresh.match?.serialize()).toBe(before);
+    await until(() => fresh.lobby().seats.every((s) => s.connected), 2000);
+    await playRounds(fresh, [a], 2);
+    await until(
+      () =>
+        a.match?.current().roundNumber === fresh.match?.current().roundNumber,
+      2000,
+    );
+    fresh.finish();
+    await until(() => audits.length === 1, 5000);
+    expect(audits).toEqual([{ ok: true }]);
   });
 
   it("방장이 대기실에서 고친 규칙과 이름이 참가자에게 간다", async () => {
@@ -443,7 +498,11 @@ describe("방장 확인(서명)", () => {
       token: null,
       hostFingerprint: fingerprint,
     });
-    await until(() => a.seat !== null && a.lobby !== null, 3000);
+    // 가짜 방장의 서명 확인은 비동기라 진짜 방장을 정한 뒤에 끝날 수 있다.
+    await until(
+      () => a.seat !== null && a.lobby !== null && a.impostors >= 1,
+      3000,
+    );
     expect(a.lobby?.seats[0]?.name).toBe("방장");
     expect(a.impostors).toBeGreaterThanOrEqual(1);
     host.close();

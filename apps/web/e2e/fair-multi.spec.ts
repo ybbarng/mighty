@@ -362,3 +362,83 @@ test("고친 프로그램: 다른 카드라고 속여 내면 방장 화면에 �
   await expect(honest.getByText(/방장의 알림 — 손님1/)).toBeVisible();
   await honest.screenshot({ path: info.outputPath("incident-guest-chat.png") });
 });
+
+for (const [preset, players] of [
+  ["표준 5마", 3],
+  [null, 3],
+] as const) {
+  test(`${preset ?? "하트"}: 방장이 게임 중에 새로고침해도 같은 판을 이어 가고 검증을 통과한다`, async ({
+    context,
+  }, info) => {
+    test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+    test.setTimeout(10 * 60_000);
+    const { pages, host, errors, fairLog } = await openTable(
+      context,
+      players,
+      preset,
+    );
+    await host.getByRole("button", { name: "시작하기" }).click();
+    for (const p of pages)
+      await expect(p.getByRole("button", { name: "점수판" })).toBeVisible({
+        timeout: 60_000,
+      });
+    const play = async (until: () => Promise<boolean>) => {
+      const last = Date.now();
+      let lastAction = Date.now();
+      for (let i = 0; i < 20_000; i++) {
+        if (await until()) return;
+        if (
+          Date.now() - lastAction > 60_000 ||
+          Date.now() - last > 8 * 60_000
+        ) {
+          for (const [k, p] of pages.entries()) {
+            await p.screenshot({ path: info.outputPath(`stuck-${k}.png`) });
+            console.log(
+              `--- ${k}번 탭 ---\n${(await p.evaluate(() => document.body.innerText)).slice(0, 600)}`,
+            );
+          }
+          throw new Error(
+            `진행이 멈췄다: ${JSON.stringify(errors.slice(-10))}\n${fairLog.slice(-20).join("\n")}`,
+          );
+        }
+        for (const [k, p] of pages.entries()) {
+          const did = await step(p, k === 0);
+          if (did) lastAction = Date.now();
+          if (did === "incident") {
+            await p.screenshot({ path: info.outputPath(`incident-${k}.png`) });
+            throw new Error(`부정 감지가 떴다(${k}번 탭)`);
+          }
+        }
+        await host.waitForTimeout(40);
+      }
+    };
+    // 카드를 몇 장 낼 때까지 둔다.
+    let played = 0;
+    await play(async () => {
+      const text = await host.evaluate(() => document.body.innerText);
+      if (/\d+\/10턴/.test(text) || /\d+\/13턴/.test(text)) played++;
+      return played > 30;
+    });
+    await host.screenshot({ path: info.outputPath("before-reload.png") });
+    await host.reload();
+    // 이름을 다시 묻지 않고 같은 방의 게임 화면으로 돌아온다.
+    await expect(host.getByRole("button", { name: "점수판" })).toBeVisible({
+      timeout: 30_000,
+    });
+    for (const p of pages.slice(1))
+      await expect(p.getByText("연결 끊김 · 기다리는 중")).toHaveCount(0, {
+        timeout: 30_000,
+      });
+    await host.screenshot({ path: info.outputPath("after-reload.png") });
+    await host.waitForTimeout(2000);
+    await host.screenshot({ path: info.outputPath("after-reload-2s.png") });
+    // 판을 끝까지 두고 다음 판으로 넘어간다.
+    await play(async () =>
+      (await host.evaluate(() => document.body.innerText)).includes("다음 판"),
+    );
+    await host.screenshot({ path: info.outputPath("round-end.png") });
+    for (const p of pages.slice(1))
+      await expect(p.getByText(/부정 감지 —/)).toHaveCount(0);
+    expect(errors.filter((e) => !e.includes("WebSocket"))).toEqual([]);
+  });
+}

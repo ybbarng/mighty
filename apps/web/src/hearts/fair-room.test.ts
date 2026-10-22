@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "@/net/guest-room";
 import { HostRoom, type IncidentNotice } from "@/net/host-room";
+import { type HostStore, memoryHostStore } from "@/net/host-store";
 import { MemoryNetwork } from "@/net/transport";
 
 import { heartsKit } from "./kit";
@@ -17,17 +18,24 @@ async function until(condition: () => boolean, ms = 60_000): Promise<void> {
   }
 }
 
-async function setup(guestCount: number) {
-  const net = new MemoryNetwork();
-  const host = new HostRoom({
+function hostOptions(store?: HostStore) {
+  return {
     kit: heartsKit,
-    transport: net.join("host"),
     hostName: "방장",
     rules: { ...WINDOWS_RULES, endScore: 40 },
     bot: heartsNormalBot,
     botLevel: 1,
     revealTimeoutMs: 500,
-    fair: { group: "1024" },
+    fair: { group: "1024" as const },
+    ...(store ? { store } : {}),
+  };
+}
+
+async function setup(guestCount: number, store?: HostStore) {
+  const net = new MemoryNetwork();
+  const host = new HostRoom({
+    transport: net.join("host"),
+    ...hostOptions(store),
   });
   const guests: GuestRoom<
     typeof WINDOWS_RULES,
@@ -167,4 +175,53 @@ describe("하트 멘탈 포커 온라인 대전", () => {
         .every((m) => m.includes(`"to":${guests[0]?.seat}`)),
     ).toBe(true);
   }, 200_000);
+
+  it("방장이 카드 넘기기와 첫 판 중간에 새로고침해도 이어 가고, 모두의 검증을 통과한다", async () => {
+    const store = memoryHostStore();
+    const { net, host, guests, incidents } = await setup(2, store);
+    const audits: AuditResult[] = [];
+    for (const g of guests) g.on("audit", (r) => audits.push(r));
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    let current = host as unknown as HostRoom<
+      never,
+      never,
+      never,
+      never,
+      never,
+      never
+    >;
+    // 넘기기 도중, 그리고 카드 내기 도중에 한 번씩 새로고침한다.
+    for (const [k, point] of [2, 20].entries()) {
+      await playUntil(
+        current,
+        guests as never,
+        () => (current.match?.actionLog().length ?? 0) >= point,
+        incidents,
+      );
+      net.disconnect(k === 0 ? "host" : `host${k}`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const restore = store.load();
+      current = new HostRoom({
+        transport: net.join(`host${k + 1}`),
+        ...hostOptions(store),
+        ...(restore ? { restore } : {}),
+      }) as never;
+      current.onIncident((n) => incidents.push(n));
+      await until(() => current.lobby().seats.every((s) => s.connected));
+    }
+    await playUntil(
+      current,
+      guests as never,
+      () =>
+        (current.match?.current() as { phase: string } | undefined)?.phase ===
+        "gameOver",
+      incidents,
+    );
+    expect(incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`)).toEqual(
+      [],
+    );
+    await until(() => audits.length === guests.length);
+    expect(audits.filter((a) => !a.ok)).toEqual([]);
+  }, 240_000);
 });
