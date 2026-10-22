@@ -559,6 +559,7 @@ export class GuestRoom<
       reporter: this.seat,
       seat: incident.seat,
       reason: incident.reason,
+      ...(incident.pending ? { pending: true } : {}),
     };
     this.transport.send(report);
     for (const l of this.listeners.incident)
@@ -567,6 +568,7 @@ export class GuestRoom<
         seat: incident.seat,
         reason: incident.reason,
         own: true,
+        ...(incident.pending ? { pending: true } : {}),
       });
   }
 
@@ -679,6 +681,7 @@ export class GuestRoom<
         for (const l of this.listeners.incident)
           l({
             reporter: seat,
+            ...(message.pending === true ? { pending: true } : {}),
             seat: typeof message.seat === "number" ? message.seat : null,
             reason: message.reason.slice(0, 200),
             own: false,

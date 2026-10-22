@@ -148,11 +148,30 @@ button {
   }
 }
 
+/* 부정 감지 경광등: 빨강과 파랑이 번갈아 켜진다 */
+.siren-red,
+.siren-blue {
+  animation: siren 0.7s steps(1, end) infinite;
+}
+.siren-blue {
+  animation-delay: 0.35s;
+}
+@keyframes siren {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .effect-pop,
   .effect-pop-long,
   .pop-in,
-  .hint-glow {
+  .hint-glow,
+  .siren-red,
+  .siren-blue {
     animation-name: none;
   }
   .hint-glow {

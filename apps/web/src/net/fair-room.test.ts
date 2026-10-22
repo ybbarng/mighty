@@ -394,7 +394,8 @@ describe("멘탈 포커 온라인 대전", () => {
       current.finish();
       await until(() => audits.length === guestCount);
       expect(audits.filter((a) => !a.ok)).toEqual([]);
-      expect(verified.length).toBeGreaterThanOrEqual(2 * guestCount);
+      // 판마다 검증은 판 끝 기록을 받은 뒤 비동기로 끝난다.
+      await until(() => verified.length >= 2 * guestCount);
     },
     240_000,
   );
@@ -492,11 +493,19 @@ describe("멘탈 포커 온라인 대전", () => {
         // 속인 기기 자신의 알림은 빼고 본다(실제로 속이는 프로그램은 알리지 않는다).
         const honest = () =>
           incidents.filter((i) => i.own && i.reporter !== cheater);
-        await until(() => honest().length >= 2, 90_000);
+        // 같은 카드가 두 번 열리면 바로 판을 멈추고 "확인하는 중"을 알린다.
+        await until(() => honest().some((i) => i.pending), 90_000);
+        // 섞기 증명으로 확인되면 그 자리로 바꿔 알린다.
+        await until(
+          () => honest().filter((i) => !i.pending).length >= 2,
+          90_000,
+        );
       } finally {
         Party.prototype.lockAndShuffle = real;
       }
-      const own = incidents.filter((i) => i.own && i.reporter !== cheater);
+      const own = incidents.filter(
+        (i) => i.own && i.reporter !== cheater && !i.pending,
+      );
       expect(own.every((i) => i.seat === cheater)).toBe(true);
       expect(own[0]?.reason).toMatch(/섞기 증명/);
     }, 180_000);

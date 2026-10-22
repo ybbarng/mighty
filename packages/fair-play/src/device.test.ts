@@ -215,7 +215,7 @@ describe("메시지로 하는 멘탈 포커", () => {
       const { problems } = await run(1);
       // 속인 덱으로는 응답을 만들 수 없다(정직한 응답 코드가 멈춘다). 응답하지 않아도 짚는다.
       const shuffle = problems.filter(
-        (p) => p.by !== 1 && /섞기 증명/.test(p.reason),
+        (p) => p.by !== 1 && p.device !== null && /섞기 증명/.test(p.reason),
       );
       expect(shuffle.map((p) => [p.by, p.device]).sort()).toEqual([
         [0, 1],

@@ -203,7 +203,9 @@ export class FairGuestSeat {
 
   /** 다른 기기의 멘탈 포커 메시지. `from`은 연결 아이디로 확인한 자리 */
   receive(message: FairWire | FairControl, from: number): void {
-    if (this.halted) return;
+    // 판을 멈추면 게임을 진행시키는 메시지(판 기록·물음)만 받지 않는다. 섞은 덱·열쇠·증명은 끝까지 받는다
+    // (누가 조작했는지 확인하는 데 쓴다).
+    if (this.halted && (message.k === "log" || message.k === "query")) return;
     switch (message.k) {
       case "chain":
       case "keys":

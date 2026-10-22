@@ -15,6 +15,7 @@ export interface IncidentNoticeLike {
   seat: number | null;
   reason: string;
   own: boolean;
+  pending?: boolean;
 }
 
 /** 멘탈 포커 화면 상태를 담는 가게(마이티 `useGame`, 하트 `useHearts`) */
@@ -51,14 +52,22 @@ export function reportIncident(
     id: randomId(8),
     seat: -1,
     name: "부정 감지",
-    text: n.own
-      ? `⚠ 내 기기가 찾음 — ${who}: ${n.reason}`
-      : `${names[n.reporter] ?? `${n.reporter}번`}의 알림 — ${who}: ${n.reason} (내 기기 확인과 따로 봅니다)`,
+    text: n.pending
+      ? `⚠ ${n.own ? "내 기기가 찾음" : `${names[n.reporter] ?? `${n.reporter}번`}의 알림`} — ${n.reason}`
+      : n.own
+        ? `⚠ 내 기기가 찾음 — ${who}: ${n.reason}`
+        : `${names[n.reporter] ?? `${n.reporter}번`}의 알림 — ${who}: ${n.reason} (내 기기 확인과 따로 봅니다)`,
   });
   const current = store.getState().incident;
-  if (n.own || (n.reporter === 0 && !current))
+  // 확인하는 중이던 알림은 같은 사람의 확정 알림으로 바꾼다.
+  if (n.own || (n.reporter === 0 && (!current || current.pending)))
     store.setState({
-      incident: { seat: n.seat, reason: n.reason, own: n.own },
+      incident: {
+        seat: n.seat,
+        reason: n.reason,
+        own: n.own,
+        ...(n.pending ? { pending: true } : {}),
+      },
     });
 }
 

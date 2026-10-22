@@ -146,8 +146,16 @@ export interface DeviceEvents {
   slots: (deal: number, base: number, count: number) => void;
   /** 누가 열쇠를 공개했다 */
   keys: (deal: number, from: number, slots: number[]) => void;
-  /** 이상한 일(내 카드가 안 열린다, 같은 자리에 다른 열쇠 등) */
-  problem: (deal: number, reason: string, device: number | null) => void;
+  /**
+   * 이상한 일(내 카드가 안 열린다, 같은 자리에 다른 열쇠 등). `pending`이면 부정은 확실하지만
+   * 누군지 확인하는 중이라 확정 알림이 뒤따른다
+   */
+  problem: (
+    deal: number,
+    reason: string,
+    device: number | null,
+    pending?: boolean,
+  ) => void;
   /** 새 열쇠를 만들었다(새로고침에 대비해 남겨 둘 때) */
   persist: () => void;
 }
@@ -1100,7 +1108,15 @@ export class FairDevice {
         );
         return;
       }
-      // 열쇠 증명이 모두 맞으면 섞는 단계를 본다. 섞기 증명이 끝나기를 기다릴 수 있어 작업 줄 밖에서 한다.
+      // 열쇠 증명이 모두 맞으면 섞는 단계를 본다. 섞기 증명이 끝나기를 기다릴 수 있어 판은 바로 멈추고
+      // 작업 줄 밖에서 찾아 확정 알림을 보낸다.
+      this.emit(
+        "problem",
+        ctx.id,
+        `${what}: 누가 했는지 섞기 증명으로 확인하는 중`,
+        null,
+        true,
+      );
       void this.chainCulprit(ctx).then((chain) =>
         this.emit(
           "problem",

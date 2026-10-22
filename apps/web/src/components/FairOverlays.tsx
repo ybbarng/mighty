@@ -18,6 +18,8 @@ export interface IncidentState {
   seat: number | null;
   reason: string;
   own: boolean;
+  /** 부정은 확실하지만 누가 했는지 확인하는 중 */
+  pending?: boolean;
 }
 
 /**
@@ -63,20 +65,25 @@ export function FairOverlays({
       {incident && (
         <div
           role="alert"
-          className="absolute inset-x-0 z-[345] mx-auto w-fit max-w-[94%] rounded-xl border border-rose-300/60 bg-rose-800/95 px-4 py-2 text-center text-sm shadow-2xl"
+          className="absolute inset-x-0 z-[345] mx-auto flex w-fit max-w-[94%] items-center gap-3 rounded-xl border border-rose-300/60 bg-rose-800/95 px-4 py-2 text-sm shadow-2xl"
           style={{ top }}
         >
-          <div className="font-bold">
-            ⚠ 부정 감지 —{" "}
-            {incident.seat === null
-              ? "누군지는 가릴 수 없습니다"
-              : whoName(incident.seat)}
-          </div>
-          <div className="mt-0.5 text-xs opacity-90">{incident.reason}</div>
-          <div className="mt-1 text-[11px] opacity-75">
-            {incident.own
-              ? "내 기기가 직접 확인한 것입니다. 이 판을 멈췄습니다."
-              : "판을 진행하는 방장 기기가 찾아 판을 멈췄습니다(내 기기는 따로 확인하지 못했습니다)."}
+          <Police searching={incident.pending === true} />
+          <div className="min-w-0 text-center">
+            <div className="font-bold">
+              ⚠ 부정 감지 —{" "}
+              {incident.pending
+                ? "누가 했는지 확인하는 중…"
+                : incident.seat === null
+                  ? "누군지는 가릴 수 없습니다"
+                  : whoName(incident.seat)}
+            </div>
+            <div className="mt-0.5 text-xs opacity-90">{incident.reason}</div>
+            <div className="mt-1 text-[11px] opacity-75">
+              {incident.own
+                ? "내 기기가 직접 확인한 것입니다. 이 판을 멈췄습니다."
+                : "판을 진행하는 방장 기기가 찾아 판을 멈췄습니다(내 기기는 따로 확인하지 못했습니다)."}
+            </div>
           </div>
         </div>
       )}
@@ -120,6 +127,81 @@ export function FairOverlays({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * 부정 감지 팝업의 경찰관. 머리 위 경광등이 빨강·파랑으로 번갈아 켜진다.
+ * 누가 했는지 확인하는 중이면 돋보기를 든다
+ */
+function Police({ searching }: { searching: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      className="size-14 shrink-0"
+      role="img"
+      aria-label={searching ? "경찰이 조사하는 중" : "경찰 출동"}
+    >
+      {/* 경광등 */}
+      <rect x="22" y="15.5" width="20" height="4" rx="1.5" fill="#1f2937" />
+      <path
+        d="M24 6 a8 8 0 0 1 8 -8 v8 z"
+        className="siren-red"
+        fill="#ef4444"
+        transform="translate(0 10)"
+      />
+      <path
+        d="M32 6 v-8 a8 8 0 0 1 8 8 z"
+        className="siren-blue"
+        fill="#3b82f6"
+        transform="translate(0 10)"
+      />
+      {/* 얼굴 */}
+      <circle cx="32" cy="40" r="15" fill="#f4c7a1" />
+      <circle cx="26.5" cy="40" r="1.8" fill="#1f2937" />
+      <circle cx="37.5" cy="40" r="1.8" fill="#1f2937" />
+      {/* 찌푸린 눈썹과 입 */}
+      <path
+        d="M23.5 36 l5 1.2 M40.5 36 l-5 1.2"
+        stroke="#1f2937"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M28 47 q4 -2 8 0"
+        stroke="#7c2d12"
+        strokeWidth="1.6"
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* 모자 */}
+      <path d="M16 31 q16 -22 32 0 z" fill="#1e3a8a" />
+      <rect x="14" y="29.5" width="36" height="4" rx="2" fill="#0f172a" />
+      <path
+        d="M32 18.5 l1.6 3.2 3.5.5 -2.5 2.5.6 3.5 -3.2 -1.7 -3.2 1.7.6 -3.5 -2.5 -2.5 3.5 -.5z"
+        fill="#facc15"
+      />
+      {searching && (
+        <g>
+          {/* 돋보기 */}
+          <circle
+            cx="50"
+            cy="50"
+            r="7"
+            fill="#e0f2fe"
+            fillOpacity="0.35"
+            stroke="#e5e7eb"
+            strokeWidth="2.5"
+          />
+          <path
+            d="M55 55 l6 6"
+            stroke="#e5e7eb"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+          />
+        </g>
+      )}
+    </svg>
   );
 }
 

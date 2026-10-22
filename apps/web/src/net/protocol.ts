@@ -53,6 +53,8 @@ export interface IncidentReport {
   /** 탓한 자리. 누군지 가릴 수 없으면 null */
   seat: number | null;
   reason: string;
+  /** 부정은 확실하지만 누가 했는지 확인하는 중(확정 알림이 뒤따른다) */
+  pending?: boolean;
 }
 
 /** 멘탈 포커 메시지(섞은 덱, 공개한 열쇠, 물음과 답, 판 기록). 기기끼리 모두에게 직접 보낸다 */

@@ -88,16 +88,24 @@ export class HeartsCoordinator {
       if (deal === this.deal) this.checkPlays();
       this.tryOpenAll(deal);
     });
-    this.device.on("problem", (_deal, reason, device) =>
-      this.incident({ seat: device, reason }),
+    this.device.on("problem", (_deal, reason, device, pending) =>
+      this.incident({
+        seat: device,
+        reason,
+        ...(pending ? { pending: true as const } : {}),
+      }),
     );
   }
 
+  /** 판을 멈추고 알린다. 누군지 확인하는 중인 알림(`pending`)은 뒤따르는 알림으로 바꾼다 */
   incident(incident: Incident): void {
-    if (this.halted) return;
+    if (this.halted && !this.pendingIncident) return;
     this.halted = true;
+    this.pendingIncident = incident.pending === true;
     this.onIncident(incident);
   }
+
+  private pendingIncident = false;
 
   handle(events: readonly GameEvent[], pub: HeartsPublic): void {
     if (this.halted) return;
@@ -771,7 +779,9 @@ export class HeartsGuestSeat {
   }
 
   receive(message: FairWire | FairControl, from: number): void {
-    if (this.halted) return;
+    // 판을 멈추면 게임을 진행시키는 메시지(판 기록·물음)만 받지 않는다. 섞은 덱·열쇠·증명은 끝까지 받는다
+    // (누가 조작했는지 확인하는 데 쓴다).
+    if (this.halted && (message.k === "log" || message.k === "query")) return;
     switch (message.k) {
       case "chain":
       case "keys":

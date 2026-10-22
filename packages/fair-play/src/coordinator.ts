@@ -32,6 +32,11 @@ export interface Incident {
   /** 탓할 자리. 누군지 가릴 수 없으면 null */
   seat: number | null;
   reason: string;
+  /**
+   * 부정은 확실하지만 누가 했는지 확인하는 중이다(섞기 증명을 기다린다). 판은 바로 멈추고,
+   * 확인되면 이 알림을 바꾸는 알림이 뒤따른다
+   */
+  pending?: true;
 }
 
 /**
@@ -44,6 +49,12 @@ export function reportShuffleTamper(
   what: string,
   incident: (incident: Incident) => void,
 ): void {
+  // 같은 카드가 두 번 열린 것은 내 기기가 직접 본 사실이라 판을 바로 멈춘다. 누가 했는지는 뒤따라 알린다.
+  incident({
+    seat: null,
+    reason: `${what}: 섞기 조작이다. 누가 했는지 섞기 증명으로 확인하는 중`,
+    pending: true,
+  });
   void device.shuffleCulprit(deal).then((culprit) =>
     incident(
       culprit
@@ -139,10 +150,11 @@ export class FairCoordinator {
       this.tryOpenAll(deal);
     });
     this.device.on("cards", () => this.updateBusy());
-    this.device.on("problem", (_deal, reason, device) =>
+    this.device.on("problem", (_deal, reason, device, pending) =>
       this.incident({
         seat: device === null ? null : this.seatOfDevice(device),
         reason,
+        ...(pending ? { pending: true as const } : {}),
       }),
     );
   }
@@ -152,11 +164,15 @@ export class FairCoordinator {
     return device;
   }
 
+  /** 판을 멈추고 알린다. 누군지 확인하는 중인 알림(`pending`)은 뒤따르는 알림으로 바꾼다 */
   incident(incident: Incident): void {
-    if (this.halted) return;
+    if (this.halted && !this.pendingIncident) return;
     this.halted = true;
+    this.pendingIncident = incident.pending === true;
     this.onIncident(incident);
   }
+
+  private pendingIncident = false;
 
   /** 엔진 사건을 받는다. `view`는 사건 뒤의 공개 정보 */
   handle(events: readonly GameEvent[], view: PublicView): void {

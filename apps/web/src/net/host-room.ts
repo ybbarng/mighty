@@ -95,6 +95,8 @@ export interface IncidentNotice {
   seat: number | null;
   reason: string;
   own: boolean;
+  /** 누가 했는지 확인하는 중(확정 알림이 뒤따른다) */
+  pending?: boolean;
 }
 
 interface GuestSeat {
@@ -529,6 +531,7 @@ export class HostRoom<
       reporter: 0,
       seat: incident.seat,
       reason: incident.reason,
+      ...(incident.pending ? { pending: true } : {}),
     };
     this.send(report);
     for (const l of this.incidentListeners)
@@ -537,6 +540,7 @@ export class HostRoom<
         seat: incident.seat,
         reason: incident.reason,
         own: true,
+        ...(incident.pending ? { pending: true } : {}),
       });
   }
 
@@ -947,6 +951,7 @@ export class HostRoom<
             reporter: seat,
             seat: typeof message.seat === "number" ? message.seat : null,
             reason: message.reason.slice(0, 200),
+            ...(message.pending === true ? { pending: true } : {}),
             own: false,
           });
         break;
