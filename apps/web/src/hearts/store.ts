@@ -10,13 +10,13 @@ import {
 } from "@mighty/hearts-engine";
 import { create } from "zustand";
 import type { EndVoteState, IncidentState } from "@/components/FairOverlays";
-
 import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { useSettings } from "@/game/settings";
 import { type Cue, play as playCue } from "@/game/sound";
 import { dealPlan, prefersReducedMotion, SHUFFLE_MS } from "@/game/timing";
+import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 
 import { heartsBotFor } from "./bots";
 import { heartsKit } from "./kit";
@@ -137,7 +137,7 @@ interface HeartsStore {
   attachOnline(
     host: HeartsHost,
     seatNames: string[],
-    options?: { network?: boolean },
+    options?: { network?: boolean; stats?: StatsTarget },
   ): void;
   setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
@@ -241,7 +241,13 @@ export const useHearts = create<HeartsStore>((set, get) => {
 
   const attach = (
     host: HeartsHost,
-    options: { save: boolean; seatNames: string[] | null; network?: boolean },
+    options: {
+      save: boolean;
+      seatNames: string[] | null;
+      network?: boolean;
+      /** 내 기록에 남길 대국(배우기는 남기지 않는다) */
+      stats?: StatsTarget;
+    },
   ) => {
     clearTimer();
     unsubscribe?.();
@@ -268,8 +274,13 @@ export const useHearts = create<HeartsStore>((set, get) => {
         saveHearts((host as HeartsLocalMatch).save());
     };
     persist();
+    const recorder = options.stats
+      ? new StatsRecorder(heartsKit.stats, options.stats)
+      : null;
+    for (const snapshot of pending) recorder?.observe(snapshot);
     unsubscribe = host.subscribe((snapshot) => {
       persist();
+      recorder?.observe(snapshot);
       enqueue([snapshot]);
     });
     enqueue(pending);
@@ -326,13 +337,12 @@ export const useHearts = create<HeartsStore>((set, get) => {
     network: false,
 
     newGame(options) {
-      attach(
-        newLocal(
-          options.rules,
-          options.seed ?? Math.floor(Math.random() * 2 ** 31),
-        ),
-        { save: true, seatNames: null },
-      );
+      const seed = options.seed ?? Math.floor(Math.random() * 2 ** 31);
+      attach(newLocal(options.rules, seed), {
+        save: true,
+        seatNames: null,
+        stats: { game: "hearts", mode: "solo", key: `solo:${seed}` },
+      });
       set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
 
@@ -340,6 +350,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
       attach(newLocal(saved.rules, saved.seed, saved.log), {
         save: true,
         seatNames: null,
+        stats: { game: "hearts", mode: "solo", key: `solo:${saved.seed}` },
       });
     },
 
@@ -348,6 +359,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
         save: false,
         seatNames,
         network: options?.network ?? false,
+        ...(options?.stats ? { stats: options.stats } : {}),
       });
     },
 

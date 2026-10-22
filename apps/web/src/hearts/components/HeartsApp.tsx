@@ -192,6 +192,12 @@ export function HeartsApp() {
             하트는?
           </button>
           <a
+            href="/profile?game=hearts"
+            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
+          >
+            내 기록
+          </a>
+          <a
             href="/"
             className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
           >

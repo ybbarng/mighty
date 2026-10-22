@@ -18,6 +18,23 @@ export interface KitLoggedAction<Action> {
 }
 
 /**
+ * 내 기록(통계)으로 무엇을 남기나. 내 자리 화면과 사건만 본다(`StatsRecorder`).
+ * 판 기록·게임 기록의 모양은 게임마다 정하고, 지표는 그 게임의 통계 화면이 계산한다
+ */
+export interface KitStats<View, Event> {
+  /** 이 사건들로 새 판이 시작했다 */
+  roundStarted(events: readonly Event[]): boolean;
+  /** 이 사건들로 판 점수가 매겨졌다 */
+  roundEnded(events: readonly Event[]): boolean;
+  gameEnded(events: readonly Event[]): boolean;
+  roundNumber(view: View): number;
+  /** 판 기록. `start`는 판이 시작할 때 화면(보지 못했으면 null), `events`는 그 판 사건 모두 */
+  round(start: View | null, end: View, events: readonly Event[]): unknown;
+  /** 게임 기록. `events`는 게임이 끝난 걸음의 사건 */
+  game(view: View, events: readonly Event[]): unknown;
+}
+
+/**
  * 게임 하나를 돌리는 데 필요한 것. 대국 진행(LocalMatch)과 온라인 방(HostRoom·GuestRoom)은
  * 이것만 알고, 어떤 게임(마이티·하트)인지는 모른다.
  * `Extra`는 그 게임만의 시작 조건(마이티의 정해진 패 등)이다.
@@ -53,6 +70,8 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
    * 참가자는 보낼 수 없어야 한다(`guestMayAct`)
    */
   readonly retireAction: Action;
+  /** 내 기록에 남길 것 */
+  readonly stats: KitStats<View, Event>;
   /** 봇이 둘 수 있는 화면인가. 튜토리얼 장면처럼 낼 카드가 떨어지면 멈춘다 */
   botCanAct?(view: View): boolean;
   /** 온라인 참가자가 보낼 수 있는 행동인가(마이티의 그만두기처럼 혼자 할 때만 쓰는 것을 막는다) */

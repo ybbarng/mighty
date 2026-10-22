@@ -105,6 +105,15 @@ export function OnlineScreen({
     () => roomFromUrl ?? resume?.room ?? randomId(16),
   );
   const [copied, setCopied] = useState(false);
+  /** 온라인 대국: 내 기록에 남긴다(같은 방은 같은 대국이라 새로고침해도 같은 판을 두 번 남기지 않는다) */
+  const onlineOptions = {
+    network: true,
+    stats: {
+      game: "mighty",
+      mode: "online" as const,
+      key: `online:${roomCode}`,
+    },
+  };
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
@@ -208,9 +217,7 @@ export function OnlineScreen({
         // 새로고침 전에 게임 중이었으면 바로 게임 화면으로 간다. 참가자들은 토큰으로 다시 들어온다.
         if (host.match) {
           started.current = true;
-          attachOnline(host.match, seatNamesOf(host.lobby()), {
-            network: true,
-          });
+          attachOnline(host.match, seatNamesOf(host.lobby()), onlineOptions);
           attachFair(
             host.fair?.coordinator,
             () => host.abandon(),
@@ -282,7 +289,7 @@ export function OnlineScreen({
             seatNamesOf(
               guest.lobby ?? { seats: [], ruleCode: "", started: true },
             ),
-            { network: true },
+            onlineOptions,
           );
           attachFair(guest.fair?.coordinator, null, (end) => guest.vote(end));
           onPlaying();
@@ -300,7 +307,7 @@ export function OnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()), { network: true });
+      attachOnline(match, seatNamesOf(host.lobby()), onlineOptions);
       attachFair(
         host.fair?.coordinator,
         () => host.abandon(),

@@ -156,6 +156,12 @@ export function StartScreen({
           >
             마이티는?
           </button>
+          <a
+            href="/profile"
+            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
+          >
+            내 기록
+          </a>
           {hearts && (
             <button
               type="button"

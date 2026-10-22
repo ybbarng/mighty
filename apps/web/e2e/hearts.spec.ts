@@ -86,6 +86,18 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   await expect(page.getByText(/오른쪽\(.+\)에게 넘길 카드/)).toBeVisible({
     timeout: 20_000,
   });
+  // 끝낸 판은 내 기록에 쌓인다(하트에서 들어가면 하트 기록부터).
+  await page.goto("/profile?game=hearts");
+  await expect(page.getByRole("tab", { name: "♥ 하트" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText("판 평균 점수")).toBeVisible();
+  await expect(page.getByText(/1판 · 게임 0번/)).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("hearts-4-profile.png"),
+    fullPage: true,
+  });
   expect(errors).toEqual([]);
 });
 

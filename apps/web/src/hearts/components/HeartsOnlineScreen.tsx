@@ -82,6 +82,15 @@ export function HeartsOnlineScreen({
     () => roomFromUrl ?? resume?.room ?? randomId(16),
   );
   const [copied, setCopied] = useState(false);
+  /** 온라인 대국: 내 기록에 남긴다(같은 방은 같은 대국이라 새로고침해도 같은 판을 두 번 남기지 않는다) */
+  const onlineOptions = {
+    network: true,
+    stats: {
+      game: "hearts",
+      mode: "online" as const,
+      key: `online:${roomCode}`,
+    },
+  };
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
@@ -172,9 +181,7 @@ export function HeartsOnlineScreen({
         setPhase("lobby");
         if (host.match) {
           started.current = true;
-          attachOnline(host.match, seatNamesOf(host.lobby()), {
-            network: true,
-          });
+          attachOnline(host.match, seatNamesOf(host.lobby()), onlineOptions);
           bindFair(
             useHearts,
             host.fair?.coordinator,
@@ -250,7 +257,7 @@ export function HeartsOnlineScreen({
             seatNamesOf(
               guest.lobby ?? { seats: [], ruleCode: "", started: true },
             ),
-            { network: true },
+            onlineOptions,
           );
           bindFair(useHearts, guest.fair?.coordinator, null, (end) =>
             guest.vote(end),
@@ -270,7 +277,7 @@ export function HeartsOnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()), { network: true });
+      attachOnline(match, seatNamesOf(host.lobby()), onlineOptions);
       bindFair(
         useHearts,
         host.fair?.coordinator,

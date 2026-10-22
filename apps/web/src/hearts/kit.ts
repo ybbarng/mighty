@@ -18,6 +18,7 @@ import type { GameKit } from "@/game/kit";
 
 import { heartsBotFor } from "./bots";
 import type { HeartsLevel } from "./settings";
+import { heartsStats } from "./stats";
 
 import { sortHearts } from "./terms";
 
@@ -56,6 +57,7 @@ export const heartsKit: HeartsKit = {
   // 끝내기는 게임 전체를 끝내므로 참가자에게는 허락하지 않는다.
   guestMayAct: (action) => action.type !== "retire",
   retireAction: { type: "retire" },
+  stats: heartsStats,
   botFor: (level) => heartsBotFor(level as HeartsLevel),
   annotateBotAction: (view, action) =>
     action.type === "play" && action.slot === undefined

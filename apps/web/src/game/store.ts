@@ -10,10 +10,12 @@ import { isJoker, mightyOf } from "@mighty/engine";
 import type { BusyReason } from "@mighty/fair-play";
 import { create } from "zustand";
 import type { EndVoteState } from "@/components/FairOverlays";
+import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 import { botFor, browserPace } from "./bots";
 import { cuesFor } from "./cues";
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
+import { mightyKit } from "./mighty-kit";
 import { saveGame } from "./persistence";
 import { useSettings } from "./settings";
 import { play as playCue } from "./sound";
@@ -118,7 +120,7 @@ interface GameStore {
   attachOnline(
     host: AttachableHost,
     seatNames: string[],
-    options?: { network?: boolean },
+    options?: { network?: boolean; stats?: StatsTarget },
   ): void;
   setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
@@ -245,7 +247,13 @@ export const useGame = create<GameStore>((set, get) => {
    */
   const attach = (
     host: AttachableHost,
-    options: { save: boolean; seatNames: string[] | null; network?: boolean },
+    options: {
+      save: boolean;
+      seatNames: string[] | null;
+      network?: boolean;
+      /** 내 기록에 남길 대국(배우기는 남기지 않는다) */
+      stats?: StatsTarget;
+    },
   ) => {
     clearTimer();
     unsubscribe?.();
@@ -272,8 +280,13 @@ export const useGame = create<GameStore>((set, get) => {
       if (options.save && host instanceof LocalMatch) saveGame(host.save());
     };
     persist();
+    const recorder = options.stats
+      ? new StatsRecorder(mightyKit.stats, options.stats)
+      : null;
+    for (const snapshot of pending) recorder?.observe(snapshot);
     unsubscribe = host.subscribe((snapshot) => {
       persist();
+      recorder?.observe(snapshot);
       enqueue([snapshot]);
     });
     enqueue(pending);
@@ -316,14 +329,19 @@ export const useGame = create<GameStore>((set, get) => {
     voteEnd: null,
 
     newGame(options) {
+      const seed = options.seed ?? Math.floor(Math.random() * 2 ** 31);
       const host = new LocalMatch({
         rules: options.rules,
-        seed: options.seed ?? Math.floor(Math.random() * 2 ** 31),
+        seed,
         bot: botFor(useSettings.getState().botLevel),
         pace: browserPace,
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
-      attach(host, { save: true, seatNames: null });
+      attach(host, {
+        save: true,
+        seatNames: null,
+        stats: { game: "mighty", mode: "solo", key: `solo:${seed}` },
+      });
       set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
 
@@ -336,6 +354,7 @@ export const useGame = create<GameStore>((set, get) => {
         {
           save: true,
           seatNames: null,
+          stats: { game: "mighty", mode: "solo", key: `solo:${saved.seed}` },
         },
       );
     },
@@ -345,6 +364,7 @@ export const useGame = create<GameStore>((set, get) => {
         save: false,
         seatNames,
         network: options?.network ?? false,
+        ...(options?.stats ? { stats: options.stats } : {}),
       });
     },
 

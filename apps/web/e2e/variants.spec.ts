@@ -134,6 +134,14 @@ for (const variant of VARIANTS) {
       page.getByRole("heading", { name: /승리|패배/ }),
     ).toBeVisible();
     await shot("result");
+    // 끝낸 판은 내 기록에 쌓인다.
+    await page.goto("/profile");
+    await expect(page.getByText(/1판 · 게임 0번/)).toBeVisible();
+    await expect(page.getByText("역할별 승률")).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath(`${variant.name}-profile.png`),
+      fullPage: true,
+    });
     expect(errors).toEqual([]);
   });
 }
