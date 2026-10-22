@@ -31,11 +31,16 @@ function hostOptions(store?: HostStore) {
   };
 }
 
-async function setup(guestCount: number, store?: HostStore) {
+async function setup(
+  guestCount: number,
+  store?: HostStore,
+  voteDelayMs?: number,
+) {
   const net = new MemoryNetwork();
   const host = new HostRoom({
     transport: net.join("host"),
     ...hostOptions(store),
+    ...(voteDelayMs !== undefined ? { voteDelayMs } : {}),
   });
   const guests: GuestRoom<
     typeof WINDOWS_RULES,
@@ -224,4 +229,19 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     await until(() => audits.length === guests.length);
     expect(audits.filter((a) => !a.ok)).toEqual([]);
   }, 240_000);
+
+  it("카드를 넘기는 중에 끊긴 사람을 기다리다 방장이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
+    const { net, host, guests } = await setup(3, undefined, 50);
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    net.disconnect("g0");
+    await until(() => host.lobby().endVote !== undefined);
+    host.vote(true);
+    const phase = (m: { current(): unknown } | null | undefined) =>
+      (m?.current() as { phase?: string } | undefined)?.phase;
+    await until(() => phase(host.match) === "gameOver");
+    await until(() =>
+      guests.slice(1).every((g) => phase(g.match) === "gameOver"),
+    );
+  }, 120_000);
 });

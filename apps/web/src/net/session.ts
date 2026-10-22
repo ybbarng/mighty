@@ -21,6 +21,17 @@ export function isLocalNet(): boolean {
   return new URLSearchParams(window.location.search).get("net") === "local";
 }
 
+/** 화면 시험용: 같은 브라우저 탭끼리 할 때(`?net=local`)만 끝내기 투표를 여는 시간을 `?voteDelay=`(ms)로 줄인다 */
+export function testVoteDelayMs():
+  | { voteDelayMs: number }
+  | Record<string, never> {
+  if (!isLocalNet()) return {};
+  const value = Number(
+    new URLSearchParams(window.location.search).get("voteDelay"),
+  );
+  return value > 0 ? { voteDelayMs: value } : {};
+}
+
 export async function openTransport(roomCode: string): Promise<Transport> {
   if (isLocalNet()) return joinBroadcast(roomCode);
   // WebRTC 라이브러리는 친구와 할 때만 받는다.

@@ -33,6 +33,7 @@ import {
   onlineSession,
   openTransport,
   saveSeatToken,
+  testVoteDelayMs,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
 
@@ -42,6 +43,7 @@ import {
   announceRoundVerified,
   type BusyCoordinator,
   bindFair,
+  endVoteOf,
   FairLine,
   type IncidentNoticeLike,
   reportIncident,
@@ -155,7 +157,8 @@ export function OnlineScreen({
   const attachFair = (
     coordinator: BusyCoordinator | undefined,
     endGame: (() => void) | null,
-  ) => bindFair(useGame, coordinator, endGame);
+    vote: (end: boolean) => void,
+  ) => bindFair(useGame, coordinator, endGame, vote);
 
   const enter = async () => {
     const trimmed = name.trim() || (isHost ? "방장" : "손님");
@@ -176,6 +179,7 @@ export function OnlineScreen({
           botLevel: useSettings.getState().botLevel,
           botNames: useSettings.getState().botNames,
           pace: browserPace,
+          ...testVoteDelayMs(),
           ...(useSettings.getState().fairPlay
             ? { fair: { group: "2048" as const } }
             : {}),
@@ -194,7 +198,10 @@ export function OnlineScreen({
         host.onLobby((l) => {
           setLobby(l);
           setSeatNames(seatNamesOf(l));
-          useGame.setState({ offlineSeats: offlineSeatsOf(l) });
+          useGame.setState({
+            offlineSeats: offlineSeatsOf(l),
+            endVote: endVoteOf(l),
+          });
         });
         setHostingRoom("mighty", roomCode);
         setPhase("lobby");
@@ -204,7 +211,11 @@ export function OnlineScreen({
           attachOnline(host.match, seatNamesOf(host.lobby()), {
             network: true,
           });
-          attachFair(host.fair?.coordinator, () => host.abandon());
+          attachFair(
+            host.fair?.coordinator,
+            () => host.abandon(),
+            (end) => host.vote(end),
+          );
           onPlaying();
         }
       } else {
@@ -230,7 +241,10 @@ export function OnlineScreen({
           setLobby(l);
           setPhase("lobby");
           setSeatNames(seatNamesOf(l));
-          useGame.setState({ offlineSeats: offlineSeatsOf(l) });
+          useGame.setState({
+            offlineSeats: offlineSeatsOf(l),
+            endVote: endVoteOf(l),
+          });
         });
         guest.on("full", () => setPhase("full"));
         guest.on("kicked", () => setPhase("kicked"));
@@ -270,7 +284,7 @@ export function OnlineScreen({
             ),
             { network: true },
           );
-          attachFair(guest.fair?.coordinator, null);
+          attachFair(guest.fair?.coordinator, null, (end) => guest.vote(end));
           onPlaying();
         });
       }
@@ -287,7 +301,11 @@ export function OnlineScreen({
     try {
       const match = await host.start();
       attachOnline(match, seatNamesOf(host.lobby()), { network: true });
-      attachFair(host.fair?.coordinator, () => host.abandon());
+      attachFair(
+        host.fair?.coordinator,
+        () => host.abandon(),
+        (end) => host.vote(end),
+      );
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

@@ -9,6 +9,7 @@ import type {
 import { isJoker, mightyOf } from "@mighty/engine";
 import type { BusyReason } from "@mighty/fair-play";
 import { create } from "zustand";
+import type { EndVoteState } from "@/components/FairOverlays";
 import { botFor, browserPace } from "./bots";
 import { cuesFor } from "./cues";
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
@@ -105,6 +106,9 @@ interface GameStore {
   fair: boolean;
   /** 방장: 연결이 끊긴 사람을 더 기다리지 않고 게임을 끝낸다(멘탈 포커) */
   endGame: (() => void) | null;
+  /** 멘탈 포커: 끊긴 사람을 오래 기다려 연 끝내기 투표와 내 표 내기 */
+  endVote: EndVoteState | null;
+  voteEnd: ((end: boolean) => void) | null;
   /** 다른 사람과 하는 온라인 대전인가. 카드 툴팁 같은 도움 기능을 끈다(원작 `bUseHintInNetwork`) */
   network: boolean;
   newGame(options: NewGameOptions): void;
@@ -308,6 +312,8 @@ export const useGame = create<GameStore>((set, get) => {
     },
     fair: false,
     endGame: null,
+    endVote: null,
+    voteEnd: null,
 
     newGame(options) {
       const host = new LocalMatch({
@@ -318,7 +324,7 @@ export const useGame = create<GameStore>((set, get) => {
         ...(options.presetDeal ? { presetDeal: options.presetDeal } : {}),
       });
       attach(host, { save: true, seatNames: null });
-      set({ fair: false, endGame: null });
+      set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
 
     resume(saved) {

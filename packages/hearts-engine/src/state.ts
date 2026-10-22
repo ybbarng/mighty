@@ -66,7 +66,9 @@ export type Action =
       /** 손패를 펼쳐 놓은 순서에서 몇 번째 카드였는가. 연출용 */
       slot?: number;
     }
-  | { type: "continue" };
+  | { type: "continue" }
+  /** 게임을 중간에 끝낸다(멘탈 포커 판에서 끊긴 사람을 더 기다리지 않을 때). 판 점수는 매기지 않는다 */
+  | { type: "retire" };
 
 export type Decision =
   | { kind: "pass"; direction: PassDirection; count: number }
@@ -87,7 +89,7 @@ export type GameEvent =
       moonShooter: number | null;
       scores: number[];
     }
-  | { type: "gameOver"; winners: number[] };
+  | { type: "gameOver"; winners: number[]; retired?: true };
 
 export interface LoggedAction {
   seat: number;

@@ -73,6 +73,7 @@ export function MightyApp() {
       hostLeft: false,
       reconnecting: false,
       offlineSeats: [],
+      endVote: null,
     });
     // 초대 링크로 들어왔다면 주소의 방 코드를 지워 처음 화면으로 돌아간다.
     if (window.location.search.includes("room=")) {

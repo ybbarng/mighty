@@ -7,6 +7,12 @@ import type { Point, Size } from "@/layout/compute-layout";
 
 import { ShuffleLoop } from "./DealAnimation";
 
+/** 끊긴 사람을 오래 기다려 연 끝내기 투표. `voters`는 표를 낼 수 있는 자리(연결된 사람) */
+export interface EndVoteState {
+  votes: { seat: number; end: boolean }[];
+  voters: number[];
+}
+
 /** 부정 감지(내 기기가 찾았거나, 판을 진행하는 방장이 알렸다) */
 export interface IncidentState {
   seat: number | null;
@@ -18,7 +24,8 @@ export interface IncidentState {
  * 멘탈 포커 판의 화면 위 표시. 마이티와 하트가 함께 쓴다.
  * - 부정 감지: 누가, 무엇을. 내 기기가 찾은 것과 방장이 알린 것을 구분한다
  * - 모두 함께 섞는 동안: 가운데 덱이 갈라졌다 합쳐지기를 되풀이한다. 무엇을 하는지는 위 상태 막대에 쓴다(`FairStatus`)
- * - 연결이 끊긴 사람: 컴퓨터가 대신할 수 없어 기다린다. 방장은 게임을 끝낼 수 있다
+ * - 연결이 끊긴 사람: 컴퓨터가 대신할 수 없어 기다린다. 방장은 게임을 끝낼 수 있고,
+ *   오래 기다리면 남은 사람이 투표한다(과반이 끝내기를 고르면 끝난다)
  */
 export function FairOverlays({
   incident,
@@ -26,6 +33,9 @@ export function FairOverlays({
   fair,
   offlineNames,
   endGame,
+  endVote,
+  voteEnd,
+  mySeat,
   whoName,
   center,
   card,
@@ -38,6 +48,9 @@ export function FairOverlays({
   fair: boolean;
   offlineNames: string[];
   endGame: (() => void) | null;
+  endVote: EndVoteState | null;
+  voteEnd: ((end: boolean) => void) | null;
+  mySeat: number;
   whoName: (seat: number) => string;
   center: Point;
   card: Size;
@@ -84,7 +97,14 @@ export function FairOverlays({
         >
           {offlineNames.join(", ")}님 연결이 끊겼습니다. 그 사람 카드는 그
           사람만 열 수 있어 돌아오기를 기다립니다.
-          {endGame && (
+          {endVote && voteEnd ? (
+            <EndVote
+              vote={endVote}
+              mySeat={mySeat}
+              onVote={voteEnd}
+              host={endGame !== null}
+            />
+          ) : endGame ? (
             <button
               type="button"
               onClick={endGame}
@@ -92,10 +112,56 @@ export function FairOverlays({
             >
               게임 끝내기
             </button>
+          ) : (
+            <span className="text-xs opacity-70">
+              오래 걸리면 끝낼지 투표합니다.
+            </span>
           )}
         </div>
       )}
     </>
+  );
+}
+
+/** 끝내기 투표: 더 기다리기 / 끝내기. 연결된 사람의 과반이 끝내기를 고르면(방장은 혼자서도) 끝난다 */
+function EndVote({
+  vote,
+  mySeat,
+  onVote,
+  host,
+}: {
+  vote: EndVoteState;
+  mySeat: number;
+  onVote: (end: boolean) => void;
+  host: boolean;
+}) {
+  const mine = vote.votes.find((v) => v.seat === mySeat)?.end;
+  const ends = vote.votes.filter(
+    (v) => v.end && vote.voters.includes(v.seat),
+  ).length;
+  const need = Math.floor(vote.voters.length / 2) + 1;
+  return (
+    <span className="flex w-full flex-wrap items-center justify-center gap-2">
+      <span className="text-xs opacity-80" data-testid="end-vote-count">
+        끝내기 {ends}/{need}표{host ? " · 방장은 바로 끝낼 수 있습니다" : ""}
+      </span>
+      <button
+        type="button"
+        aria-pressed={mine === false}
+        onClick={() => onVote(false)}
+        className={`rounded-lg px-3 py-1 font-semibold ${mine === false ? "bg-emerald-500" : "bg-white/15"}`}
+      >
+        더 기다리기
+      </button>
+      <button
+        type="button"
+        aria-pressed={mine === true}
+        onClick={() => onVote(true)}
+        className={`rounded-lg px-3 py-1 font-semibold ${mine === true ? "bg-rose-500 ring-2 ring-white" : "bg-rose-500/70"}`}
+      >
+        {host ? "게임 끝내기" : "끝내기"}
+      </button>
+    </span>
   );
 }
 

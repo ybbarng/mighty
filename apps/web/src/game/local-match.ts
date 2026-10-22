@@ -154,6 +154,8 @@ export class LocalMatch<
   private readonly shown = new Map<number, View>();
   /** 부정이 드러나 멈췄다 */
   private haltedReason: string | null = null;
+  /** `end()`로 끝냈다. 준비 중이던 행동은 버리고, 못 연 카드는 가린 채 끝난 화면을 보낸다 */
+  private ended = false;
 
   constructor(
     options: LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -281,6 +283,20 @@ export class LocalMatch<
     this.haltedReason = reason;
   }
 
+  /**
+   * 게임을 중간에 끝낸다(`kit.retireAction`). 준비 중인 행동(멘탈 포커로 카드를 기다리는 것)을 기다리지 않는다.
+   * 끊긴 사람을 더 기다리지 않기로 했을 때 쓴다
+   */
+  end(): SubmitResult {
+    if (this.ended) return { ok: false, error: "이미 끝냈다" };
+    const result = this.apply(this.seat, this.kit.retireAction);
+    if (!result.ok) return result;
+    this.ended = true;
+    this.haltedReason = "게임을 끝냈다";
+    for (const seat of [...this.held.keys()]) this.deliver(seat);
+    return result;
+  }
+
   get halted(): string | null {
     return this.haltedReason;
   }
@@ -298,10 +314,14 @@ export class LocalMatch<
     if (!queue) return;
     while (queue.length > 0) {
       const next = queue[0] as Snapshot<View, Event>;
-      const view = this.options.revealView
+      let view = this.options.revealView
         ? this.options.revealView(seat, next.view)
         : next.view;
-      if (view === null) return;
+      if (view === null) {
+        // 끝낸 게임은 더 열 카드가 없으므로 가린 채 보낸다.
+        if (!this.ended) return;
+        view = this.options.maskView?.(seat, next.view) ?? next.view;
+      }
       queue.shift();
       this.shown.set(seat, view);
       const snapshot = { view, events: next.events };
@@ -360,6 +380,10 @@ export class LocalMatch<
       debug("준비 시작", seat);
       const prepared = await prepare(this.state, seat, action);
       debug("준비 끝", seat, JSON.stringify(prepared).slice(0, 200));
+      if (this.ended) {
+        this.preparing.delete(seat);
+        return;
+      }
       const result = prepared.ok
         ? this.apply(seat, prepared.action, bot)
         : prepared;

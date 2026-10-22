@@ -199,7 +199,18 @@ export function RoundResultPanel({
   onNewGame: () => void;
 }) {
   const result = view.result;
+  // 판 점수 없이 끝났다: 끊긴 사람을 더 기다리지 않고 중간에 끝냈다(멘탈 포커 온라인).
+  if (view.phase === "gameOver" && (!result || !view.goal))
+    return (
+      <Panel title="게임을 중간에 끝냈습니다">
+        <p className="text-center text-sm">
+          이번 판은 점수를 매기지 않았습니다.
+        </p>
+        <ActionButton onClick={onNewGame}>처음으로</ActionButton>
+      </Panel>
+    );
   if (!result || !view.goal) return null;
+  const bankrupt = view.order.some((s) => (view.money[s] ?? 0) <= 0);
   const ruling = view.seat === view.declarer || view.seat === view.friend;
   const won = ruling === result.rulingWon;
   const gameOver = view.phase === "gameOver";
@@ -299,7 +310,10 @@ export function RoundResultPanel({
       {gameOver ? (
         <div className="flex flex-col items-center gap-2">
           <p className="text-center text-sm">
-            돈이 바닥난 사람이 생겨 게임이 끝났습니다. 내 등수는{" "}
+            {bankrupt
+              ? "돈이 바닥난 사람이 생겨 게임이 끝났습니다."
+              : "게임을 끝냈습니다."}{" "}
+            내 등수는{" "}
             <b>
               {view.order.filter(
                 (s) => (view.money[s] ?? 0) > (view.money[view.seat] ?? 0),

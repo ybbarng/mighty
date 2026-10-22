@@ -48,11 +48,17 @@ function hostOptions(rules: RuleSet, store?: HostStore) {
   };
 }
 
-async function setup(rules: RuleSet, guestCount: number, store?: HostStore) {
+async function setup(
+  rules: RuleSet,
+  guestCount: number,
+  store?: HostStore,
+  voteDelayMs?: number,
+) {
   const net = new MemoryNetwork();
   const host = new HostRoom({
     transport: net.join("host"),
     ...hostOptions(rules, store),
+    ...(voteDelayMs !== undefined ? { voteDelayMs } : {}),
   });
   const guests: GuestRoom[] = [];
   for (let i = 0; i < guestCount; i++) {
@@ -246,6 +252,46 @@ describe("멘탈 포커 온라인 대전", () => {
     expect(scored).toBe(1);
     await until(() => verified.length > 0);
   }, 180_000);
+
+  it("끊긴 사람을 기다리다 투표가 열리고, 남은 사람의 과반이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
+    const { net, host, guests } = await setup(
+      presetRules("standard5"),
+      3,
+      undefined,
+      50,
+    );
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    const [, g1, g2] = guests as [GuestRoom, GuestRoom, GuestRoom];
+    // 돌아오면 투표를 닫는다.
+    net.disconnect("g0");
+    await until(() => g1.lobby?.endVote !== undefined);
+    net.reconnect("g0");
+    (guests[0] as GuestRoom).leave();
+    const back = new GuestRoom({
+      transport: net.join("g0-back"),
+      name: "손님0",
+      token: (guests[0] as GuestRoom).token,
+      secret: (guests[0] as GuestRoom).secret,
+      fairStore: (
+        guests[0] as unknown as { fairStore: ReturnType<typeof memoryStore> }
+      ).fairStore,
+    });
+    await until(() => back.seat !== null && g1.lobby?.endVote === undefined);
+    // 다시 끊기면 기다렸다 다시 연다. 한 사람(3명 중 1명)의 끝내기로는 끝나지 않는다.
+    net.disconnect("g0-back");
+    await until(() => g1.lobby?.endVote !== undefined);
+    g1.vote(true);
+    host.vote(false);
+    await until(() => g2.lobby?.endVote?.votes.length === 2);
+    expect(host.match?.current().phase).not.toBe("gameOver");
+    g2.vote(true);
+    await until(() => host.match?.current().phase === "gameOver");
+    await until(() =>
+      [g1, g2].every((g) => g.match?.current().phase === "gameOver"),
+    );
+    expect(g1.lobby?.endVote).toBeUndefined();
+  }, 120_000);
 
   it("방장이 잠깐 끊겼다 돌아오면 참가자는 기다렸다 같은 판을 이어 간다", async () => {
     const { net, host, guests, incidents } = await setup(

@@ -48,6 +48,11 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
   startEvents(view: View): Event[];
   /** 게임이 끝났는가(온라인 판 끝 검증을 시작한다) */
   isOver(view: View): boolean;
+  /**
+   * 게임을 중간에 끝내는 행동. 멘탈 포커 판에서 끊긴 사람을 더 기다리지 않기로 하면(방장·투표) 방장 자리로 낸다.
+   * 참가자는 보낼 수 없어야 한다(`guestMayAct`)
+   */
+  readonly retireAction: Action;
   /** 봇이 둘 수 있는 화면인가. 튜토리얼 장면처럼 낼 카드가 떨어지면 멈춘다 */
   botCanAct?(view: View): boolean;
   /** 온라인 참가자가 보낼 수 있는 행동인가(마이티의 그만두기처럼 혼자 할 때만 쓰는 것을 막는다) */

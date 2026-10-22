@@ -75,6 +75,8 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
   const shuffling = useHearts((s) => s.shuffling);
   const fair = useHearts((s) => s.fair);
   const endGame = useHearts((s) => s.endGame);
+  const endVote = useHearts((s) => s.endVote);
+  const voteEnd = useHearts((s) => s.voteEnd);
   const submit = useHearts((s) => s.submit);
   const clearNotice = useHearts((s) => s.clearNotice);
   const botNames = useSettings((s) => s.botNames);
@@ -463,8 +465,15 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
             incident={incident}
             shuffling={dealing ? null : shuffling}
             fair={fair}
-            offlineNames={offlineSeats.map((s) => seatName(s))}
+            offlineNames={
+              view.phase === "gameOver"
+                ? []
+                : offlineSeats.map((s) => seatName(s))
+            }
             endGame={endGame}
+            endVote={endVote}
+            voteEnd={voteEnd}
+            mySeat={me}
             whoName={(seat) => (seat === me ? "내 자리" : seatName(seat))}
             center={tableCenter}
             card={layout.trick.card}
@@ -720,17 +729,21 @@ function RoundPanel({
   onExit: () => void;
 }) {
   const over = view.phase === "gameOver";
+  // 판 점수 없이 끝났다: 끊긴 사람을 더 기다리지 않고 중간에 끝냈다.
+  const retired = over && view.roundPoints === null;
   const low = Math.min(...view.scores);
   const winners = view.players.filter((s) => view.scores[s] === low);
   const points = view.roundPoints ?? view.history.at(-1) ?? [];
   return (
     <Panel
       title={
-        over
-          ? winners.includes(view.seat)
-            ? "🏆 이겼습니다!"
-            : `${winners.map(seatName).join(", ")} 승리`
-          : `${view.roundNumber}판 결과`
+        retired
+          ? "게임을 중간에 끝냈습니다"
+          : over
+            ? winners.includes(view.seat)
+              ? "🏆 이겼습니다!"
+              : `${winners.map(seatName).join(", ")} 승리`
+            : `${view.roundNumber}판 결과`
       }
     >
       {view.moonShooter !== null && (
@@ -742,7 +755,7 @@ function RoundPanel({
         <thead>
           <tr className="text-xs opacity-60">
             <th />
-            <th>이번 판</th>
+            {!retired && <th>이번 판</th>}
             <th>합계</th>
           </tr>
         </thead>
@@ -753,9 +766,11 @@ function RoundPanel({
               className={cn(seat === view.seat && "font-bold text-amber-200")}
             >
               <td className="text-left">{seatName(seat)}</td>
-              <td className={cn((points[seat] ?? 0) > 0 && "text-red-300")}>
-                +{points[seat] ?? 0}
-              </td>
+              {!retired && (
+                <td className={cn((points[seat] ?? 0) > 0 && "text-red-300")}>
+                  +{points[seat] ?? 0}
+                </td>
+              )}
               <td>{view.scores[seat]}</td>
             </tr>
           ))}

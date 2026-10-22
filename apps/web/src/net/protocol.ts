@@ -35,6 +35,11 @@ export interface LobbyState {
    * `group`은 쓰는 수의 크기(비트)
    */
   fair?: { group: GroupName };
+  /**
+   * 멘탈 포커 판에서 끊긴 사람을 오래 기다리면 여는 끝내기 투표. 연결된 사람(방장과 참가자)이 표를 낸다.
+   * 과반이 끝내기를 고르거나 방장이 고르면 게임을 끝낸다
+   */
+  endVote?: { votes: { seat: number; end: boolean }[] };
 }
 
 /**
@@ -112,6 +117,8 @@ export type GuestMessage<A = Action> =
   | { t: "action"; action: A }
   | { t: "reveal"; secret: string }
   | { t: "chat"; text: string }
+  /** 끝내기 투표의 표(`LobbyState.endVote`) */
+  | { t: "vote"; end: boolean }
   | AuditReport
   | IncidentReport
   | { t: "leave" };

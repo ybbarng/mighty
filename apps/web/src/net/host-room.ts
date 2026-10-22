@@ -68,6 +68,8 @@ export interface HostRoomOptions<
   standInDelayMs?: number;
   /** 시작할 때 참가자의 비밀 값을 기다리는 시간 */
   revealTimeoutMs?: number;
+  /** 멘탈 포커 판에서 끊긴 사람을 기다리다 끝내기 투표를 열기까지의 시간 */
+  voteDelayMs?: number;
   /** 빈자리와 연결이 끊긴 자리를 맡을 컴퓨터 */
   bot?: KitBot<View, ActionT>;
   /** 그 컴퓨터의 실력 단계. 대기실에 알려 참가자가 판 끝에 컴퓨터 수를 다시 계산하게 한다 */
@@ -133,6 +135,10 @@ export class HostRoom<
   private hostCommit: string | null = null;
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
+  private readonly voteDelayMs: number;
+  private voteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 끝내기 투표(열려 있을 때). 자리 → 끝내기에 찬성하는가 */
+  private endVote: Map<number, boolean> | null = null;
   private readonly bot: KitBot<View, ActionT> | null;
   private readonly botLevel: number | null;
   private readonly pace: ((next: () => void) => void) | null;
@@ -175,6 +181,7 @@ export class HostRoom<
     this.hostName = options.hostName;
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
+    this.voteDelayMs = options.voteDelayMs ?? 60_000;
     this.bot = options.bot ?? null;
     this.botLevel = options.botLevel ?? null;
     this.pace = options.pace ?? null;
@@ -334,6 +341,8 @@ export class HostRoom<
     }
     this.subscribeGuests(match);
     match.refresh();
+    // 멘탈 포커 판에서 돌아오지 않는 사람이 있으면 전처럼 투표로 끝낼 수 있게 한다.
+    this.updateVote();
   }
 
   /** 참가자 자리마다 화면을 보낸다 */
@@ -402,6 +411,13 @@ export class HostRoom<
       ...(this.fairGroup()
         ? { fair: { group: this.fairGroup() as GroupName } }
         : {}),
+      ...(this.endVote
+        ? {
+            endVote: {
+              votes: [...this.endVote].map(([seat, end]) => ({ seat, end })),
+            },
+          }
+        : {}),
     };
   }
 
@@ -427,7 +443,73 @@ export class HostRoom<
 
   /** 연결이 끊긴 사람을 더 기다리지 않고 게임을 끝낸다(멘탈 포커는 컴퓨터가 대신할 수 없다) */
   abandon(): void {
-    this.match?.submit({ type: "retire" } as unknown as ActionT);
+    if (!this.match) return;
+    this.match.end();
+    this.closeVote();
+    this.broadcastLobby();
+  }
+
+  /** 방장의 표. 방장이 끝내기를 고르면 바로 끝낸다 */
+  vote(end: boolean): void {
+    this.castVote(0, end);
+  }
+
+  /** 끝내기 투표에 표를 낼 수 있는 자리: 연결된 사람(방장과 참가자) */
+  private voters(): number[] {
+    const seats = [0];
+    for (const [seat, guest] of this.guests) if (guest.peerId) seats.push(seat);
+    return seats;
+  }
+
+  /**
+   * 멘탈 포커 판에서 끊긴 사람이 있으면 정한 시간 기다렸다가 끝내기 투표를 연다. 모두 돌아오면 닫는다.
+   * 그 사람 열쇠 없이는 그 사람 카드를 열 수 없어 컴퓨터가 대신 둘 수 없다(docs/13 4절).
+   */
+  private updateVote(): void {
+    const waiting =
+      this.fair !== null &&
+      this.match !== null &&
+      !this.kit.isOver(this.match.current()) &&
+      [...this.guests.values()].some((g) => g.peerId === null);
+    if (!waiting) {
+      this.closeVote();
+      return;
+    }
+    if (this.endVote || this.voteTimer) return;
+    this.voteTimer = setTimeout(() => {
+      this.voteTimer = null;
+      if (![...this.guests.values()].some((g) => g.peerId === null)) return;
+      this.endVote = new Map();
+      this.broadcastLobby();
+    }, this.voteDelayMs);
+  }
+
+  private closeVote(): void {
+    if (this.voteTimer) clearTimeout(this.voteTimer);
+    this.voteTimer = null;
+    this.endVote = null;
+  }
+
+  /** 남은 사람의 과반이 끝내기를 고르거나 방장이 끝내기를 고르면 게임을 끝낸다 */
+  private castVote(seat: number, end: boolean): void {
+    const votes = this.endVote;
+    if (!votes || !this.voters().includes(seat)) return;
+    votes.set(seat, end);
+    const voters = this.voters();
+    const ends = voters.filter((s) => votes.get(s) === true).length;
+    if ((seat === 0 && end) || ends * 2 > voters.length) {
+      const names = voters
+        .filter((s) => votes.get(s) === true)
+        .map((s) => (s === 0 ? this.hostName : (this.names.get(s) ?? "손님")));
+      this.relayChat(
+        -1,
+        "투표",
+        `${names.join(", ")}님이 끝내기를 골라 게임을 끝냅니다`,
+      );
+      this.abandon();
+      return;
+    }
+    this.broadcastLobby();
   }
 
   /** 부정 알림(내 기기가 찾은 것과 다른 사람이 알린 것) */
@@ -923,6 +1005,12 @@ export class HostRoom<
         for (const l of this.reportListeners) l(report);
         break;
       }
+      case "vote": {
+        const seat = this.seatOf(from);
+        if (seat === null || typeof message.end !== "boolean") return;
+        this.castVote(seat, message.end);
+        break;
+      }
       case "leave":
         this.onPeerLeave(from);
         break;
@@ -1023,6 +1111,7 @@ export class HostRoom<
             peerId,
           );
         }
+        this.updateVote();
         this.broadcastLobby();
         return;
       }
@@ -1069,6 +1158,7 @@ export class HostRoom<
         this.standInDelayMs,
       );
     }
+    this.updateVote();
     this.broadcastLobby();
   }
 }

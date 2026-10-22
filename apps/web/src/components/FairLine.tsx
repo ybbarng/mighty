@@ -7,7 +7,7 @@ import { useChat } from "@/net/chat";
 import type { LobbyState } from "@/net/protocol";
 import { randomId } from "@/net/transport";
 
-import type { IncidentState } from "./FairOverlays";
+import type { EndVoteState, IncidentState } from "./FairOverlays";
 
 /** 부정 알림(내 기기가 찾은 것과 다른 사람이 알린 것) */
 export interface IncidentNoticeLike {
@@ -27,6 +27,7 @@ interface FairStore {
     incident?: IncidentState | null;
     fair?: boolean;
     endGame?: (() => void) | null;
+    voteEnd?: ((end: boolean) => void) | null;
     shuffling?: BusyReason | null;
   }): void;
 }
@@ -66,13 +67,30 @@ export function bindFair(
   store: FairStore,
   coordinator: BusyCoordinator | undefined,
   endGame: (() => void) | null,
+  voteEnd: (end: boolean) => void,
 ): void {
   if (!coordinator) {
-    store.setState({ fair: false, endGame: null, shuffling: null });
+    store.setState({
+      fair: false,
+      endGame: null,
+      voteEnd: null,
+      shuffling: null,
+    });
     return;
   }
-  store.setState({ fair: true, endGame });
+  store.setState({ fair: true, endGame, voteEnd });
   coordinator.onBusy((busy) => store.getState().setShuffling(busy));
+}
+
+/** 대기실 정보에서 끝내기 투표(열려 있을 때). 표를 낼 수 있는 사람은 연결된 사람 자리다 */
+export function endVoteOf(lobby: LobbyState): EndVoteState | null {
+  if (!lobby.endVote) return null;
+  return {
+    votes: lobby.endVote.votes,
+    voters: lobby.seats
+      .filter((s) => s.kind !== "bot" && s.connected)
+      .map((s) => s.seat),
+  };
 }
 
 /** 판마다 진짜 카드로 다시 계산해 문제가 없었다고 채팅에 남긴다 */

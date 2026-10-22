@@ -354,6 +354,11 @@ export class GuestRoom<
     if (this.hostId) this.send({ t: "chat", text }, this.hostId);
   }
 
+  /** 끝내기 투표에 표를 낸다(`LobbyState.endVote`) */
+  vote(end: boolean): void {
+    if (this.hostId) this.send({ t: "vote", end }, this.hostId);
+  }
+
   leave(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;

@@ -293,6 +293,19 @@ export function step(
   seat: number,
   action: Action,
 ): StepResult {
+  if (action.type === "retire") {
+    if (current.round.phase === "gameOver") return fail("이미 끝난 게임이다");
+    const state = clone(current);
+    state.round.phase = "gameOver";
+    state.round.turn = null;
+    const low = Math.min(...state.scores);
+    const winners = state.players.filter((s) => state.scores[s] === low);
+    return {
+      ok: true,
+      state,
+      events: [{ type: "gameOver", winners, retired: true }],
+    };
+  }
   const decision = decisionFor(current, seat);
   if (decision === null) return fail("지금은 차례가 아니다");
   const state = clone(current);

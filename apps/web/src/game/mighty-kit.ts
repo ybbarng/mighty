@@ -62,6 +62,7 @@ export const mightyKit: MightyKit = {
   isOver: (view) => view.phase === "gameOver",
   // 그만두기는 게임 전체를 끝내므로 참가자에게는 허락하지 않는다(모의 침투 B6).
   guestMayAct: (action) => action.type !== "retire",
+  retireAction: { type: "retire" },
   botFor: (level) => botFor(level as BotLevel),
   // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
   botCanAct: (view) =>

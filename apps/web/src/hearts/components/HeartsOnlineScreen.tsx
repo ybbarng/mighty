@@ -7,6 +7,7 @@ import { ChatBox } from "@/components/ChatBox";
 import {
   announceRoundVerified,
   bindFair,
+  endVoteOf,
   FairLine,
   reportIncident,
 } from "@/components/FairLine";
@@ -31,6 +32,7 @@ import {
   loadSeatToken,
   openTransport,
   saveSeatToken,
+  testVoteDelayMs,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
 
@@ -126,7 +128,10 @@ export function HeartsOnlineScreen({
   const syncLobby = (l: LobbyState) => {
     setLobby(l);
     setSeatNames(seatNamesOf(l));
-    useHearts.setState({ offlineSeats: offlineSeatsOf(l) });
+    useHearts.setState({
+      offlineSeats: offlineSeatsOf(l),
+      endVote: endVoteOf(l),
+    });
   };
 
   const enter = async () => {
@@ -147,6 +152,7 @@ export function HeartsOnlineScreen({
           botLevel: useHeartsSettings.getState().level,
           botNames: useSettings.getState().botNames,
           pace: (next) => setTimeout(next, 0),
+          ...testVoteDelayMs(),
           ...(useSettings.getState().fairPlay
             ? { fair: { group: "2048" as const } }
             : {}),
@@ -169,7 +175,12 @@ export function HeartsOnlineScreen({
           attachOnline(host.match, seatNamesOf(host.lobby()), {
             network: true,
           });
-          bindFair(useHearts, host.fair?.coordinator, () => host.abandon());
+          bindFair(
+            useHearts,
+            host.fair?.coordinator,
+            () => host.abandon(),
+            (end) => host.vote(end),
+          );
           onPlaying();
         }
       } else {
@@ -241,7 +252,9 @@ export function HeartsOnlineScreen({
             ),
             { network: true },
           );
-          bindFair(useHearts, guest.fair?.coordinator, null);
+          bindFair(useHearts, guest.fair?.coordinator, null, (end) =>
+            guest.vote(end),
+          );
           onPlaying();
         });
       }
@@ -258,7 +271,12 @@ export function HeartsOnlineScreen({
     try {
       const match = await host.start();
       attachOnline(match, seatNamesOf(host.lobby()), { network: true });
-      bindFair(useHearts, host.fair?.coordinator, () => host.abandon());
+      bindFair(
+        useHearts,
+        host.fair?.coordinator,
+        () => host.abandon(),
+        (end) => host.vote(end),
+      );
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

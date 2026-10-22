@@ -53,6 +53,9 @@ export const heartsKit: HeartsKit = {
     { type: "dealt", handSize: 13 },
   ],
   isOver: (view) => view.phase === "gameOver",
+  // 끝내기는 게임 전체를 끝내므로 참가자에게는 허락하지 않는다.
+  guestMayAct: (action) => action.type !== "retire",
+  retireAction: { type: "retire" },
   botFor: (level) => heartsBotFor(level as HeartsLevel),
   annotateBotAction: (view, action) =>
     action.type === "play" && action.slot === undefined

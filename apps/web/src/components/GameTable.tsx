@@ -153,6 +153,8 @@ export function GameTable({
   const shuffling = useGame((s) => s.shuffling);
   const fair = useGame((s) => s.fair);
   const endGame = useGame((s) => s.endGame);
+  const endVote = useGame((s) => s.endVote);
+  const voteEnd = useGame((s) => s.voteEnd);
   const chatMessages = useChat((s) => s.messages);
   const chatUnread = useChat((s) => s.unread);
   const chatOpen = useChat((s) => s.open);
@@ -1149,8 +1151,15 @@ export function GameTable({
               incident={incident}
               shuffling={dealing ? null : shuffling}
               fair={fair}
-              offlineNames={offlineSeats.map((s) => seatName(s))}
+              offlineNames={
+                view.phase === "gameOver"
+                  ? []
+                  : offlineSeats.map((s) => seatName(s))
+              }
               endGame={endGame}
+              endVote={endVote}
+              voteEnd={voteEnd}
+              mySeat={view.seat}
               whoName={(seat) =>
                 seat === view.seat ? "내 자리" : seatName(seat)
               }

@@ -96,6 +96,7 @@ export function HeartsApp() {
       hostLeft: false,
       reconnecting: false,
       offlineSeats: [],
+      endVote: null,
     });
     if (window.location.search.includes("room=")) {
       const url = new URL(window.location.href);

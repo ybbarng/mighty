@@ -132,6 +132,8 @@ async function openTable(
   preset: string | null,
   /** 탭을 열기 전에(고친 프로그램 내려보내기 등) */
   before?: (index: number, page: Page) => Promise<void>,
+  /** 방장 주소에 덧붙일 것(`&voteDelay=` 등) */
+  query = "",
 ) {
   const pages: Page[] = [];
   const errors: string[] = [];
@@ -151,10 +153,10 @@ async function openTable(
   const host = pages[0] as Page;
   if (preset === null) {
     // 하트
-    await host.goto("/hearts?net=local");
+    await host.goto(`/hearts?net=local${query}`);
     await host.getByRole("button", { name: /다함께 하트/ }).click();
   } else {
-    await host.goto("/?net=local");
+    await host.goto(`/?net=local${query}`);
     await host.getByRole("button", { name: "옵션", exact: true }).click();
     await host.getByRole("button", { name: preset, exact: true }).click();
     await host.getByRole("button", { name: "처음으로" }).click();
@@ -440,5 +442,53 @@ for (const [preset, players] of [
     for (const p of pages.slice(1))
       await expect(p.getByText(/부정 감지 —/)).toHaveCount(0);
     expect(errors.filter((e) => !e.includes("WebSocket"))).toEqual([]);
+  });
+}
+
+for (const [preset, players] of [
+  ["표준 5마", 4],
+  [null, 4],
+] as const) {
+  test(`${preset ?? "하트"}: 참가자가 탭을 닫으면 기다리다 투표가 열리고, 남은 사람의 과반이 끝내기를 고르면 모두의 게임이 끝난다`, async ({
+    context,
+  }, info) => {
+    test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+    test.setTimeout(5 * 60_000);
+    const { pages, host } = await openTable(
+      context,
+      players,
+      preset,
+      undefined,
+      "&voteDelay=1500",
+    );
+    await host.getByRole("button", { name: "시작하기" }).click();
+    for (const p of pages)
+      await expect(p.getByRole("button", { name: "점수판" })).toBeVisible({
+        timeout: 60_000,
+      });
+    const [, gone, a, b] = pages as [Page, Page, Page, Page];
+    await gone.close();
+    // 기다리는 동안은 방장만 바로 끝낼 수 있다.
+    await expect(a.getByText(/연결이 끊겼습니다/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await a.screenshot({ path: info.outputPath("waiting.png") });
+    await expect(
+      a.getByRole("button", { name: "끝내기", exact: true }),
+    ).toBeVisible({
+      timeout: 30_000,
+    });
+    await a.getByRole("button", { name: "끝내기", exact: true }).click();
+    await expect(b.getByTestId("end-vote-count")).toHaveText(/끝내기 1\/2표/);
+    await host.getByRole("button", { name: "더 기다리기" }).click();
+    await b.screenshot({ path: info.outputPath("voting.png") });
+    await expect(host.getByText("점수판")).toBeVisible();
+    await b.getByRole("button", { name: "끝내기", exact: true }).click();
+    for (const p of [host, a, b]) {
+      await expect(p.getByText("게임을 중간에 끝냈습니다")).toBeVisible({
+        timeout: 30_000,
+      });
+    }
+    await host.screenshot({ path: info.outputPath("ended.png") });
   });
 }

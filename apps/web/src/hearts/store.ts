@@ -9,7 +9,7 @@ import {
   QUEEN_OF_SPADES,
 } from "@mighty/hearts-engine";
 import { create } from "zustand";
-import type { IncidentState } from "@/components/FairOverlays";
+import type { EndVoteState, IncidentState } from "@/components/FairOverlays";
 
 import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
@@ -128,6 +128,9 @@ interface HeartsStore {
   setShuffling(reason: BusyReason | null): void;
   fair: boolean;
   endGame: (() => void) | null;
+  /** 멘탈 포커: 끝내기 투표(GameStore와 같다) */
+  endVote: EndVoteState | null;
+  voteEnd: ((end: boolean) => void) | null;
   network: boolean;
   newGame(options: { rules: HeartsRules; seed?: number }): void;
   resume(saved: HeartsSaved): void;
@@ -318,6 +321,8 @@ export const useHearts = create<HeartsStore>((set, get) => {
     },
     fair: false,
     endGame: null,
+    endVote: null,
+    voteEnd: null,
     network: false,
 
     newGame(options) {
@@ -328,7 +333,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
         ),
         { save: true, seatNames: null },
       );
-      set({ fair: false, endGame: null });
+      set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
 
     resume(saved) {
