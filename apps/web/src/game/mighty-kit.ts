@@ -6,12 +6,17 @@ import {
   decodeRuleString,
   encodeRuleString,
   type GameEvent,
+  isJoker,
+  isPointCard,
+  leadSuitOf,
   type MatchState,
+  mightyOf,
   type PlayerView,
   type PresetDeal,
   type RuleSet,
   replay,
   step,
+  suitOf,
   viewOf,
 } from "@mighty/engine";
 
@@ -27,7 +32,7 @@ interface MightyDeal {
 }
 
 import { mightyStats } from "./mighty-stats";
-import { sortHand } from "./terms";
+import { cardLabel, goalLabel, SUIT_SYMBOL, sortHand } from "./terms";
 
 export type MightyKit = GameKit<
   RuleSet,
@@ -90,6 +95,79 @@ export const mightyKit: MightyKit = {
     realAction: (action, deal) => {
       const cards = (deal as { cards?: [number, Card][] } | undefined)?.cards;
       return cards ? realAction(action as Action, new Map(cards)) : action;
+    },
+    situation: (state) => {
+      const round = state.round;
+      const mighty = round.goal
+        ? mightyOf(state.rules, round.goal.kiruda)
+        : null;
+      const voids = state.order.map(() => new Set<string>());
+      let ruling = 0;
+      let opposition = 0;
+      const ruler = (seat: number) =>
+        seat === round.declarer || seat === round.friend;
+      const tricks = [...round.tricks, ...(round.trick ? [round.trick] : [])];
+      for (const trick of tricks) {
+        const lead = leadSuitOf({
+          cards: trick.plays.map((p) => p.card),
+          jokerSuit: trick.jokerSuit,
+          jokerCalled: trick.jokerCalled,
+        });
+        for (const play of trick.plays.slice(1)) {
+          // 마이티와 조커는 언제든 낼 수 있어 무늬를 따르지 않아도 떨어진 것이 아니다.
+          if (!lead || isJoker(play.card) || play.card === mighty) continue;
+          if (suitOf(play.card) !== lead)
+            voids[play.seat]?.add(SUIT_SYMBOL[lead]);
+        }
+        if ("winner" in trick) {
+          const points = trick.plays.filter((p) => isPointCard(p.card)).length;
+          if (ruler(trick.winner as number)) ruling += points;
+          else opposition += points;
+        }
+      }
+      const total = 20;
+      return {
+        voids: voids.map((v) => [...v]),
+        tally:
+          round.declarer === null
+            ? []
+            : [
+                { label: "여당 점수 카드", value: `${ruling}장` },
+                { label: "야당 점수 카드", value: `${opposition}장` },
+                {
+                  label: "남은 점수 카드",
+                  value: `${total - ruling - opposition}장`,
+                },
+                ...(round.goal
+                  ? [{ label: "공약", value: `${round.goal.score}장` }]
+                  : []),
+              ],
+      };
+    },
+    describe: (action) => {
+      const a = action as Action;
+      switch (a.type) {
+        case "play":
+          return `${cardLabel(a.card)}${a.jokerCall ? " 조커콜" : ""}${a.jokerSuit ? ` (${SUIT_SYMBOL[a.jokerSuit]} 지정)` : ""}`;
+        case "bid":
+          return `공약 ${goalLabel(a.goal)}`;
+        case "pass":
+          return "포기";
+        case "kill":
+          return `${cardLabel(a.card)} 죽이기`;
+        case "exchange":
+          return `버리기 ${a.discard.map(cardLabel).join(" ")}`;
+        case "friend":
+          return "프렌드 정하기";
+        case "dealMiss":
+          return "딜미스";
+        case "pick":
+          return a.index === 0 ? "앞면 고르기" : "뒷면 고르기";
+        case "continue":
+          return "다음 판";
+        case "retire":
+          return "그만두기";
+      }
     },
     cleanup: (state, before) => {
       // 판을 새로 시작하지 않았으면 다음 판 패는 넣지 않은 상태로 둔다.

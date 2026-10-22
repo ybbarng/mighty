@@ -11,11 +11,13 @@ import {
   PLAYER_COUNT,
   type PlayerView,
   pendingSeats,
+  pointsOf,
   replay,
   step,
   viewOf,
 } from "@mighty/hearts-engine";
 import type { GameKit } from "@/game/kit";
+import { cardLabel, SUIT_SYMBOL } from "@/game/terms";
 
 import { heartsBotFor } from "./bots";
 import type { HeartsLevel } from "./settings";
@@ -77,6 +79,38 @@ export const heartsKit: HeartsKit = {
       return cards
         ? realHeartsAction(action as Action, new Map(cards))
         : action;
+    },
+    situation: (state) => {
+      const round = state.round;
+      const voids = state.players.map(() => new Set<string>());
+      const tricks = [...round.tricks, ...(round.trick ? [round.trick] : [])];
+      for (const trick of tricks) {
+        const lead = trick.plays[0]?.card[0];
+        for (const play of trick.plays.slice(1))
+          if (lead && play.card[0] !== lead)
+            voids[play.seat]?.add(
+              SUIT_SYMBOL[lead as keyof typeof SUIT_SYMBOL],
+            );
+      }
+      return {
+        voids: voids.map((v) => [...v]),
+        tally: state.players.map((seat) => ({
+          seat,
+          label: "이번 판",
+          value: `${pointsOf(round.taken[seat] ?? [], state.rules)}점`,
+        })),
+      };
+    },
+    describe: (action) => {
+      const a = action as Action;
+      switch (a.type) {
+        case "pass":
+          return `넘기기 ${a.cards.map((c) => cardLabel(c)).join(" ")}`;
+        case "play":
+          return cardLabel(a.card);
+        default:
+          return a.type === "continue" ? "다음 판" : a.type;
+      }
     },
     cleanup: (state) => {
       delete state.presetHands;

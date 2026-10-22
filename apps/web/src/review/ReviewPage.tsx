@@ -2,7 +2,7 @@
 
 import type { MatchState } from "@mighty/engine";
 import type { MatchState as HeartsState } from "@mighty/hearts-engine";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { botName } from "@/game/bot-names";
 import type { GameKit } from "@/game/kit";
@@ -12,7 +12,9 @@ import { heartsKit } from "@/hearts/kit";
 
 import {
   deleteArchive,
+  exportArchives,
   type GameArchive,
+  importArchives,
   listArchives,
   loadArchive,
 } from "./archive";
@@ -46,6 +48,29 @@ export function ReviewPage() {
   const [list, setList] = useState<GameArchive[] | null>(null);
   const [archive, setArchive] = useState<GameArchive | null>(null);
   const [missing, setMissing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+
+  const download = async () => {
+    const blob = new Blob([await exportArchives()], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mighty-review-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const upload = async (f: File) => {
+    const count = await importArchives(await f.text());
+    setNotice(
+      count === null
+        ? "복기 기록 파일이 아닙니다"
+        : `${count}게임을 가져왔습니다`,
+    );
+    setList(await listArchives());
+  };
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("id");
@@ -90,6 +115,39 @@ export function ReviewPage() {
           하기를 남기고, 배우기는 남기지 않습니다. 친구와 한 판은 판이 끝나 모두
           공개된 뒤의 카드로 남습니다.
         </p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => void download()}
+            className="rounded-lg bg-white/10 px-3 py-1.5 hover:bg-white/15"
+          >
+            내보내기
+          </button>
+          <button
+            type="button"
+            onClick={() => file.current?.click()}
+            className="rounded-lg bg-white/10 px-3 py-1.5 hover:bg-white/15"
+          >
+            가져오기
+          </button>
+          <input
+            ref={file}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-label="복기 기록 파일"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void upload(f);
+              e.target.value = "";
+            }}
+          />
+          {notice && (
+            <span role="status" className="text-white/70">
+              {notice}
+            </span>
+          )}
+        </div>
         {list === null ? null : list.length === 0 ? (
           <p className="rounded-2xl bg-black/35 p-4 text-sm text-white/70">
             아직 남긴 게임이 없습니다. 한 판을 끝까지 두면 여기에 생깁니다.
@@ -177,6 +235,7 @@ function ArchiveView({
         spans={spans}
         startIndex={replayAt}
         name={name}
+        log={archive.log}
         onExit={() => setReplayAt(null)}
       />
     );

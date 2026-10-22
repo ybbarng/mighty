@@ -47,6 +47,17 @@ export interface KitReview<State, Extra> {
   cleanup(state: State, before: State): State;
   /** 멘탈 포커 판의 기록 속 행동(자리 표)을 그 판 실제 카드로 바꾼다. `deal`은 그 판 패 */
   realAction(action: unknown, deal: unknown): unknown;
+  /**
+   * 상황판: 그 순간 자리별로 떨어진 무늬(선 무늬를 따르지 못한 적이 있다, 무늬 기호)와
+   * 점수 요약(여당·야당 점수 카드, 자리별 받은 점수 등)
+   */
+  situation(state: State): {
+    voids: string[][];
+    /** `seat`가 있으면 그 자리 이름을 앞에 붙인다 */
+    tally: { label: string; value: string; seat?: number }[];
+  };
+  /** 행동 한 줄 설명(다시 보기에서 실제 수와 고수 수를 견준다) */
+  describe(action: unknown): string;
 }
 
 /**

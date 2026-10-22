@@ -168,8 +168,19 @@ for (const variant of VARIANTS) {
     }
     await page.getByRole("button", { name: "상황판" }).click();
     await expect(page.getByText("모든 패")).toBeVisible();
-    await page.waitForTimeout(800);
+    // 다음 수를 고수의 수와 견준다(고수는 생각하는 데 조금 걸린다).
+    await expect(page.getByText(/실제:/)).toBeVisible();
+    await expect(page.getByText("생각하는 중…")).toHaveCount(0, {
+      timeout: 15_000,
+    });
+    await page.waitForTimeout(500);
     await page.screenshot({ path: testInfo.outputPath("5ma-replay.png") });
+    // 복기 기록을 파일로 내보낸다.
+    await page.getByRole("button", { name: "다시 보기 나가기" }).click();
+    await page.getByRole("button", { name: "← 목록" }).click();
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "내보내기" }).click();
+    expect((await download).suggestedFilename()).toMatch(/^mighty-review-/);
     expect(errors).toEqual([]);
   });
 }

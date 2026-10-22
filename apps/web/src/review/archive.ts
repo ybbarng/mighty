@@ -95,6 +95,32 @@ export async function saveArchive(archive: GameArchive): Promise<void> {
     await run("readwrite", (s) => s.delete(old.id));
 }
 
+/** 내보내기: 이 기기의 복기 기록 전체(JSON) */
+export async function exportArchives(): Promise<string> {
+  return JSON.stringify({ version: 1, games: await listArchives() });
+}
+
+/** 가져오기: 없는 게임이나 더 나중에 고친 게임만 넣는다. 넣은 수(파일이 아니면 null) */
+export async function importArchives(text: string): Promise<number | null> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const games = (parsed as { version?: unknown; games?: unknown }) ?? {};
+  if (games.version !== 1 || !Array.isArray(games.games)) return null;
+  let count = 0;
+  for (const g of games.games as GameArchive[]) {
+    if (typeof g?.id !== "string" || !Array.isArray(g.log)) continue;
+    const before = await loadArchive(g.id);
+    if (before && before.updatedAt >= g.updatedAt) continue;
+    await saveArchive(g);
+    count++;
+  }
+  return count;
+}
+
 export async function deleteArchive(id: string): Promise<void> {
   await run("readwrite", (s) => s.delete(id));
 }

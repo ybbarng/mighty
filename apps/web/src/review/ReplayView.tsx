@@ -46,9 +46,12 @@ export function ReplayView({
   startIndex,
   name,
   onExit,
+  log,
 }: {
   game: string;
   replayed: Replayed<unknown, unknown>;
+  /** 행동 기록(다음 수를 고수의 수와 견준다) */
+  log: readonly { seat: number; action: unknown }[];
   seat: number;
   seatNames: string[] | null;
   spans: readonly RoundSpan[];
@@ -183,7 +186,16 @@ export function ReplayView({
           </Ctl>
         </div>
       </div>
-      {board && state && <Board state={state} name={name} seat={seat} />}
+      {board && state && (
+        <Board
+          state={state}
+          name={name}
+          seat={seat}
+          kit={kit}
+          index={index}
+          next={log[index] ?? null}
+        />
+      )}
       {replayed.error && (
         <p className="fixed inset-x-0 bottom-2 z-[400] mx-auto w-fit rounded-lg bg-rose-800 px-3 py-1 text-xs">
           {replayed.error}
@@ -223,24 +235,105 @@ function Ctl({
   );
 }
 
-/** 상황판: 그 순간 모든 자리의 패와 이 판에 나온 카드(무늬별) */
+/** 다음 수를 고수(실력 단계 2)라면 어떻게 두었을까. 계산이 무거울 수 있어 그린 뒤에 한다 */
+function useExpertMove(
+  kit: AnyKit,
+  state: unknown,
+  next: { seat: number; action: unknown } | null,
+  index: number,
+): string | null {
+  const [move, setMove] = useState<string | null>(null);
+  useEffect(() => {
+    setMove(null);
+    const bot = kit.botFor?.(2);
+    if (!next || !bot) return;
+    const timer = setTimeout(() => {
+      try {
+        const view = kit.viewOf(state, next.seat) as { decision: unknown };
+        if (!view.decision) return;
+        setMove(kit.review.describe(bot.decide(view, { seed: index })));
+      } catch {
+        setMove(null);
+      }
+    }, 30);
+    return () => clearTimeout(timer);
+  }, [kit, state, next, index]);
+  return move;
+}
+
+/** 상황판: 다음 수와 고수의 수, 점수, 모든 자리의 패와 떨어진 무늬, 이 판에 나온 카드(무늬별) */
 function Board({
   state,
   name,
   seat,
+  kit,
+  index,
+  next,
 }: {
   state: BoardState;
   name: (seat: number) => string;
   seat: number;
+  kit: AnyKit;
+  index: number;
+  next: { seat: number; action: unknown } | null;
 }) {
+  const situation = kit.review.situation(state);
+  const expert = useExpertMove(kit, state, next, index);
+  const actual = next ? kit.review.describe(next.action) : null;
   const played = [
     ...state.round.tricks.flatMap((t) => t.plays),
     ...(state.round.trick?.plays ?? []),
   ].map((p) => p.card);
   return (
     <aside className="fixed top-28 right-2 z-[400] flex max-h-[70dvh] w-72 max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-y-auto rounded-2xl bg-black/90 p-3 text-sm shadow-2xl">
+      {next && (
+        <section>
+          <h3 className="mb-1 font-bold text-white/80 text-xs">
+            다음 수 · {name(next.seat)}
+          </h3>
+          <div className="flex flex-col gap-0.5 text-xs">
+            <span>
+              실제: <b>{actual}</b>
+            </span>
+            <span className="text-white/70">
+              고수라면:{" "}
+              {expert === null ? (
+                "생각하는 중…"
+              ) : (
+                <b
+                  className={
+                    expert === actual ? "text-sky-300" : "text-amber-200"
+                  }
+                >
+                  {expert}
+                  {expert === actual ? " (같다)" : ""}
+                </b>
+              )}
+            </span>
+          </div>
+        </section>
+      )}
+      {situation.tally.length > 0 && (
+        <section>
+          <h3 className="mb-1 font-bold text-white/80 text-xs">점수</h3>
+          <dl className="grid grid-cols-[1fr_auto] gap-x-3 text-xs">
+            {situation.tally.map((t) => (
+              <div key={`${t.seat ?? ""}${t.label}`} className="contents">
+                <dt className="text-white/60">
+                  {t.seat !== undefined ? `${name(t.seat)} ` : ""}
+                  {t.label}
+                </dt>
+                <dd className="text-right tabular-nums">{t.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       <section>
-        <h3 className="mb-1 font-bold text-white/80 text-xs">모든 패</h3>
+        <h3 className="mb-1 font-bold text-white/80 text-xs">
+          모든 패{" "}
+          <span className="font-normal text-white/50">(떨어진 무늬)</span>
+        </h3>
         {state.round.hands.map((hand, s) => (
           <div
             // biome-ignore lint/suspicious/noArrayIndexKey: 자리 번호가 곧 정체다
@@ -258,6 +351,11 @@ function Board({
             {hand.map((c) => (
               <CardChip key={c} card={c} />
             ))}
+            {(situation.voids[s] ?? []).length > 0 && (
+              <span className="ml-1 rounded bg-rose-900/70 px-1 text-[10px] text-rose-200">
+                {(situation.voids[s] ?? []).join("")} 없음
+              </span>
+            )}
           </div>
         ))}
       </section>

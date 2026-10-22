@@ -1,5 +1,5 @@
 import { heuristicBot } from "@mighty/ai";
-import { type MatchState, presetRules } from "@mighty/engine";
+import { type MatchState, mightyOf, presetRules } from "@mighty/engine";
 import { heartsNormalBot } from "@mighty/hearts-ai";
 import {
   type MatchState as HeartsState,
@@ -113,5 +113,36 @@ describe("복기: 남긴 기록을 다시 돌린다", () => {
     expect((replayed.states.at(-1) as HeartsState).round.phase).toBe(
       "gameOver",
     );
+  });
+
+  it("상황판: 떨어졌다고 한 무늬는 그 순간 그 자리 손에 정말 없고, 점수 카드는 20장을 넘지 않는다", () => {
+    const match = playMighty(3);
+    const replayed = replayArchive(
+      mightyKit,
+      archiveOf("mighty", match.save()),
+    );
+    const symbol: Record<string, string> = { S: "♠", H: "♥", D: "◆", C: "♣" };
+    let checked = 0;
+    for (const state of replayed.states as MatchState[]) {
+      const { voids, tally } = mightyKit.review.situation(state);
+      for (const [seat, list] of voids.entries())
+        for (const v of list) {
+          const hand = state.round.hands[seat] ?? [];
+          // 마이티는 무늬를 따르지 않아도 되므로 손에 남아 있을 수 있다.
+          const mighty = state.round.goal
+            ? mightyOf(state.rules, state.round.goal.kiruda)
+            : null;
+          expect(
+            hand.some((c) => c !== mighty && symbol[c[0] as string] === v),
+          ).toBe(false);
+          checked++;
+        }
+      const cards = tally
+        .filter((t) => t.label.endsWith("점수 카드"))
+        .reduce((n, t) => n + Number.parseInt(t.value, 10), 0);
+      expect(cards).toBeLessThanOrEqual(20);
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(mightyKit.review.describe({ type: "pass" })).toBe("포기");
   });
 });
