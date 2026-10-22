@@ -98,6 +98,19 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
     path: info.outputPath("hearts-4-profile.png"),
     fullPage: true,
   });
+  // 복기: 하트 게임을 열어 판 한눈에 보기와 다시 보기를 확인한다.
+  await page.getByRole("link", { name: /지난 게임 복기/ }).click();
+  await page.getByRole("button", { name: /하트 · 혼자/ }).click();
+  await expect(page.getByText("넘긴 카드").first()).toBeVisible();
+  await page.getByRole("button", { name: "▶ 이 판 다시 보기" }).first().click();
+  for (let k = 0; k < 8; k++) {
+    await page.getByRole("button", { name: "한 걸음 앞으로" }).click();
+    await page.waitForTimeout(250);
+  }
+  await page.getByRole("button", { name: "상황판" }).click();
+  await expect(page.getByText("모든 패")).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: info.outputPath("hearts-5-replay.png") });
   expect(errors).toEqual([]);
 });
 

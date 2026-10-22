@@ -142,6 +142,34 @@ for (const variant of VARIANTS) {
       path: testInfo.outputPath(`${variant.name}-profile.png`),
       fullPage: true,
     });
+    if (variant.name !== "5ma") {
+      expect(errors).toEqual([]);
+      return;
+    }
+    // 복기: 남긴 게임을 열어 판 한눈에 보기와 다시 보기를 확인한다.
+    await page.getByRole("link", { name: /지난 게임 복기/ }).click();
+    await page.getByRole("button", { name: /마이티 · 혼자/ }).click();
+    await expect(page.getByText("1판").first()).toBeVisible();
+    await expect(page.getByText("턴 표").first()).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("5ma-review.png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "▶ 이 판 다시 보기" })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("toolbar", { name: "다시 보기" }),
+    ).toBeVisible();
+    for (let k = 0; k < 12; k++) {
+      await page.getByRole("button", { name: "한 걸음 앞으로" }).click();
+      await page.waitForTimeout(250);
+    }
+    await page.getByRole("button", { name: "상황판" }).click();
+    await expect(page.getByText("모든 패")).toBeVisible();
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: testInfo.outputPath("5ma-replay.png") });
     expect(errors).toEqual([]);
   });
 }

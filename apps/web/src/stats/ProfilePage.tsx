@@ -97,7 +97,13 @@ export function ProfilePage() {
             >
               ← 처음으로
             </a>
-            <span className="text-white/50 text-xs">
+            <a
+              href="/review"
+              className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
+            >
+              지난 게임 복기 →
+            </a>
+            <span className="hidden text-white/50 text-xs sm:inline">
               {total > 0
                 ? `${new Date(book.since).toLocaleDateString("ko-KR")}부터`
                 : ""}

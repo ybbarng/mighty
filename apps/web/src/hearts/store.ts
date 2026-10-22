@@ -16,6 +16,11 @@ import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { useSettings } from "@/game/settings";
 import { type Cue, play as playCue } from "@/game/sound";
 import { dealPlan, prefersReducedMotion, SHUFFLE_MS } from "@/game/timing";
+import {
+  ArchiveRecorder,
+  type ArchiveTarget,
+  soloArchive,
+} from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 
 import { heartsBotFor } from "./bots";
@@ -137,9 +142,15 @@ interface HeartsStore {
   attachOnline(
     host: HeartsHost,
     seatNames: string[],
-    options?: { network?: boolean; stats?: StatsTarget },
+    options?: {
+      network?: boolean;
+      stats?: StatsTarget;
+      archive?: Omit<ArchiveTarget, "source">;
+    },
   ): void;
   setSeatNames(seatNames: string[]): void;
+  /** 다시 보기: 남긴 기록을 화면에 붙인다(저장·기록하지 않는다) */
+  attachReplay(host: HeartsHost, seatNames: string[] | null): void;
   submit(action: Action): SubmitResult;
   clearNotice(): void;
 }
@@ -247,6 +258,8 @@ export const useHearts = create<HeartsStore>((set, get) => {
       network?: boolean;
       /** 내 기록에 남길 대국(배우기는 남기지 않는다) */
       stats?: StatsTarget;
+      /** 복기용으로 남길 대국(시작 조건과 행동 기록은 이 기기의 대국에서 꺼낸다) */
+      archive?: Omit<ArchiveTarget, "source">;
     },
   ) => {
     clearTimer();
@@ -277,10 +290,29 @@ export const useHearts = create<HeartsStore>((set, get) => {
     const recorder = options.stats
       ? new StatsRecorder(heartsKit.stats, options.stats)
       : null;
-    for (const snapshot of pending) recorder?.observe(snapshot);
+    const archiver =
+      options.archive && host instanceof LocalMatch
+        ? new ArchiveRecorder(heartsKit.stats, {
+            ...options.archive,
+            source: () => {
+              const saved = (host as HeartsLocalMatch).save();
+              return {
+                rules: saved.rules,
+                seed: saved.seed,
+                ...(saved.presetDeal ? { presetDeal: saved.presetDeal } : {}),
+                log: saved.log,
+              };
+            },
+          })
+        : null;
+    for (const snapshot of pending) {
+      recorder?.observe(snapshot);
+      archiver?.observe(snapshot);
+    }
     unsubscribe = host.subscribe((snapshot) => {
       persist();
       recorder?.observe(snapshot);
+      archiver?.observe(snapshot);
       enqueue([snapshot]);
     });
     enqueue(pending);
@@ -342,6 +374,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
         save: true,
         seatNames: null,
         stats: { game: "hearts", mode: "solo", key: `solo:${seed}` },
+        archive: soloArchive("hearts", `solo:${seed}`),
       });
       set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
@@ -351,6 +384,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
         save: true,
         seatNames: null,
         stats: { game: "hearts", mode: "solo", key: `solo:${saved.seed}` },
+        archive: soloArchive("hearts", `solo:${saved.seed}`),
       });
     },
 
@@ -360,7 +394,13 @@ export const useHearts = create<HeartsStore>((set, get) => {
         seatNames,
         network: options?.network ?? false,
         ...(options?.stats ? { stats: options.stats } : {}),
+        ...(options?.archive ? { archive: options.archive } : {}),
       });
+    },
+
+    attachReplay(host, seatNames) {
+      attach(host, { save: false, seatNames });
+      set({ fair: false, endGame: null, endVote: null, voteEnd: null });
     },
 
     setSeatNames(seatNames) {

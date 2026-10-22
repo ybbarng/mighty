@@ -1,5 +1,6 @@
 import {
   type Action,
+  type Card,
   createMatch,
   decisionFor,
   decodeRuleString,
@@ -16,6 +17,13 @@ import {
 
 import { type BotLevel, botFor } from "./bots";
 import type { GameKit } from "./kit";
+
+/** 멘탈 포커 판 하나의 실제 패(복기용) */
+interface MightyDeal {
+  deal: PresetDeal;
+  redeal?: Card[];
+}
+
 import { mightyStats } from "./mighty-stats";
 import { sortHand } from "./terms";
 
@@ -65,6 +73,25 @@ export const mightyKit: MightyKit = {
   guestMayAct: (action) => action.type !== "retire",
   retireAction: { type: "retire" },
   stats: mightyStats,
+  // 멘탈 포커 판의 판 패: { deal: 처음 나눈 패, redeal?: 6·7마 다시 나눈 순서 }(fair-play RoundDeal과 같다).
+  review: {
+    firstExtra: (deals) => (deals.get(1) as MightyDeal | undefined)?.deal,
+    prepare: (state, deals) => {
+      const next = structuredClone(state);
+      const round = next.roundNumber;
+      next.presetDeal =
+        (deals.get(round + 1) as MightyDeal | undefined)?.deal ?? null;
+      const redeal = (deals.get(round) as MightyDeal | undefined)?.redeal;
+      if (next.round.phase === "kill" && redeal) next.presetRedeal = redeal;
+      return next;
+    },
+    cleanup: (state, before) => {
+      // 판을 새로 시작하지 않았으면 다음 판 패는 넣지 않은 상태로 둔다.
+      if (state.roundNumber === before.roundNumber) state.presetDeal = null;
+      delete state.presetRedeal;
+      return state;
+    },
+  },
   botFor: (level) => botFor(level as BotLevel),
   // 튜토리얼 미션처럼 손패가 짧은 장면에서는 낼 카드가 떨어지면 멈춘다.
   botCanAct: (view) =>

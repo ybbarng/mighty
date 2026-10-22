@@ -58,6 +58,24 @@ export const heartsKit: HeartsKit = {
   guestMayAct: (action) => action.type !== "retire",
   retireAction: { type: "retire" },
   stats: heartsStats,
+  // 멘탈 포커 판의 판 패: { hands: 자리마다 처음 패 }(fair-play HeartsRoundDeal과 같다).
+  review: {
+    firstExtra: (deals) =>
+      (deals.get(1) as { hands: Card[][] } | undefined)?.hands,
+    prepare: (state, deals) => {
+      const next = structuredClone(state);
+      const hands = (
+        deals.get(next.roundNumber + 1) as { hands: Card[][] } | undefined
+      )?.hands;
+      if (hands) next.presetHands = hands;
+      else delete next.presetHands;
+      return next;
+    },
+    cleanup: (state) => {
+      delete state.presetHands;
+      return state;
+    },
+  },
   botFor: (level) => heartsBotFor(level as HeartsLevel),
   annotateBotAction: (view, action) =>
     action.type === "play" && action.slot === undefined

@@ -35,6 +35,19 @@ export interface KitStats<View, Event> {
 }
 
 /**
+ * 복기(다시 보기)를 위해 기록에서 상태를 다시 만들 때 게임마다 다른 것.
+ * 멘탈 포커 판은 시드가 패를 정하지 않으므로 판마다 실제 패(`deals`, 판 번호 → 그 판 패)를 넣어 가며 돌린다
+ */
+export interface KitReview<State, Extra> {
+  /** 첫 판 실제 패로 대국을 만들 때의 시작 조건 */
+  firstExtra(deals: ReadonlyMap<number, unknown>): Extra | undefined;
+  /** 한 걸음 전에: 다음 판(또는 다시 나누기) 실제 패를 상태에 넣는다 */
+  prepare(state: State, deals: ReadonlyMap<number, unknown>): State;
+  /** 한 걸음 뒤에: 쓰지 않은 미리 정한 패를 지운다 */
+  cleanup(state: State, before: State): State;
+}
+
+/**
  * 게임 하나를 돌리는 데 필요한 것. 대국 진행(LocalMatch)과 온라인 방(HostRoom·GuestRoom)은
  * 이것만 알고, 어떤 게임(마이티·하트)인지는 모른다.
  * `Extra`는 그 게임만의 시작 조건(마이티의 정해진 패 등)이다.
@@ -72,6 +85,8 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
   readonly retireAction: Action;
   /** 내 기록에 남길 것 */
   readonly stats: KitStats<View, Event>;
+  /** 복기할 때 기록에서 상태를 다시 만든다 */
+  readonly review: KitReview<State, Extra>;
   /** 봇이 둘 수 있는 화면인가. 튜토리얼 장면처럼 낼 카드가 떨어지면 멈춘다 */
   botCanAct?(view: View): boolean;
   /** 온라인 참가자가 보낼 수 있는 행동인가(마이티의 그만두기처럼 혼자 할 때만 쓰는 것을 막는다) */
