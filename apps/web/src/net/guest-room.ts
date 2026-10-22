@@ -24,6 +24,8 @@ import {
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import type { GameKit, KitLoggedAction } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
+import type { ArchiveSource } from "@/review/recorder";
+import { serializeDeals } from "@/review/replay";
 
 import { type FairReplayGame, verifyFairLog } from "./fair-verify";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
@@ -204,6 +206,8 @@ export interface GuestEvents<
   }) => void;
   /** 멘탈 포커: 한 판을 진짜 카드로 다시 계산해 문제가 없었다 */
   roundVerified: (deal: number) => void;
+  /** 복기용 기록이 늘었다(판 검증·게임 끝 검증을 통과했을 때) */
+  archive: (source: ArchiveSource) => void;
 }
 
 /**
@@ -277,11 +281,35 @@ export class GuestRoom<
     audit: new Set(),
     incident: new Set(),
     roundVerified: new Set(),
+    archive: new Set(),
   };
   /** 멘탈 포커 진행(이 방이 멘탈 포커일 때, 첫 화면을 받으면 만든다) */
   fair: FairGuestSeat | HeartsGuestSeat | null = null;
   /** 멘탈 포커 판: 시작하자마자 공개된 시드 */
   private fairSeed: number | null = null;
+  /** 일반 판: 게임 끝 검증 중인 복기용 기록 */
+  private pendingArchive: ArchiveSource | null = null;
+
+  /** 멘탈 포커 판: 검증을 통과한 기록과 판별 실제 패를 복기용으로 알린다 */
+  private emitArchive(
+    rules: unknown,
+    seed: number,
+    log: readonly FairLogged[],
+  ): void {
+    if (!this.fair) return;
+    const source: ArchiveSource = {
+      rules,
+      seed,
+      log: [...log] as KitLoggedAction<unknown>[],
+      deals: serializeDeals(
+        this.fair.deals as ReadonlyMap<
+          number,
+          { cards: ReadonlyMap<number, string> }
+        >,
+      ),
+    };
+    for (const l of this.listeners.archive) l(source);
+  }
   /** 진행을 만들기 전에 온 멘탈 포커 메시지 */
   private readonly fairEarly: { message: FairMessage; from: number }[] = [];
 
@@ -654,6 +682,7 @@ export class GuestRoom<
     const verdict = await verifyFairLog({ ...input, inFlight: true });
     if (verdict.ok) {
       for (const l of this.listeners.roundVerified) l(deal);
+      this.emitArchive(input.rules, input.seed, log);
       return;
     }
     this.fair?.coordinator.incident({
@@ -838,6 +867,8 @@ export class GuestRoom<
               message.commitments,
             );
         for (const l of this.listeners.audit) l(result);
+        if (result.ok && this.pendingArchive)
+          for (const l of this.listeners.archive) l(this.pendingArchive);
         // 방장을 거치지 않고 모두에게 결과를 알린다.
         if (this.seat !== null)
           this.transport.send({
@@ -867,6 +898,7 @@ export class GuestRoom<
     if (!input) return { ok: false, reason: "검증할 정보가 없다" };
     // 끝까지 하지 못한 판(그만두기 등)은 열쇠가 다 모이지 않아 그 앞까지만 본다(verifyFairLog).
     const verdict = await verifyFairLog(input);
+    if (verdict.ok) this.emitArchive(input.rules, input.seed, log);
     return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
   }
 
@@ -931,6 +963,12 @@ export class GuestRoom<
     if (!seed.ok) return seed;
     const rules = this.kit.decodeRules(this.lobby.ruleCode);
     if (!rules.ok) return { ok: false, reason: rules.reason };
+    // 검증을 통과하면 복기용으로 남긴다(audit 처리에서 결과를 보고 알린다).
+    this.pendingArchive = {
+      rules: rules.rules,
+      seed: seed.seed,
+      log: log as KitLoggedAction<unknown>[],
+    };
     // 기록을 한 걸음씩 다시 돌리며 매 걸음 내 자리 화면을 만든다.
     // 컴퓨터 수는 같은 컴퓨터·같은 난수로 다시 계산해 기록과 맞춰 본다(방장의 컴퓨터 조종, 모의 침투 A4).
     const level = this.lobby.botLevel;

@@ -4,6 +4,15 @@ import type { StatsMode } from "@/stats/records";
 
 import { saveArchive } from "./archive";
 
+/** 복기용 기록의 내용: 시작 조건과 행동 기록(멘탈 포커 판이면 판별 실제 패) */
+export interface ArchiveSource {
+  rules: unknown;
+  seed: number;
+  presetDeal?: unknown;
+  deals?: Record<number, unknown>;
+  log: KitLoggedAction<unknown>[];
+}
+
 /** 복기용으로 남길 대국. `source`는 그 순간의 시작 조건과 행동 기록을 돌려준다 */
 export interface ArchiveTarget {
   game: string;
@@ -11,13 +20,7 @@ export interface ArchiveTarget {
   key: string;
   seat: number;
   seatNames: string[] | null;
-  source: () => {
-    rules: unknown;
-    seed: number;
-    presetDeal?: unknown;
-    deals?: Record<number, unknown>;
-    log: KitLoggedAction<unknown>[];
-  } | null;
+  source: () => ArchiveSource | null;
 }
 
 /**
@@ -60,4 +63,25 @@ export function soloArchive(
   key: string,
 ): Omit<ArchiveTarget, "source"> {
   return { game, mode: "solo", key, seat: 0, seatNames: null };
+}
+
+/** 참가자: 판 검증을 통과할 때마다 받은 기록을 바로 남긴다 */
+export function saveGuestArchive(
+  target: Omit<ArchiveTarget, "source">,
+  source: ArchiveSource,
+  rounds: number,
+  over: boolean,
+): void {
+  void saveArchive({
+    id: target.key,
+    game: target.game,
+    mode: target.mode,
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+    ...source,
+    seat: target.seat,
+    seatNames: target.seatNames,
+    rounds,
+    over,
+  });
 }

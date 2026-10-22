@@ -1,4 +1,5 @@
 import type { Card } from "@mighty/engine";
+import { realHeartsAction } from "@mighty/fair-play";
 import {
   type Action,
   createMatch,
@@ -70,6 +71,12 @@ export const heartsKit: HeartsKit = {
       if (hands) next.presetHands = hands;
       else delete next.presetHands;
       return next;
+    },
+    realAction: (action, deal) => {
+      const cards = (deal as { cards?: [number, Card][] } | undefined)?.cards;
+      return cards
+        ? realHeartsAction(action as Action, new Map(cards))
+        : action;
     },
     cleanup: (state) => {
       delete state.presetHands;

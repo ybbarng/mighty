@@ -2,7 +2,6 @@
 
 import { type HeartsRules, PLAYER_COUNT } from "@mighty/hearts-engine";
 import { useEffect, useRef, useState } from "react";
-
 import { ChatBox } from "@/components/ChatBox";
 import {
   announceRoundVerified,
@@ -35,6 +34,7 @@ import {
   testVoteDelayMs,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
+import { type ArchiveSource, saveGuestArchive } from "@/review/recorder";
 
 import { heartsBotFor } from "../bots";
 import { heartsKit } from "../kit";
@@ -91,6 +91,21 @@ export function HeartsOnlineScreen({
       key: `online:${roomCode}`,
     },
   };
+  /** 방장: 복기용 기록은 방이 내준다(멘탈 포커 판이면 판별 실제 패까지) */
+  const hostOptions = (host: {
+    archiveSource(): ArchiveSource | null;
+    lobby(): LobbyState;
+  }) => ({
+    ...onlineOptions,
+    archive: {
+      game: "hearts",
+      mode: "online" as const,
+      key: `online:${roomCode}`,
+      seat: 0,
+      seatNames: seatNamesOf(host.lobby()),
+      source: () => host.archiveSource(),
+    },
+  });
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
@@ -181,7 +196,11 @@ export function HeartsOnlineScreen({
         setPhase("lobby");
         if (host.match) {
           started.current = true;
-          attachOnline(host.match, seatNamesOf(host.lobby()), onlineOptions);
+          attachOnline(
+            host.match,
+            seatNamesOf(host.lobby()),
+            hostOptions(host),
+          );
           bindFair(
             useHearts,
             host.fair?.coordinator,
@@ -249,6 +268,24 @@ export function HeartsOnlineScreen({
           ),
         );
         guest.on("roundVerified", announceRoundVerified);
+        // 판 검증(멘탈 포커)·게임 끝 검증을 통과할 때마다 복기용으로 남긴다.
+        guest.on("archive", (source) => {
+          const view = guest.match?.current();
+          saveGuestArchive(
+            {
+              game: "hearts",
+              mode: "online",
+              key: `online:${roomCode}`,
+              seat: guest.seat ?? 0,
+              seatNames: seatNamesOf(
+                guest.lobby ?? { seats: [], ruleCode: "", started: true },
+              ),
+            },
+            source,
+            view?.roundNumber ?? 0,
+            view ? heartsKit.isOver(view as never) : false,
+          );
+        });
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -277,7 +314,7 @@ export function HeartsOnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()), onlineOptions);
+      attachOnline(match, seatNamesOf(host.lobby()), hostOptions(host));
       bindFair(
         useHearts,
         host.fair?.coordinator,

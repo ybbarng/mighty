@@ -87,7 +87,8 @@ export function ReviewPage() {
         )}
         <p className="text-sm text-white/60">
           판이 끝날 때마다 이 기기에 남깁니다(최근 50게임). 혼자 하기와 친구와
-          하기(방장)를 남기고, 배우기는 남기지 않습니다.
+          하기를 남기고, 배우기는 남기지 않습니다. 친구와 한 판은 판이 끝나 모두
+          공개된 뒤의 카드로 남습니다.
         </p>
         {list === null ? null : list.length === 0 ? (
           <p className="rounded-2xl bg-black/35 p-4 text-sm text-white/70">

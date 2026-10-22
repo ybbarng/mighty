@@ -15,6 +15,8 @@ import {
   viewOf,
 } from "@mighty/engine";
 
+import { realAction } from "@mighty/fair-play";
+
 import { type BotLevel, botFor } from "./bots";
 import type { GameKit } from "./kit";
 
@@ -84,6 +86,10 @@ export const mightyKit: MightyKit = {
       const redeal = (deals.get(round) as MightyDeal | undefined)?.redeal;
       if (next.round.phase === "kill" && redeal) next.presetRedeal = redeal;
       return next;
+    },
+    realAction: (action, deal) => {
+      const cards = (deal as { cards?: [number, Card][] } | undefined)?.cards;
+      return cards ? realAction(action as Action, new Map(cards)) : action;
     },
     cleanup: (state, before) => {
       // 판을 새로 시작하지 않았으면 다음 판 패는 넣지 않은 상태로 둔다.

@@ -7,6 +7,8 @@ import { type AuditResult, GuestRoom } from "@/net/guest-room";
 import { HostRoom, type IncidentNotice } from "@/net/host-room";
 import { type HostStore, memoryHostStore } from "@/net/host-store";
 import { MemoryNetwork } from "@/net/transport";
+import type { ArchiveSource } from "@/review/recorder";
+import { replayArchive } from "@/review/replay";
 
 import { heartsKit } from "./kit";
 
@@ -274,4 +276,47 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     expect(own[0]?.seat).toBe(cheater);
     expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
   }, 120_000);
+
+  it("복기: 방장이 남기는 기록(판별 실제 패 포함)을 다시 돌리면 실제 카드로 같은 판이 나온다", async () => {
+    const { host, guests, incidents } = await setup(2);
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    const match = host.match as unknown as {
+      rawState(): { roundNumber: number };
+    };
+    await playUntil(
+      host as never,
+      guests as never,
+      () => match.rawState().roundNumber >= 2,
+      incidents,
+    );
+    const source = (
+      host as unknown as { archiveSource(): ArchiveSource }
+    ).archiveSource();
+    const replayed = replayArchive(heartsKit, {
+      id: "online:test",
+      game: "hearts",
+      mode: "online",
+      startedAt: 0,
+      updatedAt: 0,
+      ...source,
+      seat: 0,
+      seatNames: null,
+      rounds: 1,
+      over: false,
+    });
+    expect(replayed.error).toBeNull();
+    const scoredAt = replayed.events.findIndex((e) =>
+      (e as { type: string }[]).some((x) => x.type === "roundScored"),
+    );
+    expect(scoredAt).toBeGreaterThan(0);
+    const state = replayed.states[scoredAt] as {
+      round: { tricks: { plays: { card: string }[] }[] };
+    };
+    expect(
+      state.round.tricks
+        .flatMap((t) => t.plays)
+        .every((p) => !p.card.startsWith("?_")),
+    ).toBe(true);
+  }, 180_000);
 });

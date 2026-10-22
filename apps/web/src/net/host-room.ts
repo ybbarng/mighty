@@ -21,9 +21,11 @@ import type {
   PlayerView as HeartsView,
 } from "@mighty/hearts-engine";
 import { botName } from "@/game/bot-names";
-import type { GameKit, KitBot } from "@/game/kit";
+import type { GameKit, KitBot, KitLoggedAction } from "@/game/kit";
 import { LocalMatch } from "@/game/local-match";
 import { mightyKit } from "@/game/mighty-kit";
+import type { ArchiveSource } from "@/review/recorder";
+import { serializeDeals } from "@/review/replay";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import type { HostRestore, HostSaved, HostStore } from "./host-store";
 import {
@@ -360,6 +362,26 @@ export class HostRoom<
           this.send({ t: "snapshot", ...snapshot }, guest.peerId);
         if (this.kit.isOver(snapshot.view)) this.sendAudit();
       });
+  }
+
+  /** 복기용 기록: 시드와 행동 기록, 멘탈 포커 판이면 판별 실제 패(다 연 판까지) */
+  archiveSource(): ArchiveSource | null {
+    if (!this.match || this.seed === null) return null;
+    return {
+      rules: this.rules,
+      seed: this.seed,
+      log: this.match.actionLog() as KitLoggedAction<unknown>[],
+      ...(this.fair
+        ? {
+            deals: serializeDeals(
+              this.fair.deals as ReadonlyMap<
+                number,
+                { cards: ReadonlyMap<number, string> }
+              >,
+            ),
+          }
+        : {}),
+    };
   }
 
   /** 되살린 방이 게임 중인가(화면을 바로 게임으로 옮긴다) */

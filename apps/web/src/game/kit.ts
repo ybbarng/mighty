@@ -45,6 +45,8 @@ export interface KitReview<State, Extra> {
   prepare(state: State, deals: ReadonlyMap<number, unknown>): State;
   /** 한 걸음 뒤에: 쓰지 않은 미리 정한 패를 지운다 */
   cleanup(state: State, before: State): State;
+  /** 멘탈 포커 판의 기록 속 행동(자리 표)을 그 판 실제 카드로 바꾼다. `deal`은 그 판 패 */
+  realAction(action: unknown, deal: unknown): unknown;
 }
 
 /**

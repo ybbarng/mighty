@@ -145,7 +145,9 @@ interface HeartsStore {
     options?: {
       network?: boolean;
       stats?: StatsTarget;
-      archive?: Omit<ArchiveTarget, "source">;
+      archive?: Omit<ArchiveTarget, "source"> & {
+        source?: ArchiveTarget["source"];
+      };
     },
   ): void;
   setSeatNames(seatNames: string[]): void;
@@ -259,7 +261,9 @@ export const useHearts = create<HeartsStore>((set, get) => {
       /** 내 기록에 남길 대국(배우기는 남기지 않는다) */
       stats?: StatsTarget;
       /** 복기용으로 남길 대국(시작 조건과 행동 기록은 이 기기의 대국에서 꺼낸다) */
-      archive?: Omit<ArchiveTarget, "source">;
+      archive?: Omit<ArchiveTarget, "source"> & {
+        source?: ArchiveTarget["source"];
+      };
     },
   ) => {
     clearTimer();
@@ -290,19 +294,25 @@ export const useHearts = create<HeartsStore>((set, get) => {
     const recorder = options.stats
       ? new StatsRecorder(heartsKit.stats, options.stats)
       : null;
+    // 복기용 기록: 온라인 방장은 방이 기록을 내주고, 혼자 하기는 이 기기의 대국에서 꺼낸다.
+    const archiveSource =
+      options.archive?.source ??
+      (host instanceof LocalMatch
+        ? () => {
+            const saved = (host as HeartsLocalMatch).save();
+            return {
+              rules: saved.rules,
+              seed: saved.seed,
+              ...(saved.presetDeal ? { presetDeal: saved.presetDeal } : {}),
+              log: saved.log,
+            };
+          }
+        : null);
     const archiver =
-      options.archive && host instanceof LocalMatch
+      options.archive && archiveSource
         ? new ArchiveRecorder(heartsKit.stats, {
             ...options.archive,
-            source: () => {
-              const saved = (host as HeartsLocalMatch).save();
-              return {
-                rules: saved.rules,
-                seed: saved.seed,
-                ...(saved.presetDeal ? { presetDeal: saved.presetDeal } : {}),
-                log: saved.log,
-              };
-            },
+            source: archiveSource,
           })
         : null;
     for (const snapshot of pending) {

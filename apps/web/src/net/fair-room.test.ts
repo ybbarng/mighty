@@ -1,6 +1,7 @@
 import { heuristicBot } from "@mighty/ai";
 import {
   type Action,
+  type MatchState,
   type PlayerView,
   presetRules,
   type RuleSet,
@@ -8,8 +9,12 @@ import {
 } from "@mighty/engine";
 import { isToken, Party } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
-
+import { mightyKit } from "@/game/mighty-kit";
+import type { GameArchive } from "@/review/archive";
+import type { ArchiveSource } from "@/review/recorder";
+import { replayArchive } from "@/review/replay";
 import { type AuditResult, type FairSaved, GuestRoom } from "./guest-room";
+
 import { HostRoom, type IncidentNotice } from "./host-room";
 import { type HostStore, memoryHostStore } from "./host-store";
 import { MemoryNetwork } from "./transport";
@@ -292,6 +297,69 @@ describe("멘탈 포커 온라인 대전", () => {
     );
     expect(g1.lobby?.endVote).toBeUndefined();
   }, 120_000);
+
+  it("복기: 방장과 참가자가 남기는 기록(판별 실제 패 포함)을 다시 돌리면 실제 카드로 같은 판이 나온다", async () => {
+    const { host, guests, incidents } = await setup(
+      presetRules("standard5"),
+      2,
+    );
+    const guestSources: ArchiveSource[] = [];
+    (guests[0] as GuestRoom).on("archive", (s) => guestSources.push(s));
+    await host.start();
+    await until(() => guests.every((g) => g.match !== null));
+    const scored = await playRounds(host, guests, 1, incidents);
+    expect(scored).toBe(1);
+    await until(() => guestSources.length > 0);
+    const archive = (source: ArchiveSource, seat: number): GameArchive => ({
+      id: "online:test",
+      game: "mighty",
+      mode: "online",
+      startedAt: 0,
+      updatedAt: 0,
+      ...source,
+      seat,
+      seatNames: null,
+      rounds: 1,
+      over: false,
+    });
+    const fromHost = host.archiveSource() as ArchiveSource;
+    for (const [source, seat] of [
+      [fromHost, 0],
+      [guestSources.at(-1) as ArchiveSource, guests[0]?.seat as number],
+    ] as const) {
+      const replayed = replayArchive(mightyKit, archive(source, seat));
+      console.log(
+        "DBG",
+        seat,
+        replayed.states.length,
+        JSON.stringify(
+          replayed.events
+            .map((e) => e.map((x) => x.type).join("+"))
+            .filter(Boolean),
+        ).slice(0, 1500),
+        (replayed.states.at(-1) as MatchState).roundNumber,
+        (replayed.states.at(-1) as MatchState).round.phase,
+        host.match?.rawState().roundNumber,
+        host.match?.rawState().round.phase,
+      );
+      expect(replayed.error).toBeNull();
+      const states = replayed.states as MatchState[];
+      // 자리 표가 아니라 실제 카드로 돌았다.
+      expect(
+        states
+          .flatMap((st) => st.round.tricks.flatMap((t) => t.plays))
+          .every((p) => !isToken(p.card)),
+      ).toBe(true);
+      expect(states.some((st) => st.round.tricks.length > 0)).toBe(true);
+      if (seat === 0) {
+        // 방장 기록은 점수를 매긴 걸음까지 있다(참가자는 판 검증 때라 마지막 턴 직전까지).
+        const scoredAt = replayed.events.findIndex((e) =>
+          e.some((x) => x.type === "roundScored"),
+        );
+        expect(scoredAt).toBeGreaterThan(0);
+      }
+    }
+  }, 180_000);
 
   it("방장이 잠깐 끊겼다 돌아오면 참가자는 기다렸다 같은 판을 이어 간다", async () => {
     const { net, host, guests, incidents } = await setup(

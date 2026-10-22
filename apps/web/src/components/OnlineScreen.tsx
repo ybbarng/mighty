@@ -8,6 +8,7 @@ import {
 } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
 import { botFor, browserPace } from "@/game/bots";
+import { mightyKit } from "@/game/mighty-kit";
 import { ruleLabel, useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
@@ -36,6 +37,7 @@ import {
   testVoteDelayMs,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
+import { type ArchiveSource, saveGuestArchive } from "@/review/recorder";
 
 import { Logo } from "./brand/Logo";
 import { ChatBox } from "./ChatBox";
@@ -114,6 +116,21 @@ export function OnlineScreen({
       key: `online:${roomCode}`,
     },
   };
+  /** 방장: 복기용 기록은 방이 내준다(멘탈 포커 판이면 판별 실제 패까지) */
+  const hostOptions = (host: {
+    archiveSource(): ArchiveSource | null;
+    lobby(): LobbyState;
+  }) => ({
+    ...onlineOptions,
+    archive: {
+      game: "mighty",
+      mode: "online" as const,
+      key: `online:${roomCode}`,
+      seat: 0,
+      seatNames: seatNamesOf(host.lobby()),
+      source: () => host.archiveSource(),
+    },
+  });
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 방장 공개 열쇠 지문. 초대 링크에 넣는다 */
@@ -217,7 +234,11 @@ export function OnlineScreen({
         // 새로고침 전에 게임 중이었으면 바로 게임 화면으로 간다. 참가자들은 토큰으로 다시 들어온다.
         if (host.match) {
           started.current = true;
-          attachOnline(host.match, seatNamesOf(host.lobby()), onlineOptions);
+          attachOnline(
+            host.match,
+            seatNamesOf(host.lobby()),
+            hostOptions(host),
+          );
           attachFair(
             host.fair?.coordinator,
             () => host.abandon(),
@@ -281,6 +302,24 @@ export function OnlineScreen({
           ),
         );
         guest.on("roundVerified", announceRoundVerified);
+        // 판 검증(멘탈 포커)·게임 끝 검증을 통과할 때마다 복기용으로 남긴다.
+        guest.on("archive", (source) => {
+          const view = guest.match?.current();
+          saveGuestArchive(
+            {
+              game: "mighty",
+              mode: "online",
+              key: `online:${roomCode}`,
+              seat: guest.seat ?? 0,
+              seatNames: seatNamesOf(
+                guest.lobby ?? { seats: [], ruleCode: "", started: true },
+              ),
+            },
+            source,
+            view?.roundNumber ?? 0,
+            view ? mightyKit.isOver(view as never) : false,
+          );
+        });
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -307,7 +346,7 @@ export function OnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()), onlineOptions);
+      attachOnline(match, seatNamesOf(host.lobby()), hostOptions(host));
       attachFair(
         host.fair?.coordinator,
         () => host.abandon(),
