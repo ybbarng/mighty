@@ -156,6 +156,19 @@ button {
 .siren-blue {
   animation-delay: 0.35s;
 }
+/* 범인을 비추는 손전등 불빛이 은은하게 일렁인다 */
+.flash-glow {
+  animation: flash-glow 1.4s ease-in-out infinite;
+}
+@keyframes flash-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
 @keyframes siren {
   0% {
     opacity: 1;
@@ -171,7 +184,8 @@ button {
   .pop-in,
   .hint-glow,
   .siren-red,
-  .siren-blue {
+  .siren-blue,
+  .flash-glow {
     animation-name: none;
   }
   .hint-glow {

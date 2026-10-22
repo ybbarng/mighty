@@ -2,6 +2,8 @@
 
 import type { BusyReason } from "@mighty/fair-play";
 
+import { useId } from "react";
+
 import { prefersReducedMotion } from "@/game/timing";
 import type { Point, Size } from "@/layout/compute-layout";
 
@@ -132,9 +134,10 @@ export function FairOverlays({
 
 /**
  * 부정 감지 팝업의 경찰관. 머리 위 경광등이 빨강·파랑으로 번갈아 켜진다.
- * 누가 했는지 확인하는 중이면 돋보기를 든다
+ * 누가 했는지 확인하는 중이면 돋보기를 들고, 찾았으면 손전등으로 이쪽을 비춘다
  */
 function Police({ searching }: { searching: boolean }) {
+  const id = useId();
   return (
     <svg
       viewBox="0 0 64 64"
@@ -181,6 +184,40 @@ function Police({ searching }: { searching: boolean }) {
         d="M32 18.5 l1.6 3.2 3.5.5 -2.5 2.5.6 3.5 -3.2 -1.7 -3.2 1.7.6 -3.5 -2.5 -2.5 3.5 -.5z"
         fill="#facc15"
       />
+      {!searching && (
+        <g>
+          {/* 범인을 찾았다: 얼굴 오른쪽 아래에서 손전등이 이쪽(정면)을 비춘다 */}
+          <defs>
+            <radialGradient id={`${id}-flash`}>
+              <stop offset="0" stopColor="#ffffff" />
+              <stop offset="0.35" stopColor="#fef9c3" stopOpacity="0.9" />
+              <stop offset="1" stopColor="#fde047" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle
+            cx="50"
+            cy="51"
+            r="13"
+            fill={`url(#${id}-flash)`}
+            className="flash-glow"
+          />
+          <path
+            d="M50 51 L62 63"
+            stroke="#374151"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
+          <circle cx="50" cy="51" r="5.5" fill="#9ca3af" />
+          <circle cx="50" cy="51" r="4" fill="#fffbeb" />
+          <path
+            d="M50 42.5 v-3 M50 59.5 v3 M41.5 51 h-3 M44 45 l-2 -2 M56 45 l2 -2 M44 57 l-2 2"
+            stroke="#fef08a"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            className="flash-glow"
+          />
+        </g>
+      )}
       {searching && (
         <g>
           {/* 돋보기 */}
