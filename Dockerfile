@@ -33,7 +33,7 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
 RUN pnpm --filter @mighty/web build
 
 # 실행 — 서버의 static 앱과 같은 nginx 판. 서버 compose 에서 read_only + tmpfs 로 띄운다
-FROM nginx:1.31.7-alpine AS runner
+FROM nginx:1.31.8-alpine AS runner
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/out /usr/share/nginx/html
 EXPOSE 80
