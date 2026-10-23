@@ -8,6 +8,7 @@ import {
   bindFair,
   endVoteOf,
   FairLine,
+  RoomKindPicker,
   reportIncident,
 } from "@/components/FairLine";
 import { InviteQr } from "@/components/InviteQr";
@@ -370,6 +371,7 @@ export function HeartsOnlineScreen({
                 {rules.endScore}점.
               </p>
             )}
+            {isHost && <RoomKindPicker />}
             <ActionButton
               className="py-3 text-base"
               onClick={() => void enter()}

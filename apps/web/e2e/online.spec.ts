@@ -74,7 +74,11 @@ test("방장이 방을 만들고 친구가 링크로 들어와 한 판을 끝까
   await host.goto("/?net=local");
   await host.getByRole("button", { name: /다함께 마이티/ }).click();
   await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
+  // 방 종류: 기본은 암호화방이다.
+  await expect(host.getByRole("radio", { name: /암호화방/ })).toBeChecked();
+  await host.screenshot({ path: test.info().outputPath("room-kind.png") });
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();
+  await expect(host.getByText(/암호화방 — 멘탈 포커로/)).toBeVisible();
   const link = await host.locator("input[readonly]").inputValue();
   expect(link).toContain("room=");
   expect(link).toContain("net=local");

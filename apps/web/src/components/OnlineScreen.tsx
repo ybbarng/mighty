@@ -48,6 +48,7 @@ import {
   endVoteOf,
   FairLine,
   type IncidentNoticeLike,
+  RoomKindPicker,
   reportIncident,
 } from "./FairLine";
 import { InviteQr } from "./InviteQr";
@@ -405,6 +406,7 @@ export function OnlineScreen({
                 {rules.playerCount}명. 빈자리는 컴퓨터가 채웁니다.
               </p>
             )}
+            {isHost && <RoomKindPicker />}
             <ActionButton
               className="py-3 text-base"
               onClick={() => void enter()}
