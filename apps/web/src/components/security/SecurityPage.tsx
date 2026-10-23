@@ -300,7 +300,9 @@ export function SecurityPage() {
             <a href="/" className="text-sm underline opacity-70">
               ← 처음으로
             </a>
-            <span className="font-mono text-xs opacity-50">개발자용 설명</span>
+            <a href="/learn" className="text-sm underline opacity-70">
+              처음부터 배우기 →
+            </a>
           </div>
           <h1 className="font-black text-3xl">어떻게 지켜지나요?</h1>
           <P>

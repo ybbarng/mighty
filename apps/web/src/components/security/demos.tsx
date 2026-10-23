@@ -56,7 +56,7 @@ function CardChip({ card, dim = false }: { card: Card; dim?: boolean }) {
   );
 }
 
-function Box({
+export function Box({
   title,
   children,
 }: {
@@ -73,7 +73,7 @@ function Box({
   );
 }
 
-function Btn({
+export function Btn({
   children,
   onClick,
   active = false,
@@ -101,7 +101,13 @@ function Btn({
   );
 }
 
-function Result({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+export function Result({
+  ok,
+  children,
+}: {
+  ok: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div
       className={cn(

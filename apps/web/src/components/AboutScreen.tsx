@@ -45,6 +45,10 @@ export function AboutScreen({
             어떻게 막는지 실제 코드로 해 볼 수 있게 정리했습니다.{" "}
             <a href="/security" className="text-sky-300 underline">
               어떻게 지켜지나요?
+            </a>{" "}
+            · 처음부터 차근차근 배우려면{" "}
+            <a href="/learn" className="text-sky-300 underline">
+              보안 배우기
             </a>
           </p>
         </section>
