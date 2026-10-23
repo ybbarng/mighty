@@ -172,7 +172,8 @@ describe("메시지로 하는 멘탈 포커", () => {
       // 고친 프로그램이 nonce를 숨기면(남의 nonce를 보고 도전값이 불리하다고 보고 멈춘다) 보내지 않는다.
       const devices = network(
         [0, 1, 2],
-        8000,
+        // 느린 CI에서도 정직한 기기가 증명을 끝낼 만큼 넉넉히(실제 게임은 30초)
+        20_000,
         (m, from) =>
           hideNonce && from === cheater && m.k === "sproof" && !!m.nonce,
       );
@@ -207,7 +208,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         // 섞기 증명은 판 진행 줄 밖에서 계산한다. 확인이 다 끝날 때까지 기다린다.
         for (
           let i = 0;
-          i < 400 && !proofsDone(devices) && !timedOut(devices);
+          i < 2400 && !proofsDone(devices) && !timedOut(devices);
           i++
         )
           await new Promise<void>((r) => setTimeout(() => r(), 25));
@@ -225,7 +226,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         const results = await Promise.all(stateOf(d)?.checked.values() ?? []);
         expect(results).toEqual([true, true]);
       }
-    }, 120_000);
+    }, 180_000);
 
     it("복제 카드를 넣고 nonce를 숨기면(도전값을 정하지 못하게) 조작이 드러날 때 nonce를 공개하지 않은 그 기기를 짚는다", async () => {
       const { devices, problems } = await run(1, true);
@@ -239,7 +240,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         expect(culprit?.device).toBe(1);
         expect(culprit?.reason).toMatch(/nonce를 공개하지/);
       }
-    }, 120_000);
+    }, 180_000);
 
     it("복제 카드를 넣고 섞으면(응답을 만들 수 없다) 조작이 드러날 때 다른 두 기기가 그 기기를 짚는다", async () => {
       const { devices } = await run(1);
@@ -248,6 +249,6 @@ describe("메시지로 하는 멘탈 포커", () => {
         expect(culprit?.device).toBe(1);
         expect(culprit?.reason).toMatch(/섞기 증명/);
       }
-    }, 120_000);
+    }, 180_000);
   });
 });

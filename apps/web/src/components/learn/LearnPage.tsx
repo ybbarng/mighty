@@ -17,8 +17,11 @@ import { cn } from "@/lib/cn";
 import { Quiz, type QuizItem } from "./Quiz";
 import {
   CutChooseGame,
+  ElGamalToy,
   FiatShamirToy,
   LockToy,
+  OrProofToy,
+  PolyCheckToy,
   QrLeakToy,
   RenegeToy,
   ZkToy,
@@ -529,6 +532,137 @@ const LESSONS: Lesson[] = [
   },
 ];
 
+/** 심화 학습: 아직 게임에 적용하지 않았지만 다음 단계로 배워 볼 만한 기법 */
+const ADVANCED: Lesson[] = [
+  {
+    id: "elgamal",
+    title: "타원곡선 ElGamal: 섞을 때마다 다시 감싸기",
+    hook: "공동 공개 열쇠로 감싸고 섞을 때마다 다시 감싼다. 표준 멘탈 포커(Barnett–Smart)",
+    body: (
+      <>
+        <P>
+          이 게임의 SRA는 카드를 거듭제곱으로 잠급니다. 같은 열쇠로 잠그면 같은
+          카드는 같은 값이 되므로, 섞을 때 카드끼리 짝이 이어지지 않게 하려면
+          사람마다 새 열쇠로 잠가야 하고, 섞기를 증명할 때도 그 구조에 맞춘
+          방법(cut-and-choose)을 써야 했습니다.
+        </P>
+        <P>
+          표준적인 멘탈 포커(Barnett·Smart 2003)는 ElGamal을 씁니다. 모두의 비밀
+          몫을 더한 공동 공개 열쇠 하나로 카드를 (g<sup>r</sup>, m·h
+          <sup>r</sup>)로 감싸고, 섞을 때마다 무작위 값을 더해{" "}
+          <b>다시 감쌉니다</b>. 그러면 같은 카드도 값이 완전히 바뀌어 짝을 찾을
+          수 없습니다. 열 때는 각자 몫(c₁<sup>xᵢ</sup>)을 내고, 그 몫이 맞다는
+          것은 8단원의 Chaum–Pedersen 증명으로 보입니다. 타원곡선 위에서 하면
+          수가 256비트로 짧아 메시지도 작아집니다.
+        </P>
+      </>
+    ),
+    demo: <ElGamalToy />,
+    points: [
+      "다시 감싸기가 짝을 끊어 주므로 '감싸고 순서만 바꿨다'만 증명하면 된다",
+      "적용하려면 잠그기·열쇠 공개·하트 넘기기·판 끝 확인을 모두 다시 짜야 한다(큰 작업, docs/15)",
+      "참고: Barnett & Smart, Mental Poker Revisited(2003) · 구현체 geometryxyz/mental-poker, ziffle",
+    ],
+    quiz: [
+      {
+        q: "ElGamal에서 다시 감싸면 무엇이 좋아지나?",
+        options: [
+          "카드가 더 빨리 열린다",
+          "같은 카드도 값이 바뀌어 섞기 전과 뒤의 짝을 찾을 수 없다",
+          "열쇠가 필요 없어진다",
+        ],
+        answer: 1,
+        why: "무작위 값이 더해져 같은 카드라도 매번 다른 값이 된다.",
+      },
+    ],
+  },
+  {
+    id: "bayer-groth",
+    title: "다항식으로 한 번에: Neff·Bayer–Groth 섞기 증명",
+    hook: "두 목록이 순서만 다른지는 무작위 t 하나에서 Π(t − aᵢ)를 견주면 안다",
+    body: (
+      <>
+        <P>
+          cut-and-choose는 16번을 반복해 1/65,536까지 줄입니다. 더 강한 섞기
+          증명은 수학 사실 하나에 기댑니다. 두 목록 A, B가 같은 수들을 순서만
+          바꾼 것이라면 다항식 Π(x − aᵢ)와 Π(x − bᵢ)는 똑같습니다. 하나라도
+          바뀌었다면 두 다항식은 다르고, 서로 다른 n차 다항식은 많아야 n개의
+          점에서만 같습니다(Schwartz–Zippel). 그래서 아주 큰 범위에서 무작위 t를
+          하나 뽑아 두 곱을 견주면 거의 확실하게 가려집니다.
+        </P>
+        <P>
+          Neff(2001)는 이 생각에 "값과 순서를 보이지 않고"를 더한 영지식 증명을
+          만들었고, Bayer–Groth(2012)는 덱을 √n×√n 표로 놓아 증명 크기를
+          줄였습니다. 52장 증명이 5.5KB 정도입니다. 이 게임의 SRA 군에서 Neff를
+          쓰면 한 번에 끝나지만 2048비트라 4~5초가 걸려, 지금은 cut-and-choose를
+          골랐습니다.
+        </P>
+      </>
+    ),
+    demo: <PolyCheckToy />,
+    points: [
+      "순열이면 다항식이 같다 → 무작위 점 하나로 확인(Schwartz–Zippel)",
+      "cut-and-choose 2⁻¹⁶ 대신 한 번에 거의 확실",
+      "참고: Neff, A Verifiable Secret Shuffle(CCS 2001) · Bayer & Groth(EUROCRYPT 2012) · docs/15",
+    ],
+    quiz: [
+      {
+        q: "목록에 복제 카드가 섞였을 때 무작위 t에서 두 곱이 우연히 같을 확률은?",
+        options: [
+          "언제나 같다",
+          "많아야 (카드 수)/(수의 범위) — 범위가 크면 사실상 0",
+          "반반이다",
+        ],
+        answer: 1,
+        why: "서로 다른 n차 다항식은 많아야 n개 점에서만 같다.",
+      },
+    ],
+  },
+  {
+    id: "no-suit",
+    title: '"선 무늬가 없다" 증명: OR 증명',
+    hook: "손의 카드마다 '♥이거나 ◆이거나 ♣이다'를, 어느 것인지 숨기고 증명한다",
+    body: (
+      <>
+        <P>
+          지금은 무늬 안 따르기를 숨긴 카드가 드러날 때 잡습니다(12단원). 잡혀도
+          그때까지 드러난 카드는 이미 보인 뒤입니다. 그 자리에서 막으려면 무늬를
+          따르지 않을 때 "내 손에 선 무늬 카드가 없다"를 손패를 보이지 않고
+          증명해야 합니다.
+        </P>
+        <P>
+          바탕은 OR 증명(Cramer–Damgård–Schoenmakers 1994)입니다. "이것 아니면
+          저것"을 증명하는데, 모르는 쪽은 8단원의 속이는 증명처럼 도전값을 미리
+          정해 흉내 내고, 두 도전값의 합만 확인하는 사람의 도전값과 맞춥니다. 두
+          쪽 기록이 똑같이 생겨 어느 쪽이 진짜인지 알 수 없습니다. 손의 카드마다
+          "선 무늬가 아닌 카드들 중 하나다"를 보이면 됩니다. 후보가 많을 때는
+          Groth–Kohlweiss(2015)의 one-out-of-many 증명이 크기를 로그로 줄입니다.
+          트릭 테이킹 게임에 이것을 붙인 연구가 Bultel·Lafourcade(FC 2019), 바닥
+          카드까지 다룬 것이 Bella 외(FC 2023)입니다.
+        </P>
+      </>
+    ),
+    demo: <OrProofToy />,
+    points: [
+      "OR 증명: 모르는 쪽은 흉내 내고, 도전값의 합만 맞춘다",
+      "적용하면 무늬 안 따르기를 사후가 아니라 그 자리에서 막는다",
+      "참고: Bultel & Lafourcade(FC 2019, ePrint 2019/375) · Bella 외(FC 2023, ePrint 2023/309) · Groth & Kohlweiss(EUROCRYPT 2015)",
+    ],
+    quiz: [
+      {
+        q: "OR 증명에서 확인하는 사람이 어느 쪽이 진짜인지 모르는 까닭은?",
+        options: [
+          "기록을 암호로 숨겨서",
+          "진짜 쪽과 흉내 낸 쪽의 기록이 똑같은 분포라서",
+          "한쪽 기록만 보내서",
+        ],
+        answer: 1,
+        why: "흉내 낸 기록도 확인 식을 똑같이 만족해 구별할 수 없다.",
+      },
+    ],
+  },
+];
+
 const KEY = "mighty-learn-done";
 
 function loadDone(): Set<string> {
@@ -581,13 +715,19 @@ export function LearnPage() {
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-amber-300"
-                style={{ width: `${(done.size / LESSONS.length) * 100}%` }}
+                style={{
+                  width: `${(LESSONS.filter((l) => done.has(l.id)).length / LESSONS.length) * 100}%`,
+                }}
               />
             </div>
             <span className="text-sm text-white/70 tabular-nums">
-              {done.size}/{LESSONS.length}단원
+              {LESSONS.filter((l) => done.has(l.id)).length}/{LESSONS.length}
+              단원
             </span>
           </div>
+          <a href="#elgamal" className="w-fit text-sky-300 text-sm underline">
+            심화 학습(아직 적용하지 않은 기법) 바로 가기 ↓
+          </a>
           <nav className="grid gap-1.5 sm:grid-cols-2">
             {LESSONS.map((l, i) => (
               <a
@@ -638,6 +778,52 @@ export function LearnPage() {
               {l.points.map((p) => (
                 <li key={p} className="flex gap-2">
                   <span aria-hidden className="text-amber-300">
+                    ●
+                  </span>
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <Quiz items={l.quiz} onPass={() => mark(l.id)} />
+          </section>
+        ))}
+        <header className="flex flex-col gap-2 border-white/10 border-t pt-8">
+          <span className="font-mono text-amber-300 text-xs">심화 학습</span>
+          <h2 className="font-black text-2xl">
+            아직 적용하지 않은, 다음 단계의 기법
+          </h2>
+          <P>
+            아래 세 가지는 이 게임에 아직 붙이지 않았지만, 더 강한 보안을 원할
+            때 다음으로 배워 볼 만한 표준 기법입니다. 원리를 작은 수로 해 볼 수
+            있게 만들었습니다. 조사 내용은 docs/13·docs/15에 있습니다.
+          </P>
+          <p className="text-sm text-white/60 tabular-nums">
+            {ADVANCED.filter((l) => done.has(l.id)).length}/{ADVANCED.length}
+            단원
+          </p>
+        </header>
+        {ADVANCED.map((l, i) => (
+          <section
+            key={l.id}
+            id={l.id}
+            className="flex scroll-mt-4 flex-col gap-4"
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono text-sky-300 text-sm">
+                심화 {i + 1}
+              </span>
+              <h2 className="font-bold text-xl">{l.title}</h2>
+              {done.has(l.id) && (
+                <span className="text-emerald-300 text-xs">✓ 마침</span>
+              )}
+            </div>
+            <p className="text-sm text-white/55">{l.hook}</p>
+            {l.body}
+            {l.demo}
+            <ul className="flex flex-col gap-1 rounded-xl bg-white/[0.04] px-4 py-3 text-sm">
+              {l.points.map((p) => (
+                <li key={p} className="flex gap-2">
+                  <span aria-hidden className="text-sky-300">
                     ●
                   </span>
                   {p}

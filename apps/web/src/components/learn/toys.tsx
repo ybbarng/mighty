@@ -596,3 +596,314 @@ export function RenegeToy() {
     </Box>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* 심화: 아직 게임에 적용하지 않은 기법                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ElGamal 다시 감싸기: 같은 카드라도 감쌀 때마다 값이 바뀐다(SRA는 같은 열쇠면 같은 값).
+ * 모두의 열쇠를 더한 공동 공개 열쇠로 감싸고, 열 때는 각자 몫을 낸다
+ */
+export function ElGamalToy() {
+  const [card, setCard] = useState(0);
+  const [x1, setX1] = useState(3);
+  const [x2, setX2] = useState(6);
+  const [r, setR] = useState(4);
+  const [wraps, setWraps] = useState<number[]>([]);
+  const [opened, setOpened] = useState(0);
+  const [, m] = TOY_CARDS[card] as [string, number];
+  const h = pow(G, (x1 + x2) % Q, P);
+  // 감쌀 때마다 무작위 s를 더한다: (c1·g^s, c2·h^s)
+  const total = (r + wraps.reduce((a, b) => a + b, 0)) % Q;
+  const c1 = pow(G, total, P);
+  const c2 = (m * pow(h, total, P)) % P;
+  const d1 = pow(c1, x1, P);
+  const d2 = pow(c1, x2, P);
+  const plain =
+    opened === 2
+      ? (c2 * inv((d1 * d2) % P, P)) % P
+      : opened === 1
+        ? (c2 * inv(d1, P)) % P
+        : null;
+  const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  return (
+    <Box title="ElGamal 다시 감싸기(p = 23)">
+      <div className="flex flex-wrap items-center gap-1 text-xs">
+        <span className="w-20 text-white/70">카드</span>
+        {TOY_CARDS.map(([n, v], i) => (
+          <Btn
+            key={n}
+            onClick={() => {
+              setCard(i);
+              setWraps([]);
+              setOpened(0);
+            }}
+            active={i === card}
+          >
+            {n} = {v}
+          </Btn>
+        ))}
+      </div>
+      <Picker label="철수 몫 x₁" value={x1} options={keys} onChange={setX1} />
+      <Picker label="영희 몫 x₂" value={x2} options={keys} onChange={setX2} />
+      <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm">
+        <li>
+          공동 공개 열쇠 h = g<sup>x₁+x₂</sup> = <Num>{h}</Num>. 둘 다 몫을 내야
+          연다.
+        </li>
+        <li>
+          카드 <Num>{m}</Num>를 무작위 r = {r}로 감싼다: (g<sup>r</sup>, m·h
+          <sup>r</sup>) = (<Num>{c1}</Num>, <Num>{c2}</Num>)
+        </li>
+        <li>
+          다시 감싼 횟수 {wraps.length}번{" "}
+          <Btn
+            onClick={() => {
+              setWraps((w) => [...w, 1 + rand(Q - 1)]);
+              setOpened(0);
+            }}
+          >
+            다시 감싸기(무작위 s를 더한다)
+          </Btn>{" "}
+          <Btn
+            onClick={() => {
+              setR(1 + rand(Q - 1));
+              setWraps([]);
+              setOpened(0);
+            }}
+          >
+            처음부터
+          </Btn>
+        </li>
+        <li>
+          열기: 철수 몫 c₁<sup>x₁</sup> = {d1}, 영희 몫 c₁<sup>x₂</sup> = {d2}{" "}
+          <Btn onClick={() => setOpened(1)}>철수만 풀기</Btn>{" "}
+          <Btn onClick={() => setOpened(2)}>둘 다 풀기</Btn>
+          {plain !== null && (
+            <>
+              {" "}
+              → <Num>{plain}</Num>
+            </>
+          )}
+        </li>
+      </ol>
+      <Result ok>
+        같은 카드인데 다시 감쌀 때마다 두 값이 모두 바뀐다. SRA는 같은 열쇠로
+        잠그면 같은 카드는 같은 값이라, 섞기 증명이 따로 짝을 맞춰야 했다.
+        ElGamal은 섞을 때마다 다시 감싸 짝을 끊고, 그 대신 "다시 감싸고 순서만
+        바꿨다"를 Bayer–Groth 같은 증명으로 한 번에 보인다.{" "}
+        {opened === 1 ? "한 사람 몫만으로는 엉뚱한 수가 나온다." : ""}
+      </Result>
+    </Box>
+  );
+}
+
+/**
+ * 다항식으로 순서 확인(Neff·Bayer–Groth의 핵심): 두 목록이 순서만 다른지 보려면
+ * 무작위 t에서 Π(t − aᵢ)와 Π(t − bᵢ)를 견준다. 순열이면 언제나 같고, 하나라도 바뀌면 거의 다르다
+ */
+export function PolyCheckToy() {
+  const base = [2, 5, 9, 13, 17, 20];
+  const [b, setB] = useState<number[]>(() => [9, 20, 2, 17, 5, 13]);
+  const [t, setT] = useState(7);
+  const [stats, setStats] = useState({ tries: 0, caught: 0 });
+  const tampered = [...b].sort((x, y) => x - y).join() !== [...base].join();
+  const evalAt = (list: number[], x: number) =>
+    list.reduce((acc, v) => (acc * ((((x - v) % P) + P) % P)) % P, 1);
+  const pa = evalAt(base, t);
+  const pb = evalAt(b, t);
+  const draw = () => {
+    const next = rand(P);
+    setT(next);
+    if (tampered)
+      setStats((s) => ({
+        tries: s.tries + 1,
+        caught: s.caught + (evalAt(base, next) !== evalAt(b, next) ? 1 : 0),
+      }));
+  };
+  return (
+    <Box title="다항식으로 순서만 바뀌었는지 확인">
+      <p className="text-sm text-white/80">
+        받은 목록 A와 넘긴 목록 B가 같은 수들을 순서만 바꾼 것인지, 수를 하나씩
+        견주지 않고 한 번에 본다.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        <Btn
+          onClick={() => {
+            setB([...base].sort(() => rand(3) - 1));
+            setStats({ tries: 0, caught: 0 });
+          }}
+        >
+          B = A를 섞은 것
+        </Btn>
+        <Btn
+          onClick={() => {
+            const next = [...base].sort(() => rand(3) - 1);
+            next[0] = next[1] as number; // 한 장을 복제했다
+            setB(next);
+            setStats({ tries: 0, caught: 0 });
+          }}
+        >
+          B = 섞으며 한 장을 복제
+        </Btn>
+        <Btn onClick={draw}>무작위 t 뽑기</Btn>
+      </div>
+      <p className="font-mono text-xs">
+        A = [{base.join(", ")}] · B = [{b.join(", ")}] · t = {t}
+      </p>
+      <p className="text-sm">
+        Π(t − aᵢ) mod 23 = <Num>{pa}</Num>, Π(t − bᵢ) mod 23 = <Num>{pb}</Num> →{" "}
+        {pa === pb ? "같다" : "다르다"}
+      </p>
+      {tampered && stats.tries > 0 && (
+        <p className="text-xs text-white/70">
+          t를 {stats.tries}번 뽑아 {stats.caught}번 잡았다. 두 다항식이 다르면
+          같아지는 t는 많아야 6개(차수)라, 23개 중에서는 가끔 빠져나가지만
+          2048비트 수 중에서는 사실상 빠져나갈 수 없다.
+        </p>
+      )}
+      <Result ok={!tampered || pa !== pb}>
+        {tampered
+          ? pa === pb
+            ? "이번 t에서는 우연히 같아졌다(드물다). 다시 뽑아 보자."
+            : "복제 카드가 들어가면 두 곱이 달라 바로 드러난다."
+          : "순서만 바꿨으니 어떤 t에서도 두 곱이 같다."}{" "}
+        Neff(2001)와 Bayer–Groth(2012)는 이 생각에 "값을 보이지 않고"를 더한
+        영지식 증명이다. cut-and-choose(16번, 2⁻¹⁶)와 달리 한 번에 거의
+        확실하다.
+      </Result>
+    </Box>
+  );
+}
+
+/**
+ * OR 증명(Cramer–Damgård–Schoenmakers 1994): "V₁의 비밀이나 V₂의 비밀 중 하나를 안다"를
+ * 어느 쪽인지 숨기고 증명한다. 모르는 쪽은 도전값을 미리 정해 흉내 낸다(8단원의 속이는 증명)
+ */
+export function OrProofToy() {
+  const [real, setReal] = useState<0 | 1>(0);
+  const [x] = useState(6);
+  const [proof, setProof] = useState<{
+    a: [number, number];
+    c: [number, number];
+    z: [number, number];
+    total: number;
+  } | null>(null);
+  const [guess, setGuess] = useState<0 | 1 | null>(null);
+  const [score, setScore] = useState({ played: 0, right: 0 });
+  // 공개 열쇠 둘. 증명하는 사람은 real 쪽 비밀(x)만 안다.
+  const V: [number, number] =
+    real === 0 ? [pow(G, x, P), pow(G, 8, P)] : [pow(G, 9, P), pow(G, x, P)];
+  const run = () => {
+    const fake = (1 - real) as 0 | 1;
+    // 모르는 쪽: 도전값 c_f와 z_f를 먼저 고르고 a_f를 거꾸로 맞춘다.
+    const cf = rand(Q);
+    const zf = rand(Q);
+    const af = (pow(G, zf, P) * inv(pow(V[fake], cf, P), P)) % P;
+    // 아는 쪽: 정직하게 r로 시작한다.
+    const r = rand(Q);
+    const ar = pow(G, r, P);
+    // 확인하는 사람의 도전값 c. 아는 쪽 도전값은 c − c_f로 정해진다.
+    const c = rand(Q);
+    const cr = (((c - cf) % Q) + Q) % Q;
+    const zr = (r + cr * x) % Q;
+    const a: [number, number] = real === 0 ? [ar, af] : [af, ar];
+    const cs: [number, number] = real === 0 ? [cr, cf] : [cf, cr];
+    const zs: [number, number] = real === 0 ? [zr, zf] : [zf, zr];
+    setProof({ a, c: cs, z: zs, total: c });
+    setGuess(null);
+  };
+  const verifies =
+    proof !== null &&
+    (proof.c[0] + proof.c[1]) % Q === proof.total &&
+    [0, 1].every(
+      (i) =>
+        pow(G, proof.z[i] as number, P) ===
+        ((proof.a[i] as number) *
+          pow(V[i] as number, proof.c[i] as number, P)) %
+          P,
+    );
+  return (
+    <Box title="OR 증명: 둘 중 하나를, 어느 쪽인지 숨기고">
+      <div className="flex flex-wrap gap-1.5">
+        <Btn
+          onClick={() => {
+            setReal(0);
+            setProof(null);
+          }}
+          active={real === 0}
+        >
+          증명하는 사람은 왼쪽 비밀을 안다
+        </Btn>
+        <Btn
+          onClick={() => {
+            setReal(1);
+            setProof(null);
+          }}
+          active={real === 1}
+        >
+          오른쪽 비밀을 안다
+        </Btn>
+        <Btn onClick={run}>증명 만들기</Btn>
+      </div>
+      <p className="text-sm text-white/80">
+        공개 열쇠 V₁ = <Num>{V[0]}</Num>, V₂ = <Num>{V[1]}</Num>. 증명할 것: "둘
+        중 하나의 비밀을 안다." 확인하는 사람에게는 어느 쪽인지 알리지 않는다.
+      </p>
+      {proof && (
+        <>
+          <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+            {[0, 1].map((i) => (
+              <div key={i} className="rounded-lg bg-white/5 p-2">
+                {i === 0 ? "왼쪽" : "오른쪽"}: a = {proof.a[i]}, c ={" "}
+                {proof.c[i]}, z = {proof.z[i]}
+                <br />g<sup>z</sup> = a·V<sup>c</sup>?{" "}
+                {pow(G, proof.z[i] as number, P) ===
+                ((proof.a[i] as number) *
+                  pow(V[i] as number, proof.c[i] as number, P)) %
+                  P
+                  ? "맞다"
+                  : "틀리다"}
+              </div>
+            ))}
+          </div>
+          <p className="text-sm">
+            도전값 c = {proof.total} = {proof.c[0]} + {proof.c[1]} (mod 11) ·{" "}
+            {verifies ? "증명이 맞다" : "증명이 틀리다"}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+            <span className="text-white/70">어느 쪽이 진짜일까?</span>
+            {([0, 1] as const).map((i) => (
+              <Btn
+                key={i}
+                onClick={() => {
+                  if (guess !== null) return;
+                  setGuess(i);
+                  setScore((s) => ({
+                    played: s.played + 1,
+                    right: s.right + (i === real ? 1 : 0),
+                  }));
+                }}
+                active={guess === i}
+              >
+                {i === 0 ? "왼쪽" : "오른쪽"}
+              </Btn>
+            ))}
+          </div>
+          {guess !== null && (
+            <Result ok>
+              {guess === real ? "맞혔다" : "틀렸다"}(진짜는{" "}
+              {real === 0 ? "왼쪽" : "오른쪽"}). 지금까지 {score.played}번 중{" "}
+              {score.right}번 — 두 쪽 기록이 똑같이 생겨 반반 찍기보다 나을 수
+              없다. 모르는 쪽은 도전값을 미리 정해 흉내 내고, 두 도전값의 합만
+              확인하는 사람의 c와 맞으면 된다. "선 무늬가 없다"는 손의 카드마다
+              "♥이거나 ◆이거나 ♣이다"를 이런 OR 증명(또는 Groth–Kohlweiss의
+              one-out-of-many)으로 보이는 것이다.
+            </Result>
+          )}
+        </>
+      )}
+    </Box>
+  );
+}

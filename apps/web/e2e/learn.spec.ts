@@ -36,6 +36,30 @@ test("보안 배우기: 장난감 체험과 퀴즈가 돌아간다", async ({ pa
     .getByRole("button", { name: "자기 자리에서 보이는 정보만 있다" })
     .click();
   await expect(page.getByText("1/13단원")).toBeVisible();
+  // 심화: ElGamal 다시 감싸기 뒤에도 둘 다 풀면 원래 카드(♠A = 4)가 나온다.
+  await page.getByRole("button", { name: /다시 감싸기/ }).click();
+  await page.getByRole("button", { name: /다시 감싸기/ }).click();
+  await page.getByRole("button", { name: "둘 다 풀기" }).click();
+  await expect(page.locator("#elgamal").getByText("→ 4")).toBeVisible();
+  // 다항식 확인: 복제 카드는 거의 언제나 잡힌다.
+  await page.getByRole("button", { name: "B = 섞으며 한 장을 복제" }).click();
+  for (let i = 0; i < 5; i++)
+    await page.getByRole("button", { name: "무작위 t 뽑기" }).click();
+  await expect(page.getByText(/t를 5번 뽑아/)).toBeVisible();
+  // OR 증명: 두 쪽 모두 맞아 어느 쪽이 진짜인지 모른다.
+  await page.getByRole("button", { name: "증명 만들기" }).click();
+  await expect(page.getByText("증명이 맞다")).toBeVisible();
+  await page
+    .locator("#no-suit")
+    .getByRole("button", { name: "왼쪽", exact: true })
+    .click();
+  await expect(page.getByText(/반반 찍기보다 나을 수/)).toBeVisible();
+  await page
+    .locator("#elgamal")
+    .screenshot({ path: info.outputPath("elgamal.png") });
+  await page
+    .locator("#no-suit")
+    .screenshot({ path: info.outputPath("no-suit.png") });
   await page.screenshot({ path: info.outputPath("learn.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
