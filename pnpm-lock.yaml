@@ -190,6 +190,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@fontsource/playfair-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/roboto-condensed':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@mighty/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -445,6 +451,12 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@fontsource/playfair-display@5.3.0':
+    resolution: {integrity: sha512-uJSABalvdWc10fEPppQjQocamT21LEyRfzzWfRfqbkPz+sRv+kKpYDKyluBUskvJREkJTos9epj1WjQROGu99Q==}
+
+  '@fontsource/roboto-condensed@5.3.0':
+    resolution: {integrity: sha512-Vbh5pesre/M/Jspd10btdKRqLSTe3yn4l6B2tXHGElCeASfA7Pgdpu1mb8wTG8E72J4Xk6FUfqnSe46UN2QAog==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2201,6 +2213,10 @@ snapshots:
     optional: true
 
   '@exodus/bytes@1.16.0': {}
+
+  '@fontsource/playfair-display@5.3.0': {}
+
+  '@fontsource/roboto-condensed@5.3.0': {}
 
   '@img/colour@1.1.0':
     optional: true

@@ -80,6 +80,9 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   await page.screenshot({ path: info.outputPath("hearts-3-result.png") });
   await page.getByRole("button", { name: "점수판" }).click();
   await expect(page.getByRole("dialog", { name: "점수판" })).toBeVisible();
+  // 결과 창이 사라지는 연출이 끝난 뒤 찍는다
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: info.outputPath("hearts-4-score.png") });
   await page.getByRole("button", { name: "닫기" }).click();
   await page.getByRole("button", { name: "다음 판" }).click();
   // 둘째 판은 오른쪽으로 넘긴다.
