@@ -287,6 +287,8 @@ export class GuestRoom<
   fair: FairGuestSeat | HeartsGuestSeat | null = null;
   /** 멘탈 포커 판: 시작하자마자 공개된 시드 */
   private fairSeed: number | null = null;
+  /** 진행 중인 판에 내가 보낸 섞기 증명 약속 */
+  private ownCommits: Extract<FairMessage, { k: "sproof" }>[] = [];
   /** 일반 판: 게임 끝 검증 중인 복기용 기록 */
   private pendingArchive: ArchiveSource | null = null;
 
@@ -554,8 +556,14 @@ export class GuestRoom<
   /** 내가 보낸 멘탈 포커 메시지를 기억한다(묻는 말에 한 답은 그때뿐이라 뺀다) */
   private rememberOwn(message: FairMessage, to: number | null): void {
     if (message.k === "answer") return;
-    // 섞기 증명 약속은 크고, 섞기 열쇠에서 다시 만들 수 있어 기억하지 않는다.
-    if (message.k === "sproof" && message.commit) return;
+    // 섞기 증명 약속은 커서 진행 중인 판 것만 메모리에 둔다(새로고침한 방장이 nonce를 공개하는 데 필요하다).
+    if (message.k === "sproof" && message.commit) {
+      this.ownCommits = [
+        ...this.ownCommits.filter((m) => m.deal >= message.deal),
+        message,
+      ];
+      return;
+    }
     const key = JSON.stringify(message);
     if (this.ownFairSeen.has(key)) return;
     this.ownFairSeen.add(key);
@@ -566,6 +574,7 @@ export class GuestRoom<
   private resendOwnFair(hostId: string): void {
     for (const { message } of this.ownFair)
       this.transport.send(message, hostId);
+    for (const message of this.ownCommits) this.transport.send(message, hostId);
   }
 
   /** 새로고침 전에 보낸 행동(되살린 대국의 `sent` 앞에 붙인다) */

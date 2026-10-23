@@ -272,7 +272,17 @@ export class HostRoom<
   private logFair(from: number, message: FairMessage): void {
     // 섞기 증명 약속(중간 덱 16벌, 수백 KB)은 다시 보내기·남기기에서 뺀다. 다시 들어온 기기는 그 판 증명을
     // 확인하지 못할 뿐이다. 내 약속은 섞기 열쇠에서 다시 만든다.
-    if (message.k === "sproof" && message.commit) return;
+    if (message.k === "sproof" && message.commit) {
+      // 다시 들어온 기기가 nonce를 공개하려면 남의 약속이 있어야 한다. 진행 중인 판 것만 메모리에 둔다.
+      const deal = message.deal;
+      for (const [key, kept] of this.proofCommits)
+        if (kept.message.deal < deal) this.proofCommits.delete(key);
+      this.proofCommits.set(
+        `${from}:${deal}:${message.round}:${message.stage}`,
+        { from, message },
+      );
+      return;
+    }
     const key = JSON.stringify([from, message]);
     if (this.fpSeen.has(key)) return;
     this.fpSeen.add(key);
@@ -287,6 +297,11 @@ export class HostRoom<
   }
 
   private readonly fpSeen = new Set<string>();
+  /** 진행 중인 판의 섞기 증명 약속(남기지 않고 다시 들어온 기기에게만 다시 보낸다) */
+  private readonly proofCommits = new Map<
+    string,
+    { from: number; message: Extract<FairMessage, { k: "sproof" }> }
+  >();
 
   /** 새로고침 전에 남긴 방을 되살린다. 참가자는 토큰으로 같은 자리에 다시 들어온다 */
   private restoreRoom({ saved, own }: HostRestore): void {
@@ -1125,7 +1140,13 @@ export class HostRoom<
               peerId,
             );
             // 끊긴 동안 오간 멘탈 포커 메시지와 걸음별 사건을 다시 보낸다(이미 받은 것은 참가자가 건너뛴다).
-            this.send({ t: "fpRelay", items: [...this.fpLog] }, peerId);
+            this.send(
+              {
+                t: "fpRelay",
+                items: [...this.fpLog, ...this.proofCommits.values()],
+              },
+              peerId,
+            );
             this.send(
               { t: "fpHistory", items: [...this.fair.history] as never },
               peerId,

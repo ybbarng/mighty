@@ -679,7 +679,11 @@ export class FairDevice {
     }
     if (isShuffleStage(message.stage)) {
       const state = this.shuffleState(ctx, message.round, message.stage);
-      if (typeof message.nc === "string") state.nc.set(from, message.nc);
+      if (typeof message.nc === "string" && !state.nc.has(from)) {
+        state.nc.set(from, message.nc);
+        // 섞은 뒤 정한 시간 안에 섞기 증명 약속을 내야 한다.
+        if (from !== this.id) this.watch(ctx, state, "commit", from);
+      }
       // 새로고침 전에 보낸 내 섞기가 돌아왔으면 증명을 다시 만든다(섞기 열쇠에서 정해져 같다).
       if (from === this.id) this.startShuffleProof(ctx, state);
     }
@@ -1274,6 +1278,8 @@ export class FairDevice {
         stage: state.stage,
         nonce,
       });
+      // 모두의 약속이 모였는데 nonce를 공개하지 않으면(남의 nonce를 보고 도전값이 불리해 멈춘 것) 짚는다.
+      this.watch(ctx, state, "nonce");
     }
     if (state.bits === null && all(state.nonces) && all(state.nc)) {
       const nonces: string[] = [];
@@ -1297,15 +1303,9 @@ export class FairDevice {
       );
       // 도전값이 정해진 뒤 오래 응답하지 않으면 그 기기를 짚는다. 속인 덱은 응답을 만들 수 없다.
       setTimeout(() => {
+        // 응답이 늦은 것만으로는 탓하지 않는다(다른 앱으로 넘어가 탭이 느려진 정직한 사람일 수 있다).
+        // 조작이 드러나면 그때 증명을 끝내지 않은 기기를 범인으로 본다(chainCulprit).
         state.timedOut = true;
-        for (const d of ctx.devices)
-          if (d !== this.id && !state.answers.has(d))
-            this.emit(
-              "problem",
-              ctx.id,
-              "섞기 증명에 응답하지 않았다(섞을 때 카드를 바꿨을 수 있다)",
-              d,
-            );
       }, this.proofTimeoutMs);
     }
     const bits = state.bits;
@@ -1373,6 +1373,40 @@ export class FairDevice {
   }
 
   private checking: Promise<void> = Promise.resolve();
+
+  /** 지금 진행 중인 판인가(가장 나중에 시작한 판) */
+  private isCurrent(ctx: DealCtx): boolean {
+    return Math.max(...this.deals.keys()) === ctx.id;
+  }
+
+  /**
+   * 섞기 증명 단계마다 시간 제한: 약속(섞은 뒤) → nonce(모두의 약속이 모인 뒤) → 응답(도전값이 정해진 뒤).
+   * 정한 시간이 지나면 기다리기를 끝낸 것으로 적는다. 바로 탓하지는 않는다(느린 정직한 기기일 수 있다).
+   * 조작이 드러나면 그 단계를 끝내지 않은 기기를 범인으로 본다(chainCulprit). 틀린 증명만 바로 짚는다
+   */
+  private watch(
+    ctx: DealCtx,
+    state: ShuffleState,
+    step: "commit" | "nonce",
+    /** 약속 단계: 그 기기가 섞은 덱을 받은 때부터 잰다 */
+    device?: number,
+  ): void {
+    setTimeout(() => {
+      if (state.bits !== null || !this.isCurrent(ctx)) return;
+      const map = step === "commit" ? state.commits : state.nonces;
+      // nonce 단계는 모두의 약속이 모였을 때만 따진다(약속이 빠진 것은 약속 단계에서 짚는다).
+      if (step === "nonce" && !ctx.devices.every((d) => state.commits.has(d)))
+        return;
+      const missing = ctx.devices.filter(
+        (d) =>
+          d !== this.id &&
+          !map.has(d) &&
+          (device === undefined || d === device),
+      );
+      // 늦은 것만으로는 탓하지 않고, 조작이 드러날 때 범인을 찾는 데 쓴다(chainCulprit).
+      if (missing.length > 0) state.timedOut = true;
+    }, this.proofTimeoutMs);
+  }
 
   /** 다시 나누기 바꾸기(convert)의 V = g^(1/p) */
   private convertCommitment(ctx: DealCtx): bigint | null {
@@ -1461,19 +1495,27 @@ export class FairDevice {
             reason: "다시 섞을 카드를 바꿀 때 값을 바꿨다(바꾸기 증명 실패)",
           };
       }
-    const missing = new Set<number>();
-    for (const state of ctx.shuffles.values())
-      for (const d of ctx.devices) {
-        if (d === this.id) continue;
-        const proved = state.bits === null ? state.commits : state.answers;
-        if (!proved.has(d)) missing.add(d);
-      }
+    const missing = new Map<number, string>();
+    for (const state of ctx.shuffles.values()) {
+      // 도전값 전: 약속이 다 모였으면 nonce를 공개하지 않은 기기, 아니면 약속을 내지 않은 기기
+      const allCommitted = ctx.devices.every((d) => state.commits.has(d));
+      const [proved, reason] =
+        state.bits !== null
+          ? [state.answers, "섞기 증명 도전에 응답하지 않았다"]
+          : allCommitted
+            ? [
+                state.nonces,
+                "섞기 증명 nonce를 공개하지 않았다(도전값을 보고 멈췄다)",
+              ]
+            : [state.commits, "섞기 증명 약속을 내지 않았다"];
+      for (const d of ctx.devices)
+        if (d !== this.id && !proved.has(d) && !missing.has(d))
+          missing.set(d, reason);
+    }
+    // 정직한 기기는 증명을 끝낸다. 끝내지 않은 기기가 하나뿐이면 그 기기다.
     if (missing.size === 1) {
-      const [device] = missing as Set<number> & Iterable<number>;
-      return {
-        device: device as number,
-        reason: "섞기 증명을 내지 않았다(정직한 기기는 낸다)",
-      };
+      const [[device, reason]] = [...missing] as [[number, string]];
+      return { device, reason };
     }
     return null;
   }

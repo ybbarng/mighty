@@ -8,7 +8,12 @@ import { FairDevice, type FairWire } from "./device";
 import { type Party, Party as PartyClass, type RevealReason } from "./protocol";
 
 /** 기기 셋을 메모리로 잇는다(메시지는 비동기로, 보낸 기기 번호와 함께) */
-function network(ids: number[], proofTimeoutMs?: number) {
+function network(
+  ids: number[],
+  proofTimeoutMs?: number,
+  /** 보내지 않을 메시지(고친 프로그램이 일부러 빼먹는 것) */
+  drop?: (message: FairWire, from: number) => boolean,
+) {
   const devices: FairDevice[] = [];
   for (const id of ids)
     devices.push(
@@ -17,6 +22,7 @@ function network(ids: number[], proofTimeoutMs?: number) {
         group: "1024",
         ...(proofTimeoutMs ? { proofTimeoutMs } : {}),
         send: (m: FairWire) => {
+          if (drop?.(m, id)) return;
           for (const d of devices)
             if (d.id !== id) setTimeout(() => d.receive(m, id), 0);
         },
@@ -154,12 +160,22 @@ describe("메시지로 하는 멘탈 포커", () => {
       ).deals
         .get(1)
         ?.shuffles.get("0:shuffle");
+    const timedOut = (devices: FairDevice[]) =>
+      devices.some(
+        (d) => (stateOf(d) as { timedOut?: boolean } | undefined)?.timedOut,
+      );
     const proofsDone = (devices: FairDevice[]) =>
       devices.every((d) => (stateOf(d)?.checked.size ?? 0) === 2);
 
-    async function run(cheater: number | null) {
+    async function run(cheater: number | null, hideNonce = false) {
       const rules = presetRules("standard5");
-      const devices = network([0, 1, 2], 8000);
+      // 고친 프로그램이 nonce를 숨기면(남의 nonce를 보고 도전값이 불리하다고 보고 멈춘다) 보내지 않는다.
+      const devices = network(
+        [0, 1, 2],
+        8000,
+        (m, from) =>
+          hideNonce && from === cheater && m.k === "sproof" && !!m.nonce,
+      );
       const problems: { by: number; device: number | null; reason: string }[] =
         [];
       for (const d of devices)
@@ -191,7 +207,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         // 섞기 증명은 판 진행 줄 밖에서 계산한다. 확인이 다 끝날 때까지 기다린다.
         for (
           let i = 0;
-          i < 400 && !proofsDone(devices) && problems.length < 2;
+          i < 400 && !proofsDone(devices) && !timedOut(devices);
           i++
         )
           await new Promise<void>((r) => setTimeout(() => r(), 25));
@@ -211,16 +227,27 @@ describe("메시지로 하는 멘탈 포커", () => {
       }
     }, 120_000);
 
-    it("복제 카드를 넣고 섞으면 다른 두 기기가 섞기 증명으로 그 기기를 짚는다", async () => {
-      const { problems } = await run(1);
-      // 속인 덱으로는 응답을 만들 수 없다(정직한 응답 코드가 멈춘다). 응답하지 않아도 짚는다.
-      const shuffle = problems.filter(
-        (p) => p.by !== 1 && p.device !== null && /섞기 증명/.test(p.reason),
+    it("복제 카드를 넣고 nonce를 숨기면(도전값을 정하지 못하게) 조작이 드러날 때 nonce를 공개하지 않은 그 기기를 짚는다", async () => {
+      const { devices, problems } = await run(1, true);
+      // 늦거나 없는 것만으로는 바로 탓하지 않는다(느린 정직한 기기일 수 있다).
+      expect(problems.filter((p) => p.by !== 1 && p.device !== null)).toEqual(
+        [],
       );
-      expect(shuffle.map((p) => [p.by, p.device]).sort()).toEqual([
-        [0, 1],
-        [2, 1],
-      ]);
+      // 같은 카드가 드러났을 때처럼 범인을 찾는다.
+      for (const d of [devices[0], devices[2]]) {
+        const culprit = await d?.shuffleCulprit(1);
+        expect(culprit?.device).toBe(1);
+        expect(culprit?.reason).toMatch(/nonce를 공개하지/);
+      }
+    }, 120_000);
+
+    it("복제 카드를 넣고 섞으면(응답을 만들 수 없다) 조작이 드러날 때 다른 두 기기가 그 기기를 짚는다", async () => {
+      const { devices } = await run(1);
+      for (const d of [devices[0], devices[2]]) {
+        const culprit = await d?.shuffleCulprit(1);
+        expect(culprit?.device).toBe(1);
+        expect(culprit?.reason).toMatch(/섞기 증명/);
+      }
     }, 120_000);
   });
 });
