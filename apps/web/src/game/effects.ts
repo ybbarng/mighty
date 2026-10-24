@@ -90,12 +90,6 @@ export function effectFor(
         if (event.card === mighty) return { text: "마이티!", tone: "gold" };
         if (isJoker(event.card)) return { text: "조커!", tone: "gold" };
         break;
-      case "roundScored":
-        if (event.result.multipliers.includes("run"))
-          return { text: "런!", tone: "gold" };
-        if (event.result.multipliers.includes("reverseRun"))
-          return { text: "백런!", tone: "red" };
-        break;
       default:
         break;
     }

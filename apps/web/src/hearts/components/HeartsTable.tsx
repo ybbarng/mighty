@@ -14,7 +14,9 @@ import { DealAnimation } from "@/components/DealAnimation";
 import { FairOverlays, FairStatus } from "@/components/FairOverlays";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
+import { ResultBanner } from "@/components/ResultBanner";
 import { botName } from "@/game/bot-names";
+import type { ResultBanner as Banner } from "@/game/result-banner";
 import { useSettings } from "@/game/settings";
 import { playUiCue } from "@/game/ui-sound";
 import { computeLayout, type Point } from "@/layout/compute-layout";
@@ -234,6 +236,16 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
     }
     act({ type: "play", card, slot: hand.indexOf(card) });
   };
+
+  // 게임 끝 승패 문구. 하트는 판마다 승패가 없어 게임이 끝날 때만 띄운다(누가 그만둬 끝나면 띄우지 않는다).
+  const over = events.find((e) => e.type === "gameOver");
+  const banner: Banner | null =
+    over && over.type === "gameOver" && !over.retired
+      ? {
+          won: over.winners.includes(me),
+          detail: `${view.scores[me] ?? 0}점`,
+        }
+      : null;
 
   // 효과 글자
   const effect = (() => {
@@ -610,6 +622,13 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
               </div>
             </div>
           )}
+
+          <ResultBanner
+            banner={banner}
+            seq={seq}
+            center={tableCenter}
+            stageHeight={stage.height}
+          />
 
           {effect && (
             <div

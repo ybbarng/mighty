@@ -113,6 +113,33 @@ button {
   animation: effect-pop 2.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* 판 끝 승패 문구: 크게 튀어나왔다가 머물고 사라진다(`ResultBanner`) */
+.result-banner {
+  animation: result-banner 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes result-banner {
+  0% {
+    opacity: 0;
+    scale: 0.5;
+  }
+  12% {
+    opacity: 1;
+    scale: 1.1;
+  }
+  22% {
+    scale: 1;
+  }
+  85% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.04;
+  }
+}
+
 /* 나타난 뒤 그대로 머무는 안내 상자 */
 .pop-in {
   animation: pop-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -180,6 +207,7 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .effect-pop,
+  .result-banner,
   .effect-pop-long,
   .pop-in,
   .hint-glow,

@@ -16,6 +16,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { effectFor } from "@/game/effects";
+import { mightyResultBanner } from "@/game/result-banner";
 import { botName, useCardTheme, useSettings } from "@/game/settings";
 import { canAct, useGame } from "@/game/store";
 import {
@@ -46,6 +47,7 @@ import {
   PickPanel,
   RoundResultPanel,
 } from "./panels/OtherPanels";
+import { ResultBanner } from "./ResultBanner";
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 import { SettingsMenu } from "./SettingsMenu";
@@ -490,6 +492,7 @@ export function GameTable({
     if (e.type === "played" && e.slot !== null) playedSlots.set(e.card, e.slot);
 
   const effect = effectFor(view, events, seatName);
+  const banner = mightyResultBanner(view, events, startMoney);
   const effectCards = effect?.cards ?? null;
   const bigEffect = Boolean(effect?.cards || effect?.lines);
 
@@ -1046,6 +1049,14 @@ export function GameTable({
                 </div>
               </div>
             )}
+
+            {/* 판 끝 승패 문구 */}
+            <ResultBanner
+              banner={banner}
+              seq={seq}
+              center={tableCenter}
+              stageHeight={stage.height}
+            />
 
             {/* 효과 글자: 당선, 마이티, 조커콜, 프렌드 공개 등 */}
             {effect && (

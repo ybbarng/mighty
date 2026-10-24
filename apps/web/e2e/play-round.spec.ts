@@ -85,9 +85,15 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
     await page.waitForTimeout(150);
   }
 
+  // 판이 끝나면 가운데에 크게 승패 문구가 떴다가 사라진다.
+  const banner = page.locator("[data-result-banner]");
+  await expect(banner).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("4-banner.png") });
+  await expect(banner).toBeHidden({ timeout: 5_000 });
+
   await expect(page.getByRole("button", { name: "다음 판" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /승리|패배/ })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("4-result.png") });
+  await page.screenshot({ path: testInfo.outputPath("5-result.png") });
 
   // 손패 카드는 화면 안에 있어야 한다.
   const viewport = page.viewportSize();
