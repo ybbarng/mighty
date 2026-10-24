@@ -21,8 +21,9 @@ import { botName, useCardTheme, useSettings } from "@/game/settings";
 import { canAct, useGame } from "@/game/store";
 import {
   cardTipText,
-  friendLabel,
+  friendWords,
   goalLabel,
+  goalWords,
   jokerCallLabel,
   jokerSuitLabel,
   slangTerms,
@@ -613,7 +614,11 @@ export function GameTable({
           <>
             {/* HUD */}
             <div
-              className="absolute flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-xl bg-black/35 px-3 text-sm"
+              className={cn(
+                "absolute flex items-center gap-x-2 overflow-hidden whitespace-nowrap rounded-xl bg-black/35 px-3 text-sm",
+                // 세로 화면은 좁아 주공·프렌드를 둘째 줄로 내린다.
+                compactHud && "flex-wrap content-center gap-y-0.5",
+              )}
               style={{
                 left: layout.hud.x,
                 top: layout.hud.y,
@@ -624,14 +629,25 @@ export function GameTable({
               {view.goal ? (
                 <Term
                   id={view.goal.kiruda === "NT" ? "noKiruda" : "goal"}
-                  className="shrink-0 font-bold text-base"
+                  className={cn(
+                    "shrink-0 font-bold",
+                    compactHud ? "text-sm" : "text-base",
+                  )}
                 >
-                  {goalLabel(view.goal, n)}
+                  {goalWords(view.goal, n)}
                 </Term>
               ) : (
                 <span className="shrink-0 opacity-70">공약 전</span>
               )}
-              <span className="min-w-0 flex-1 truncate opacity-80">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 opacity-80",
+                  // 세로 화면은 둘째 줄을 통째로 쓴다.
+                  compactHud
+                    ? "order-last basis-full truncate text-xs leading-tight"
+                    : "truncate",
+                )}
+              >
                 {view.declarer !== null && (
                   <>
                     <Term id="declarer">주공</Term> {seatName(view.declarer)}
@@ -641,7 +657,7 @@ export function GameTable({
                   <>
                     {" · "}
                     <Term id="friend">
-                      {friendLabel(view.friendDeclaration, seatName, {
+                      {friendWords(view.friendDeclaration, seatName, {
                         rules,
                         kiruda,
                       })}

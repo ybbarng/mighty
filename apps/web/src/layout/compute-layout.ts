@@ -125,7 +125,8 @@ export function computeLayout(input: LayoutInput): Layout {
   const g = clamp(Math.min(W, H) * 0.02, 8, 24);
 
   const hand = handLayout(W, H, g, input.handCount, portrait);
-  const hudH = portrait ? 44 : H < 480 ? 32 : 40;
+  // 세로 화면 마이티는 위쪽 막대를 두 줄(공약·버튼 / 주공·프렌드)로 쓴다.
+  const hudH = portrait ? 58 : H < 480 ? 32 : 40;
   const hud: Rect = { x: g, y: g, w: W - 2 * g, h: hudH };
   const table: Rect = {
     x: g,
