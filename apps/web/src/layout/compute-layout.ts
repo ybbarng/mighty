@@ -47,10 +47,14 @@ export interface Layout {
   /** `offset` 순서. 0번은 내 자리(자리 판 없이 손패 위 가운데) */
   seats: SeatLayout[];
   trick: { card: Size; slots: Point[] };
+  /** 내 자리 판: 손패 바로 위 구석. 이름·돈·주공 표시·먹은 점수 카드를 보인다 */
+  myPlate: Rect;
 }
 
 /** 자리 판의 가장 낮은 높이. 이보다 낮아지면 한 줄짜리 간단한 판(이름·장수·점수)으로 그린다 */
 export const PLATE_MIN_H = 44;
+/** 자리가 모자랄 때 줄인 내 자리 판 높이(이름·돈 한 줄) */
+export const MY_PLATE_SLIM_H = 26;
 /** 이 높이보다 낮으면 자리 판을 한 줄로 줄여 그린다 */
 export const PLATE_COMPACT_H = 58;
 
@@ -239,6 +243,36 @@ export function computeLayout(input: LayoutInput): Layout {
     y: Tc.y + Ty * Math.sin(rad(angle)),
   }));
 
+  // 내 자리 판: 손패 바로 위 왼쪽 구석. 다른 자리 판이나 바닥 카드와 겹치면 오른쪽 구석,
+  // 그래도 겹치면(7인, 좁은 세로 화면) 판을 줄여 본다. 줄인 판은 이름·돈 한 줄만 보인다.
+  const taken = [
+    ...seats.slice(1).map((s) => s.plate),
+    ...trickSlots.map((s) => ({
+      x: s.x - trickCard.w / 2,
+      y: s.y - trickCard.h / 2,
+      w: trickCard.w,
+      h: trickCard.h,
+    })),
+  ];
+  const cornersOf = (w: number, h: number): Rect[] => {
+    const y = table.y + table.h - h;
+    return [
+      { x: table.x, y, w, h },
+      { x: table.x + table.w - w, y, w, h },
+    ];
+  };
+  const sizes: Size[] = [
+    plate,
+    { w: plate.w, h: MY_PLATE_SLIM_H },
+    { w: plate.w * 0.8, h: MY_PLATE_SLIM_H },
+    { w: plate.w * 0.65, h: MY_PLATE_SLIM_H },
+  ];
+  const myPlate =
+    sizes
+      .flatMap((s) => cornersOf(s.w, s.h))
+      .find((r) => !taken.some((t) => rectsOverlap(r, t))) ??
+    (cornersOf(plate.w * 0.65, MY_PLATE_SLIM_H)[0] as Rect);
+
   return {
     orientation: portrait ? "portrait" : "landscape",
     gutter: g,
@@ -248,5 +282,6 @@ export function computeLayout(input: LayoutInput): Layout {
     hand,
     seats,
     trick: { card: trickCard, slots: trickSlots },
+    myPlate,
   };
 }

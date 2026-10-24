@@ -806,6 +806,27 @@ export function GameTable({
                 />
               );
             })}
+            {/* 내 자리 판: 이름·돈·주공·프렌드 표시·내가 먹은 점수 카드 */}
+            <SeatPlate
+              mine
+              rect={layout.myPlate}
+              name={seatName(view.seat)}
+              handCount={view.hand.length}
+              points={view.pointPiles?.[view.seat] ?? null}
+              pointCount={view.pointCounts[view.seat] ?? 0}
+              money={view.money[view.seat] ?? 0}
+              declarer={view.seat === view.declarer}
+              friend={view.friend === view.seat && view.friendRevealed}
+              ruling={
+                view.seat === view.declarer ||
+                (view.friend === view.seat && view.friendRevealed)
+              }
+              active={false}
+              leader={view.phase === "play" && trick?.leader === view.seat}
+              dead={view.dead.includes(view.seat)}
+              bubble={null}
+              compact={layout.orientation === "portrait" && n >= 6}
+            />
 
             {/* 카드 무대: 손패와 바닥을 한 배열로 그려야 같은 카드가 손패에서 바닥으로 날아간다 */}
             {dealing && (

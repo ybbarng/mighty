@@ -134,5 +134,23 @@ describe.each(cases)(
         for (const c of cards) expect(rectsOverlap(seat.plate, c)).toBe(false);
       }
     });
+
+    it("내 자리 판은 손패 위에 있고 다른 자리 판·바닥 카드와 겹치지 않는다", () => {
+      const layout = computeLayout(input);
+      const { myPlate } = layout;
+      expect(myPlate.y + myPlate.h).toBeLessThanOrEqual(layout.hand.top);
+      const { card, slots } = layout.trick;
+      for (const s of slots)
+        expect(
+          rectsOverlap(myPlate, {
+            x: s.x - card.w / 2,
+            y: s.y - card.h / 2,
+            w: card.w,
+            h: card.h,
+          }),
+        ).toBe(false);
+      for (const seat of layout.seats.slice(1))
+        expect(rectsOverlap(myPlate, seat.plate)).toBe(false);
+    });
   },
 );

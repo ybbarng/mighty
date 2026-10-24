@@ -30,17 +30,24 @@ interface SeatPlateProps {
   /** 포기했거나 다른 사람에게 밀린 공약 */
   bubbleDim?: boolean;
   compact: boolean;
+  /** 내 자리: 손패가 보이므로 장수를 빼고, 자리가 모자라면 한 줄로 줄인다 */
+  mine?: boolean;
 }
+
+/** 이보다 낮으면 한 줄로 줄인 판 */
+const SLIM_H = 36;
 
 function isRed(card: Card): boolean {
   return card.startsWith("H") || card.startsWith("D");
 }
 
-/** 다른 사람 자리. 장수·딴 점수 카드·상태를 보여 준다. 손패 뒷면은 GameTable이 판 뒤에 펼친다. */
+/** 자리 판. 장수·딴 점수 카드·상태를 보여 준다. 다른 사람 손패 뒷면은 GameTable이 판 뒤에 펼친다. */
 export function SeatPlate(props: SeatPlateProps) {
   const { rect } = props;
   // 낮은 화면에서는 점수 카드 줄을 접어 한 줄로 보여 준다.
   const compact = rect.h < PLATE_COMPACT_H;
+  // 내 자리 판을 줄였을 때는 이름·표시·점수 장수·돈을 한 줄에 놓는다.
+  const slim = rect.h < SLIM_H;
   return (
     <div
       className={cn(
@@ -63,7 +70,7 @@ export function SeatPlate(props: SeatPlateProps) {
         zIndex: 20,
       }}
     >
-      <div className="flex items-center gap-1">
+      <div className={cn("flex items-center gap-1", slim && "h-full")}>
         <span className="min-w-[3.5em] truncate font-semibold">
           {props.name}
         </span>
@@ -91,12 +98,21 @@ export function SeatPlate(props: SeatPlateProps) {
             선
           </Term>
         )}
-        <span
-          className="ml-auto shrink-0 whitespace-nowrap tabular-nums opacity-80"
-          title="남은 손패"
-        >
-          {props.dead ? "탈락" : `${props.handCount}장`}
-        </span>
+        {slim ? (
+          <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] tabular-nums opacity-70">
+            {props.pointCount > 0 ? `점수 ${props.pointCount}장 · ` : ""}
+            {props.money * 10}
+          </span>
+        ) : (
+          !props.mine && (
+            <span
+              className="ml-auto shrink-0 whitespace-nowrap tabular-nums opacity-80"
+              title="남은 손패"
+            >
+              {props.dead ? "탈락" : `${props.handCount}장`}
+            </span>
+          )
+        )}
       </div>
       {props.accused ? (
         <div
@@ -121,7 +137,7 @@ export function SeatPlate(props: SeatPlateProps) {
           </div>
         )
       )}
-      {compact ? (
+      {slim ? null : compact ? (
         <div className="flex items-center justify-between text-[10px] tabular-nums opacity-70">
           <span>
             {props.pointCount > 0 ? `점수 ${props.pointCount}장` : ""}
