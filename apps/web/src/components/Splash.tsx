@@ -58,7 +58,7 @@ export function Splash() {
         <Logo size={300} animated />
       </div>
       <p className="splash-tagline relative text-sm text-white/70">
-        대학가 카드게임, 다시 한 판
+        다섯이 모이면, 마이티
       </p>
     </button>
   );

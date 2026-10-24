@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-
+import { MadeWith } from "@/components/brand/MadeWith";
 import {
   ChatRoutingDemo,
   CommitRevealDemo,
@@ -838,6 +838,9 @@ export function LearnPage() {
           <a href="/" className="underline">
             처음으로
           </a>
+          <p className="mt-2 text-xs opacity-70">
+            <MadeWith />
+          </p>
         </footer>
       </article>
     </main>

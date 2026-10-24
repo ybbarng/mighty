@@ -2,6 +2,7 @@
 
 import { CREDITS } from "./brand/brand";
 import { Logo } from "./brand/Logo";
+import { MadeWith } from "./brand/MadeWith";
 import { ActionButton } from "./panels/common";
 
 /** 마이티는?: 게임 소개와 만든 사람, 원작 표시 */
@@ -89,7 +90,8 @@ export function AboutScreen({
 
         <p className="text-center text-[11px] leading-relaxed opacity-50">
           전통 그림 카드 인물: Dmitry Fomin, 위키미디어 공용(CC0)
-          <br />© 2026 ybbarng · MIT License
+          <br />
+          <MadeWith /> · MIT License
         </p>
 
         <button

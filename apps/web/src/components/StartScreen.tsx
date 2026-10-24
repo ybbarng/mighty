@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { useTutorialProgress } from "@/tutorial/progress";
 
 import { Logo } from "./brand/Logo";
+import { MadeWith } from "./brand/MadeWith";
 
 function MenuItem({
   title,
@@ -179,7 +180,9 @@ export function StartScreen({
           )}
         </div>
         <p className="mt-2 text-center text-[11px] opacity-40">
-          마이티 네트워크 4.0을 이어받아 만들었습니다 · © 2026 ybbarng
+          마이티 네트워크 4.0을 이어받아 만들었습니다
+          <br />
+          <MadeWith />
         </p>
       </div>
     </main>
