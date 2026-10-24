@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
 import { chosenRules, ruleLabel, useSettings } from "@/game/settings";
+import { playUiCue } from "@/game/ui-sound";
 import { heartsUnlocked, unlockHearts } from "@/hearts/settings";
 import { cn } from "@/lib/cn";
 import { useTutorialProgress } from "@/tutorial/progress";
@@ -26,7 +27,10 @@ function MenuItem({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        playUiCue("click");
+        onClick();
+      }}
       className={cn(
         "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
         primary

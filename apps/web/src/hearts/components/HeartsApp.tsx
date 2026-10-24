@@ -8,6 +8,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 
 import { ActionButton } from "@/components/panels/common";
+import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 
@@ -48,7 +49,10 @@ function MenuItem({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        playUiCue("click");
+        onClick();
+      }}
       className={cn(
         "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
         primary

@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 
 import { friendLabel, slangTerms } from "@/game/terms";
+import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 
 import { ActionButton, CardPicker, Panel } from "./common";
@@ -58,6 +59,10 @@ export function FriendPanel({
   const [choice, setChoice] = useState<FriendDeclaration>(
     quick[0]?.friend ?? { kind: "none" },
   );
+  const choose = (friend: FriendDeclaration) => {
+    playUiCue("beep");
+    setChoice(friend);
+  };
   const pickedCard = choice.kind === "card" ? choice.card : null;
   const valid = decision.options.some((o) => sameFriend(o, choice));
 
@@ -69,7 +74,7 @@ export function FriendPanel({
             data-choice
             key={q.label}
             type="button"
-            onClick={() => setChoice(q.friend)}
+            onClick={() => choose(q.friend)}
             className={cn(
               "rounded-full border px-3 py-1 text-sm",
               sameFriend(q.friend, choice)
@@ -88,7 +93,7 @@ export function FriendPanel({
               data-choice
               key={p.seat}
               type="button"
-              onClick={() => setChoice(p)}
+              onClick={() => choose(p)}
               className={cn(
                 "rounded-full border px-3 py-1 text-xs",
                 sameFriend(p, choice)

@@ -17,7 +17,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { effectFor } from "@/game/effects";
 import { botName, useCardTheme, useSettings } from "@/game/settings";
-import { play as playCue } from "@/game/sound";
 import { canAct, useGame } from "@/game/store";
 import {
   cardTipText,
@@ -29,6 +28,7 @@ import {
   sortHand,
   unplayableText,
 } from "@/game/terms";
+import { playUiCue } from "@/game/ui-sound";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 import { useChat } from "@/net/chat";
@@ -340,6 +340,8 @@ export function GameTable({
     // 훑거나 끈 것은 손을 뗄 때 따로 처리한다(onHandPointerUp).
     if (touchGesture.current?.moved) return;
     if (exchanging && decision?.kind === "exchange") {
+      // 원작은 버릴 카드를 고를 때 카드받기 소리를 냈다.
+      playUiCue("pickCard");
       setDiscards((d) =>
         d.includes(card)
           ? d.filter((c) => c !== card)
@@ -363,7 +365,7 @@ export function GameTable({
       useGame.setState({
         notice: reason ? unplayableText(reason) : "지금 낼 수 없는 카드입니다",
       });
-      if (useSettings.getState().sound) playCue("invalid");
+      playUiCue("invalid");
       return;
     }
     // 터치는 두 단계: 골라서 들어 올린 뒤 다시 눌러 낸다.

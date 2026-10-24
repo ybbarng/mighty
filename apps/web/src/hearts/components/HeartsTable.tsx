@@ -16,7 +16,7 @@ import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { botName } from "@/game/bot-names";
 import { useSettings } from "@/game/settings";
-import { play as playCue } from "@/game/sound";
+import { playUiCue } from "@/game/ui-sound";
 import { computeLayout, type Point } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 import { useChat } from "@/net/chat";
@@ -203,6 +203,7 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
 
   const onCard = (card: Card, pointer: string) => {
     if (passing && decision?.kind === "pass") {
+      playUiCue("pickCard");
       setPassPick((p) =>
         p.includes(card)
           ? p.filter((c) => c !== card)
@@ -224,7 +225,7 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
             ? "첫 턴에는 하트와 ♠Q를 낼 수 없습니다"
             : "선 무늬를 따라 내야 합니다",
       });
-      if (useSettings.getState().sound) playCue("invalid");
+      playUiCue("invalid");
       return;
     }
     if (pointer === "touch" && selected !== card) {

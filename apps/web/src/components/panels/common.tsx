@@ -11,6 +11,7 @@ import {
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { isRedSuit, kirudaName, kirudaSymbol, SUIT_SYMBOL } from "@/game/terms";
+import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 
 import { TermQuestion } from "../TermHint";
@@ -60,6 +61,12 @@ export function ActionButton({
   );
 }
 
+/** 고르기 단추: 원작처럼 "삑" 하고 고른다 */
+function picked<T>(onChange: (value: T) => void, value: T): void {
+  playUiCue("beep");
+  onChange(value);
+}
+
 export function KirudaPicker({
   value,
   onChange,
@@ -79,7 +86,7 @@ export function KirudaPicker({
           data-choice
           title={kirudaName(k)}
           disabled={!enabled(k)}
-          onClick={() => onChange(k)}
+          onClick={() => picked(onChange, k)}
           className={cn(
             "h-10 min-w-10 rounded-lg border px-2 font-bold text-lg transition disabled:opacity-25",
             value === k
@@ -113,7 +120,7 @@ export function ScoreStepper({
         aria-label="낮추기"
         data-step="down"
         disabled={index <= 0}
-        onClick={() => onChange(options[index - 1] as number)}
+        onClick={() => picked(onChange, options[index - 1] as number)}
         className="h-10 w-10 rounded-full bg-white/15 text-xl disabled:opacity-25"
       >
         −
@@ -126,7 +133,7 @@ export function ScoreStepper({
         aria-label="올리기"
         data-step="up"
         disabled={index < 0 || index >= options.length - 1}
-        onClick={() => onChange(options[index + 1] as number)}
+        onClick={() => picked(onChange, options[index + 1] as number)}
         className="h-10 w-10 rounded-full bg-white/15 text-xl disabled:opacity-25"
       >
         +
@@ -161,7 +168,7 @@ export function CardPicker({
             onClick={() => {
               const rank =
                 value && value !== "JK" ? (value.slice(1) as Rank) : "A";
-              onChange(`${s}${rank}`);
+              picked(onChange, `${s}${rank}`);
             }}
             className={cn(
               "h-8 w-9 rounded-md border text-base",
@@ -178,7 +185,7 @@ export function CardPicker({
           <button
             type="button"
             disabled={!available("JK")}
-            onClick={() => onChange("JK")}
+            onClick={() => picked(onChange, "JK")}
             className={cn(
               "h-8 rounded-md border px-2 text-xs disabled:opacity-25",
               value === "JK"
@@ -198,7 +205,7 @@ export function CardPicker({
               key={rank}
               type="button"
               disabled={!available(card)}
-              onClick={() => onChange(card)}
+              onClick={() => picked(onChange, card)}
               className={cn(
                 "h-8 min-w-8 rounded-md border px-1 text-sm disabled:opacity-25",
                 value === card
