@@ -56,6 +56,10 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
     cues: [
       { cue: "queenOfSpades", when: "스페이드 Q" },
       { cue: "heartsBroken", when: "하트가 처음 깨짐" },
+      { cue: "penalty", when: "내가 벌점 카드(하트·♠Q)를 가져감" },
+      { cue: "scored", when: "내가 점수를 깎는 카드(◆J)를 가져감" },
+      { cue: "roundEnd", when: "한 판이 끝나 점수표가 뜸" },
+      { cue: "mighty", when: "내가 문을 먹음(남이 먹으면 ♠Q 소리)" },
     ],
   },
 ];

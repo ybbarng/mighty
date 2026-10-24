@@ -93,7 +93,7 @@
 
 "카드·섞기 소리가 벌레 바스락거리는 소리 같다"는 의견으로 소리를 모두 새로 합성했다. 높은 대역(2.5~3.2kHz)의 잡음을 짧게 끊어 낸 것이 원인이어서, 카드 소리는 낮은 대역 잡음과 짧게 떨어지는 낮은 음("톡")으로 바꾸고 모든 소리에 작은 방 울림을 더했다. 원작 wav는 쓰지 않는다(5절).
 
-- `apps/web/src/game/sound.ts`: `Cue` 25종과 합성. `play(cue, { delay, times })`는 AudioContext 시간으로 예약해서 낸다. 큰 소리(`BIG`)끼리는 앞 소리를 줄여 끊는다(원작은 한 번에 한 소리). 첫 누름(`pointerdown`·`keydown`·`touchend`)에서 AudioContext를 열어 두어 iOS에서 첫 소리가 막히지 않게 한다. `renderCue`는 소리를 재생하지 않고 그려 본다.
+- `apps/web/src/game/sound.ts`: `Cue` 27종과 합성. `play(cue, { delay, times })`는 AudioContext 시간으로 예약해서 낸다. 큰 소리(`BIG`)끼리는 앞 소리를 줄여 끊는다(원작은 한 번에 한 소리). 첫 누름(`pointerdown`·`keydown`·`touchend`)에서 AudioContext를 열어 두어 iOS에서 첫 소리가 막히지 않게 한다. `renderCue`는 소리를 재생하지 않고 그려 본다.
 - `apps/web/src/game/cues.ts` `cuesFor(view, events)`: 엔진 이벤트를 소리로 바꾼다. 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다. 같은 스냅숏 안의 같은 소리는 하나로 줄인다.
 - `apps/web/src/hearts/cues.ts` `heartsCuesFor`: 하트용 매핑.
 - `apps/web/src/game/ui-sound.ts` `playUiCue`: 화면 조작 소리. 소리 설정이 꺼져 있으면 내지 않는다.
@@ -126,7 +126,10 @@
 | 고르기 | `beep` | 짧은 "틱" | 공약·특권·프렌드·죽이기 창의 무늬·점수·카드·프렌드 고르기(`panels/common.tsx`, `FriendPanel`) |
 | 하트: 스페이드 Q | `queenOfSpades` | 불길한 "둥, 둥, 두웅~" | 하트 `played` |
 | 하트: 하트 깨짐 | `heartsBroken` | 유리 "쨍그랑" | 하트 `heartsBroken` |
-| 하트: 문 | `mighty` | 마이티와 같은 소리 | 하트 `roundScored.moonShooter` |
+| 하트: 벌점 먹음 | `penalty` | 아쉽게 내려가는 "뿌우" | 내가 점수 카드(하트·♠Q)가 든 트릭을 가져갈 때. 남이 가져가면 조용히 둔다 |
+| 하트: 점수 깎는 카드 | `scored` | 동전 "띵-딩" | 내가 ◆J처럼 점수를 깎는 트릭을 가져갈 때 |
+| 하트: 판 끝 | `roundEnd` | 종이 "사락"과 "띵동" | `roundScored`. 마지막 판이면 승리·패배만 |
+| 하트: 문 | `mighty` · `queenOfSpades` | 내가 먹으면 팡파르, 남이 먹으면(나에게 벌점) 불길한 소리 | 하트 `roundScored.moonShooter` |
 
 원작과 다르게 둔 것: 원작은 트릭을 가져갈 때 득점이 없으면 소리가 없어서, 지금도 따로 소리를 내지 않는다(예전 `trick` 소리는 뺐다). 프렌드 공개는 원작에 소리가 없지만 중요한 장면이라 전용 소리를 두었다. 원작은 첫 트릭처럼 규칙 때문에 힘이 없는 조커에도 조커 소리를 냈지만, 여기서는 죽은 조커 소리를 낸다.
 

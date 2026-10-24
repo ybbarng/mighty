@@ -46,7 +46,11 @@ export type Cue =
   /** 하트: 스페이드 Q */
   | "queenOfSpades"
   /** 하트: 하트가 처음 깨질 때 */
-  | "heartsBroken";
+  | "heartsBroken"
+  /** 하트: 내가 벌점 카드를 가져갈 때 */
+  | "penalty"
+  /** 하트: 한 판이 끝나 점수표가 뜰 때 */
+  | "roundEnd";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -75,6 +79,8 @@ export const CUE_LABELS: Record<Cue, string> = {
   beep: "고르기",
   queenOfSpades: "하트: 스페이드 Q",
   heartsBroken: "하트: 하트 깨짐",
+  penalty: "하트: 벌점 먹음",
+  roundEnd: "하트: 판 끝 점수표",
 };
 
 /**
@@ -105,6 +111,7 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   lose: -3.3,
   queenOfSpades: -5.8,
   heartsBroken: 2,
+  roundEnd: -1.5,
 };
 
 function trim(cue: Cue): number {
@@ -715,6 +722,30 @@ function render(cue: Cue, v: Voice): void {
       [2637, 3136, 2349, 2960, 2093].forEach((f, i) => {
         bell(v, f, i * 0.045 + Math.random() * 0.02, 0.35, 0.06);
       });
+      break;
+    case "penalty":
+      // 아쉬운 "뿌우": 부드럽게 내려가는 두 음
+      tone(v, 330, 0, 0.18, { type: "triangle", gain: 0.12, attack: 0.02 });
+      tone(v, 262, 0.16, 0.4, {
+        type: "triangle",
+        gain: 0.12,
+        endFreq: 220,
+        vibrato: [5, 3],
+        attack: 0.02,
+      });
+      break;
+    case "roundEnd":
+      // 점수표를 펼치는 "사락"과 "띵동"
+      noise(v, 0, 0.18, {
+        filter: "bandpass",
+        freq: 1100,
+        sweepTo: 1800,
+        q: 0.8,
+        gain: 0.12,
+        attack: 0.06,
+      });
+      bell(v, G5, 0.15, 0.6, 0.08);
+      bell(v, E5, 0.32, 0.9, 0.08);
       break;
   }
 }
