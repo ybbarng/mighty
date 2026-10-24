@@ -9,7 +9,7 @@
 - `packages/engine` 마이티 엔진(순수 함수) · `packages/ai` 마이티 컴퓨터 · `packages/hearts-engine` · `packages/hearts-ai`
 - `packages/fair-play` — 멘탈 포커(SRA 섞기, 열쇠 증명 `proof.ts`, 섞기 증명 `shuffle-proof.ts`, 판 끝 다시 계산 `audit.ts`)
 - `docs/` — 번호순 설계 문서. 남은 일은 `06-backlog.md`
-- `assets/original-sounds/` — 원작 효과음(라이선스 없음, 배포·공개 금지, docs/16)
+- 원작 효과음과 2019년 코드·옛 기록은 비공개 저장소 `ybbarng/mighty-archive`에 있다(효과음은 라이선스가 없어 이 공개 저장소와 배포에 넣지 않는다, docs/16)
 
 ## 명령
 - 개발 서버: `pnpm dev` (포트 3456)

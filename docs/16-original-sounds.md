@@ -1,7 +1,7 @@
 # 16. 원작 효과음 조사 (2026-10-22)
 
 > 원작 Mighty Network 4.0(`skyser2003/mighty40`)이 어떤 상황에 어떤 효과음을 냈는지, 2019년 `legacy/`가 그 파일을 어디에 썼는지, 지금 앱이 무엇을 내는지 정리한다.
-> `legacy/` 폴더는 2026-10-22에 지웠다(2019년 코드는 태그 `legacy-2019`). 효과음 파일 18개는 이름 그대로 `assets/original-sounds/`로 옮겼다(배포 이미지에는 넣지 않는다, `.dockerignore`). 아래 `legacy/src/...` 경로는 태그 `legacy-2019`에서 본다.
+> `legacy/` 폴더는 2026-10-22에 지웠다(2019년 코드는 비공개 `ybbarng/mighty-archive`의 태그 `legacy-2019`). 효과음 파일 18개는 이름 그대로 비공개 `ybbarng/mighty-archive`의 `assets/original-sounds/`에 있다(이 공개 저장소와 배포 이미지에는 넣지 않는다). 아래 `legacy/src/...` 경로는 비공개 `ybbarng/mighty-archive`의 태그 `legacy-2019`에서 본다.
 
 표기: **[확인]** 소스에서 직접 본 것, **[추정]** 소스를 읽고 짐작한 것(실제로 돌려 보지는 않았다).
 
@@ -12,7 +12,7 @@
 3. **원작에도 소리가 없는 상황이 있다.** 프렌드 공개(글자만 띄운다), 트릭을 가져갈 때(점수 카드가 야당으로 갈 때만 `득점.wav`), 일반 딜(카드 나눠 주기). 판 시작의 "짝!"(`IDW_CARDSETUP`)은 코드에서 부르지만 리소스가 없어 소리가 나지 않는다 [추정].
 4. **legacy는 18개 중 7개만 실제로 울렸다.** 공약(`bid`), 포기(`abandon_bid`), 카드 내기 다섯 종(`mighty`, `joker`, `hunted_joker`, `joker_hunter`, `gan`, `card`), 섞기(`shuffling`). 당선·승패·버튼·득점 등은 매핑만 만들고 부르지 않았다.
 5. **지금 앱은 음원 없이 Web Audio로 합성한 24가지 소리를 낸다**(2026-10-24 다시 만듦, 4절). 원작이 소리를 내던 장면을 모두 채웠고, 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다.
-6. **원작 효과음은 라이선스가 없고 출처도 불분명하다**(나무위키는 코에이 "삼국지 조조전"에서 왔다고 추정, docs/02 참고). 지금 저장소가 비공개라 보관은 괜찮지만, **공개 저장소나 공개 배포(mighty.byb.kr)에는 넣지 않는다.**
+6. **원작 효과음은 라이선스가 없고 출처도 불분명하다**(나무위키는 코에이 "삼국지 조조전"에서 왔다고 추정, docs/02 참고). 비공개 `ybbarng/mighty-archive`에만 보관하고, **공개 저장소(이곳)나 공개 배포(mighty.byb.kr)에는 넣지 않는다.**
 
 ## 1. 원작 효과음 파일 목록
 
@@ -136,8 +136,8 @@
 ## 5. 원작 효과음을 다시 쓸 때 주의
 
 - **라이선스가 없다.** 원작 저장소에 LICENSE가 없고, 효과음 출처 표기도 없다(코에이 게임에서 가져왔다는 추정이 있다). 권리가 확인되지 않은 파일이다.
-  - 지금 저장소(`ybbarng/mighty`)는 비공개라 보관해 두는 것은 괜찮다.
-  - **저장소를 공개하거나, 공개 사이트(mighty.byb.kr) 빌드에 넣지 않는다.** 넣으려면 git 기록까지 빠지는 곳(비공개 저장소나 저장소 밖)에 둔다. 공개 전에는 `git log --all -- '*.wav'`로 기록에 남은 파일이 없는지 확인한다(지금도 `legacy/` 기록에 남아 있으니 공개 전에는 기록 정리가 필요하다).
+  - 파일은 비공개 `ybbarng/mighty-archive`에만 둔다. 이 저장소는 2026-10-25에 원작 효과음을 기록까지 빼고 공개했다.
+  - **저장소를 공개하거나, 공개 사이트(mighty.byb.kr) 빌드에 넣지 않는다.** 다시 넣지 않도록 `.gitignore`에 `assets/original-sounds/`를 두었다.
   - 개인용으로만 쓰려면 "내 브라우저에서 파일을 골라 넣으면 그 소리로 바꾼다" 같은 방식이 안전하다. 앱에는 파일을 싣지 않는다.
   - 공개판에는 지금 합성음을 쓰거나, CC0 등 라이선스가 분명한 효과음을 새로 구한다(docs/03 M4 계획과 같다).
 - **원작 코드는 옮기지 않는다.** 위 조건(언제 어떤 소리)은 동작만 참고해 새로 짠다.
@@ -155,7 +155,7 @@
 | 내용 | 위치 |
 |---|---|
 | legacy 효과음 매핑과 재생 함수 `playSound`(음량 0.05) | `legacy/src/components/Sound/Sound.js` |
-| legacy 효과음 파일 18개 | `assets/original-sounds/*.wav` |
+| legacy 효과음 파일 18개 | 비공개 `ybbarng/mighty-archive`의 `assets/original-sounds/*.wav` |
 | 공약·포기·카드 내기 소리 고르기 (`playBidSound`, `playCardSound`) | `legacy/src/components/Board/Board.js` 44~65행, 247~279행 |
 | 섞기 소리 두 번 (`playShuffleSound`) | `legacy/src/components/CenterZone/CenterZone.js` 58행, 67~72행 |
 | `specialCardName`, `hasPower`, `isGan` 계산 | `legacy/src/core/Game.js` 235~271행 |
