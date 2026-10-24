@@ -46,9 +46,20 @@ export function DealAnimation({
   shuffleMs = SHUFFLE_MS,
 }: DealAnimationProps) {
   const [stage, setStage] = useState<Stage>("stack");
+  /** 덱을 떠난 카드 수. 카드마다 떠나는 순간에 위로 올려야 받는 자리에서 나중 카드가 위에 쌓인다 */
+  const [launched, setLaunched] = useState(0);
   const total = handSize * targets.length;
   const { flights } = dealPlan(handSize, targets.length, pattern);
   const lastFlight = flights.at(-1)?.delay ?? 0;
+  const players = targets.length;
+
+  useEffect(() => {
+    const start = startDelay + shuffleMs;
+    const timers = dealPlan(handSize, players, pattern).flights.map((f, k) =>
+      setTimeout(() => setLaunched(k + 1), start + f.delay),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [handSize, players, pattern, startDelay, shuffleMs]);
 
   useEffect(() => {
     const step = shuffleMs / 4;
@@ -79,8 +90,7 @@ export function DealAnimation({
         const isKitty = i < kittyCount;
         const order = count - 1 - i;
         const flight = isKitty ? undefined : flights[order];
-        const dealing = stage === "deal" || stage === "settle";
-        const dealt = dealing && !isKitty;
+        const dealt = !isKitty && order < launched;
         const half = i % 2 === 0 ? -1 : 1;
         const stack = i * 0.35;
         const at = dealt
@@ -104,9 +114,10 @@ export function DealAnimation({
             height={card.h}
             at={at}
             rotate={split ? half * 6 : 0}
-            // 덱에서는 맨 위 카드가 맨 위에 보이고 먼저 나간다.
-            z={dealt ? 100 + (total - order) : 10 + i}
-            delay={dealt ? (flight?.delay ?? 0) : 0}
+            // 덱에서는 맨 위 카드가 맨 위에 보이고 먼저 나간다. 덱을 떠난 카드는 나중에 떠날수록
+            // 위에 있어야 받는 자리에 먼저 받은 카드 위로 쌓인다.
+            z={dealt ? 100 + order : 10 + i}
+            delay={0}
             duration={dealt ? FLIGHT_MS : 400}
           />
         );
