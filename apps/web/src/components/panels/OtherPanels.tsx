@@ -11,7 +11,7 @@ import {
 import { useState } from "react";
 import { useCardTheme } from "@/game/settings";
 import {
-  cardLabel,
+  cardWords,
   goalLabel,
   isRedSuit,
   jokerCallLabel,
@@ -46,7 +46,7 @@ export function KillPanel({
       </p>
       {decision.failed.length > 0 && (
         <p className="text-center text-xs">
-          헛다리: {decision.failed.map(cardLabel).join(", ")}
+          헛다리: {decision.failed.map(cardWords).join(", ")}
         </p>
       )}
       <CardPicker
@@ -60,7 +60,7 @@ export function KillPanel({
           disabled={card === null}
           onClick={() => card && onSubmit({ type: "kill", card })}
         >
-          {card ? `${cardLabel(card)} 지목` : "카드를 고르세요"}
+          {card ? `${cardWords(card)} 지목` : "카드를 고르세요"}
         </ActionButton>
       </div>
     </Panel>
@@ -84,7 +84,7 @@ export function PickPanel({
       <div className="flex justify-center gap-4">
         {(
           [
-            [0, faceUp, cardLabel(faceUp)],
+            [0, faceUp, cardWords(faceUp)],
             [1, null, "안 보이는 카드"],
           ] as const
         ).map(([index, card, label]) => (
@@ -125,7 +125,7 @@ export function LeadChoicePanel({
       title={
         kind === "jokerSuit"
           ? "조커로 부를 무늬를 고르세요"
-          : `${cardLabel(card)}로 조커콜을 할까요?`
+          : `${cardWords(card)}로 조커콜을 할까요?`
       }
     >
       {kind === "jokerSuit" ? (

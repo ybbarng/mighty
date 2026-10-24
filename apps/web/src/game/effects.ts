@@ -7,7 +7,7 @@ import {
   type PlayerView,
 } from "@mighty/engine";
 
-import { cardLabel, friendLabel, goalLabel, jokerCallLabel } from "./terms";
+import { cardWords, friendLabel, goalLabel, jokerCallLabel } from "./terms";
 
 function sameGoal(a: Goal, b: Goal): boolean {
   return a.kiruda === b.kiruda && a.score === b.score;
@@ -76,9 +76,9 @@ export function effectFor(
         };
       case "killAttempt":
         return event.killed === null
-          ? { text: `${cardLabel(event.card)} 지목 — 헛다리`, tone: "info" }
+          ? { text: `${cardWords(event.card)} 지목 — 헛다리`, tone: "info" }
           : {
-              text: `${cardLabel(event.card)} — ${seatName(event.killed)} 탈락`,
+              text: `${cardWords(event.card)} — ${seatName(event.killed)} 탈락`,
               tone: "red",
             };
       case "friendRevealed":

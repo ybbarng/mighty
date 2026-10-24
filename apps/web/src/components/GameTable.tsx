@@ -21,9 +21,8 @@ import { botName, useCardTheme, useSettings } from "@/game/settings";
 import { canAct, useGame } from "@/game/store";
 import {
   cardTipText,
-  friendWords,
+  friendLabel,
   goalLabel,
-  goalWords,
   jokerCallLabel,
   jokerSuitLabel,
   slangTerms,
@@ -634,7 +633,7 @@ export function GameTable({
                     compactHud ? "text-sm" : "text-base",
                   )}
                 >
-                  {goalWords(view.goal, n)}
+                  {goalLabel(view.goal, n)}
                 </Term>
               ) : (
                 <span className="shrink-0 opacity-70">공약 전</span>
@@ -657,7 +656,7 @@ export function GameTable({
                   <>
                     {" · "}
                     <Term id="friend">
-                      {friendWords(view.friendDeclaration, seatName, {
+                      {friendLabel(view.friendDeclaration, seatName, {
                         rules,
                         kiruda,
                       })}

@@ -89,7 +89,7 @@ describe("효과 글자", () => {
       effect({ type: "elected", seat: 2, goal: { kiruda: "H", score: 15 } }),
     ).toMatchObject({
       text: "P2 당선",
-      lines: ["공약 ♥ 15", "바닥 카드를 가져갑니다"],
+      lines: ["공약 하트 15", "바닥 카드를 가져갑니다"],
     });
     expect(effect({ type: "friendRevealed", seat: 3 })?.text).toBe(
       "프렌드는 P3!",
@@ -110,7 +110,7 @@ describe("효과 글자", () => {
         [{ type: "exchanged", seat: 0, goal: { kiruda: "H", score: 16 } }],
         name,
       ),
-    ).toMatchObject({ text: "공약 변경", lines: ["♠ 14 → ♥ 16"] });
+    ).toMatchObject({ text: "공약 변경", lines: ["스페이드 14 → 하트 16"] });
     expect(
       effectFor(
         elected,
@@ -129,10 +129,10 @@ describe("효과 글자", () => {
   it("6마 죽이기", () => {
     expect(
       effect({ type: "killAttempt", seat: 0, card: "SK", killed: null })?.text,
-    ).toBe("♠K 지목 — 헛다리");
+    ).toBe("스페이드 K 지목 — 헛다리");
     expect(
       effect({ type: "killAttempt", seat: 0, card: "SK", killed: 4 })?.text,
-    ).toBe("♠K — P4 탈락");
+    ).toBe("스페이드 K — P4 탈락");
   });
 
   it("보통 카드에는 효과가 없다", () => {

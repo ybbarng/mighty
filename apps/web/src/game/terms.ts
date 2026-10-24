@@ -121,9 +121,13 @@ export function isRedSuit(kiruda: Kiruda | null): boolean {
   return kiruda === "D" || kiruda === "H";
 }
 
+/**
+ * 공약: "스페이드 13". 작은 글씨에서 ♠·♣ 기호가 헷갈려 무늬를 이름으로 적는다.
+ * 은어를 켰으면 "스페이드 13 (셋삽)"처럼 은어를 함께 적는다
+ */
 export function goalLabel(goal: Goal, playerCount?: number): string {
-  if (slang) return goalSlang(goal, playerCount);
-  return `${kirudaSymbol(goal.kiruda)} ${goal.score}`;
+  const base = `${kirudaName(goal.kiruda)} ${goal.score}`;
+  return slang ? `${base} (${goalSlang(goal, playerCount)})` : base;
 }
 
 export function cardLabel(card: Card): string {
@@ -131,10 +135,14 @@ export function cardLabel(card: Card): string {
   return `${SUIT_SYMBOL[suitOf(card)]}${rankOf(card)}`;
 }
 
+/**
+ * 프렌드: "스페이드 A (마이티) 프렌드". 카드는 무늬 이름으로 적고, 마이티·조커콜 카드는 역할을
+ * 괄호로 붙인다. 은어를 켰으면 "(기아)"처럼 은어를 붙인다
+ */
 export function friendLabel(
   friend: FriendDeclaration,
   seatName: (seat: number) => string,
-  /** 은어로 보여 줄 때 기아·마이티를 가리려면 규칙과 기루다가 필요하다 */
+  /** 마이티·조커콜·기아를 가리려면 규칙과 기루다가 필요하다 */
   context?: { rules: RuleSet; kiruda: Kiruda | null },
 ): string {
   switch (friend.kind) {
@@ -144,22 +152,12 @@ export function friendLabel(
       return "초구 프렌드";
     case "player":
       return `${seatName(friend.seat)} 프렌드`;
-    case "card":
-      return `${
-        slang && context
-          ? cardSlang(friend.card, context.rules, context.kiruda)
-          : cardLabel(friend.card)
-      } 프렌드`;
+    case "card": {
+      const name = cardWords(friend.card);
+      const role = context ? cardRole(friend.card, context) : null;
+      return `${name}${role && role !== name ? ` (${role})` : ""} 프렌드`;
+    }
   }
-}
-
-/**
- * 위쪽 막대용 공약: "스페이드 13". 작은 글씨에서 ♠·♣ 기호가 헷갈려 무늬를 이름으로 적는다.
- * 은어를 켰으면 "스페이드 13 (셋삽)"처럼 은어를 함께 적는다
- */
-export function goalWords(goal: Goal, playerCount?: number): string {
-  const base = `${kirudaName(goal.kiruda)} ${goal.score}`;
-  return slang ? `${base} (${goalSlang(goal, playerCount)})` : base;
 }
 
 /** 카드를 무늬 이름으로: "스페이드 A" */
@@ -168,27 +166,23 @@ export function cardWords(card: Card): string {
   return `${SUIT_NAME[suitOf(card)]} ${rankOf(card)}`;
 }
 
-/**
- * 위쪽 막대용 프렌드: "스페이드 A (마이티) 프렌드". 마이티·조커콜 카드는 역할을 괄호로 붙이고,
- * 은어를 켰으면 "(기아)"처럼 은어를 붙인다
- */
-export function friendWords(
-  friend: FriendDeclaration,
-  seatName: (seat: number) => string,
-  context: { rules: RuleSet; kiruda: Kiruda | null },
-): string {
-  if (friend.kind !== "card") return friendLabel(friend, seatName, context);
-  const { card } = friend;
-  const { rules, kiruda } = context;
-  const role = slang
-    ? cardSlang(card, rules, kiruda)
-    : card === mightyOf(rules, kiruda ?? "NT")
-      ? "마이티"
-      : kiruda !== null && card === jokerCallOf(rules, kiruda)
-        ? "조커콜"
-        : null;
-  const name = cardWords(card);
-  return `${name}${role && role !== name ? ` (${role})` : ""} 프렌드`;
+const SUIT_SHORT: Record<Suit, string> = { S: "스", D: "다", H: "하", C: "클" };
+
+/** 작은 칩용 카드 이름: "스K", "클10". 무늬 이름 첫 글자라 ♠·♣ 기호처럼 헷갈리지 않는다 */
+export function cardShort(card: Card): string {
+  if (isJoker(card)) return "조커";
+  return `${SUIT_SHORT[suitOf(card)]}${rankOf(card)}`;
+}
+
+/** 카드 이름 뒤 괄호에 붙일 말: 은어를 켰으면 은어, 아니면 마이티·조커콜만 */
+function cardRole(
+  card: Card,
+  { rules, kiruda }: { rules: RuleSet; kiruda: Kiruda | null },
+): string | null {
+  if (slang) return cardSlang(card, rules, kiruda);
+  if (card === mightyOf(rules, kiruda ?? "NT")) return "마이티";
+  if (kiruda !== null && card === jokerCallOf(rules, kiruda)) return "조커콜";
+  return null;
 }
 
 const DISPLAY_SUIT_ORDER: readonly Suit[] = ["S", "H", "C", "D"];

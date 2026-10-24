@@ -1,7 +1,7 @@
 "use client";
 
 import type { Card } from "@mighty/engine";
-import { cardLabel } from "@/game/terms";
+import { cardShort } from "@/game/terms";
 import { PLATE_COMPACT_H, type Rect } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
 
@@ -159,7 +159,7 @@ export function SeatPlate(props: SeatPlateProps) {
                       isRed(card) ? "text-red-600" : "text-black",
                     )}
                   >
-                    {cardLabel(card)}
+                    {cardShort(card)}
                   </span>
                 ))}
           </div>
