@@ -60,21 +60,37 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
 interface Level {
   /** 가장 큰 순간(dBFS) */
   peak: number;
+  /** 귀에 크게 느껴지는 정도: 0.15초 구간 평균 크기의 가장 큰 값(dBFS) */
+  loudness: number;
   /** 소리가 들리는 길이(초) */
   length: number;
 }
+
+/** 귀는 0.1~0.2초쯤을 뭉뚱그려 크기를 느낀다. 그 길이 구간의 평균 크기로 비교한다 */
+const WINDOW_S = 0.15;
 
 function measure(buffer: AudioBuffer): Level {
   let peak = 0;
   let last = 0;
   const data = buffer.getChannelData(0);
+  const squares = new Float64Array(data.length + 1);
   for (let i = 0; i < data.length; i++) {
-    const x = Math.abs(data[i] ?? 0);
-    if (x > peak) peak = x;
-    if (x > 0.003) last = i;
+    const x = data[i] ?? 0;
+    const a = Math.abs(x);
+    if (a > peak) peak = a;
+    if (a > 0.003) last = i;
+    squares[i + 1] = (squares[i] ?? 0) + x * x;
   }
+  const win = Math.floor(buffer.sampleRate * WINDOW_S);
+  let loudest = 0;
+  for (let i = 0; i + win <= data.length; i += 256) {
+    const mean = ((squares[i + win] ?? 0) - (squares[i] ?? 0)) / win;
+    if (mean > loudest) loudest = mean;
+  }
+  const db = (x: number) => (x > 0 ? 20 * Math.log10(x) : -120);
   return {
-    peak: peak > 0 ? 20 * Math.log10(peak) : -120,
+    peak: db(peak),
+    loudness: db(Math.sqrt(loudest)),
     length: last / buffer.sampleRate,
   };
 }
@@ -102,7 +118,8 @@ export function SoundBoard() {
     <main className="min-h-dvh bg-[#0a3622] p-4 text-white">
       <h1 className="mb-1 font-bold text-lg">효과음</h1>
       <p className="mb-4 text-sm text-white/70">
-        누르면 그 소리가 납니다. 숫자는 가장 큰 순간의 크기와 들리는 길이입니다.
+        누르면 그 소리가 납니다. 숫자는 귀에 느껴지는 크기, 가장 큰 순간의 크기,
+        들리는 길이입니다.
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         {GROUPS.map((group) => (
@@ -130,9 +147,11 @@ export function SoundBoard() {
                       <span
                         className="text-right font-mono text-white/60 text-xs tabular-nums"
                         data-level={cue}
+                        data-loudness={level?.loudness}
+                        data-peak={level?.peak}
                       >
                         {level
-                          ? `${level.peak.toFixed(1)} dB · ${level.length.toFixed(2)}초`
+                          ? `${level.loudness.toFixed(1)} dB · 최대 ${level.peak.toFixed(1)} · ${level.length.toFixed(2)}초`
                           : "…"}
                       </span>
                     </button>

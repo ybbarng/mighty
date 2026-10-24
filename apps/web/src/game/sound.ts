@@ -73,6 +73,39 @@ export const CUE_LABELS: Record<Cue, string> = {
 };
 
 /**
+ * 소리마다 맞추는 크기(dB). 갑자기 커서 놀라지 않게 귀에 느껴지는 크기의 차이를 좁힌다.
+ * `/sounds`에서 잰 0.15초 평균 크기로 평범한 소리는 -33~-38dB, 중요한 소리는 -29dB 근처에 둔다.
+ * 소리를 고치면 `/sounds`에서 다시 재고 이 값을 맞춘다.
+ */
+const TRIM_DB: Partial<Record<Cue, number>> = {
+  card: 6.8,
+  pickCard: 8.5,
+  click: 7.7,
+  beep: 10,
+  pass: 4.9,
+  invalid: 3.7,
+  cardSet: 3,
+  shuffle: 2,
+  mighty: -8.2,
+  joker: -1.2,
+  jokerCall: 2.9,
+  deadJoker: 2,
+  gan: -3.4,
+  announce: -2.4,
+  kill: -0.8,
+  friend: -1.7,
+  scored: -0.9,
+  win: -5.6,
+  lose: -3.3,
+  queenOfSpades: -5.8,
+  heartsBroken: 2,
+};
+
+function trim(cue: Cue): number {
+  return 10 ** ((TRIM_DB[cue] ?? 0) / 20);
+}
+
+/**
  * 큰 소리. 원작은 한 번에 한 소리만 냈고 큰 소리는 앞 소리를 끊었다(`PlaySound(id, true)`).
  * 여기서는 큰 소리끼리만 앞 소리를 줄여 끊고, 카드처럼 흔한 소리는 겹쳐 둔다.
  */
@@ -122,7 +155,8 @@ function createAudio(): Audio | null {
 function buildGraph(ctx: BaseAudioContext, gain: number): Graph {
   const master = ctx.createGain();
   master.gain.value = gain;
-  // 여러 소리가 겹쳐도 깨지지 않게 살짝 누른다.
+  // 여러 소리가 겹쳐도 깨지지 않게 살짝 누른다. 문턱을 더 낮추면 압축기가 전체를
+  // 자동으로 키워(makeup gain) 오히려 커지므로, 소리 사이 크기는 `TRIM_DB`로 맞춘다.
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -12;
   limiter.ratio.value = 6;
@@ -330,7 +364,8 @@ function thump(
   duration: number,
   gain = 0.3,
 ): void {
-  tone(v, freq, at, duration, { gain, endFreq, attack: 0.003 });
+  // 너무 날카롭게 치고 들어오면 놀라므로 아주 조금 부드럽게 시작한다.
+  tone(v, freq, at, duration, { gain, endFreq, attack: 0.008 });
 }
 
 interface NoiseOptions {
@@ -424,6 +459,7 @@ export function play(
   const { ctx } = a;
   const t0 = ctx.currentTime + delay;
   const bus = ctx.createGain();
+  bus.gain.value = trim(cue);
   bus.connect(a.out);
   if (BIG.has(cue)) {
     // 앞 큰 소리를 이 소리가 시작할 때 재빨리 줄인다.
@@ -439,7 +475,10 @@ export function renderCue(cue: Cue, seconds = 3): Promise<AudioBuffer> {
   const rate = 44100;
   const ctx = new OfflineAudioContext(2, rate * seconds, rate);
   const g = buildGraph(ctx, 0.8);
-  render(cue, { ctx, bus: g.out, noise: g.noise, t0: 0 });
+  const bus = ctx.createGain();
+  bus.gain.value = trim(cue);
+  bus.connect(g.out);
+  render(cue, { ctx, bus, noise: g.noise, t0: 0 });
   return ctx.startRendering();
 }
 
@@ -567,14 +606,14 @@ function render(cue: Cue, v: Voice): void {
     case "kill":
       // 북을 몰아치다 칼 "슉"
       for (let i = 0; i < 4; i++)
-        thump(v, i * 0.08, 130, 70, 0.12, 0.1 + i * 0.04);
+        thump(v, i * 0.08, 130, 70, 0.12, 0.1 + i * 0.03);
       noise(v, 0.36, 0.3, {
         filter: "highpass",
         freq: 5000,
         sweepTo: 1500,
         q: 0.7,
-        gain: 0.2,
-        attack: 0.03,
+        gain: 0.08,
+        attack: 0.08,
       });
       break;
     case "win":

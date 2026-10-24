@@ -97,7 +97,8 @@
 - `apps/web/src/game/cues.ts` `cuesFor(view, events)`: 엔진 이벤트를 소리로 바꾼다. 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다. 같은 스냅숏 안의 같은 소리는 하나로 줄인다.
 - `apps/web/src/hearts/cues.ts` `heartsCuesFor`: 하트용 매핑.
 - `apps/web/src/game/ui-sound.ts` `playUiCue`: 화면 조작 소리. 소리 설정이 꺼져 있으면 내지 않는다.
-- `/sounds`(`components/SoundBoard.tsx`): 모든 소리를 들어 보고 크기(가장 큰 순간 dBFS)와 길이를 비교하는 미리 듣기 화면. 자주 나는 소리는 -20~-24dB, 중요한 장면은 -12~-18dB에 맞췄다.
+- `/sounds`(`components/SoundBoard.tsx`): 모든 소리를 들어 보고 크기와 길이를 비교하는 미리 듣기 화면. 크기는 귀에 느껴지는 정도(0.15초 구간 평균 크기의 가장 큰 값)와 가장 큰 순간을 함께 보인다.
+- 크기 맞추기(`TRIM_DB`): 갑자기 커서 놀라지 않게 소리마다 크기를 맞춘다. 귀에 느껴지는 크기로 평범한 소리는 -33~-38dB, 중요한 소리(마이티·조커·찍기·프렌드 등)는 -29dB 근처라 평범한 카드보다 6~7dB만 크다. 가장 큰 순간은 모두 -15dB 아래다. 화면 시험 `e2e/sounds.spec.ts`가 전체 차이 12dB, 카드보다 9dB, 가장 큰 순간 -13dB를 넘지 않는지 확인한다. 압축기 문턱을 낮추면 브라우저가 전체를 자동으로 키우므로(makeup gain) 문턱은 그대로 두고 맞춤값으로만 조절한다.
 
 | 장면 | `Cue` | 소리 | 어디서 |
 |---|---|---|---|
