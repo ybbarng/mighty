@@ -11,7 +11,7 @@
 2. **원작은 상황마다 소리를 꽤 세밀하게 나눴다.** 카드를 낼 때만 다섯 갈래(마이티, 조커콜, 죽은 조커, 조커, 찍기(기루다로 자르기), 그 밖)로 나누고, 공약·포기·딜미스·당선 공지·버릴 카드 정리·키티 받기·야당 득점·승리·패배·버튼 클릭까지 소리가 있다. 소리 재생은 `Mighty.cpp`의 `PlaySound(UINT idWave, BOOL bStop)` 하나로 모이고, 대부분 `PlayerHuman.cpp`에서 부른다.
 3. **원작에도 소리가 없는 상황이 있다.** 프렌드 공개(글자만 띄운다), 트릭을 가져갈 때(점수 카드가 야당으로 갈 때만 `득점.wav`), 일반 딜(카드 나눠 주기). 판 시작의 "짝!"(`IDW_CARDSETUP`)은 코드에서 부르지만 리소스가 없어 소리가 나지 않는다 [추정].
 4. **legacy는 18개 중 7개만 실제로 울렸다.** 공약(`bid`), 포기(`abandon_bid`), 카드 내기 다섯 종(`mighty`, `joker`, `hunted_joker`, `joker_hunter`, `gan`, `card`), 섞기(`shuffling`). 당선·승패·버튼·득점 등은 매핑만 만들고 부르지 않았다.
-5. **지금 앱은 음원 없이 Web Audio로 합성한 14가지 소리를 낸다**(`apps/web/src/game/sound.ts`). 이벤트→소리 매핑은 `cues.ts`의 순수 함수 `cuesFor`에 있다. 원작 소리로 바꾸려면 `play(cue)` 안에서 합성 대신 미리 디코딩한 `AudioBuffer`를 재생하면 되고, 원작에 맞추려면 `Cue`를 몇 개 더 나눠야 한다(찍기, 죽은 조커, 득점, 판 시작, 버릴 카드 정리, 키티 받기, 죽이기 등).
+5. **지금 앱은 음원 없이 Web Audio로 합성한 24가지 소리를 낸다**(2026-10-24 다시 만듦, 4절). 원작이 소리를 내던 장면을 모두 채웠고, 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다.
 6. **원작 효과음은 라이선스가 없고 출처도 불분명하다**(나무위키는 코에이 "삼국지 조조전"에서 왔다고 추정, docs/02 참고). 지금 저장소가 비공개라 보관은 괜찮지만, **공개 저장소나 공개 배포(mighty.byb.kr)에는 넣지 않는다.**
 
 ## 1. 원작 효과음 파일 목록
@@ -51,7 +51,7 @@
 
 ## 3. 상황별 비교
 
-"원작 소리"의 근거 위치는 6절 표를 본다. legacy의 "매핑만"은 `Sound.js`에 이름만 있고 부르는 곳이 없다는 뜻이다. 지금 앱 소리는 `sound.ts`의 `Cue` 이름이다.
+"원작 소리"의 근거 위치는 6절 표를 본다. legacy의 "매핑만"은 `Sound.js`에 이름만 있고 부르는 곳이 없다는 뜻이다. "지금 앱 소리" 열은 2026-10-24에 다시 만들기 전 상태다. 지금 소리는 4절 표를 본다.
 
 | 상황 | 원작 소리 | legacy 소리 | 지금 앱 소리 | 원작 소리로 바꿀 때 메모 |
 |---|---|---|---|---|
@@ -89,17 +89,44 @@
 
 숨은 하트(`apps/web/src/hearts/store.ts`)도 같은 `Cue`를 빌려 쓴다(스페이드 Q에 `mighty`, 하트가 깨질 때 `friend`). 원작 마이티 소리로 바꾸면 하트에서도 그 소리가 나니, 하트용 매핑을 따로 둘지 함께 정한다.
 
-## 4. 지금 앱의 효과음 [확인]
+## 4. 지금 앱의 효과음 [확인] (2026-10-24 다시 만듦)
 
-- `apps/web/src/game/sound.ts`: `Cue` 14종(`card`, `bid`, `pass`, `elected`, `mighty`, `joker`, `jokerCall`, `friend`, `trick`, `shuffle`, `win`, `lose`, `dealMiss`, `invalid`). `play(cue)`가 `AudioContext`를 처음 소리 낼 때 만들고, 사인·삼각·사각·톱니파 `tone`과 대역 통과 잡음 `noise`로 그때그때 합성한다. 전체 음량은 `setVolume`(기본 0.8).
-- `apps/web/src/game/cues.ts` `cuesFor(view, events)`: 엔진 이벤트를 `Cue`로 바꾸고, 한 스냅숏 안에서 같은 소리는 하나로 줄인다.
-  - `dealt`→`shuffle`(2마 제외), `bid`→`bid`, `passed`→`pass`, `dealMiss`·`allPassed`→`dealMiss`, `elected`→`elected`
-  - `played`: `jokerCall`이면 `jokerCall`, 마이티면 `mighty`, 조커면 `joker`, 그 밖은 `card`
-  - `friendRevealed`(자리가 있을 때)→`friend`, `trickWon`→`trick`, `roundScored`→내 편이 이겼으면 `win` 아니면 `lose`
-  - 소리 없는 이벤트: `roundStarted`, `picked`, `killAttempt`, `redealtForDead`, `kittyTaken`, `exchanged`, `friendDeclared`, `gameOver`
-- `apps/web/src/game/store.ts` `advance()`: 스냅숏을 하나씩 꺼낼 때 `useSettings`의 `sound`가 켜져 있으면 `cuesFor` 결과를 모두 낸다.
-- 직접 부르는 곳: `GameTable.tsx`(낼 수 없는 카드 → `invalid`), `SettingsMenu.tsx`·`OptionsScreen.tsx`(음량 슬라이더를 놓을 때 `card`).
-- legacy 음량은 `audio.volume = 0.05`로 아주 작게 두었다. 원작 wav는 소리가 커서 그대로 쓰면 지금 합성음보다 훨씬 크게 들릴 수 있다.
+"카드·섞기 소리가 벌레 바스락거리는 소리 같다"는 의견으로 소리를 모두 새로 합성했다. 높은 대역(2.5~3.2kHz)의 잡음을 짧게 끊어 낸 것이 원인이어서, 카드 소리는 낮은 대역 잡음과 짧게 떨어지는 낮은 음("톡")으로 바꾸고 모든 소리에 작은 방 울림을 더했다. 원작 wav는 쓰지 않는다(5절).
+
+- `apps/web/src/game/sound.ts`: `Cue` 24종과 합성. `play(cue, { delay, times })`는 AudioContext 시간으로 예약해서 낸다. 큰 소리(`BIG`)끼리는 앞 소리를 줄여 끊는다(원작은 한 번에 한 소리). 첫 누름(`pointerdown`·`keydown`·`touchend`)에서 AudioContext를 열어 두어 iOS에서 첫 소리가 막히지 않게 한다. `renderCue`는 소리를 재생하지 않고 그려 본다.
+- `apps/web/src/game/cues.ts` `cuesFor(view, events)`: 엔진 이벤트를 소리로 바꾼다. 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다. 같은 스냅숏 안의 같은 소리는 하나로 줄인다.
+- `apps/web/src/hearts/cues.ts` `heartsCuesFor`: 하트용 매핑.
+- `apps/web/src/game/ui-sound.ts` `playUiCue`: 화면 조작 소리. 소리 설정이 꺼져 있으면 내지 않는다.
+- `/sounds`(`components/SoundBoard.tsx`): 모든 소리를 들어 보고 크기(가장 큰 순간 dBFS)와 길이를 비교하는 미리 듣기 화면. 자주 나는 소리는 -20~-24dB, 중요한 장면은 -12~-18dB에 맞췄다.
+
+| 장면 | `Cue` | 소리 | 어디서 |
+|---|---|---|---|
+| 섞기 | `shuffle` | 튕겨 섞는 "드르륵 착" 두 번(섞기 연출 1.6초 안) | `dealt`(2마 제외), `redealtForDead` |
+| 판 시작 | `gameStart` | "솨악" 바람 소리 뒤 세 음 | `dealt` 뒤 나눠 주기가 끝날 때(2마는 `roundStarted`) |
+| 공약 | `bid` | 마림바 "띠링" | `bid` |
+| 포기 | `pass` | 김 빠지는 "뽁" | `passed`, 죽이기 헛다리 0.75초 뒤 |
+| 딜미스 | `dealMiss` | 카드 "착착" + 낮은 음 | `dealMiss`, `allPassed` |
+| 당선·선거 끝 | `announce` | 종 화음 "짠~" | `elected`, `friendDeclared` |
+| 죽이기 | `kill` | 북을 몰아치다 칼 "슉" | `killAttempt` |
+| 키티 받기 | `pickCard` | 가벼운 "톡", 장수만큼 | `kittyTaken`, 버릴 카드·넘길 카드 고르기 |
+| 버릴 카드 확정 | `cardSet` | 카드 "착착" | 내가 주공일 때 `exchanged`, 하트 `passed` |
+| 평범한 카드 | `card` | 낮은 "톡" | `played` |
+| 마이티 | `mighty` | 금관 "빠-밤!" + 큰북 + 반짝임 | `played`(마이티면 효력과 상관없이) |
+| 조커 | `joker` | 장난스럽게 "뾰로롱" + 키득 세 번 | 힘 있는 조커. 힘 있는 마이티가 깔려 있으면 `card` |
+| 조커콜 | `jokerCall` | 경보 "삐뽀삐뽀" | `played.jokerCall` |
+| 죽은 조커 | `deadJoker` | 바람 빠지는 "뿌우웅" | 힘을 잃은 조커(조커콜에 걸림, 첫·마지막 트릭 규칙) |
+| 찍기(간) | `gan` | 내리찍는 "쾅!" + 쇳소리 | 선 무늬가 기루다가 아닌데 기루다를 냄. 힘 있는 마이티·조커가 깔려 있거나 선이 기루다(조커 선의 지정 무늬 포함)면 아니다 |
+| 프렌드 공개 | `friend` | 하프처럼 올라간 뒤 반짝이는 화음 | `friendRevealed`. 카드를 낸 같은 장면이면 0.6초 뒤 |
+| 야당 득점 | `scored` | 동전 "띵-딩", 점수 카드 장수만큼 | `trickWon`에서 야당이 점수를 가져갈 때, 카드를 모으는 1.1초 뒤. 2마 제외 |
+| 승리·패배 | `win`·`lose` | 금관 팡파르 / 처지는 트롬본 | `roundScored` |
+| 낼 수 없는 카드 | `invalid` | 낮은 두 음 | `GameTable`·`HeartsTable` |
+| 메뉴 | `click` | 기계 "철컥" | 시작 화면 메뉴(마이티·하트) |
+| 고르기 | `beep` | 짧은 "틱" | 공약·특권·프렌드·죽이기 창의 무늬·점수·카드·프렌드 고르기(`panels/common.tsx`, `FriendPanel`) |
+| 하트: 스페이드 Q | `queenOfSpades` | 불길한 "둥, 둥, 두웅~" | 하트 `played` |
+| 하트: 하트 깨짐 | `heartsBroken` | 유리 "쨍그랑" | 하트 `heartsBroken` |
+| 하트: 문 | `mighty` | 마이티와 같은 소리 | 하트 `roundScored.moonShooter` |
+
+원작과 다르게 둔 것: 원작은 트릭을 가져갈 때 득점이 없으면 소리가 없어서, 지금도 따로 소리를 내지 않는다(예전 `trick` 소리는 뺐다). 프렌드 공개는 원작에 소리가 없지만 중요한 장면이라 전용 소리를 두었다. 원작은 첫 트릭처럼 규칙 때문에 힘이 없는 조커에도 조커 소리를 냈지만, 여기서는 죽은 조커 소리를 낸다.
 
 ## 5. 원작 효과음을 다시 쓸 때 주의
 
