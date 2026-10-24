@@ -20,6 +20,8 @@ export interface CueCall extends PlayOptions {
 
 /** 트릭이 끝나고 이긴 카드를 보여 주는 시간(초). 이때 카드를 모으며 득점 소리를 낸다 */
 const TRICK_HOLD_S = 1.1;
+/** 이긴 사람에게 카드를 모으는 시간(초, store의 `TRICK_COLLECT`) */
+const TRICK_COLLECT_S = 0.38;
 
 /** 섞고 나눠 주는 연출 시간(ms). `DealAnimation`과 같은 값을 쓴다 */
 export interface DealTiming {
@@ -68,6 +70,7 @@ export function cuesFor(
 ): CueCall[] {
   const calls: CueCall[] = [];
   const played = events.some((e) => e.type === "played");
+  const trickWon = events.some((e) => e.type === "trickWon");
   for (const event of events) {
     switch (event.type) {
       case "roundStarted":
@@ -130,7 +133,11 @@ export function cuesFor(
         break;
       case "roundScored": {
         const ruling = view.seat === view.declarer || view.seat === view.friend;
-        calls.push({ cue: ruling === event.result.rulingWon ? "win" : "lose" });
+        calls.push({
+          cue: ruling === event.result.rulingWon ? "win" : "lose",
+          // 마지막 트릭을 다 모은 뒤, 승패 문구가 뜰 때 낸다.
+          ...(trickWon ? { delay: TRICK_HOLD_S + TRICK_COLLECT_S } : {}),
+        });
         break;
       }
       default:

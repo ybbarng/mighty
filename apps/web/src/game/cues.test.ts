@@ -244,3 +244,24 @@ describe("판 흐름 소리", () => {
     ).toEqual([{ cue: "pass" }]);
   });
 });
+
+describe("판 끝 소리 시점", () => {
+  const result = {
+    rulingWon: true,
+    rulingPoints: 0,
+    oppositionPoints: 0,
+    base: 0,
+    staticRun: false,
+    multipliers: [],
+    moved: 0,
+    money: [],
+  };
+
+  it("마지막 트릭과 함께 오면 카드를 다 모은 뒤 승패 소리를 낸다", () => {
+    const cues = cuesFor(view, [
+      { type: "trickWon", seat: 0, trickIndex: 9, points: 0 },
+      { type: "roundScored", result },
+    ]);
+    expect(cues).toEqual([{ cue: "win", delay: 1.48 }]);
+  });
+});

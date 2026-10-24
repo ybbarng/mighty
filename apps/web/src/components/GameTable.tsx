@@ -128,6 +128,8 @@ export function GameTable({
   const seq = useGame((s) => s.seq);
   const busy = useGame((s) => s.busy);
   const startMoney = useGame((s) => s.roundStartMoney);
+  const beforeTrick = useGame((s) => s.beforeTrick);
+  const roundResult = useGame((s) => s.roundResult);
   const notice = useGame((s) => s.notice);
   const submit = useGame((s) => s.submit);
   const clearNotice = useGame((s) => s.clearNotice);
@@ -492,7 +494,11 @@ export function GameTable({
     if (e.type === "played" && e.slot !== null) playedSlots.set(e.card, e.slot);
 
   const effect = effectFor(view, events, seatName);
-  const banner = mightyResultBanner(view, events, startMoney);
+  const banner = roundResult
+    ? mightyResultBanner(roundResult.view, roundResult.events, startMoney)
+    : null;
+  // 이긴 카드를 모으는 동안 자리 판의 점수 카드·돈은 그 트릭 전 값을 보인다.
+  const plateView = beforeTrick ?? view;
   const effectCards = effect?.cards ?? null;
   const bigEffect = Boolean(effect?.cards || effect?.lines);
 
@@ -801,9 +807,9 @@ export function GameTable({
                   name={seatName(seat)}
                   // 나눠 주는 동안은 아직 받지 않은 것으로 센다.
                   handCount={dealing ? 0 : (view.handCounts[seat] ?? 0)}
-                  points={view.pointPiles?.[seat] ?? null}
-                  pointCount={view.pointCounts[seat] ?? 0}
-                  money={view.money[seat] ?? 0}
+                  points={plateView.pointPiles?.[seat] ?? null}
+                  pointCount={plateView.pointCounts[seat] ?? 0}
+                  money={plateView.money[seat] ?? 0}
                   declarer={seat === view.declarer}
                   friend={revealedFriend}
                   ruling={seat === view.declarer || revealedFriend}
@@ -827,9 +833,9 @@ export function GameTable({
               rect={layout.myPlate}
               name={seatName(view.seat)}
               handCount={view.hand.length}
-              points={view.pointPiles?.[view.seat] ?? null}
-              pointCount={view.pointCounts[view.seat] ?? 0}
-              money={view.money[view.seat] ?? 0}
+              points={plateView.pointPiles?.[view.seat] ?? null}
+              pointCount={plateView.pointCounts[view.seat] ?? 0}
+              money={plateView.money[view.seat] ?? 0}
               declarer={view.seat === view.declarer}
               friend={view.friend === view.seat && view.friendRevealed}
               ruling={
@@ -1089,7 +1095,7 @@ export function GameTable({
             {/* 판 끝 승패 문구 */}
             <ResultBanner
               banner={banner}
-              seq={seq}
+              seq={roundResult?.key ?? 0}
               center={tableCenter}
               stageHeight={stage.height}
             />

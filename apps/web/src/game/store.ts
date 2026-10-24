@@ -74,6 +74,16 @@ interface GameStore {
   /** 끝난 트릭을 잠시 바닥에 남겨 둔다 */
   shownTrick: CompletedTrick | null;
   collecting: boolean;
+  /**
+   * 트릭이 끝난 장면 직전의 화면. 이긴 카드를 보여 주고 모으는 동안 자리 판의 점수 카드·돈은
+   * 이 값을 보여 주고, 다 모은 뒤에 새 값으로 바꾼다(카드가 가기도 전에 점수가 오르지 않게)
+   */
+  beforeTrick: PlayerView | null;
+  /**
+   * 판이 끝난 결과. 마지막 트릭을 다 모은 뒤에 정해 승패 문구를 그때 띄운다.
+   * `key`는 판이 끝날 때마다 바뀐다
+   */
+  roundResult: { key: number; view: PlayerView; events: GameEvent[] } | null;
   /** 판 시작 섞기·나눠 주기 연출 중. `key`가 바뀌면 연출을 새로 시작한다 */
   dealing: {
     key: number;
@@ -170,6 +180,7 @@ export const useGame = create<GameStore>((set, get) => {
       set({ busy: false });
       return;
     }
+    const before = get().view;
     const started = next.events.some((e) => e.type === "roundStarted");
     set({
       queue: rest,
@@ -177,8 +188,19 @@ export const useGame = create<GameStore>((set, get) => {
       events: next.events,
       seq: get().seq + 1,
       busy: true,
-      ...(started ? { roundStartMoney: [...next.view.money] } : {}),
+      ...(started
+        ? { roundStartMoney: [...next.view.money], roundResult: null }
+        : {}),
     });
+    const scored = next.events.some((e) => e.type === "roundScored");
+    const finishRound = () =>
+      set({
+        roundResult: {
+          key: get().seq,
+          view: next.view,
+          events: next.events,
+        },
+      });
 
     const dealt = next.events.find((e) => e.type === "dealt");
     // 섞고 나눠 주는 연출. 2마와 움직임 줄이기에서는 하지 않는다.
@@ -238,13 +260,17 @@ export const useGame = create<GameStore>((set, get) => {
       return;
     }
 
+    if (scored && !next.events.some((e) => e.type === "trickWon"))
+      finishRound();
+
     if (next.events.some((e) => e.type === "trickWon")) {
       const shownTrick = next.view.tricks.at(-1) ?? null;
-      set({ shownTrick, collecting: false });
+      set({ shownTrick, collecting: false, beforeTrick: before });
       wait(TRICK_HOLD, () => {
         set({ collecting: true });
         wait(TRICK_COLLECT, () => {
-          set({ shownTrick: null, collecting: false });
+          set({ shownTrick: null, collecting: false, beforeTrick: null });
+          if (scored) finishRound();
           advance();
         });
       });
@@ -298,6 +324,8 @@ export const useGame = create<GameStore>((set, get) => {
       queue: [],
       shownTrick: null,
       collecting: false,
+      beforeTrick: null,
+      roundResult: null,
       dealing: null,
       busy: false,
       roundStartMoney: [...current.money],
@@ -358,6 +386,8 @@ export const useGame = create<GameStore>((set, get) => {
     queue: [],
     shownTrick: null,
     collecting: false,
+    beforeTrick: null,
+    roundResult: null,
     dealing: null,
     roundStartMoney: [],
     busy: false,

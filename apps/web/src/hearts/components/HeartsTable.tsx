@@ -63,6 +63,8 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
   const seq = useHearts((s) => s.seq);
   const queue = useHearts((s) => s.queue);
   const shownTrick = useHearts((s) => s.shownTrick);
+  const beforeTrick = useHearts((s) => s.beforeTrick);
+  const roundResult = useHearts((s) => s.roundResult);
   const collecting = useHearts((s) => s.collecting);
   const dealing = useHearts((s) => s.dealing);
   const busy = useHearts((s) => s.busy);
@@ -238,14 +240,17 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
   };
 
   // 게임 끝 승패 문구. 하트는 판마다 승패가 없어 게임이 끝날 때만 띄운다(누가 그만둬 끝나면 띄우지 않는다).
-  const over = events.find((e) => e.type === "gameOver");
+  // 마지막 트릭을 다 모은 뒤 store가 정한 판 결과로 띄운다.
+  const over = roundResult?.events.find((e) => e.type === "gameOver");
   const banner: Banner | null =
-    over && over.type === "gameOver" && !over.retired
+    roundResult && over && over.type === "gameOver" && !over.retired
       ? {
           won: over.winners.includes(me),
-          detail: `${view.scores[me] ?? 0}점`,
+          detail: `${roundResult.view.scores[me] ?? 0}점`,
         }
       : null;
+  // 이긴 카드를 모으는 동안 점수는 그 트릭 전 값을 보인다.
+  const plateView = beforeTrick ?? view;
 
   // 효과 글자
   const effect = (() => {
@@ -322,12 +327,12 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
               나{" "}
               <span
                 className={cn(
-                  (view.takenPoints[me] ?? 0) > 0 && "text-red-300",
+                  (plateView.takenPoints[me] ?? 0) > 0 && "text-red-300",
                 )}
               >
-                {view.takenPoints[me] ?? 0}
+                {plateView.takenPoints[me] ?? 0}
               </span>
-              /{view.scores[me] ?? 0}
+              /{plateView.scores[me] ?? 0}
             </span>
             {network && (
               <button
@@ -432,15 +437,15 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
                 <div className="flex items-center justify-between text-[11px] tabular-nums">
                   <span
                     className={cn(
-                      (view.takenPoints[seat] ?? 0) > 0
+                      (plateView.takenPoints[seat] ?? 0) > 0
                         ? "text-red-300"
                         : "opacity-50",
                     )}
                   >
-                    이번 판 {view.takenPoints[seat] ?? 0}
+                    이번 판 {plateView.takenPoints[seat] ?? 0}
                   </span>
                   <span className="opacity-70">
-                    합 {view.scores[seat] ?? 0}
+                    합 {plateView.scores[seat] ?? 0}
                   </span>
                 </div>
                 {incident?.seat === seat ? (
@@ -625,7 +630,7 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
 
           <ResultBanner
             banner={banner}
-            seq={seq}
+            seq={roundResult?.key ?? 0}
             center={tableCenter}
             stageHeight={stage.height}
           />

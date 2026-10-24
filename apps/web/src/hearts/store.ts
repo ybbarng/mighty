@@ -99,6 +99,10 @@ interface HeartsStore {
   queue: HeartsSnapshot[];
   shownTrick: CompletedTrick | null;
   collecting: boolean;
+  /** 트릭이 끝난 장면 직전의 화면. 이긴 카드를 모으는 동안 자리 판 점수는 이 값을 보인다 */
+  beforeTrick: PlayerView | null;
+  /** 판(또는 게임)이 끝난 결과. 마지막 트릭을 다 모은 뒤에 정해 승패 문구를 그때 띄운다 */
+  roundResult: { key: number; view: PlayerView; events: GameEvent[] } | null;
   dealing: {
     key: number;
     handSize: number;
@@ -173,13 +177,21 @@ export const useHearts = create<HeartsStore>((set, get) => {
       set({ busy: false });
       return;
     }
+    const before = get().view;
+    const started = next.events.some((e) => e.type === "roundStarted");
     set({
       queue: rest,
       view: next.view,
       events: next.events,
       seq: get().seq + 1,
       busy: true,
+      ...(started ? { roundResult: null } : {}),
     });
+    const scored = next.events.some((e) => e.type === "roundScored");
+    const finishRound = () =>
+      set({
+        roundResult: { key: get().seq, view: next.view, events: next.events },
+      });
     const dealt = next.events.find((e) => e.type === "dealt");
     // 섞고 나눠 주는 연출. 움직임 줄이기에서는 하지 않는다.
     let dealTiming: DealTiming | null = null;
@@ -229,13 +241,17 @@ export const useHearts = create<HeartsStore>((set, get) => {
       return;
     }
 
+    if (scored && !next.events.some((e) => e.type === "trickWon"))
+      finishRound();
+
     if (next.events.some((e) => e.type === "trickWon")) {
       const shownTrick = next.view.tricks.at(-1) ?? null;
-      set({ shownTrick, collecting: false });
+      set({ shownTrick, collecting: false, beforeTrick: before });
       wait(TRICK_HOLD, () => {
         set({ collecting: true });
         wait(TRICK_COLLECT, () => {
-          set({ shownTrick: null, collecting: false });
+          set({ shownTrick: null, collecting: false, beforeTrick: null });
+          if (scored) finishRound();
           advance();
         });
       });
@@ -281,6 +297,8 @@ export const useHearts = create<HeartsStore>((set, get) => {
       queue: [],
       shownTrick: null,
       collecting: false,
+      beforeTrick: null,
+      roundResult: null,
       dealing: null,
       busy: false,
       seatNames: options.seatNames,
@@ -357,6 +375,8 @@ export const useHearts = create<HeartsStore>((set, get) => {
     queue: [],
     shownTrick: null,
     collecting: false,
+    beforeTrick: null,
+    roundResult: null,
     dealing: null,
     busy: false,
     notice: null,
