@@ -180,11 +180,18 @@ export const useGame = create<GameStore>((set, get) => {
       ...(started ? { roundStartMoney: [...next.view.money] } : {}),
     });
 
-    if (useSettings.getState().sound) {
-      for (const cue of cuesFor(next.view, next.events)) playCue(cue);
+    const dealt = next.events.find((e) => e.type === "dealt");
+    const { sound, speed } = useSettings.getState();
+    if (sound) {
+      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
+      const scale = dealt ? 1 : speed;
+      for (const { cue, delay = 0, times = 1 } of cuesFor(
+        next.view,
+        next.events,
+      ))
+        playCue(cue, { delay: delay / scale, times });
     }
 
-    const dealt = next.events.find((e) => e.type === "dealt");
     if (dealt && next.view.rules.playerCount !== 2 && !prefersReducedMotion()) {
       const others = next.events.filter(
         (e) => e.type !== "dealt" && e.type !== "roundStarted",

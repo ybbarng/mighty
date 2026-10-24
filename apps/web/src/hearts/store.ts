@@ -14,7 +14,7 @@ import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { useSettings } from "@/game/settings";
-import { type Cue, play as playCue } from "@/game/sound";
+import { play as playCue } from "@/game/sound";
 import { dealPlan, prefersReducedMotion, SHUFFLE_MS } from "@/game/timing";
 import {
   ArchiveRecorder,
@@ -24,6 +24,7 @@ import {
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 
 import { heartsBotFor } from "./bots";
+import { heartsCuesFor } from "./cues";
 import { heartsKit } from "./kit";
 import { useHeartsSettings } from "./settings";
 
@@ -85,21 +86,6 @@ export function clearHearts(): void {
   } catch {
     // 지울 수 없어도 문제없다.
   }
-}
-
-function cuesFor(view: PlayerView, events: readonly GameEvent[]): Cue[] {
-  const cues: Cue[] = [];
-  for (const e of events) {
-    if (e.type === "dealt") cues.push("shuffle");
-    if (e.type === "passed") cues.push("pass");
-    if (e.type === "played")
-      cues.push(e.card === QUEEN_OF_SPADES ? "mighty" : "card");
-    if (e.type === "heartsBroken") cues.push("friend");
-    if (e.type === "trickWon") cues.push("trick");
-    if (e.type === "gameOver")
-      cues.push(e.winners.includes(view.seat) ? "win" : "lose");
-  }
-  return cues;
 }
 
 interface HeartsStore {
@@ -192,10 +178,18 @@ export const useHearts = create<HeartsStore>((set, get) => {
       seq: get().seq + 1,
       busy: true,
     });
-    if (useSettings.getState().sound)
-      for (const cue of cuesFor(next.view, next.events)) playCue(cue);
-
     const dealt = next.events.find((e) => e.type === "dealt");
+    const { sound, speed } = useSettings.getState();
+    if (sound) {
+      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
+      const scale = dealt ? 1 : speed;
+      for (const { cue, delay = 0, times = 1 } of heartsCuesFor(
+        next.view,
+        next.events,
+      ))
+        playCue(cue, { delay: delay / scale, times });
+    }
+
     if (dealt && !prefersReducedMotion()) {
       // 멘탈 포커로 실제로 섞는 동안 섞는 연출을 보였으면 최소 시간에서 남은 만큼만 더 섞는다.
       const since = get().shuffleStartedAt;
