@@ -1,5 +1,5 @@
 import { Party } from "@mighty/fair-play";
-import { heartsNormalBot } from "@mighty/hearts-ai";
+import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
 
@@ -26,7 +26,7 @@ function hostOptions(store?: HostStore) {
     kit: heartsKit,
     hostName: "방장",
     rules: { ...WINDOWS_RULES, endScore: 40 },
-    bot: heartsNormalBot,
+    bot: heartsIntermediateBot,
     botLevel: 1,
     revealTimeoutMs: 500,
     fair: { group: "1024" as const },

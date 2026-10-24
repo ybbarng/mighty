@@ -1,4 +1,4 @@
-import { heartsNormalBot } from "@mighty/hearts-ai";
+import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +22,7 @@ describe("하트 온라인 방", () => {
       transport: net.join("host"),
       hostName: "방장",
       rules: { ...WINDOWS_RULES, endScore: 30 },
-      bot: heartsNormalBot,
+      bot: heartsIntermediateBot,
       botLevel: 1,
       revealTimeoutMs: 500,
     });

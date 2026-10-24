@@ -74,8 +74,8 @@ function slip(style: Style): boolean {
 type PassDecision = Extract<Decision, { kind: "pass" }>;
 type PlayDecision = Extract<Decision, { kind: "play" }>;
 
-/** 넘길 카드를 고를 때의 위험도. 높을수록 먼저 넘긴다 */
-function passDanger(hand: readonly Card[], card: Card): number {
+/** 넘길 카드를 고를 때의 위험도. 높을수록 먼저 넘긴다(고수가 넘기기 후보를 만들 때도 쓴다) */
+export function passDanger(hand: readonly Card[], card: Card): number {
   const suit = suitOf(card) as Suit;
   const power = rankPower(card); // 2 → 0, A → 12
   const spades = bySuit(hand, "S");
@@ -306,4 +306,14 @@ export const HEARTS_NORMAL_BOOK: readonly HeartsBookRule[] = [
 export const heartsNormalBot = createHeartsRuleBot({
   name: "hearts-normal",
   book: HEARTS_NORMAL_BOOK,
+});
+
+/**
+ * 화면의 중수: 정석대로 두지만 사람처럼 가끔(8%) 실수한다.
+ * 실수 없는 `heartsNormalBot`은 고수가 수를 읽을 때의 가상 상대로 쓴다
+ */
+export const heartsIntermediateBot = createHeartsRuleBot({
+  name: "hearts-intermediate",
+  book: HEARTS_NORMAL_BOOK,
+  mistakes: 0.08,
 });
