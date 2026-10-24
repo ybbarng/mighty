@@ -96,7 +96,7 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   pass: 4.9,
   invalid: 3.7,
   cardSet: 3,
-  shuffle: 0.5,
+  shuffle: -1,
   deal: 1.5,
   mighty: -8.2,
   joker: -1.2,

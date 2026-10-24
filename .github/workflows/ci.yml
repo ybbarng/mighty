@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# 짧은 사이에 여러 번 올리면 앞선 실행을 취소하고 마지막 것만 돌린다(사용 시간 절약).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -22,9 +27,11 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @mighty/web exec playwright install --with-deps chromium
       - run: pnpm e2e
+      # 화면 시험이 실패했을 때만 스크린숏을 남긴다. 저장 공간이 차서 올리지 못해도 CI를 실패로 만들지 않는다.
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: failure()
+        continue-on-error: true
         with:
           name: e2e-screenshots
           path: apps/web/test-results
-          retention-days: 7
+          retention-days: 3
