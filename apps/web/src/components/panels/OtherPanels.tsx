@@ -185,6 +185,20 @@ const MULTIPLIER_LABEL = {
   noFriend: "노프렌드",
 } as const;
 
+/** 여당(주공·프렌드)은 금색, 야당은 하늘색 표시 */
+function SideTag({ ruling }: { ruling: boolean }) {
+  return (
+    <span
+      className={cn(
+        "rounded px-1 font-semibold text-[10px]",
+        ruling ? "bg-amber-400 text-amber-950" : "bg-sky-300/80 text-sky-950",
+      )}
+    >
+      {ruling ? "여당" : "야당"}
+    </span>
+  );
+}
+
 export function RoundResultPanel({
   view,
   startMoney,
@@ -214,6 +228,11 @@ export function RoundResultPanel({
   const ruling = view.seat === view.declarer || view.seat === view.friend;
   const won = ruling === result.rulingWon;
   const gameOver = view.phase === "gameOver";
+  const isRuling = (seat: number) =>
+    seat === view.declarer || seat === view.friend;
+  // 우리 편 줄은 굵게, 배경을 살짝 밝게
+  const teamRow = (seat: number) =>
+    cn(isRuling(seat) === ruling && "bg-white/10 font-bold");
   return (
     <Panel title={won ? "승리!" : "패배"}>
       <p className="text-center text-sm">
@@ -233,7 +252,10 @@ export function RoundResultPanel({
             const after = view.money[seat] ?? 0;
             const delta = after - before;
             return (
-              <tr key={seat} className={cn(seat === view.seat && "font-bold")}>
+              <tr key={seat} className={teamRow(seat)}>
+                <td className="py-0.5 pr-2 pl-1">
+                  <SideTag ruling={isRuling(seat)} />
+                </td>
                 <td className="pr-3">
                   {seatName(seat)}
                   {seat === view.declarer && " (주공)"}
@@ -266,6 +288,7 @@ export function RoundResultPanel({
           <table className="mx-auto mt-2 tabular-nums">
             <thead className="opacity-60">
               <tr>
+                <th />
                 <th className="pr-3 text-left">이름</th>
                 <th className="px-1">득점</th>
                 <th
@@ -287,7 +310,10 @@ export function RoundResultPanel({
             </thead>
             <tbody>
               {view.players.map((seat) => (
-                <tr key={seat}>
+                <tr key={seat} className={teamRow(seat)}>
+                  <td className="py-0.5 pr-2 pl-1">
+                    <SideTag ruling={isRuling(seat)} />
+                  </td>
                   <td className="pr-3">{seatName(seat)}</td>
                   <td className="px-1 text-center">
                     {view.history?.scored[seat] ?? 0}

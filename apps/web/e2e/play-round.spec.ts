@@ -94,6 +94,10 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
   await expect(page.getByRole("button", { name: "다음 판" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /승리|패배/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("5-result.png") });
+  // 결과 상자와 분석 표 모두 여당·야당 표시가 붙는다.
+  await page.getByText("이번 판 분석").click();
+  await expect(page.getByText("여당", { exact: true }).first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("6-analysis.png") });
 
   // 손패 카드는 화면 안에 있어야 한다.
   const viewport = page.viewportSize();
