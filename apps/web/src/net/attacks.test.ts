@@ -1,4 +1,4 @@
-import { heuristicBot } from "@mighty/ai";
+import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { type Action, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
@@ -134,7 +134,7 @@ describe("컴퓨터 자리", () => {
       hostName: "방장",
       rules,
       revealTimeoutMs: 300,
-      bot: heuristicBot,
+      bot: intermediateBot,
       botLevel: 1,
     });
     // 연결 알림을 놓치지 않게 지문을 먼저 받아 두고 들어간다.
@@ -176,7 +176,7 @@ describe("컴퓨터 자리", () => {
         view: Parameters<typeof heuristicBot.decide>[0],
         rng: { seed: number },
       ) {
-        const action = heuristicBot.decide(view, rng);
+        const action = intermediateBot.decide(view, rng);
         const d = view.decision;
         if (action.type === "play" && d?.kind === "play") {
           const other = d.cards.find((c) => c !== action.card && c !== "JK");

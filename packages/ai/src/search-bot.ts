@@ -29,9 +29,11 @@ import {
   trickWinnerIndex,
 } from "@mighty/engine";
 
+import { type Bias, bidBias, friendCardExcluded, isMemorable } from "./belief";
 import type { Bot } from "./bot";
 import { cardKeepValue, estimatePoints, KIRUDAS } from "./hand";
 import { heuristicBot } from "./heuristic-bot";
+import { chance, forgets, type Persona, personaForSeat } from "./persona";
 
 /*
  * 2단계 봇: 카드를 낼 때 앞을 내다본다. 공약·교환·프렌드도 같은 방법으로 판 끝까지 둬 보고 정한다(아래 "판 전체 계획").
@@ -268,20 +270,31 @@ export function sampleHands(
   needs: ReadonlyMap<number, number>,
   inference: Inference,
   rng: RngState,
+  /** 카드가 그 자리에 있을 법한 무게(공약 기록 등). 없으면 모두 같다 */
+  bias?: Bias,
+  /** 그 자리에 있을 수 없는 카드(주공이 부른 프렌드 카드 등) */
+  excluded?: (seat: number, card: Card) => boolean,
 ): Map<number, Card[]> {
   const seats = [...needs.keys()];
   for (let attempt = 0; attempt < 40; attempt++) {
     const strict = attempt < 30;
     const cards = shuffleInPlace(rng, [...pool]);
-    const eligible = (card: Card) =>
-      seats.filter((s) => s === -1 || !strict || allowed(inference, s, card));
-    cards.sort((a, b) => eligible(a).length - eligible(b).length);
     const left = new Map(needs);
+    const eligible = (card: Card) =>
+      seats.filter(
+        (s) =>
+          s === -1 ||
+          !strict ||
+          (allowed(inference, s, card) && !excluded?.(s, card)),
+      );
+    const weight = (s: number, card: Card) =>
+      (left.get(s) ?? 0) * (bias ? bias(s, card) : 1);
+    cards.sort((a, b) => eligible(a).length - eligible(b).length);
     const hands = new Map<number, Card[]>(seats.map((s) => [s, []]));
     let ok = true;
     for (const card of cards) {
       const options = eligible(card).filter((s) => (left.get(s) ?? 0) > 0);
-      const total = options.reduce((sum, s) => sum + (left.get(s) ?? 0), 0);
+      const total = options.reduce((sum, s) => sum + weight(s, card), 0);
       if (total === 0) {
         ok = false;
         break;
@@ -289,7 +302,7 @@ export function sampleHands(
       let r = nextFloat(rng) * total;
       let chosen = options[options.length - 1] as number;
       for (const s of options) {
-        r -= left.get(s) ?? 0;
+        r -= weight(s, card);
         if (r < 0) {
           chosen = s;
           break;
@@ -458,9 +471,9 @@ function friendCandidates(
   if (kiruda !== "NT") wanted.push(`${kiruda}A`, `${kiruda}K`);
   for (const suit of SUITS) if (suit !== kiruda) wanted.push(`${suit}A`);
   if (kiruda !== "NT") wanted.push(`${kiruda}Q`);
+  // 정석 순서대로 모두 후보로 둔다(맨 앞이 기준). 기쿠(기루다 Q)처럼 뒤쪽 카드도 상황에 따라 낫다.
   const result: FriendDeclaration[] = wanted
     .filter((c) => cards.has(c))
-    .slice(0, 5)
     .map((card) => ({ kind: "card", card }));
   for (const o of options)
     if (o.kind === "firstTrick" || o.kind === "none") result.push(o);
@@ -503,7 +516,8 @@ function sampleWorlds(
   if (pool.length > held) needs.set(-1, pool.length - held);
   const inference: Inference = { voids: new Map(), noJoker: new Set() };
   return Array.from({ length: count }, () => ({
-    hands: sampleHands(pool, needs, inference, rng),
+    // 공약 기록으로 누가 무슨 카드를 쥐었을지 기울여 추측한다.
+    hands: sampleHands(pool, needs, inference, rng, bidBias(view)),
   }));
 }
 
@@ -514,8 +528,8 @@ function handsOf(view: PlayerView, world: World, mine: readonly Card[]) {
   return hands;
 }
 
-/** 이 계획으로 둔 판들의 평균 돈 변화 */
-function averagePayoff(
+/** 이 계획으로 추측한 판마다 끝까지 둔 돈 변화 */
+function payoffs(
   view: PlayerView,
   worlds: readonly World[],
   plan: {
@@ -525,9 +539,8 @@ function averagePayoff(
     discard: readonly Card[];
   },
   rng: RngState,
-): number {
-  let total = 0;
-  for (const world of worlds) {
+): number[] {
+  return worlds.map((world) => {
     const sim = roundStart(
       view.rules,
       view.players,
@@ -539,9 +552,67 @@ function averagePayoff(
       plan.discard,
     );
     playOut(sim, rng);
-    total += payoff(sim, view.seat, view.money);
-  }
-  return total / worlds.length;
+    return payoff(sim, view.seat, view.money);
+  });
+}
+
+/**
+ * 기준 후보(정석)와 짝지어 비교한 차이의 "확실히 나은 정도": 평균 차이에서 오차만큼 뺀 값.
+ * 같은 추측 판끼리 빼므로 패 운은 지워지고, 남은 차이가 우연인지를 오차(표준 오차)로 가린다.
+ * 어떤 후보든(초구·기아·기쿠 프렌드 등) 그 판에서 확실히 나으면 양수가 되고,
+ * 적은 판에서 우연히 높게 나온 것은 오차에 묻혀 걸러진다.
+ */
+function sureGain(
+  candidate: readonly number[],
+  base: readonly number[],
+  z: number,
+): number {
+  const n = candidate.length;
+  if (n === 0) return 0;
+  const diffs = candidate.map((v, i) => v - (base[i] ?? 0));
+  const mean = diffs.reduce((a, b) => a + b, 0) / n;
+  const variance =
+    n > 1 ? diffs.reduce((a, d) => a + (d - mean) ** 2, 0) / (n - 1) : 0;
+  return mean - z * Math.sqrt(variance / n);
+}
+
+/** 후보마다의 판별 결과 중, 기준(0번)보다 확실히 나은 것이 있으면 그중 가장 나은 것. 없으면 기준 */
+/** 판 계획 비교의 조정값(실험용으로 바꿀 수 있다) */
+export const SEARCH_TUNING = {
+  /**
+   * 판 계획 후보 비교에서 오차를 얼마나 깎는가. 0이면 평균이 큰 쪽.
+   * 재 보니 깎을수록 약해져(예전 고수 상대 0: +0.21, 1: −0.07, 480판) 0으로 둔다.
+   * 마이티는 공약·프렌드 한 번이 판을 크게 좌우해 조금이라도 나은 쪽을 고르는 편이 낫다
+   */
+  sureZ: 0,
+  /** 공약(출마/포기) 비교에서 오차를 얼마나 깎는가. 위와 같은 까닭으로 0 */
+  electZ: 0,
+  /** 성향 이름별 출마 기준을 덮어쓴다 */
+  bidMargins: null as Record<string, number> | null,
+};
+
+function pickSure(
+  samples: readonly (readonly number[])[],
+  z = SEARCH_TUNING.sureZ,
+): number {
+  const base = samples[0] ?? [];
+  let best = 0;
+  let bestGain = 0;
+  samples.forEach((s, i) => {
+    if (i === 0) return;
+    const gain = sureGain(s, base, z);
+    if (gain > bestGain) {
+      bestGain = gain;
+      best = i;
+    }
+  });
+  return best;
+}
+
+function mean(values: readonly number[]): number {
+  return values.length === 0
+    ? 0
+    : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 function planExchange(
@@ -568,7 +639,9 @@ function planExchange(
     .slice(0, 2);
   goals.push(...others.map((o) => o.goal));
 
-  let best: { action: Action; value: number } | null = null;
+  // 첫 후보(당선 공약 그대로, 정석대로 버리기)를 기준으로, 확실히 나은 후보가 있을 때만 바꾼다.
+  const plans: Action[] = [];
+  const samples: number[][] = [];
   for (const goal of goals) {
     const base = discardFor(rules, view.hand, goal.kiruda, view.hand.length);
     const count = decision.discardCount;
@@ -583,17 +656,23 @@ function planExchange(
       }
     for (const discard of sets) {
       const hand = view.hand.filter((c) => !discard.includes(c));
-      const value = averagePayoff(
-        view,
-        worlds,
-        { goal, friend: likelyFriend(rules, goal.kiruda, hand), hand, discard },
-        rng,
+      plans.push({ type: "exchange", goal, discard });
+      samples.push(
+        payoffs(
+          view,
+          worlds,
+          {
+            goal,
+            friend: likelyFriend(rules, goal.kiruda, hand),
+            hand,
+            discard,
+          },
+          rng,
+        ),
       );
-      if (!best || value > best.value)
-        best = { action: { type: "exchange", goal, discard }, value };
     }
   }
-  return best?.action ?? null;
+  return plans[pickSure(samples)] ?? null;
 }
 
 function planFriend(
@@ -613,27 +692,80 @@ function planFriend(
   const known = [...view.hand, ...(view.discarded ?? [])];
   const worlds = sampleWorlds(view, known, worldCount, rng);
   const discard = view.discarded ?? [];
-  let best: { friend: FriendDeclaration; value: number } | null = null;
-  for (const friend of candidates) {
-    const value = averagePayoff(
-      view,
-      worlds,
-      { goal, friend, hand: view.hand, discard },
-      rng,
-    );
-    if (!best || value > best.value) best = { friend, value };
-  }
-  return best ? { type: "friend", friend: best.friend } : null;
+  // 첫 후보(정석 순서의 첫 카드)를 기준으로, 이 판에서 확실히 나은 프렌드가 있으면 그것을 부른다.
+  // 초구·노프렌드·기아·기쿠 무엇이든 상황에 따라 나을 수 있다. 정해 둔 순서나 감점은 없다.
+  const samples = candidates.map((friend) =>
+    payoffs(view, worlds, { goal, friend, hand: view.hand, discard }, rng),
+  );
+  const friend = candidates[pickSure(samples)];
+  return friend ? { type: "friend", friend } : null;
 }
 
-/** 공약을 걸어 볼 만한 최소 기대 이득(판당 돈). 포기했을 때보다 이만큼은 나아야 나선다 */
-const BID_MARGIN = 0.4;
+/**
+ * 내가 포기했을 때의 기대 이득. 추측한 판마다 다른 사람 중 패가 가장 좋은 사람이 주공이 된다고 보고
+ * (이미 공약한 사람이 있으면 그 사람, 더 센 패가 있으면 그 사람이 올린다), 나는 프렌드나 야당으로
+ * 끝까지 둬 본다. 추측한 판마다의 돈 변화를 돌려준다. 아무도 나설 패가 아니면 다시 섞으므로 0이다.
+ */
+function passPayoffs(
+  view: PlayerView,
+  floor: number,
+  worlds: readonly World[],
+  rng: RngState,
+): number[] {
+  const { rules } = view;
+  const current = view.election.goal;
+  const bidder = view.election.bidder;
+  return worlds.map((world) => {
+    let pick: { seat: number; goal: Goal } | null =
+      current && bidder !== null && bidder !== view.seat
+        ? { seat: bidder, goal: current }
+        : null;
+    let bestEstimate = pick ? pick.goal.score : floor - 0.5;
+    for (const seat of view.players) {
+      if (seat === view.seat || view.election.passed[seat]) continue;
+      const hand = world.hands.get(seat) ?? [];
+      for (const kiruda of KIRUDAS) {
+        const estimate = estimatePoints(rules, hand, kiruda);
+        if (estimate >= bestEstimate + (pick ? 1 : 0)) {
+          bestEstimate = estimate;
+          pick = {
+            seat,
+            goal: {
+              kiruda,
+              score: Math.min(20, Math.max(floor, Math.floor(estimate))),
+            },
+          };
+        }
+      }
+    }
+    if (!pick) return 0;
+    const kitty = world.hands.get(-1) ?? [];
+    const full = [...(world.hands.get(pick.seat) ?? []), ...kitty];
+    const discard = discardFor(rules, full, pick.goal.kiruda, kitty.length);
+    const declarerHand = full.filter((c) => !discard.includes(c));
+    const hands = handsOf(view, world, view.hand);
+    hands[pick.seat] = declarerHand;
+    const sim = roundStart(
+      rules,
+      view.players,
+      view.money,
+      pick.seat,
+      pick.goal,
+      likelyFriend(rules, pick.goal.kiruda, declarerHand),
+      hands,
+      discard,
+    );
+    playOut(sim, rng);
+    return payoff(sim, view.seat, view.money);
+  });
+}
 
 function planElection(
   view: PlayerView,
   decision: Extract<Decision, { kind: "election" }>,
   worldCount: number,
   rng: RngState,
+  persona: Persona,
 ): Action | null {
   if (decision.canDealMiss || decision.bids.length === 0) return null;
   // 6·7마는 당선 뒤 한 사람을 죽이고 다시 나눠 손패가 달라지므로 어림으로 둔다.
@@ -642,7 +774,7 @@ function planElection(
   const kitty = view.kittyCount;
   const worlds = sampleWorlds(view, view.hand, worldCount, rng);
 
-  let best: { goal: Goal; value: number } | null = null;
+  let best: { goal: Goal; samples: number[] } | null = null;
   for (const kiruda of KIRUDAS) {
     const bids = decision.bids
       .filter((g) => g.kiruda === kiruda)
@@ -650,8 +782,7 @@ function planElection(
     const lowest = bids[0];
     if (!lowest) continue;
     // 바닥 카드를 받아 1단계 봇처럼 버리고 프렌드를 부른 뒤 끝까지 둔다.
-    let total = 0;
-    for (const world of worlds) {
+    const samples = worlds.map((world) => {
       const full = [...view.hand, ...(world.hands.get(-1) ?? [])];
       const discard = discardFor(rules, full, kiruda, kitty);
       const hand = full.filter((c) => !discard.includes(c));
@@ -666,12 +797,20 @@ function planElection(
         discard,
       );
       playOut(sim, rng);
-      total += payoff(sim, view.seat, view.money);
-    }
-    const value = total / worlds.length;
-    if (!best || value > best.value) best = { goal: lowest, value };
+      return payoff(sim, view.seat, view.money);
+    });
+    if (!best || mean(samples) > mean(best.samples))
+      best = { goal: lowest, samples };
   }
-  if (best && best.value > BID_MARGIN) return { type: "bid", goal: best.goal };
+  // 포기했을 때(프렌드·야당)와 같은 추측 판끼리 비교해, 출마가 확실히 나은 정도가 성향의 기준을 넘어야
+  // 나선다. 마이티를 들었어도 주공으로 이기는 판이 많으면 출마하고, 애매하면 포기한다.
+  const floor = Math.min(...decision.bids.map((g) => g.score));
+  const stay = decision.canPass
+    ? passPayoffs(view, floor, worlds, rng)
+    : worlds.map(() => 0);
+  const margin = SEARCH_TUNING.bidMargins?.[persona.name] ?? persona.bidMargin;
+  if (best && sureGain(best.samples, stay, SEARCH_TUNING.electZ) > margin)
+    return { type: "bid", goal: best.goal };
   return decision.canPass ? { type: "pass" } : null;
 }
 
@@ -680,9 +819,15 @@ export interface SearchBotOptions {
   worlds?: number;
   /** 공약·교환·프렌드를 정할 때 추측해 보는 판 수. 0이면 1단계 봇처럼 어림한다 */
   planWorlds?: number;
+  /** 성향. 없으면 자리마다 정해진 성향(`personaForSeat`)을 쓴다 */
+  persona?: Persona;
 }
 
-/** 카드를 낼 때 남의 손패를 추측해 끝까지 둬 보는 봇 */
+/**
+ * 고수: 남의 손패를 추측해 끝까지 둬 보고 고르는 봇. 많이 해 본 사람처럼
+ * 공약 기록으로 패를 짐작하고, 큰 카드와 기루다는 세지만 작은 카드는 가끔 잊고,
+ * 비슷한 수면 정석을 따르되 가끔 다른 수도 둔다. 버릇은 성향(`Persona`)마다 다르다.
+ */
 export function createSearchBot(options: SearchBotOptions = {}): Bot {
   const worlds = options.worlds ?? 64;
   const planWorlds = options.planWorlds ?? 24;
@@ -690,16 +835,17 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
     name: "search",
     decide(view, rng) {
       const decision = view.decision;
+      const persona = options.persona ?? personaForSeat(view.seat);
       const fallback = heuristicBot.decide(view, rng);
       // 2마는 판 흐름(카드 고르기)이 달라 공약·교환은 어림으로 둔다.
       if (planWorlds > 0 && view.rules.playerCount >= 3) {
         const planned =
           decision?.kind === "election"
-            ? planElection(view, decision, planWorlds, rng)
+            ? planElection(view, decision, planWorlds, rng, persona)
             : decision?.kind === "exchange"
               ? planExchange(view, decision, planWorlds, rng)
               : decision?.kind === "friend"
-                ? planFriend(view, decision, planWorlds, rng)
+                ? planFriend(view, decision, planWorlds * 2, rng)
                 : null;
         if (planned) return planned;
       }
@@ -707,9 +853,17 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
       const actions = candidates(decision);
       if (actions.length <= 1) return fallback;
 
+      // 끝난 턴의 낮은 잡카드는 성향에 따라 잊는다(사람은 기루다와 큰 카드 위주로 센다).
+      const remembered = view.tricks
+        .flatMap((t) => t.plays.map((p) => p.card))
+        .filter(
+          (c) =>
+            isMemorable(view, c) ||
+            !forgets(persona, view.seat, view.roundNumber, c),
+        );
       const seen = new Set<Card>([
         ...view.hand,
-        ...view.tricks.flatMap((t) => t.plays.map((p) => p.card)),
+        ...remembered,
         ...(view.trick?.plays.map((p) => p.card) ?? []),
         ...(view.discarded ?? []),
       ]);
@@ -721,6 +875,7 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
       const held = [...needs.values()].reduce((a, b) => a + b, 0);
       needs.set(-1, pool.length - held);
       const inference = inferFromPlays(view);
+      const bias = bidBias(view);
       const base = baseSim(view);
 
       const totals = actions.map(() => 0);
@@ -728,7 +883,9 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
         const world = fillWorld(
           base,
           view,
-          sampleHands(pool, needs, inference, rng),
+          sampleHands(pool, needs, inference, rng, bias, (s, c) =>
+            friendCardExcluded(view, s, c),
+          ),
         );
         actions.forEach((action, i) => {
           const sim = cloneSim(world);
@@ -738,12 +895,38 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
         });
       }
 
-      // 평균이 같으면 1단계 봇이 고른 카드를 따른다.
-      const best = Math.max(...totals);
-      const top = actions.filter((_, i) => totals[i] === best);
-      return top.find((a) => sameAction(a, fallback)) ?? (top[0] as Action);
+      return chooseAction(
+        actions,
+        totals.map((t) => t / worlds),
+        fallback,
+        persona,
+        rng,
+      );
     },
   };
+}
+
+/**
+ * 평균 돈이 가장 큰 수를 고르되, 그와 비슷한 수(성향의 `closeMargin` 안)에 정석(중수의 수)이 있으면
+ * 정석을 따른다. 추측한 판 수가 적어 생기는 오차로 어색한 수를 두지 않게 하고, 사람처럼 정석에 기댄다.
+ * 가끔(`whim`)은 비슷한 수 가운데 아무거나 골라 매번 똑같이 두지 않는다.
+ */
+function chooseAction(
+  actions: readonly PlayAction[],
+  values: readonly number[],
+  fallback: Action,
+  persona: Persona,
+  rng: RngState,
+): Action {
+  const best = Math.max(...values);
+  const close = actions.filter(
+    (_, i) => (values[i] ?? -Infinity) >= best - persona.closeMargin,
+  );
+  if (close.length > 1 && chance(rng, persona.whim))
+    return close[Math.floor(nextFloat(rng) * close.length)] as Action;
+  const book = close.find((a) => sameAction(a, fallback));
+  if (book) return book;
+  return actions[values.indexOf(best)] as Action;
 }
 
 export const searchBot: Bot = createSearchBot();

@@ -1,4 +1,4 @@
-import { heuristicBot } from "@mighty/ai";
+import { heuristicBot, intermediateBot } from "@mighty/ai";
 import {
   type Action,
   type MatchState,
@@ -46,7 +46,7 @@ function hostOptions(rules: RuleSet, store?: HostStore) {
     hostName: "방장",
     rules,
     revealTimeoutMs: 500,
-    bot: heuristicBot,
+    bot: intermediateBot,
     botLevel: 1,
     fair: { group: "1024" as const },
     ...(store ? { store } : {}),

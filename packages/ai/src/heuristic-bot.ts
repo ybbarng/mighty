@@ -492,3 +492,13 @@ export const heuristicBot: Bot = createRuleBot({
   name: "normal",
   book: NORMAL_BOOK,
 });
+
+/**
+ * 화면의 중수: 정석대로 두지만 사람처럼 가끔(8%) 실수한다. 매번 똑같이 두지 않게 한다.
+ * 실수 없는 `heuristicBot`은 고수가 수를 읽을 때의 가상 상대와 튜토리얼 추천 카드에 쓴다
+ */
+export const intermediateBot: Bot = createRuleBot({
+  name: "intermediate",
+  book: NORMAL_BOOK,
+  mistakes: 0.08,
+});

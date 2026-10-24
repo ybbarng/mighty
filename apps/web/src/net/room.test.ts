@@ -1,4 +1,4 @@
-import { heuristicBot } from "@mighty/ai";
+import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { encodeRuleString, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
@@ -111,7 +111,7 @@ describe("온라인 방", () => {
       hostName: "방장",
       rules,
       revealTimeoutMs: 500,
-      bot: heuristicBot,
+      bot: intermediateBot,
       botLevel: 1,
       store,
     };
