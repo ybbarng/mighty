@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { dealCues } from "@/game/cues";
 import { CUE_LABELS, type Cue, play, renderCue } from "@/game/sound";
+import { SHUFFLE_MS } from "@/game/timing";
 
 /** 원작에서 그 소리가 나던 때. 소리를 들어 보며 다듬을 때 참고한다(docs/16) */
 const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
@@ -32,7 +34,8 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
   {
     title: "판 흐름",
     cues: [
-      { cue: "shuffle", when: "섞기(두 번)" },
+      { cue: "shuffle", when: "덱이 갈라졌다 합쳐질 때(두 번)" },
+      { cue: "deal", when: "나눠 줄 때 묶음마다(원작에는 없음)" },
       { cue: "gameStart", when: "다 나눠 주고 판 시작" },
       { cue: "friend", when: "프렌드가 드러남" },
       { cue: "scored", when: "야당이 점수 카드를 가져감(장마다)" },
@@ -121,6 +124,22 @@ export function SoundBoard() {
         누르면 그 소리가 납니다. 숫자는 귀에 느껴지는 크기, 가장 큰 순간의 크기,
         들리는 길이입니다.
       </p>
+      <button
+        type="button"
+        data-play-deal
+        onClick={() => {
+          // 표준 5마 판 시작: 섞고, 나눠 주고, 판 시작 소리까지 실제 연출 시간대로
+          const calls = dealCues(10, 5, {
+            startDelay: 0,
+            shuffleMs: SHUFFLE_MS,
+          });
+          for (const { cue, delay, times } of calls)
+            play(cue, { delay: delay ?? 0, times: times ?? 1 });
+        }}
+        className="mb-6 rounded-lg border border-amber-300/60 bg-amber-400/15 px-4 py-2 text-sm hover:bg-amber-400/25"
+      >
+        섞고 나눠 주기 전체 듣기
+      </button>
       <div className="grid gap-6 sm:grid-cols-2">
         {GROUPS.map((group) => (
           <section key={group.title}>

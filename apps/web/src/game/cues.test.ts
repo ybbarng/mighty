@@ -126,14 +126,35 @@ describe("판 흐름 소리", () => {
   const cues = (events: GameEvent[], scene: PlayerView = view) =>
     cuesFor(scene, events);
 
-  it("나눠 주면 섞고, 다 나눈 뒤 판 시작 소리", () => {
-    const [shuffle, start] = cues([
+  it("섞는 연출에 맞춰 섞고, 묶음마다 나눠 주는 소리, 다 나눈 뒤 판 시작 소리", () => {
+    const dealt: GameEvent[] = [
       { type: "roundStarted", roundNumber: 1, beginner: 0 },
       { type: "dealt", handSize: 10 },
-    ]);
-    expect(shuffle).toEqual({ cue: "shuffle" });
+    ];
+    const result = cuesFor(view, dealt, { startDelay: 0, shuffleMs: 1600 });
+    expect(result[0]).toEqual({ cue: "shuffle", delay: 0 });
+    // 5명에게 2·3·3·2장 묶음 네 바퀴
+    const deals = result.filter((c) => c.cue === "deal");
+    expect(deals).toHaveLength(20);
+    expect(deals[0]?.delay).toBe(1.6);
+    const start = result.at(-1);
     expect(start?.cue).toBe("gameStart");
-    expect(start?.delay).toBeGreaterThan(1.6);
+    expect(start?.delay).toBeGreaterThan(deals.at(-1)?.delay ?? 0);
+  });
+
+  it("섞는 연출을 이미 보였으면 섞는 소리 없이 나눠 주기부터", () => {
+    const result = cuesFor(view, [{ type: "dealt", handSize: 10 }], {
+      startDelay: 0,
+      shuffleMs: 300,
+    });
+    expect(result.some((c) => c.cue === "shuffle")).toBe(false);
+    expect(result.find((c) => c.cue === "deal")?.delay).toBe(0.3);
+  });
+
+  it("연출을 하지 않으면(움직임 줄이기) 판 시작 소리만", () => {
+    expect(cues([{ type: "dealt", handSize: 10 }])).toEqual([
+      { cue: "gameStart" },
+    ]);
   });
 
   it("야당이 점수 카드를 가져가면 장수만큼 득점 소리, 주공이 가져가면 없다", () => {

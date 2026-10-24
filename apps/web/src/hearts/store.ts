@@ -11,6 +11,7 @@ import {
 import { create } from "zustand";
 import type { EndVoteState, IncidentState } from "@/components/FairOverlays";
 import { browserPace } from "@/game/bots";
+import type { DealTiming } from "@/game/cues";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { useSettings } from "@/game/settings";
@@ -42,8 +43,9 @@ export type HeartsLocalMatch = LocalMatch<
 >;
 export type HeartsSaved = SavedMatch<HeartsRules, Action, Card[][]>;
 
-/** 하트는 4·4·5장씩 세 바퀴에 나눠 준다 */
-export const HEARTS_DEAL_PATTERN = [4, 4, 5] as const;
+import { HEARTS_DEAL_PATTERN } from "./timing";
+
+export { HEARTS_DEAL_PATTERN };
 
 /** 이벤트마다 화면이 머무는 시간(ms) */
 const EVENT_DELAY: Partial<Record<GameEvent["type"], number>> = {
@@ -179,17 +181,8 @@ export const useHearts = create<HeartsStore>((set, get) => {
       busy: true,
     });
     const dealt = next.events.find((e) => e.type === "dealt");
-    const { sound, speed } = useSettings.getState();
-    if (sound) {
-      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
-      const scale = dealt ? 1 : speed;
-      for (const { cue, delay = 0, times = 1 } of heartsCuesFor(
-        next.view,
-        next.events,
-      ))
-        playCue(cue, { delay: delay / scale, times });
-    }
-
+    // 섞고 나눠 주는 연출. 움직임 줄이기에서는 하지 않는다.
+    let dealTiming: DealTiming | null = null;
     if (dealt && !prefersReducedMotion()) {
       // 멘탈 포커로 실제로 섞는 동안 섞는 연출을 보였으면 최소 시간에서 남은 만큼만 더 섞는다.
       const since = get().shuffleStartedAt;
@@ -197,6 +190,23 @@ export const useHearts = create<HeartsStore>((set, get) => {
         since === null
           ? SHUFFLE_MS
           : Math.max(0, SHUFFLE_MS - (Date.now() - since));
+      dealTiming = { startDelay: 0, shuffleMs };
+    }
+
+    const { sound, speed } = useSettings.getState();
+    if (sound) {
+      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
+      const scale = dealt ? 1 : speed;
+      for (const { cue, delay = 0, times = 1 } of heartsCuesFor(
+        next.view,
+        next.events,
+        dealTiming,
+      ))
+        playCue(cue, { delay: delay / scale, times });
+    }
+
+    if (dealt && dealTiming) {
+      const { shuffleMs } = dealTiming;
       set({
         dealing: {
           key: (get().dealing?.key ?? 0) + 1,

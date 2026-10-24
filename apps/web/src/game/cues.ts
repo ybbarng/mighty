@@ -12,7 +12,7 @@ import {
 } from "@mighty/engine";
 
 import type { Cue, PlayOptions } from "./sound";
-import { dealPlan } from "./timing";
+import { dealPlan, SHUFFLE_MS } from "./timing";
 
 export interface CueCall extends PlayOptions {
   cue: Cue;
@@ -21,13 +21,50 @@ export interface CueCall extends PlayOptions {
 /** 트릭이 끝나고 이긴 카드를 보여 주는 시간(초). 이때 카드를 모으며 득점 소리를 낸다 */
 const TRICK_HOLD_S = 1.1;
 
+/** 섞고 나눠 주는 연출 시간(ms). `DealAnimation`과 같은 값을 쓴다 */
+export interface DealTiming {
+  startDelay: number;
+  /** 섞는 연출 시간. 멘탈 포커로 이미 섞는 연출을 보였으면 남은 만큼 */
+  shuffleMs: number;
+}
+
+/**
+ * 섞고 나눠 주는 연출에 맞춘 소리. 덱이 갈라졌다 합쳐질 때 섞는 소리를 내고(0.4초 간격 두 번),
+ * 나눠 줄 때는 묶음마다 "슥-톡", 다 나눠 주면 판 시작 소리를 낸다.
+ * 원작에는 나눠 주는 소리가 없지만 연출에 소리가 없으면 허전해서 넣었다.
+ */
+export function dealCues(
+  handSize: number,
+  players: number,
+  { startDelay, shuffleMs }: DealTiming,
+  pattern?: readonly number[],
+): CueCall[] {
+  const calls: CueCall[] = [];
+  const start = startDelay / 1000;
+  // 섞는 연출을 다 보일 때만 섞는 소리를 낸다(이미 섞는 연출을 보였으면 나눠 주기부터).
+  if (shuffleMs >= SHUFFLE_MS) calls.push({ cue: "shuffle", delay: start });
+  const plan = dealPlan(handSize, players, pattern);
+  const dealStart = start + shuffleMs / 1000;
+  plan.flights.forEach((flight, i) => {
+    if (plan.flights[i - 1]?.player !== flight.player)
+      calls.push({ cue: "deal", delay: dealStart + flight.delay / 1000 });
+  });
+  calls.push({
+    cue: "gameStart",
+    delay: start + (plan.duration - SHUFFLE_MS + shuffleMs) / 1000,
+  });
+  return calls;
+}
+
 /**
  * 한 스냅숏의 이벤트에서 낼 소리. 순수 함수라 테스트할 수 있다.
  * 언제 어떤 소리를 내는지는 원작 `PlayerHuman.cpp`를 따른다(docs/16 3절).
+ * `deal`은 섞고 나눠 주는 연출 시간. 연출을 하지 않으면(2마, 움직임 줄이기) `null`
  */
 export function cuesFor(
   view: PlayerView,
   events: readonly GameEvent[],
+  deal: DealTiming | null = null,
 ): CueCall[] {
   const calls: CueCall[] = [];
   const played = events.some((e) => e.type === "played");
@@ -40,11 +77,9 @@ export function cuesFor(
       case "dealt":
         if (view.rules.playerCount === 2) break;
         // 원작처럼 섞고, 다 나눠 준 뒤 "솨악!"
-        calls.push({ cue: "shuffle" });
-        calls.push({
-          cue: "gameStart",
-          delay: dealPlan(event.handSize, view.players.length).duration / 1000,
-        });
+        if (deal)
+          calls.push(...dealCues(event.handSize, view.players.length, deal));
+        else calls.push({ cue: "gameStart" });
         break;
       case "bid":
         calls.push({ cue: "bid" });
@@ -102,9 +137,12 @@ export function cuesFor(
         break;
     }
   }
-  // 한 스냅숏에 같은 소리가 겹치면 하나만 낸다.
-  const seen = new Set<Cue>();
-  return calls.filter(({ cue }) => !seen.has(cue) && seen.add(cue));
+  // 한 스냅숏에 같은 때 같은 소리가 겹치면 하나만 낸다(나눠 주기처럼 때가 다르면 둔다).
+  const seen = new Set<string>();
+  return calls.filter(({ cue, delay = 0 }) => {
+    const key = `${cue}@${delay}`;
+    return !seen.has(key) && seen.add(key);
+  });
 }
 
 /** 원작 `CPlayerHuman::PlayTurnSound`: 카드 낼 때 소리 고르기 */

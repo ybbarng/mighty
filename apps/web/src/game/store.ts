@@ -17,7 +17,7 @@ import {
 } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 import { botFor, browserPace } from "./bots";
-import { cuesFor } from "./cues";
+import { cuesFor, type DealTiming } from "./cues";
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
 import { LocalMatch, type SavedMatch } from "./local-match";
 import { mightyKit } from "./mighty-kit";
@@ -181,17 +181,8 @@ export const useGame = create<GameStore>((set, get) => {
     });
 
     const dealt = next.events.find((e) => e.type === "dealt");
-    const { sound, speed } = useSettings.getState();
-    if (sound) {
-      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
-      const scale = dealt ? 1 : speed;
-      for (const { cue, delay = 0, times = 1 } of cuesFor(
-        next.view,
-        next.events,
-      ))
-        playCue(cue, { delay: delay / scale, times });
-    }
-
+    // 섞고 나눠 주는 연출. 2마와 움직임 줄이기에서는 하지 않는다.
+    let dealTiming: DealTiming | null = null;
     if (dealt && next.view.rules.playerCount !== 2 && !prefersReducedMotion()) {
       const others = next.events.filter(
         (e) => e.type !== "dealt" && e.type !== "roundStarted",
@@ -206,6 +197,23 @@ export const useGame = create<GameStore>((set, get) => {
         since === null
           ? SHUFFLE_MS
           : Math.max(0, SHUFFLE_MS - (Date.now() - since));
+      dealTiming = { startDelay, shuffleMs };
+    }
+
+    const { sound, speed } = useSettings.getState();
+    if (sound) {
+      // 나눠 주기 연출은 실제 시간으로 돌고, 나머지는 속도 설정을 따른다.
+      const scale = dealt ? 1 : speed;
+      for (const { cue, delay = 0, times = 1 } of cuesFor(
+        next.view,
+        next.events,
+        dealTiming,
+      ))
+        playCue(cue, { delay: delay / scale, times });
+    }
+
+    if (dealt && dealTiming) {
+      const { startDelay, shuffleMs } = dealTiming;
       set({
         dealing: {
           key: (get().dealing?.key ?? 0) + 1,

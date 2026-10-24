@@ -93,7 +93,7 @@
 
 "카드·섞기 소리가 벌레 바스락거리는 소리 같다"는 의견으로 소리를 모두 새로 합성했다. 높은 대역(2.5~3.2kHz)의 잡음을 짧게 끊어 낸 것이 원인이어서, 카드 소리는 낮은 대역 잡음과 짧게 떨어지는 낮은 음("톡")으로 바꾸고 모든 소리에 작은 방 울림을 더했다. 원작 wav는 쓰지 않는다(5절).
 
-- `apps/web/src/game/sound.ts`: `Cue` 24종과 합성. `play(cue, { delay, times })`는 AudioContext 시간으로 예약해서 낸다. 큰 소리(`BIG`)끼리는 앞 소리를 줄여 끊는다(원작은 한 번에 한 소리). 첫 누름(`pointerdown`·`keydown`·`touchend`)에서 AudioContext를 열어 두어 iOS에서 첫 소리가 막히지 않게 한다. `renderCue`는 소리를 재생하지 않고 그려 본다.
+- `apps/web/src/game/sound.ts`: `Cue` 25종과 합성. `play(cue, { delay, times })`는 AudioContext 시간으로 예약해서 낸다. 큰 소리(`BIG`)끼리는 앞 소리를 줄여 끊는다(원작은 한 번에 한 소리). 첫 누름(`pointerdown`·`keydown`·`touchend`)에서 AudioContext를 열어 두어 iOS에서 첫 소리가 막히지 않게 한다. `renderCue`는 소리를 재생하지 않고 그려 본다.
 - `apps/web/src/game/cues.ts` `cuesFor(view, events)`: 엔진 이벤트를 소리로 바꾼다. 카드 소리는 원작 `PlayTurnSound` 판정을 그대로 따른다. 같은 스냅숏 안의 같은 소리는 하나로 줄인다.
 - `apps/web/src/hearts/cues.ts` `heartsCuesFor`: 하트용 매핑.
 - `apps/web/src/game/ui-sound.ts` `playUiCue`: 화면 조작 소리. 소리 설정이 꺼져 있으면 내지 않는다.
@@ -102,8 +102,9 @@
 
 | 장면 | `Cue` | 소리 | 어디서 |
 |---|---|---|---|
-| 섞기 | `shuffle` | 튕겨 섞는 "드르륵 착" 두 번(섞기 연출 1.6초 안) | `dealt`(2마 제외), `redealtForDead` |
-| 판 시작 | `gameStart` | "솨악" 바람 소리 뒤 세 음 | `dealt` 뒤 나눠 주기가 끝날 때(2마는 `roundStarted`) |
+| 섞기 | `shuffle` | 덱이 갈라질 때 "스윽", 합쳐질 때 촘촘히 맞물리는 "촤르르륵 착". 연출(0.4초마다 갈라짐·합쳐짐)에 맞춰 두 번 | `dealt`(2마·움직임 줄이기 제외, 섞는 연출을 이미 보였으면 뺀다), `redealtForDead` |
+| 나눠 주기 | `deal` | 묶음이 날아가는 "슥"과 손에 닿는 "톡". 원작에는 없다 | `dealt`에서 묶음마다(`dealCues`, 하트 포함) |
+| 판 시작 | `gameStart` | "솨악" 바람 소리 뒤 세 음 | 나눠 주기가 끝날 때(2마는 `roundStarted`, 움직임 줄이기는 바로) |
 | 공약 | `bid` | 마림바 "띠링" | `bid` |
 | 포기 | `pass` | 김 빠지는 "뽁" | `passed`, 죽이기 헛다리 0.75초 뒤 |
 | 딜미스 | `dealMiss` | 카드 "착착" + 낮은 음 | `dealMiss`, `allPassed` |

@@ -4,17 +4,21 @@ import {
   QUEEN_OF_SPADES,
 } from "@mighty/hearts-engine";
 
-import type { CueCall } from "@/game/cues";
+import { type CueCall, type DealTiming, dealCues } from "@/game/cues";
+
+import { HEARTS_DEAL_PATTERN } from "./timing";
 
 /** 한 스냅숏의 이벤트에서 낼 소리. 마이티와 같은 소리를 빌려 쓰고, 하트만의 장면은 따로 둔다 */
 export function heartsCuesFor(
   view: PlayerView,
   events: readonly GameEvent[],
+  deal: DealTiming | null = null,
 ): CueCall[] {
   const calls: CueCall[] = [];
   const played = events.some((e) => e.type === "played");
   for (const e of events) {
-    if (e.type === "dealt") calls.push({ cue: "shuffle" });
+    if (e.type === "dealt" && deal)
+      calls.push(...dealCues(e.handSize, 4, deal, HEARTS_DEAL_PATTERN));
     // 서로 카드를 주고받아 손패를 다시 정리한다.
     if (e.type === "passed") calls.push({ cue: "cardSet" });
     if (e.type === "played")

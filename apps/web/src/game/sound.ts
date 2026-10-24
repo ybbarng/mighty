@@ -5,6 +5,8 @@
  * 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다. 첫 누름에서 AudioContext를 열어 두어
  * 컴퓨터 차례처럼 누름 없이 나는 첫 소리도 막히지 않게 한다(특히 iOS).
  */
+import { FLIGHT_MS } from "./timing";
+
 export type Cue =
   /** 일반 카드 내기 */
   | "card"
@@ -13,6 +15,8 @@ export type Cue =
   /** 버릴 카드 확정·딜미스(원작 카드셋) */
   | "cardSet"
   | "shuffle"
+  /** 나눠 주기: 카드 묶음 하나가 날아가 닿는 소리 */
+  | "deal"
   /** 판 시작(원작 게임시작 "솨악!") */
   | "gameStart"
   | "bid"
@@ -50,6 +54,7 @@ export const CUE_LABELS: Record<Cue, string> = {
   pickCard: "키티 받기·버릴 카드 고르기",
   cardSet: "버릴 카드 정리",
   shuffle: "섞기",
+  deal: "나눠 주기",
   gameStart: "판 시작",
   bid: "공약",
   pass: "포기",
@@ -85,7 +90,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   pass: 4.9,
   invalid: 3.7,
   cardSet: 3,
-  shuffle: 2,
+  shuffle: 0.5,
+  deal: 1.5,
   mighty: -8.2,
   joker: -1.2,
   jokerCall: 2.9,
@@ -419,18 +425,38 @@ function tap(v: Voice, at: number, gain = 1, bright = 1): void {
   thump(v, at, 210 * vary, 110, 0.06, 0.3 * gain);
 }
 
-/** 카드 묶음을 튕겨 섞는 "드르륵 착" */
+/** 덱을 둘로 가르는 "스윽" */
+function cut(v: Voice, at: number): void {
+  noise(v, at, 0.2, {
+    filter: "bandpass",
+    freq: 700,
+    sweepTo: 1400,
+    q: 0.9,
+    gain: 0.18,
+    attack: 0.05,
+  });
+}
+
+/**
+ * 두 묶음의 카드 끝이 촘촘히 맞물리는 "촤르르륵".
+ * 아주 짧은 잡음 알갱이를 4~7ms 간격으로 겹쳐 끊기지 않는 떨림을 만들고
+ * (알갱이 사이가 벌어지면 "톡톡" 따로 들려 어색하다), 끝에 묶음을 밀어 맞추는 "착"을 낸다.
+ */
 function riffle(v: Voice, at: number): void {
-  let t = at;
-  for (let i = 0; i < 16; i++) {
-    noise(v, t, 0.03, {
-      freq: 1500 + Math.random() * 500,
-      q: 0.6,
-      gain: 0.12 + Math.random() * 0.1,
+  const length = 0.3;
+  for (let t = 0; t < length; t += 0.004 + Math.random() * 0.003) {
+    // 처음과 끝은 작게, 가운데가 크게
+    const swell = Math.sin(Math.PI * Math.min(1, (t / length) * 1.2));
+    noise(v, at + t, 0.012, {
+      filter: "bandpass",
+      freq: 1400 + Math.random() * 800,
+      q: 1.1,
+      gain: (0.04 + Math.random() * 0.04) * (0.3 + swell),
     });
-    t += 0.034 - i * 0.0012;
   }
-  tap(v, t + 0.05, 0.45, 0.8);
+  // 밑에 깔리는 낮은 "흐르륵"
+  noise(v, at, length, { freq: 900, q: 0.5, gain: 0.05, attack: 0.08 });
+  tap(v, at + length + 0.04, 0.5, 0.8);
 }
 
 const C4 = 261.63;
@@ -500,9 +526,23 @@ function render(cue: Cue, v: Voice): void {
       tap(v, 0.08, 0.55, 0.8);
       break;
     case "shuffle":
-      // 원작처럼 두 번 섞는다. 섞기 연출(1.6초) 안에 끝난다.
-      riffle(v, 0);
-      riffle(v, 0.8);
+      // 원작처럼 두 번 섞는다. 섞기 연출(`DealAnimation`)이 0.4초마다 갈라졌다 합쳐지는 데 맞춘다.
+      cut(v, 0);
+      riffle(v, 0.4);
+      cut(v, 0.8);
+      riffle(v, 1.2);
+      break;
+    case "deal":
+      // 카드 묶음이 날아가는 "슥"과 손에 닿는 "톡"
+      noise(v, 0, 0.12, {
+        filter: "bandpass",
+        freq: 1000,
+        sweepTo: 2000,
+        q: 0.8,
+        gain: 0.1,
+        attack: 0.03,
+      });
+      tap(v, FLIGHT_MS / 1000, 0.35, 1.1);
       break;
     case "gameStart":
       noise(v, 0, 0.55, {
