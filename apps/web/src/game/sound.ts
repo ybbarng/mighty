@@ -5,7 +5,15 @@
  * 브라우저는 사용자가 한 번 누르기 전에는 소리를 막는다. 첫 누름에서 AudioContext를 열어 두어
  * 컴퓨터 차례처럼 누름 없이 나는 첫 소리도 막히지 않게 한다(특히 iOS).
  */
+import { createRng, nextFloat } from "@mighty/engine";
+
 import { FLIGHT_MS } from "./timing";
+
+/**
+ * 소리마다 조금씩 다르게 들리게 하는 난수. 평소에는 Math.random이고,
+ * renderCue는 씨앗을 고정해 같은 소리를 몇 번 그려도 똑같이 나오게 한다(크기 시험이 흔들리지 않게)
+ */
+let random: () => number = Math.random;
 
 export type Cue =
   /** 일반 카드 내기 */
@@ -188,7 +196,7 @@ function buildGraph(ctx: BaseAudioContext, gain: number): Graph {
 
   const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const data = noise.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1;
   return { out, master, noise };
 }
 
@@ -198,7 +206,7 @@ function impulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   for (let ch = 0; ch < 2; ch++) {
     const data = buffer.getChannelData(ch);
     for (let i = 0; i < length; i++)
-      data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3;
+      data[i] = (random() * 2 - 1) * (1 - i / length) ** 3;
   }
   return buffer;
 }
@@ -418,12 +426,12 @@ function noise(
   env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
   // 같은 잡음 버퍼를 매번 다른 곳에서 읽어 똑같이 들리지 않게 한다.
   src.connect(f).connect(env).connect(v.bus);
-  src.start(t, Math.random() * 0.5, duration + 0.05);
+  src.start(t, random() * 0.5, duration + 0.05);
 }
 
 /** 카드 한 장이 탁자에 닿는 "톡". 높은 잡음을 빼야 벌레 소리처럼 들리지 않는다 */
 function tap(v: Voice, at: number, gain = 1, bright = 1): void {
-  const vary = 0.9 + Math.random() * 0.2;
+  const vary = 0.9 + random() * 0.2;
   noise(v, at, 0.045, {
     freq: 1300 * bright * vary,
     q: 0.5,
@@ -451,14 +459,14 @@ function cut(v: Voice, at: number): void {
  */
 function riffle(v: Voice, at: number): void {
   const length = 0.3;
-  for (let t = 0; t < length; t += 0.004 + Math.random() * 0.003) {
+  for (let t = 0; t < length; t += 0.004 + random() * 0.003) {
     // 처음과 끝은 작게, 가운데가 크게
     const swell = Math.sin(Math.PI * Math.min(1, (t / length) * 1.2));
     noise(v, at + t, 0.012, {
       filter: "bandpass",
-      freq: 1400 + Math.random() * 800,
+      freq: 1400 + random() * 800,
       q: 1.1,
-      gain: (0.04 + Math.random() * 0.04) * (0.3 + swell),
+      gain: (0.04 + random() * 0.04) * (0.3 + swell),
     });
   }
   // 밑에 깔리는 낮은 "흐르륵"
@@ -512,15 +520,29 @@ export function previewVolume(): void {
   play("friend", { delay: 0.3 });
 }
 
-/** 소리 하나를 재생하지 않고 그려 본다. 미리 듣기 화면에서 크기와 모양을 보는 데 쓴다 */
-export function renderCue(cue: Cue, seconds = 3): Promise<AudioBuffer> {
+/**
+ * 소리 하나를 재생하지 않고 그려 본다. 미리 듣기 화면에서 크기와 모양을 보는 데 쓴다.
+ * 난수 씨앗을 고정해 같은 소리는 늘 똑같이 그려진다
+ */
+export function renderCue(
+  cue: Cue,
+  seconds = 3,
+  seed = 1,
+): Promise<AudioBuffer> {
   const rate = 44100;
   const ctx = new OfflineAudioContext(2, rate * seconds, rate);
-  const g = buildGraph(ctx, 0.8);
-  const bus = ctx.createGain();
-  bus.gain.value = trim(cue);
-  bus.connect(g.out);
-  render(cue, { ctx, bus, noise: g.noise, t0: 0 });
+  const rng = createRng(seed);
+  random = () => nextFloat(rng);
+  try {
+    // 난수는 소리를 짜는 동안에만 쓰고, 실제 그리기(startRendering)에는 쓰지 않는다.
+    const g = buildGraph(ctx, 0.8);
+    const bus = ctx.createGain();
+    bus.gain.value = trim(cue);
+    bus.connect(g.out);
+    render(cue, { ctx, bus, noise: g.noise, t0: 0 });
+  } finally {
+    random = Math.random;
+  }
   return ctx.startRendering();
 }
 
@@ -729,7 +751,7 @@ function render(cue: Cue, v: Voice): void {
         gain: 0.35,
       });
       [2637, 3136, 2349, 2960, 2093].forEach((f, i) => {
-        bell(v, f, i * 0.045 + Math.random() * 0.02, 0.35, 0.06);
+        bell(v, f, i * 0.045 + random() * 0.02, 0.35, 0.06);
       });
       break;
     case "penalty":
