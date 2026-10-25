@@ -1,7 +1,41 @@
-import { SPADE_PATH } from "./brand";
+import { HEART_PATH, SPADE_PATH } from "./brand";
 
 const INK = "#111111";
 const PAPER = "#ffffff";
+/** 카드 그림 기본 테마의 빨강 */
+const RED = "#d42a2a";
+
+/** 카드 테두리: 위와 왼쪽, 모서리는 둥글게 */
+const BORDER_PATH = "M3 100 L3 14 Q3 3 14 3 L100 3";
+
+/** 세리프 A */
+const SERIF_A_PATH =
+  "M23.5 7 L37 37 L41 37 L41 42 L30 42 L30 37 L32.5 37 L30.6 32.5 L16.4 32.5 L14.5 37 L17 37 L17 42 L6 42 L6 37 L10 37 Z M18.4 27.5 L28.6 27.5 L23.5 15.5 Z";
+
+/** 큰 무늬 안의 마름모 장식(엇갈린 흰 줄). 쓰는 쪽에서 clipPath로 자른다. satori는 svg 안의 컴포넌트를 못 그려 함수로 부른다 */
+function hatchLines() {
+  return Array.from({ length: 14 }, (_, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: 장식 줄은 순서가 곧 정체다
+    <g key={i}>
+      <line
+        x1={20 + i * 8}
+        y1="30"
+        x2={-50 + i * 8}
+        y2="100"
+        stroke={PAPER}
+        strokeWidth="1.8"
+      />
+      <line
+        x1={-30 + i * 8}
+        y1="30"
+        x2={40 + i * 8}
+        y2="100"
+        stroke={PAPER}
+        strokeWidth="1.8"
+      />
+    </g>
+  ));
+}
 
 /**
  * 원작 Mighty Network의 아이콘(32×32 흑백 픽셀, res/Mighty.ico)을 고화질로 다시 그린 것.
@@ -28,20 +62,8 @@ function MightyCorner() {
       </defs>
 
       <rect width="100" height="100" fill={PAPER} />
-      {/* 카드 테두리: 위와 왼쪽, 모서리는 둥글게 */}
-      <path
-        d="M3 100 L3 14 Q3 3 14 3 L100 3"
-        fill="none"
-        stroke={INK}
-        strokeWidth="4.5"
-      />
-
-      {/* 세리프 A */}
-      <path
-        d="M23.5 7 L37 37 L41 37 L41 42 L30 42 L30 37 L32.5 37 L30.6 32.5 L16.4 32.5 L14.5 37 L17 37 L17 42 L6 42 L6 37 L10 37 Z M18.4 27.5 L28.6 27.5 L23.5 15.5 Z"
-        fill={INK}
-        fillRule="evenodd"
-      />
+      <path d={BORDER_PATH} fill="none" stroke={INK} strokeWidth="4.5" />
+      <path d={SERIF_A_PATH} fill={INK} fillRule="evenodd" />
 
       {/* 작은 ♠ */}
       <path d={SPADE_PATH} transform="translate(6 53) scale(0.3)" fill={INK} />
@@ -56,38 +78,67 @@ function MightyCorner() {
         stroke={PAPER}
         strokeWidth="2.6"
       />
-      <g clipPath="url(#big-spade-inner)">
-        {Array.from({ length: 14 }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 장식 줄은 순서가 곧 정체다
-          <g key={i}>
-            <line
-              x1={20 + i * 8}
-              y1="30"
-              x2={-50 + i * 8}
-              y2="100"
-              stroke={PAPER}
-              strokeWidth="1.8"
-            />
-            <line
-              x1={-30 + i * 8}
-              y1="30"
-              x2={40 + i * 8}
-              y2="100"
-              stroke={PAPER}
-              strokeWidth="1.8"
-            />
-          </g>
-        ))}
-      </g>
+      <g clipPath="url(#big-spade-inner)">{hatchLines()}</g>
+    </svg>
+  );
+}
+
+/** 100×100 무늬 경로를 `scale`배로 키워 (`dx`, `dy`)로 옮긴다. clipPath 안에서도 쓰려고 좌표를 직접 바꾼다 */
+function placePath(d: string, scale: number, dx: number, dy: number): string {
+  return d.replace(
+    /(-?[\d.]+) (-?[\d.]+)/g,
+    (_, x: string, y: string) =>
+      `${(Number(x) * scale + dx).toFixed(2)} ${(Number(y) * scale + dy).toFixed(2)}`,
+  );
+}
+
+/** 큰 ♥ 세 겹(겉·흰 줄·장식 안쪽). 같은 점을 중심으로 크기만 줄여 어깨가 나란하다 */
+const BIG_HEART = placePath(HEART_PATH, 2, 38, 30);
+const BIG_HEART_LINE = placePath(HEART_PATH, 1.86, 43.6, 35.6);
+const BIG_HEART_INNER = placePath(HEART_PATH, 1.72, 49.2, 41.2);
+
+/**
+ * 하트 아이콘. 마이티 아이콘과 같은 구도로 ♥A 카드의 왼쪽 위 모서리를 크게 본 것이다:
+ * 테두리, 세리프 "A", 작은 ♥, 오른쪽 아래로 잘려 보이는 큰 ♥의 둥근 왼쪽 어깨와 마름모 장식.
+ */
+function HeartsCorner() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "flex" }}
+    >
+      <defs>
+        <clipPath id="big-heart-inner">
+          <path d={BIG_HEART_INNER} />
+        </clipPath>
+      </defs>
+
+      <rect width="100" height="100" fill={PAPER} />
+      <path d={BORDER_PATH} fill="none" stroke={RED} strokeWidth="4.5" />
+      <path d={SERIF_A_PATH} fill={RED} fillRule="evenodd" />
+      <path d={HEART_PATH} transform="translate(6 53) scale(0.3)" fill={RED} />
+
+      <path d={BIG_HEART} fill={RED} />
+      <path d={BIG_HEART_LINE} fill="none" stroke={PAPER} strokeWidth="2.6" />
+      <g clipPath="url(#big-heart-inner)">{hatchLines()}</g>
     </svg>
   );
 }
 
 /**
- * 앱 아이콘 그림(`next/og` ImageResponse용 JSX).
+ * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트 아이콘을 그린다.
  * `maskable`이면 안드로이드가 잘라 쓰는 안전 영역(가운데 80%) 안에 들어가게 줄인다.
  */
-export function IconArt({ maskable = false }: { maskable?: boolean }) {
+export function IconArt({
+  maskable = false,
+  game = "mighty",
+}: {
+  maskable?: boolean;
+  game?: "mighty" | "hearts";
+}) {
   return (
     <div
       style={{
@@ -108,7 +159,7 @@ export function IconArt({ maskable = false }: { maskable?: boolean }) {
           height: maskable ? "78%" : "100%",
         }}
       >
-        <MightyCorner />
+        {game === "hearts" ? <HeartsCorner /> : <MightyCorner />}
       </div>
     </div>
   );

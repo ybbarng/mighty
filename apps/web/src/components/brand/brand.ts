@@ -24,3 +24,7 @@ export const CREDITS: readonly { years: string; name: string }[] = [
   { years: "2011", name: "Yoshi-TS4" },
   { years: "2026", name: "ybbarng" },
 ];
+
+/** ♥ 모양 (100×100 상자). 카드 그림의 무늬와 같다 */
+export const HEART_PATH =
+  "M50 92 C22 70 2 52 2 30 C2 14 14 4 28 4 C38 4 46 10 50 18 C54 10 62 4 72 4 C86 4 98 14 98 30 C98 52 78 70 50 92 Z";
