@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { DealAnimation } from "@/components/DealAnimation";
 import { FairOverlays, FairStatus } from "@/components/FairOverlays";
+import { OpenHand } from "@/components/OpenHand";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { ResultBanner } from "@/components/ResultBanner";
@@ -69,10 +70,13 @@ const MISSION_BAND_MIN_W = 220;
 export function HeartsTable({
   onExit,
   mission,
+  openHands = null,
 }: {
   onExit: () => void;
   /** 튜토리얼 미션 목표와 결과 안내 */
   mission?: MissionProps;
+  /** 다시 보기: 다른 사람 손패를 앞면으로 펼친다(자리마다 정렬한 패) */
+  openHands?: readonly (readonly Card[])[] | null;
 }) {
   const stage = useStageSize();
   const view = useHearts((s) => s.view);
@@ -404,8 +408,21 @@ export function HeartsTable({
             </button>
           </div>
 
-          {/* 다른 사람 손패(뒷면) */}
+          {/* 다른 사람 손패(뒷면). 다시 보기에서 펼치면 자리 판 아래에 칩으로 보인다 */}
+          {openHands &&
+            [1, 2, 3].map((offset) => {
+              const seat = (me + offset) % 4;
+              const p = layout.seats[offset]?.plate;
+              return p ? (
+                <OpenHand
+                  key={`open-${seat}`}
+                  cards={openHands[seat] ?? []}
+                  rect={p}
+                />
+              ) : null;
+            })}
           {!dealing &&
+            !openHands &&
             view.phase !== "roundEnd" &&
             view.phase !== "gameOver" &&
             [1, 2, 3].flatMap((offset) => {

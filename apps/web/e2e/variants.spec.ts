@@ -173,6 +173,11 @@ for (const variant of VARIANTS) {
     await expect(page.getByText("생각하는 중…")).toHaveCount(0, {
       timeout: 15_000,
     });
+    // 걸음 해설(고수의 계산)과 모든 패 펼치기
+    await expect(page.getByText("해설을 계산하는 중…")).toHaveCount(0, {
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "모든 패 보기" }).click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: testInfo.outputPath("5ma-replay.png") });
     // 복기 기록을 파일로 내보낸다.

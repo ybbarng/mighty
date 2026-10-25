@@ -1,10 +1,11 @@
 "use client";
 
+import type { Card } from "@mighty/engine";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { GameTable } from "@/components/GameTable";
 import { SuitMark, SuitText } from "@/components/SuitText";
-import type { GameKit } from "@/game/kit";
+import type { Commentary, GameKit, Verdict } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import { type AttachableHost, useGame } from "@/game/store";
 import { HeartsTable } from "@/hearts/components/HeartsTable";
@@ -13,6 +14,7 @@ import { type HeartsHost, useHearts } from "@/hearts/store";
 import { cn } from "@/lib/cn";
 
 import { CardChip } from "./CardChip";
+import { VERDICT_LABEL } from "./commentary";
 import type { Replayed } from "./replay";
 import { ReplayHost } from "./replay-host";
 import type { RoundSpan } from "./rounds";
@@ -68,6 +70,8 @@ export function ReplayView({
   const [index, setIndex] = useState(startIndex);
   const [playing, setPlaying] = useState(false);
   const [board, setBoard] = useState(false);
+  /** 다른 사람 손패를 앞면으로 펼친다 */
+  const [reveal, setReveal] = useState(false);
   /** 기록을 화면 상태에 붙인 뒤에 게임 화면을 그린다(화면 크기 재기가 첫 그림에 붙는다) */
   const [ready, setReady] = useState(false);
   const last = replayed.states.length - 1;
@@ -118,14 +122,21 @@ export function ReplayView({
     [...spans].reverse().find((s) => s.start <= index) ?? spans[0] ?? null;
   const nextSpan = spans.find((s) => s.start > index) ?? null;
   const state = replayed.states[index] as BoardState | undefined;
+  const openHands =
+    reveal && state
+      ? // 기록의 카드 문자열은 엔진 카드 그대로다.
+        (state.round.hands.map((hand) =>
+          kit.review.sortHand(state, hand),
+        ) as Card[][])
+      : null;
 
   return (
     <div className="relative">
       {ready &&
         (hearts ? (
-          <HeartsTable onExit={onExit} />
+          <HeartsTable onExit={onExit} openHands={openHands} />
         ) : (
-          <GameTable onExit={onExit} />
+          <GameTable onExit={onExit} openHands={openHands} />
         ))}
       <div className="pointer-events-none fixed inset-x-0 top-3.5 z-[400] flex justify-center px-2">
         <div
@@ -149,18 +160,23 @@ export function ReplayView({
           >
             ⏮
           </Ctl>
-          <Ctl label="한 걸음 뒤로" onClick={() => jump(index - 1)}>
+          <Ctl
+            label="한 걸음 뒤로"
+            onClick={() => {
+              setPlaying(false);
+              jump(index - 1);
+            }}
+          >
             ◀
           </Ctl>
           <Ctl
-            label={playing ? "멈추기" : "재생"}
-            onClick={() => setPlaying((p) => !p)}
-            active={playing}
+            label="한 걸음 앞으로"
+            onClick={() => {
+              setPlaying(false);
+              forward();
+            }}
           >
-            {playing ? "⏸" : "▶"}
-          </Ctl>
-          <Ctl label="한 걸음 앞으로" onClick={forward}>
-            ▶|
+            ▶
           </Ctl>
           <Ctl
             label="다음 판"
@@ -168,6 +184,21 @@ export function ReplayView({
             disabled={!nextSpan}
           >
             ⏭
+          </Ctl>
+          {/* 한 걸음씩과 헷갈리지 않게 자동 재생은 따로 글자로 둔다 */}
+          <Ctl
+            label={playing ? "자동 재생 멈추기" : "자동 재생"}
+            onClick={() => setPlaying((p) => !p)}
+            active={playing}
+          >
+            {playing ? "⏸ 멈춤" : "자동 재생"}
+          </Ctl>
+          <Ctl
+            label={reveal ? "모든 패 숨기기" : "모든 패 보기"}
+            onClick={() => setReveal((r) => !r)}
+            active={reveal}
+          >
+            {reveal ? "패 숨기기" : "패 보기"}
           </Ctl>
           <Ctl
             label="상황판"
@@ -190,6 +221,7 @@ export function ReplayView({
           kit={kit}
           index={index}
           next={log[index] ?? null}
+          after={(replayed.states[index + 1] as BoardState | undefined) ?? null}
         />
       )}
       {replayed.error && (
@@ -257,6 +289,31 @@ function useExpertMove(
   return move;
 }
 
+/** 다음 수 해설. 고수의 계산을 다시 하므로 그린 뒤에 한다 */
+function useCommentary(
+  kit: AnyKit,
+  state: unknown,
+  next: { seat: number; action: unknown } | null,
+  after: unknown,
+  index: number,
+  name: (seat: number) => string,
+): Commentary | null {
+  const [commentary, setCommentary] = useState<Commentary | null>(null);
+  useEffect(() => {
+    setCommentary(null);
+    if (!next) return;
+    const timer = setTimeout(() => {
+      try {
+        setCommentary(kit.review.explain(state, next, after, index, name));
+      } catch {
+        setCommentary(null);
+      }
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [kit, state, next, after, index, name]);
+  return commentary;
+}
+
 /** 상황판: 다음 수와 고수의 수, 점수, 모든 자리의 패와 떨어진 무늬, 이 판에 나온 카드(무늬별) */
 function Board({
   state,
@@ -265,6 +322,7 @@ function Board({
   kit,
   index,
   next,
+  after,
 }: {
   state: BoardState;
   name: (seat: number) => string;
@@ -272,16 +330,22 @@ function Board({
   kit: AnyKit;
   index: number;
   next: { seat: number; action: unknown } | null;
+  after: BoardState | null;
 }) {
   const situation = kit.review.situation(state);
   const expert = useExpertMove(kit, state, next, index);
+  const commentary = useCommentary(kit, state, next, after, index, name);
   const actual = next ? kit.review.describe(next.action) : null;
   const played = [
     ...state.round.tricks.flatMap((t) => t.plays),
     ...(state.round.trick?.plays ?? []),
   ].map((p) => p.card);
   return (
-    <aside className="fixed top-28 right-2 z-[400] flex max-h-[70dvh] w-72 max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-y-auto rounded-2xl bg-black/90 p-3 text-sm shadow-2xl">
+    // 오른쪽 위는 게임 화면의 설정 메뉴가 열리는 곳이라 왼쪽에 둔다.
+    <aside
+      className="fixed top-28 left-2 z-[400] flex max-h-[calc(100dvh-8rem)] w-80 max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-y-auto rounded-2xl bg-black/90 p-3 text-sm shadow-2xl"
+      aria-label="상황판"
+    >
       {next && (
         <section>
           <h3 className="mb-1 font-bold text-white/80 text-xs">
@@ -307,6 +371,7 @@ function Board({
               )}
             </span>
           </div>
+          <Explanation commentary={commentary} />
         </section>
       )}
       {situation.tally.length > 0 && (
@@ -326,10 +391,7 @@ function Board({
         </section>
       )}
       <section>
-        <h3 className="mb-1 font-bold text-white/80 text-xs">
-          모든 패{" "}
-          <span className="font-normal text-white/50">(떨어진 무늬)</span>
-        </h3>
+        <h3 className="mb-1 font-bold text-white/80 text-xs">모든 패</h3>
         {state.round.hands.map((hand, s) => (
           <div
             // biome-ignore lint/suspicious/noArrayIndexKey: 자리 번호가 곧 정체다
@@ -344,7 +406,7 @@ function Board({
             >
               {name(s)}
             </span>
-            {hand.map((c) => (
+            {kit.review.sortHand(state, hand).map((c) => (
               <CardChip key={c} card={c} />
             ))}
             {(situation.voids[s] ?? []).length > 0 && (
@@ -354,6 +416,12 @@ function Board({
             )}
           </div>
         ))}
+        {situation.voids.some((v) => v.length > 0) && (
+          <p className="mt-1 text-[11px] text-white/50">
+            "<SuitText text="♣" /> 없음"은 그 무늬가 나왔을 때 따라 내지 못해,
+            그 무늬가 손에 없다는 게 드러났다는 뜻입니다.
+          </p>
+        )}
       </section>
       <section>
         <h3 className="mb-1 font-bold text-white/80 text-xs">
@@ -385,5 +453,44 @@ function Board({
         )}
       </section>
     </aside>
+  );
+}
+
+const VERDICT_STYLE: Record<Verdict, string> = {
+  good: "bg-emerald-500/25 text-emerald-200",
+  fine: "bg-sky-500/25 text-sky-200",
+  slip: "bg-amber-500/25 text-amber-200",
+  bad: "bg-rose-500/30 text-rose-200",
+};
+
+/** 걸음 해설: 평가, 상황, 판단과 근거 */
+function Explanation({ commentary }: { commentary: Commentary | null }) {
+  if (commentary === null)
+    return <p className="mt-2 text-white/40 text-xs">해설을 계산하는 중…</p>;
+  const { situation, verdict, reasons } = commentary;
+  if (situation.length === 0 && reasons.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1 rounded-xl bg-white/5 p-2 text-xs">
+      {verdict && (
+        <span
+          className={cn(
+            "w-fit rounded-md px-1.5 py-0.5 font-bold",
+            VERDICT_STYLE[verdict],
+          )}
+        >
+          {VERDICT_LABEL[verdict]}
+        </span>
+      )}
+      {situation.map((line) => (
+        <p key={line} className="text-white/70">
+          <SuitText text={line} />
+        </p>
+      ))}
+      {reasons.map((line) => (
+        <p key={line} className="leading-snug">
+          · <SuitText text={line} />
+        </p>
+      ))}
+    </div>
   );
 }

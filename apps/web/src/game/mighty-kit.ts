@@ -31,6 +31,7 @@ interface MightyDeal {
   redeal?: Card[];
 }
 
+import { explainMighty } from "./mighty-commentary";
 import { mightyStats } from "./mighty-stats";
 import { cardLabel, goalLabel, SUIT_SYMBOL, sortHand } from "./terms";
 
@@ -169,6 +170,9 @@ export const mightyKit: MightyKit = {
           return "그만두기";
       }
     },
+    sortHand: (state, cards) =>
+      sortHand(cards as Card[], state.rules, state.round.goal?.kiruda ?? null),
+    explain: explainMighty,
     cleanup: (state, before) => {
       // 판을 새로 시작하지 않았으면 다음 판 패는 넣지 않은 상태로 둔다.
       if (state.roundNumber === before.roundNumber) state.presetDeal = null;

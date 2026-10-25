@@ -58,6 +58,32 @@ export interface KitReview<State, Extra> {
   };
   /** 행동 한 줄 설명(다시 보기에서 실제 수와 고수 수를 견준다) */
   describe(action: unknown): string;
+  /** 상황판·펼친 패에 보일 손패 순서(게임 화면과 같은 정렬) */
+  sortHand(state: State, cards: readonly string[]): string[];
+  /**
+   * 걸음 해설: 이 순간 상황과, 다음 수를 고수의 계산으로 본 판단·근거·평가.
+   * 계산이 무거워 화면을 그린 뒤에 부른다. `after`는 그 수를 둔 뒤 상태(턴 결과를 말할 때 쓴다)
+   */
+  explain(
+    state: State,
+    next: { seat: number; action: unknown },
+    after: State | null,
+    seed: number,
+    name: (seat: number) => string,
+  ): Commentary;
+}
+
+/** 평가: 좋은 수·괜찮은 수·아쉬운 수·나쁜 수 */
+export type Verdict = "good" | "fine" | "slip" | "bad";
+
+/** 다시 보기 걸음 해설 */
+export interface Commentary {
+  /** 지금 상황 */
+  situation: string[];
+  /** 고수의 계산으로 본 평가. 계산하지 않는 결정(버리기·프렌드 등)은 null */
+  verdict: Verdict | null;
+  /** 판단과 근거 */
+  reasons: string[];
 }
 
 /**

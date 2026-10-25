@@ -20,6 +20,7 @@ import type { GameKit } from "@/game/kit";
 import { cardLabel, SUIT_SYMBOL } from "@/game/terms";
 
 import { heartsBotFor } from "./bots";
+import { explainHearts } from "./commentary";
 import type { HeartsLevel } from "./settings";
 import { heartsStats } from "./stats";
 
@@ -101,6 +102,8 @@ export const heartsKit: HeartsKit = {
         })),
       };
     },
+    sortHand: (_state, cards) => sortHearts(cards as Card[]),
+    explain: explainHearts,
     describe: (action) => {
       const a = action as Action;
       switch (a.type) {

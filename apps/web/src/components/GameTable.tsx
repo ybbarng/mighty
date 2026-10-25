@@ -37,6 +37,7 @@ import { ChatBox } from "./ChatBox";
 import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
 import { FairOverlays, FairStatus } from "./FairOverlays";
+import { OpenHand } from "./OpenHand";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
 import { ExchangePanel } from "./panels/ExchangePanel";
@@ -107,12 +108,15 @@ export function GameTable({
   onExit,
   mission,
   hints = false,
+  openHands = null,
 }: {
   onExit: () => void;
   /** 튜토리얼 미션 목표와 결과 안내 */
   mission?: MissionProps;
   /** 컴퓨터가 추천하는 카드에 빛을 낸다 */
   hints?: boolean;
+  /** 다시 보기: 다른 사람 손패를 앞면으로 펼친다(자리마다 정렬한 패) */
+  openHands?: readonly (readonly Card[])[] | null;
 }) {
   const stage = useStageSize();
   const theme = useCardTheme();
@@ -769,8 +773,9 @@ export function GameTable({
               });
             })}
 
-            {/* 다른 사람 손패(뒷면) */}
+            {/* 다른 사람 손패(뒷면). 다시 보기에서 펼치면 자리 판 아래에 칩으로 보인다 */}
             {!dealing &&
+              !openHands &&
               view.phase !== "roundEnd" &&
               view.phase !== "gameOver" &&
               layout.seats.slice(1).flatMap((seatLayout) => {
@@ -794,6 +799,20 @@ export function GameTable({
                     />
                   );
                 });
+              })}
+
+            {openHands &&
+              layout.seats.slice(1).map((seatLayout) => {
+                const seat = view.order[
+                  (myIndex + seatLayout.offset) % n
+                ] as number;
+                return (
+                  <OpenHand
+                    key={`open-${seat}`}
+                    cards={openHands[seat] ?? []}
+                    rect={seatLayout.plate}
+                  />
+                );
               })}
 
             {/* 자리 판 */}
