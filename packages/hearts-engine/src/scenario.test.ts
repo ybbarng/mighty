@@ -1,3 +1,4 @@
+import type { Card } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
 import { step } from "./match";
@@ -55,7 +56,7 @@ describe("정해진 장면(튜토리얼 미션)", () => {
       trick: ["D5", "DK", "D3"],
       hands: [["HA", "C4"], ["C2"], ["C3"], ["C5"]],
     });
-    const moves: [number, string][] = [
+    const moves: [number, Card][] = [
       [0, "HA"],
       [2, "C3"],
       [3, "C5"],
