@@ -20,6 +20,7 @@ import {
 
 import type { BotLevel } from "./bots";
 import { setVolume as setSoundVolume } from "./sound";
+import type { SuitStyle } from "./suit-style";
 import { setSlangTerms as applySlangTerms } from "./terms";
 
 /** 원작의 rule.txt처럼 이름을 붙여 둔 내 규칙 */
@@ -61,6 +62,9 @@ interface Settings {
   /** 마이티 은어로 보기: 셋트·기아 프렌드·삽컴! (원작 "마이티 용어 사용", `bUseTerm`) */
   slangTerms: boolean;
   setSlangTerms(on: boolean): void;
+  /** 무늬를 어떻게 보일지: 그림(◆·♣ 테두리, 기본)·채운 그림·글자 기호·이름·첫 글자 */
+  suitStyle: SuitStyle;
+  setSuitStyle(style: SuitStyle): void;
   /** 친구와 하기를 멘탈 포커로(방장도 남의 패를 못 본다). 마이티 3~7마 */
   fairPlay: boolean;
   setFairPlay(on: boolean): void;
@@ -105,6 +109,8 @@ export const useSettings = create<Settings>()(
       cardTip: false,
       setCardTip: (cardTip) => set({ cardTip }),
       slangTerms: false,
+      suitStyle: "outline",
+      setSuitStyle: (suitStyle) => set({ suitStyle }),
       setSlangTerms: (slangTerms) => set({ slangTerms }),
       fairPlay: true,
       setFairPlay: (fairPlay) => set({ fairPlay }),

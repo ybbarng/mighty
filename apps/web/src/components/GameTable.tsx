@@ -51,6 +51,7 @@ import { ResultBanner } from "./ResultBanner";
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 import { SettingsMenu } from "./SettingsMenu";
+import { SuitText } from "./SuitText";
 import { Term, TermProvider } from "./TermHint";
 import { MissionOverlay, type MissionProps } from "./tutorial/MissionOverlay";
 
@@ -639,7 +640,7 @@ export function GameTable({
                     compactHud ? "text-sm" : "text-base",
                   )}
                 >
-                  {goalLabel(view.goal, n)}
+                  <SuitText text={goalLabel(view.goal, n)} />
                 </Term>
               ) : (
                 <span className="shrink-0 opacity-70">공약 전</span>
@@ -662,10 +663,12 @@ export function GameTable({
                   <>
                     {" · "}
                     <Term id="friend">
-                      {friendLabel(view.friendDeclaration, seatName, {
-                        rules,
-                        kiruda,
-                      })}
+                      <SuitText
+                        text={friendLabel(view.friendDeclaration, seatName, {
+                          rules,
+                          kiruda,
+                        })}
+                      />
                     </Term>
                     {view.friend !== null && view.friendRevealed
                       ? ` → ${seatName(view.friend)}`
@@ -998,9 +1001,13 @@ export function GameTable({
                   transform: "translate(-50%,-100%)",
                 }}
               >
-                {slangTerms()
-                  ? jokerSuitLabel(trick.jokerSuit as Suit)
-                  : `조커 → ${jokerSuitLabel(trick.jokerSuit as Suit)}`}
+                <SuitText
+                  text={
+                    slangTerms()
+                      ? jokerSuitLabel(trick.jokerSuit as Suit)
+                      : `조커 → ${jokerSuitLabel(trick.jokerSuit as Suit)}`
+                  }
+                />
                 {trick.jokerCalled ? ` · ${jokerCallLabel()}` : ""}
               </div>
             )}
@@ -1130,10 +1137,10 @@ export function GameTable({
                       : layout.center.y + layout.center.h * 0.3,
                 }}
               >
-                {effect.text}
+                <SuitText text={effect.text} />
                 {effect.lines?.map((line) => (
                   <div key={line} className="mt-1 font-bold text-base">
-                    {line}
+                    <SuitText text={line} />
                   </div>
                 ))}
                 {effectCards && (
@@ -1263,7 +1270,9 @@ export function GameTable({
                   top: tipSlot.y - layout.hand.card.h / 2 - 34,
                 }}
               >
-                {cardTipText(tipCard, rules, kiruda, playedCards)}
+                <SuitText
+                  text={cardTipText(tipCard, rules, kiruda, playedCards)}
+                />
               </div>
             )}
 
@@ -1275,7 +1284,7 @@ export function GameTable({
                 )}
                 style={{ left: stage.width / 2, top: layout.hand.top - 36 }}
               >
-                {notice}
+                <SuitText text={notice} />
               </div>
             )}
           </>

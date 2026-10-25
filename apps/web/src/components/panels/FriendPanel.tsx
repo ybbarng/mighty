@@ -15,6 +15,7 @@ import { useState } from "react";
 import { friendLabel, slangTerms } from "@/game/terms";
 import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
+import { SuitText } from "../SuitText";
 
 import { ActionButton, CardPicker, Panel } from "./common";
 
@@ -121,7 +122,7 @@ export function FriendPanel({
       </details>
       <div className="panel-pair flex flex-col items-center gap-1">
         <span className="text-sm">
-          {friendLabel(choice, seatName, { rules, kiruda })}
+          <SuitText text={friendLabel(choice, seatName, { rules, kiruda })} />
           {pickedCard &&
             !available(pickedCard) &&
             " — 내 손에 있거나 버린 카드라 지목할 수 없습니다"}

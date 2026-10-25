@@ -221,3 +221,21 @@ test("하트 배우기: 설명·퀴즈·미션으로 단원을 끝낸다", async
   });
   expect(errors).toEqual([]);
 });
+
+test("무늬 표기: 기본은 그림, 옵션에서 이름·첫 글자로 바꾼다", async ({
+  page,
+}) => {
+  await prepare(page);
+  await page.goto("/hearts");
+  await page.getByRole("button", { name: "옵션" }).click();
+  const sample = page.locator("[data-suit-sample]");
+  // 그림이어도 읽을 때는 기호로 읽힌다.
+  await expect(sample.locator("svg")).toHaveCount(4);
+  await expect(sample).toHaveText("♠13 · ♣A · ♥Q · ◆K");
+  await page.getByRole("button", { name: "이름", exact: true }).click();
+  await expect(sample).toHaveText(
+    "스페이드 13 · 클로버 A · 하트 Q · 다이아몬드 K",
+  );
+  await page.getByRole("button", { name: "첫 글자", exact: true }).click();
+  await expect(sample).toHaveText("스13 · 클A · 하Q · 다K");
+});

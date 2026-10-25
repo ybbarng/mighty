@@ -8,6 +8,7 @@ import { play as playCue } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { CARD_THEMES } from "./card-art/themes";
+import { SuitStylePicker } from "./SuitStylePicker";
 import { GlossarySheet } from "./tutorial/GlossarySheet";
 
 function Chips<T extends string | number>({
@@ -99,6 +100,10 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
             value={cardThemeId}
             onChange={setCardTheme}
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs opacity-70">무늬 표기</span>
+          <SuitStylePicker />
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs opacity-70">

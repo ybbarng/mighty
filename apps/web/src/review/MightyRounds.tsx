@@ -2,7 +2,7 @@
 
 import type { MatchState } from "@mighty/engine";
 import { mightyOf } from "@mighty/engine";
-
+import { SuitText } from "@/components/SuitText";
 import { friendLabel, goalLabel } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
@@ -74,13 +74,16 @@ export function MightyRound({
         <dl className="grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1 text-sm">
           <dt className="text-white/60">주공</dt>
           <dd>
-            {name(declarer)} · {goalLabel(goal, start.rules.playerCount)}
+            {name(declarer)} ·{" "}
+            <SuitText text={goalLabel(goal, start.rules.playerCount)} />
           </dd>
           <dt className="text-white/60">프렌드</dt>
           <dd>
-            {round.friendDeclaration
-              ? friendLabel(round.friendDeclaration, name)
-              : "—"}
+            {round.friendDeclaration ? (
+              <SuitText text={friendLabel(round.friendDeclaration, name)} />
+            ) : (
+              "—"
+            )}
             {round.friend !== null && round.friend !== undefined
               ? ` → ${name(round.friend)}`
               : ""}

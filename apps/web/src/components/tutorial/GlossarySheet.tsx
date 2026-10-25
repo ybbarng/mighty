@@ -2,6 +2,7 @@
 
 import { GLOSSARY, TERM_GROUPS } from "@/tutorial/glossary";
 
+import { SuitText } from "../SuitText";
 import { TermAside } from "../TermHint";
 
 /** 게임 중에도 볼 수 있는 용어 사전 */
@@ -36,7 +37,7 @@ export function GlossarySheet({ onClose }: { onClose: () => void }) {
                   <div key={t.id}>
                     <dt className="font-bold text-amber-200">{t.term}</dt>
                     <dd className="leading-relaxed opacity-85">
-                      {t.meaning}
+                      <SuitText text={t.meaning} />
                       <TermAside term={t} />
                     </dd>
                   </div>

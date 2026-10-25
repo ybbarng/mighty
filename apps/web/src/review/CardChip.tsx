@@ -1,5 +1,5 @@
 import type { Card } from "@mighty/engine";
-
+import { SuitText } from "@/components/SuitText";
 import { cardLabel } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
@@ -23,7 +23,7 @@ export function CardChip({
         strong && "ring-2 ring-amber-300",
       )}
     >
-      {cardLabel(card as Card)}
+      <SuitText text={cardLabel(card as Card)} />
     </span>
   );
 }

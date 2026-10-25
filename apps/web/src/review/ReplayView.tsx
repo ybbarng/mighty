@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { GameTable } from "@/components/GameTable";
+import { SuitMark, SuitText } from "@/components/SuitText";
 import type { GameKit } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import { type AttachableHost, useGame } from "@/game/store";
@@ -27,12 +28,7 @@ interface BoardState {
   };
 }
 
-const SUITS = [
-  ["S", "♠"],
-  ["H", "♥"],
-  ["D", "◆"],
-  ["C", "♣"],
-] as const;
+const SUITS = ["S", "H", "D", "C"] as const;
 
 /**
  * 다시 보기: 게임 화면을 그대로 쓰고, 위에 앞뒤로 움직이는 단추와 상황판(모든 패·나온 카드)을 얹는다
@@ -293,7 +289,7 @@ function Board({
           </h3>
           <div className="flex flex-col gap-0.5 text-xs">
             <span>
-              실제: <b>{actual}</b>
+              실제: <b>{actual && <SuitText text={actual} />}</b>
             </span>
             <span className="text-white/70">
               고수라면:{" "}
@@ -305,7 +301,7 @@ function Board({
                     expert === actual ? "text-sky-300" : "text-amber-200"
                   }
                 >
-                  {expert}
+                  <SuitText text={expert} />
                   {expert === actual ? " (같다)" : ""}
                 </b>
               )}
@@ -353,7 +349,7 @@ function Board({
             ))}
             {(situation.voids[s] ?? []).length > 0 && (
               <span className="ml-1 rounded bg-rose-900/70 px-1 text-[10px] text-rose-200">
-                {(situation.voids[s] ?? []).join("")} 없음
+                <SuitText text={(situation.voids[s] ?? []).join("")} /> 없음
               </span>
             )}
           </div>
@@ -363,14 +359,16 @@ function Board({
         <h3 className="mb-1 font-bold text-white/80 text-xs">
           이 판에 나온 카드
         </h3>
-        {SUITS.map(([suit, symbol]) => {
+        {SUITS.map((suit) => {
           const cards = played.filter((c) => c.startsWith(suit));
           return (
             <div
               key={suit}
               className="mb-1 flex flex-wrap items-center gap-0.5"
             >
-              <span className="w-5 text-white/60">{symbol}</span>
+              <span className="w-5 text-white/60">
+                <SuitMark suit={suit} />
+              </span>
               {cards.length === 0 ? (
                 <span className="text-white/30 text-xs">없음</span>
               ) : (

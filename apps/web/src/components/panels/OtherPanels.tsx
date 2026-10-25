@@ -11,18 +11,18 @@ import {
 import { useState } from "react";
 import { useCardTheme } from "@/game/settings";
 import {
-  cardWords,
+  cardLabel,
   goalLabel,
   isRedSuit,
   jokerCallLabel,
   jokerSuitLabel,
   SUIT_NAME,
-  SUIT_SYMBOL,
   slangTerms,
 } from "@/game/terms";
 import { cn } from "@/lib/cn";
 
 import { CardArt } from "../card-art/CardArt";
+import { SuitMark, SuitText } from "../SuitText";
 
 import { ActionButton, CardPicker, Panel } from "./common";
 
@@ -46,7 +46,7 @@ export function KillPanel({
       </p>
       {decision.failed.length > 0 && (
         <p className="text-center text-xs">
-          헛다리: {decision.failed.map(cardWords).join(", ")}
+          헛다리: <SuitText text={decision.failed.map(cardLabel).join(", ")} />
         </p>
       )}
       <CardPicker
@@ -60,7 +60,9 @@ export function KillPanel({
           disabled={card === null}
           onClick={() => card && onSubmit({ type: "kill", card })}
         >
-          {card ? `${cardWords(card)} 지목` : "카드를 고르세요"}
+          <SuitText
+            text={card ? `${cardLabel(card)} 지목` : "카드를 고르세요"}
+          />
         </ActionButton>
       </div>
     </Panel>
@@ -84,7 +86,7 @@ export function PickPanel({
       <div className="flex justify-center gap-4">
         {(
           [
-            [0, faceUp, cardWords(faceUp)],
+            [0, faceUp, cardLabel(faceUp)],
             [1, null, "안 보이는 카드"],
           ] as const
         ).map(([index, card, label]) => (
@@ -98,7 +100,9 @@ export function PickPanel({
             <span className="block h-28 w-20 rounded-md shadow-lg transition hover:-translate-y-1">
               <CardArt card={card} theme={theme} />
             </span>
-            <span className="text-xs">{label}</span>
+            <span className="text-xs">
+              <SuitText text={label} />
+            </span>
           </button>
         ))}
       </div>
@@ -123,9 +127,11 @@ export function LeadChoicePanel({
   return (
     <Panel
       title={
-        kind === "jokerSuit"
-          ? "조커로 부를 무늬를 고르세요"
-          : `${cardWords(card)}로 조커콜을 할까요?`
+        kind === "jokerSuit" ? (
+          "조커로 부를 무늬를 고르세요"
+        ) : (
+          <SuitText text={`${cardLabel(card)}로 조커콜을 할까요?`} />
+        )
       }
     >
       {kind === "jokerSuit" ? (
@@ -145,7 +151,7 @@ export function LeadChoicePanel({
                   : "border-transparent",
               )}
             >
-              {SUIT_SYMBOL[s]}
+              <SuitMark suit={s} />
               {slangTerms() && (
                 <span className="block font-semibold text-[10px] leading-none">
                   {jokerSuitLabel(s)}
@@ -237,7 +243,7 @@ export function RoundResultPanel({
     <Panel title={won ? "승리!" : "패배"}>
       <p className="text-center text-sm">
         {seatName(view.declarer ?? 0)}의 공약{" "}
-        {goalLabel(view.goal, view.rules.playerCount)} — 여당{" "}
+        <SuitText text={goalLabel(view.goal, view.rules.playerCount)} /> — 여당{" "}
         {result.rulingPoints}장 {result.rulingWon ? "달성" : "실패"}
       </p>
       <p className="text-center text-xs opacity-70">

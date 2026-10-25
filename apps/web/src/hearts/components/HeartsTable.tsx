@@ -15,6 +15,7 @@ import { FairOverlays, FairStatus } from "@/components/FairOverlays";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { ResultBanner } from "@/components/ResultBanner";
+import { SuitText } from "@/components/SuitText";
 import {
   MissionOverlay,
   type MissionProps,
@@ -635,8 +636,8 @@ export function HeartsTable({
                     title={`${directionLabel(view.direction)}(${seatName(passTo)})에게 넘길 카드 ${decision.count}장`}
                   >
                     <p className="text-center text-xs opacity-70">
-                      높은 카드, ♠Q·♠A·♠K, 높은 하트를 넘기면 좋아요. (
-                      {passPick.length}/{decision.count})
+                      <SuitText text="높은 카드, ♠Q·♠A·♠K, 높은 하트를 넘기면 좋아요." />{" "}
+                      ({passPick.length}/{decision.count})
                     </p>
                     <ActionButton
                       disabled={passPick.length !== decision.count}
@@ -685,7 +686,7 @@ export function HeartsTable({
                 top: layout.center.y + layout.center.h * 0.25,
               }}
             >
-              {effect.text}
+              <SuitText text={effect.text} />
             </div>
           )}
 
@@ -705,7 +706,7 @@ export function HeartsTable({
               className="absolute z-[300] -translate-x-1/2 rounded-full bg-black/80 px-4 py-1.5 text-sm shadow"
               style={{ left: stage.width / 2, top: layout.hand.top - 36 }}
             >
-              {notice}
+              <SuitText text={notice} />
             </div>
           )}
 

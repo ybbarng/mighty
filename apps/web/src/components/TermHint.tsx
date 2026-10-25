@@ -11,6 +11,8 @@ import {
 import { cn } from "@/lib/cn";
 import { type Term as GlossaryTerm, termOf } from "@/tutorial/glossary";
 
+import { SuitText } from "./SuitText";
+
 const TermContext = createContext<(id: string) => void>(() => {});
 
 /** 게임 화면의 용어를 누르면 뜻을 잠깐 보여 준다(용어 사전과 같은 데이터) */
@@ -34,7 +36,7 @@ export function TermProvider({ children }: { children: ReactNode }) {
         >
           <span className="font-bold text-amber-200 text-sm">{term.term}</span>
           <span className="text-sm leading-snug">
-            {term.meaning}
+            <SuitText text={term.meaning} />
             <TermAside term={term} />
           </span>
         </button>

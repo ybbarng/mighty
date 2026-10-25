@@ -14,18 +14,13 @@ import {
   type UnplayableReason,
 } from "@mighty/engine";
 
-export const SUIT_SYMBOL: Record<Suit, string> = {
-  S: "♠",
-  D: "◆",
-  H: "♥",
-  C: "♣",
-};
-export const SUIT_NAME: Record<Suit, string> = {
-  S: "스페이드",
-  D: "다이아몬드",
-  H: "하트",
-  C: "클로버",
-};
+import { SUIT_GLYPH, SUIT_WORD } from "./suit-style";
+
+/**
+ * 문구 속 무늬는 기호로 적는다. 화면은 `SuitText`로 설정한 방식(그림·이름 등)으로 바꿔 그린다(suit-style.ts)
+ */
+export const SUIT_SYMBOL = SUIT_GLYPH;
+export const SUIT_NAME = SUIT_WORD;
 
 /**
  * 마이티 은어로 보여 줄지(원작 "마이티 용어 사용", `bUseTerm`). 설정이 바꾼다.
@@ -99,9 +94,9 @@ export function cardSlang(
   return `${shape}${name}`;
 }
 
-/** 조커로 부른 무늬: "스페이드" / 은어면 "삽컴!" */
+/** 조커로 부른 무늬: "♠" / 은어면 "삽컴!" */
 export function jokerSuitLabel(suit: Suit): string {
-  return slang ? `${SUIT_SLANG[suit]}컴!` : SUIT_NAME[suit];
+  return slang ? `${SUIT_SLANG[suit]}컴!` : SUIT_SYMBOL[suit];
 }
 
 /** 조커콜 선언: "조커콜!" / 은어면 "쪼카컴!" */
@@ -122,11 +117,13 @@ export function isRedSuit(kiruda: Kiruda | null): boolean {
 }
 
 /**
- * 공약: "스페이드 13". 작은 글씨에서 ♠·♣ 기호가 헷갈려 무늬를 이름으로 적는다.
- * 은어를 켰으면 "스페이드 13 (셋삽)"처럼 은어를 함께 적는다
+ * 공약: "♠13", 노기루다는 "노기루다 13". 은어를 켰으면 "♠13 (셋삽)"처럼 은어를 함께 적는다
  */
 export function goalLabel(goal: Goal, playerCount?: number): string {
-  const base = `${kirudaName(goal.kiruda)} ${goal.score}`;
+  const base =
+    goal.kiruda === "NT"
+      ? `노기루다 ${goal.score}`
+      : `${SUIT_SYMBOL[goal.kiruda]}${goal.score}`;
   return slang ? `${base} (${goalSlang(goal, playerCount)})` : base;
 }
 
@@ -136,8 +133,8 @@ export function cardLabel(card: Card): string {
 }
 
 /**
- * 프렌드: "스페이드 A (마이티) 프렌드". 카드는 무늬 이름으로 적고, 마이티·조커콜 카드는 역할을
- * 괄호로 붙인다. 은어를 켰으면 "(기아)"처럼 은어를 붙인다
+ * 프렌드: "♠A (마이티) 프렌드". 마이티·조커콜 카드는 역할을 괄호로 붙인다.
+ * 은어를 켰으면 "(기아)"처럼 은어를 붙인다
  */
 export function friendLabel(
   friend: FriendDeclaration,
@@ -153,25 +150,11 @@ export function friendLabel(
     case "player":
       return `${seatName(friend.seat)} 프렌드`;
     case "card": {
-      const name = cardWords(friend.card);
+      const name = cardLabel(friend.card);
       const role = context ? cardRole(friend.card, context) : null;
       return `${name}${role && role !== name ? ` (${role})` : ""} 프렌드`;
     }
   }
-}
-
-/** 카드를 무늬 이름으로: "스페이드 A" */
-export function cardWords(card: Card): string {
-  if (isJoker(card)) return "조커";
-  return `${SUIT_NAME[suitOf(card)]} ${rankOf(card)}`;
-}
-
-const SUIT_SHORT: Record<Suit, string> = { S: "스", D: "다", H: "하", C: "클" };
-
-/** 작은 칩용 카드 이름: "스K", "클10". 무늬 이름 첫 글자라 ♠·♣ 기호처럼 헷갈리지 않는다 */
-export function cardShort(card: Card): string {
-  if (isJoker(card)) return "조커";
-  return `${SUIT_SHORT[suitOf(card)]}${rankOf(card)}`;
 }
 
 /** 카드 이름 뒤 괄호에 붙일 말: 은어를 켰으면 은어, 아니면 마이티·조커콜만 */
@@ -223,7 +206,7 @@ export function unplayableText(reason: UnplayableReason): string {
     case "jokerLastTrick":
       return "마지막 턴에는 조커를 낼 수 없습니다";
     case "followSuit":
-      return `${SUIT_SYMBOL[reason.suit]} ${SUIT_NAME[reason.suit]}를 따라 내야 합니다`;
+      return `${SUIT_SYMBOL[reason.suit]} 무늬를 따라 내야 합니다`;
     case "kirudaFirstTrick":
       return reason.leading
         ? "첫 턴 선은 기루다를 낼 수 없습니다"

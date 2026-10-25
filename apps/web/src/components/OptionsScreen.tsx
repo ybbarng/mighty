@@ -22,6 +22,7 @@ import {
 } from "./card-art/themes";
 import { ActionButton } from "./panels/common";
 import { RuleEditor } from "./rules/RuleEditor";
+import { SuitStylePicker } from "./SuitStylePicker";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -278,6 +279,14 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
             <p className="text-xs opacity-60">
               손패 카드에 그 무늬에서 아직 안 나온 높은 카드를 보여 줍니다. 예:
               ♥9 (A K J). 친구와 할 때는 꺼집니다.
+            </p>
+          </Section>
+
+          <Section title="무늬 표기">
+            <SuitStylePicker detail />
+            <p className="text-xs opacity-60">
+              공약·프렌드·안내 글에서 무늬를 어떻게 보일지 고릅니다. 카드 그림은
+              그대로입니다. 하트에도 같이 적용됩니다.
             </p>
           </Section>
 

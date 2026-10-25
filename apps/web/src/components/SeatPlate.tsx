@@ -1,9 +1,10 @@
 "use client";
 
 import type { Card } from "@mighty/engine";
-import { cardShort } from "@/game/terms";
+import { cardLabel } from "@/game/terms";
 import { PLATE_COMPACT_H, type Rect } from "@/layout/compute-layout";
 import { cn } from "@/lib/cn";
+import { SuitText } from "./SuitText";
 
 import { Term } from "./TermHint";
 
@@ -159,7 +160,7 @@ export function SeatPlate(props: SeatPlateProps) {
                       isRed(card) ? "text-red-600" : "text-black",
                     )}
                   >
-                    {cardShort(card)}
+                    <SuitText text={cardLabel(card)} />
                   </span>
                 ))}
           </div>
@@ -177,7 +178,7 @@ export function SeatPlate(props: SeatPlateProps) {
               : "bg-white text-black",
           )}
         >
-          {props.bubble}
+          <SuitText text={props.bubble} />
         </div>
       )}
     </div>

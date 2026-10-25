@@ -8,6 +8,8 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 
 import { ActionButton } from "@/components/panels/common";
+import { SuitStylePicker } from "@/components/SuitStylePicker";
+import { SuitText } from "@/components/SuitText";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { playUiCue } from "@/game/ui-sound";
@@ -163,7 +165,7 @@ export function HeartsApp() {
           </div>
           <h1 className="mt-1 font-black text-4xl tracking-wide">하트</h1>
           <p className="mt-2 text-sm opacity-80">
-            하트와 ♠Q를 피하고, 가장 적게 먹은 사람이 이긴다
+            <SuitText text="하트와 ♠Q를 피하고, 가장 적게 먹은 사람이 이긴다" />
           </p>
         </div>
         {saved && (
@@ -324,6 +326,9 @@ function HeartsOptions({ onBack }: { onBack: () => void }) {
               {HEARTS_LEVELS.find((l) => l.value === level)?.description}
             </p>
           </Section>
+          <Section title="무늬 표기">
+            <SuitStylePicker detail />
+          </Section>
           <Section title="규칙">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs opacity-70">{ruleCode}</span>
@@ -348,7 +353,7 @@ function HeartsOptions({ onBack }: { onBack: () => void }) {
               onChange={(passing) => update({ passing })}
             />
             <span className="text-xs opacity-70">
-              문 슛(하트 13장과 ♠Q 독차지)
+              <SuitText text="문 슛(하트 13장과 ♠Q 독차지)" />
             </span>
             <Choice
               value={rules.moon}
@@ -368,7 +373,7 @@ function HeartsOptions({ onBack }: { onBack: () => void }) {
               onChange={(heartsBreak) => update({ heartsBreak })}
             />
             <span className="text-xs opacity-70">
-              ♠Q가 나와도 하트가 깨진다
+              <SuitText text="♠Q가 나와도 하트가 깨진다" />
             </span>
             <Choice
               value={rules.queenBreaksHearts}
@@ -376,14 +381,16 @@ function HeartsOptions({ onBack }: { onBack: () => void }) {
               onChange={(queenBreaksHearts) => update({ queenBreaksHearts })}
             />
             <span className="text-xs opacity-70">
-              첫 턴에 하트·♠Q를 낼 수 있다
+              <SuitText text="첫 턴에 하트·♠Q를 낼 수 있다" />
             </span>
             <Choice
               value={rules.firstTrickPoints}
               options={onOff}
               onChange={(firstTrickPoints) => update({ firstTrickPoints })}
             />
-            <span className="text-xs opacity-70">◆J를 먹으면 −10점</span>
+            <span className="text-xs opacity-70">
+              <SuitText text="◆J를 먹으면 −10점" />
+            </span>
             <Choice
               value={rules.jackOfDiamonds}
               options={onOff}
@@ -458,7 +465,9 @@ function HeartsRulesScreen({ onBack }: { onBack: () => void }) {
           {items.map(([term, meaning]) => (
             <div key={term}>
               <dt className="font-bold text-rose-200">{term}</dt>
-              <dd className="leading-relaxed opacity-85">{meaning}</dd>
+              <dd className="leading-relaxed opacity-85">
+                <SuitText text={meaning} />
+              </dd>
             </div>
           ))}
         </dl>

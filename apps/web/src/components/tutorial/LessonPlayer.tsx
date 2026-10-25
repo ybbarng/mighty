@@ -9,6 +9,7 @@ import type { MissionStatus } from "@/tutorial/types";
 
 import { CardArt } from "../card-art/CardArt";
 import { ActionButton } from "../panels/common";
+import { SuitText } from "../SuitText";
 import { TermAside } from "../TermHint";
 import type { TutorialKit } from "./kit";
 import { RichText } from "./RichText";
@@ -155,7 +156,7 @@ export function LessonPlayer<View, Event, Scenario, Action>({
                         </dt>
                         <dd className="inline opacity-80">
                           {" "}
-                          — {term.meaning}
+                          — <SuitText text={term.meaning} />
                           <TermAside term={term} />
                         </dd>
                       </div>
@@ -197,7 +198,7 @@ export function LessonPlayer<View, Event, Scenario, Action>({
                           "border-white/5 opacity-50",
                       )}
                     >
-                      {option}
+                      <SuitText text={option} />
                       {chosen !== null && correct && " ✓"}
                     </button>
                   );

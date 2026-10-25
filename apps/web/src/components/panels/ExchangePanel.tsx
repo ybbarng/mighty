@@ -5,6 +5,8 @@ import { useState } from "react";
 
 import { goalLabel } from "@/game/terms";
 
+import { SuitText } from "../SuitText";
+
 import { ActionButton, KirudaPicker, Panel, ScoreStepper } from "./common";
 
 type ExchangeDecision = Extract<Decision, { kind: "exchange" }>;
@@ -60,7 +62,7 @@ export function ExchangePanel({
           className="text-center text-xs underline opacity-70"
           onClick={() => setChanging(true)}
         >
-          공약 바꾸기 (지금 {goalLabel(elected)})
+          공약 바꾸기 (지금 <SuitText text={goalLabel(elected)} />)
         </button>
       )}
       <div className="flex justify-center">
@@ -70,7 +72,7 @@ export function ExchangePanel({
             onSubmit({ type: "exchange", goal, discard: discards })
           }
         >
-          {goalLabel(goal)}로 확정
+          <SuitText text={goalLabel(goal)} />로 확정
         </ActionButton>
       </div>
     </Panel>

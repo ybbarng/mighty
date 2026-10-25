@@ -10,9 +10,10 @@ import {
 } from "@mighty/engine";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-import { isRedSuit, kirudaName, kirudaSymbol, SUIT_SYMBOL } from "@/game/terms";
+import { isRedSuit, kirudaName, kirudaSymbol } from "@/game/terms";
 import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
+import { SuitMark } from "../SuitText";
 
 import { TermQuestion } from "../TermHint";
 
@@ -21,7 +22,7 @@ export function Panel({
   term,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   /** 제목 옆 "?"를 누르면 이 용어의 뜻을 보여 준다 */
   term?: string;
   children: ReactNode;
@@ -96,7 +97,7 @@ export function KirudaPicker({
             k === "NT" && "text-sm",
           )}
         >
-          {kirudaSymbol(k)}
+          {k === "NT" ? kirudaSymbol(k) : <SuitMark suit={k} />}
         </button>
       ))}
     </div>
@@ -178,7 +179,7 @@ export function CardPicker({
               shownSuit === s && (isRedSuit(s) ? "text-red-600" : "text-black"),
             )}
           >
-            {SUIT_SYMBOL[s]}
+            <SuitMark suit={s} />
           </button>
         ))}
         {allowJoker && (

@@ -1,8 +1,8 @@
 import { presetRules } from "@mighty/engine";
 import { afterEach, describe, expect, it } from "vitest";
-
+import { suitText } from "./suit-style";
 import {
-  cardShort,
+  cardLabel,
   cardSlang,
   cardTipText,
   friendLabel,
@@ -46,38 +46,42 @@ describe("마이티 은어(원작 GetGoalString·GetString)", () => {
   });
 
   it("설정을 켜면 화면 문구에 은어를 함께 적는다", () => {
-    expect(goalLabel({ kiruda: "H", score: 13 })).toBe("하트 13");
+    expect(goalLabel({ kiruda: "H", score: 13 })).toBe("♥13");
     setSlangTerms(true);
-    expect(goalLabel({ kiruda: "H", score: 13 })).toBe("하트 13 (셋트)");
+    expect(goalLabel({ kiruda: "H", score: 13 })).toBe("♥13 (셋트)");
     expect(
       friendLabel({ kind: "card", card: "HA" }, String, { rules, kiruda: "H" }),
-    ).toBe("하트 A (기아) 프렌드");
+    ).toBe("♥A (기아) 프렌드");
     expect(jokerSuitLabel("S")).toBe("삽컴!");
     expect(jokerCallLabel()).toBe("쪼카컴!");
     expect(cardTipText("HA", rules, "H", new Set())).toBe("기아 (보스카)");
   });
 });
 
-describe("무늬 이름으로 적기(♠·♣ 기호가 헷갈려서)", () => {
+describe("무늬는 기호로 적고 화면이 표기 방식대로 바꾼다", () => {
   it("공약과 노기루다", () => {
-    expect(goalLabel({ kiruda: "S", score: 13 })).toBe("스페이드 13");
+    expect(goalLabel({ kiruda: "S", score: 13 })).toBe("♠13");
     expect(goalLabel({ kiruda: "NT", score: 12 })).toBe("노기루다 12");
+    expect(suitText(goalLabel({ kiruda: "S", score: 13 }), "name")).toBe(
+      "스페이드 13",
+    );
   });
 
   it("프렌드 카드는 마이티·조커콜일 때만 역할을 괄호로 붙인다", () => {
     const friend = (card: "SA" | "C3" | "DK") =>
       friendLabel({ kind: "card", card }, String, { rules, kiruda: "H" });
-    expect(friend("SA")).toBe("스페이드 A (마이티) 프렌드");
-    expect(friend("C3")).toBe("클로버 3 (조커콜) 프렌드");
-    expect(friend("DK")).toBe("다이아몬드 K 프렌드");
+    expect(friend("SA")).toBe("♠A (마이티) 프렌드");
+    expect(friend("C3")).toBe("♣3 (조커콜) 프렌드");
+    expect(friend("DK")).toBe("◆K 프렌드");
+    expect(suitText(friend("SA"), "name")).toBe("스페이드 A (마이티) 프렌드");
     expect(friendLabel({ kind: "card", card: "JK" }, String)).toBe(
       "조커 프렌드",
     );
   });
 
-  it("작은 칩은 무늬 이름 첫 글자", () => {
-    expect(cardShort("SK")).toBe("스K");
-    expect(cardShort("C10")).toBe("클10");
-    expect(cardShort("JK")).toBe("조커");
+  it("작은 칩은 첫 글자 방식이면 스K·클10", () => {
+    expect(suitText(cardLabel("SK"), "initial")).toBe("스K");
+    expect(suitText(cardLabel("C10"), "initial")).toBe("클10");
+    expect(cardLabel("JK")).toBe("조커");
   });
 });

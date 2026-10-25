@@ -1,6 +1,7 @@
 "use client";
 
 import { CARD_THEMES } from "@/components/card-art/themes";
+import { SuitStylePicker } from "@/components/SuitStylePicker";
 import { SPEEDS, useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 
@@ -75,6 +76,10 @@ export function HeartsSettingsMenu({ onClose }: { onClose: () => void }) {
             value={cardThemeId}
             onChange={setCardTheme}
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs opacity-70">무늬 표기</span>
+          <SuitStylePicker />
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs opacity-70">컴퓨터 실력 (새 게임부터)</span>
