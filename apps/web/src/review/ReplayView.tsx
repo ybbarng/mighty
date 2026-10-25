@@ -78,6 +78,7 @@ export function ReplayView({
   const mightyIdle = useGame((s) => !s.busy && s.queue.length === 0);
   const heartsIdle = useHearts((s) => !s.busy && s.queue.length === 0);
   const idle = hearts ? heartsIdle : mightyIdle;
+  const compact = useNarrowPortrait();
 
   const jump = useCallback(
     (i: number) => {
@@ -202,7 +203,11 @@ export function ReplayView({
           </Ctl>
           <Ctl
             label="상황판"
-            onClick={() => setBoard((b) => !b)}
+            onClick={() => {
+              // 세로 휴대폰 상황판은 손패 목록을 빼고, 손패는 자리 판 아래에 펼쳐 본다.
+              if (!board && compact) setReveal(true);
+              setBoard((b) => !b);
+            }}
             active={board}
           >
             상황판
@@ -221,6 +226,7 @@ export function ReplayView({
           kit={kit}
           index={index}
           next={log[index] ?? null}
+          compact={compact}
           after={(replayed.states[index + 1] as BoardState | undefined) ?? null}
         />
       )}
@@ -323,6 +329,7 @@ function Board({
   index,
   next,
   after,
+  compact,
 }: {
   state: BoardState;
   name: (seat: number) => string;
@@ -331,6 +338,8 @@ function Board({
   index: number;
   next: { seat: number; action: unknown } | null;
   after: BoardState | null;
+  /** 세로 휴대폰: 아래에 낮게 붙이고, 남의 손패 목록은 빼고(자리 판 아래 펼친 패로 본다) 내 패만 둔다 */
+  compact: boolean;
 }) {
   const situation = kit.review.situation(state);
   const expert = useExpertMove(kit, state, next, index);
@@ -342,8 +351,14 @@ function Board({
   ].map((p) => p.card);
   return (
     // 오른쪽 위는 게임 화면의 설정 메뉴가 열리는 곳이라 왼쪽에 둔다.
+    // 세로 휴대폰은 다른 사람 패와 가운데 턴 카드를 가리지 않게 아래(내 손패 자리)에 낮게 붙인다.
     <aside
-      className="fixed top-28 left-2 z-[400] flex max-h-[calc(100dvh-8rem)] w-80 max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-y-auto rounded-2xl bg-black/90 p-3 text-sm shadow-2xl"
+      className={cn(
+        "fixed z-[400] flex flex-col overflow-y-auto rounded-2xl bg-black/90 text-sm shadow-2xl",
+        compact
+          ? "inset-x-2 bottom-2 max-h-[40dvh] gap-2 bg-black/95 p-2"
+          : "top-28 left-2 max-h-[calc(100dvh-8rem)] w-80 max-w-[calc(100vw-1rem)] gap-3 p-3",
+      )}
       aria-label="상황판"
     >
       {next && (
@@ -351,7 +366,12 @@ function Board({
           <h3 className="mb-1 font-bold text-white/80 text-xs">
             다음 수 · {name(next.seat)}
           </h3>
-          <div className="flex flex-col gap-0.5 text-xs">
+          <div
+            className={cn(
+              "flex text-xs",
+              compact ? "flex-wrap gap-x-3" : "flex-col gap-0.5",
+            )}
+          >
             <span>
               실제: <b>{actual && <SuitText text={actual} />}</b>
             </span>
@@ -371,10 +391,21 @@ function Board({
               )}
             </span>
           </div>
-          <Explanation commentary={commentary} />
+          <Explanation commentary={commentary} compact={compact} />
         </section>
       )}
-      {situation.tally.length > 0 && (
+      {compact && situation.tally.length > 0 && (
+        <p className="text-white/70 text-xs">
+          {situation.tally
+            .map((t) =>
+              t.seat !== undefined
+                ? `${name(t.seat)} ${t.value}`
+                : `${t.label.replace(" 점수 카드", "")} ${t.value}`,
+            )
+            .join(" · ")}
+        </p>
+      )}
+      {!compact && situation.tally.length > 0 && (
         <section>
           <h3 className="mb-1 font-bold text-white/80 text-xs">점수</h3>
           <dl className="grid grid-cols-[1fr_auto] gap-x-3 text-xs">
@@ -391,32 +422,53 @@ function Board({
         </section>
       )}
       <section>
-        <h3 className="mb-1 font-bold text-white/80 text-xs">모든 패</h3>
-        {state.round.hands.map((hand, s) => (
-          <div
-            // biome-ignore lint/suspicious/noArrayIndexKey: 자리 번호가 곧 정체다
-            key={s}
-            className="mb-1 flex flex-wrap items-center gap-0.5"
-          >
-            <span
-              className={cn(
-                "w-14 truncate text-xs",
-                s === seat ? "text-amber-200" : "text-white/60",
-              )}
+        {/* 좁은 화면은 제목 줄을 빼서 높이를 줄인다(내 패 줄 앞에 "나"가 있다) */}
+        {!compact && (
+          <h3 className="mb-1 font-bold text-white/80 text-xs">모든 패</h3>
+        )}
+        {state.round.hands.map((hand, s) =>
+          compact && s !== seat ? null : (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: 자리 번호가 곧 정체다
+              key={s}
+              className="mb-1 flex flex-wrap items-center gap-0.5"
             >
-              {name(s)}
-            </span>
-            {kit.review.sortHand(state, hand).map((c) => (
-              <CardChip key={c} card={c} />
-            ))}
-            {(situation.voids[s] ?? []).length > 0 && (
-              <span className="ml-1 rounded bg-rose-900/70 px-1 text-[10px] text-rose-200">
-                <SuitText text={(situation.voids[s] ?? []).join("")} /> 없음
+              <span
+                className={cn(
+                  "w-14 truncate text-xs",
+                  s === seat ? "text-amber-200" : "text-white/60",
+                )}
+              >
+                {name(s)}
               </span>
-            )}
-          </div>
-        ))}
-        {situation.voids.some((v) => v.length > 0) && (
+              {kit.review.sortHand(state, hand).map((c) => (
+                <CardChip key={c} card={c} />
+              ))}
+              {(situation.voids[s] ?? []).length > 0 && (
+                <span className="ml-1 rounded bg-rose-900/70 px-1 text-[10px] text-rose-200">
+                  <SuitText text={(situation.voids[s] ?? []).join("")} /> 없음
+                </span>
+              )}
+            </div>
+          ),
+        )}
+        {compact &&
+          situation.voids.some((v, s) => s !== seat && v.length > 0) && (
+            <p className="text-[11px] text-white/60">
+              무늬가 없다고 드러난 사람:{" "}
+              <SuitText
+                text={situation.voids
+                  .map((v, s) =>
+                    v.length > 0 && s !== seat
+                      ? `${name(s)} ${v.join("")}`
+                      : null,
+                  )
+                  .filter(Boolean)
+                  .join(", ")}
+              />
+            </p>
+          )}
+        {!compact && situation.voids.some((v) => v.length > 0) && (
           <p className="mt-1 text-[11px] text-white/50">
             "<SuitText text="♣" /> 없음"은 그 무늬가 나왔을 때 따라 내지 못해,
             그 무늬가 손에 없다는 게 드러났다는 뜻입니다.
@@ -424,11 +476,21 @@ function Board({
         )}
       </section>
       <section>
-        <h3 className="mb-1 font-bold text-white/80 text-xs">
+        <h3
+          className={cn(
+            "font-bold text-white/80 text-xs",
+            compact ? "sr-only" : "mb-1",
+          )}
+        >
           이 판에 나온 카드
         </h3>
+        {compact && played.length === 0 && (
+          <span className="text-white/30 text-xs">아직 없음</span>
+        )}
         {SUITS.map((suit) => {
           const cards = played.filter((c) => c.startsWith(suit));
+          // 좁은 화면은 빈 무늬 줄을 빼서 높이를 줄인다.
+          if (compact && cards.length === 0) return null;
           return (
             <div
               key={suit}
@@ -463,12 +525,50 @@ const VERDICT_STYLE: Record<Verdict, string> = {
   bad: "bg-rose-500/30 text-rose-200",
 };
 
-/** 걸음 해설: 평가, 상황, 판단과 근거 */
-function Explanation({ commentary }: { commentary: Commentary | null }) {
+/** 걸음 해설: 평가, 상황, 판단과 근거. 좁은 화면에서는 근거를 접어 둔다 */
+function Explanation({
+  commentary,
+  compact,
+}: {
+  commentary: Commentary | null;
+  compact: boolean;
+}) {
   if (commentary === null)
     return <p className="mt-2 text-white/40 text-xs">해설을 계산하는 중…</p>;
   const { situation, verdict, reasons } = commentary;
   if (situation.length === 0 && reasons.length === 0) return null;
+  if (compact)
+    return (
+      <details className="mt-1 rounded-xl bg-white/5 p-2 text-xs">
+        <summary className="cursor-pointer">
+          {verdict && (
+            <span
+              className={cn(
+                "mr-1 rounded-md px-1.5 py-0.5 font-bold",
+                VERDICT_STYLE[verdict],
+              )}
+            >
+              {VERDICT_LABEL[verdict]}
+            </span>
+          )}
+          <span className="text-white/70">
+            <SuitText text={situation[0] ?? ""} />
+          </span>
+        </summary>
+        <div className="mt-1 flex flex-col gap-1">
+          {situation.slice(1).map((line) => (
+            <p key={line} className="text-white/70">
+              <SuitText text={line} />
+            </p>
+          ))}
+          {reasons.map((line) => (
+            <p key={line} className="leading-snug">
+              · <SuitText text={line} />
+            </p>
+          ))}
+        </div>
+      </details>
+    );
   return (
     <div className="mt-2 flex flex-col gap-1 rounded-xl bg-white/5 p-2 text-xs">
       {verdict && (
@@ -493,4 +593,19 @@ function Explanation({ commentary }: { commentary: Commentary | null }) {
       ))}
     </div>
   );
+}
+
+/** 세로로 든 좁은 화면(휴대폰)인가 */
+function useNarrowPortrait(): boolean {
+  const query = "(max-width: 639px) and (orientation: portrait)";
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia?.(query);
+    if (!media) return;
+    setNarrow(media.matches);
+    const onChange = () => setNarrow(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
 }

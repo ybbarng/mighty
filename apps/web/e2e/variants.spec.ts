@@ -166,8 +166,15 @@ for (const variant of VARIANTS) {
       await page.getByRole("button", { name: "한 걸음 앞으로" }).click();
       await page.waitForTimeout(250);
     }
+    // 상황판 없이 모든 패만 펼친 화면
+    await page.getByRole("button", { name: "모든 패 보기" }).click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: testInfo.outputPath("5ma-replay-open.png") });
+    await page.getByRole("button", { name: "모든 패 숨기기" }).click();
     await page.getByRole("button", { name: "상황판" }).click();
-    await expect(page.getByText("모든 패")).toBeVisible();
+    await expect(
+      page.getByRole("complementary", { name: "상황판" }),
+    ).toBeVisible();
     // 다음 수를 고수의 수와 견준다(고수는 생각하는 데 조금 걸린다).
     await expect(page.getByText(/실제:/)).toBeVisible();
     await expect(page.getByText("생각하는 중…")).toHaveCount(0, {
@@ -177,7 +184,9 @@ for (const variant of VARIANTS) {
     await expect(page.getByText("해설을 계산하는 중…")).toHaveCount(0, {
       timeout: 15_000,
     });
-    await page.getByRole("button", { name: "모든 패 보기" }).click();
+    // 세로 휴대폰은 상황판을 열 때 이미 펼친다.
+    const reveal = page.getByRole("button", { name: "모든 패 보기" });
+    if (await reveal.isVisible()) await reveal.click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: testInfo.outputPath("5ma-replay.png") });
     // 복기 기록을 파일로 내보낸다.

@@ -111,11 +111,15 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
     await page.waitForTimeout(250);
   }
   await page.getByRole("button", { name: "상황판" }).click();
-  await expect(page.getByText("모든 패")).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "상황판" }),
+  ).toBeVisible();
   await expect(page.getByText("해설을 계산하는 중…")).toHaveCount(0, {
     timeout: 15_000,
   });
-  await page.getByRole("button", { name: "모든 패 보기" }).click();
+  // 세로 휴대폰은 상황판을 열 때 이미 펼친다.
+  const reveal = page.getByRole("button", { name: "모든 패 보기" });
+  if (await reveal.isVisible()) await reveal.click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: info.outputPath("hearts-5-replay.png") });
   expect(errors).toEqual([]);
