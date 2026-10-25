@@ -503,6 +503,15 @@ export function play(
   for (let i = 0; i < times; i++) render(cue, { ...v, t0: t0 + i * gap(cue) });
 }
 
+/**
+ * 음량 막대를 놓을 때 들려준다. 카드 내기(가장 작은 쪽)만 들려주면 게임 중 큰 장면 소리가
+ * 5~6dB 더 크게 들려, 작은 쪽과 큰 쪽(프렌드 공개)을 이어서 들려준다
+ */
+export function previewVolume(): void {
+  play("card");
+  play("friend", { delay: 0.3 });
+}
+
 /** 소리 하나를 재생하지 않고 그려 본다. 미리 듣기 화면에서 크기와 모양을 보는 데 쓴다 */
 export function renderCue(cue: Cue, seconds = 3): Promise<AudioBuffer> {
   const rate = 44100;

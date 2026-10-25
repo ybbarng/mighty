@@ -9,7 +9,7 @@ import { type ReactNode, useState } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
 import { botName, SPEEDS, useSettings } from "@/game/settings";
-import { play as playCue } from "@/game/sound";
+import { previewVolume } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { CardArt } from "./card-art/CardArt";
@@ -35,7 +35,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 const chip = (selected: boolean) =>
   cn(
-    "rounded-lg border px-2 py-1.5 text-xs",
+    "whitespace-nowrap rounded-lg border px-2 py-1.5 text-xs",
     selected
       ? "border-amber-300 bg-white text-black"
       : "border-white/15 bg-white/5",
@@ -397,8 +397,8 @@ export function OptionsScreen({ onBack }: { onBack: () => void }) {
                   onChange={(e) =>
                     settings.setVolume(Number(e.target.value) / 100)
                   }
-                  onPointerUp={() => playCue("card")}
-                  onKeyUp={() => playCue("card")}
+                  onPointerUp={() => previewVolume()}
+                  onKeyUp={() => previewVolume()}
                   className="ml-2 flex-1 accent-amber-400"
                 />
               )}

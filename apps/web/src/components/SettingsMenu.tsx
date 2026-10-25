@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
 import { SPEEDS, useSettings } from "@/game/settings";
-import { play as playCue } from "@/game/sound";
+import { previewVolume } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { CARD_THEMES } from "./card-art/themes";
@@ -21,14 +21,14 @@ function Chips<T extends string | number>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-1.5">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((o) => (
         <button
           key={String(o.value)}
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-full border px-3 py-1 text-xs",
+            "whitespace-nowrap rounded-full border px-3 py-1 text-xs",
             o.value === value
               ? "border-amber-300 bg-white text-black"
               : "border-white/15 bg-white/5",
@@ -87,8 +87,8 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
               value={Math.round(volume * 100)}
               onChange={(e) => setVolume(Number(e.target.value) / 100)}
               // 손을 뗄 때 바뀐 크기로 한 번 들려준다.
-              onPointerUp={() => playCue("card")}
-              onKeyUp={() => playCue("card")}
+              onPointerUp={() => previewVolume()}
+              onKeyUp={() => previewVolume()}
               className="w-full accent-amber-400"
             />
           )}
