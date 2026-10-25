@@ -31,9 +31,12 @@ describe("무늬 표기", () => {
     expect(suitText("♠K", "initial")).toBe("스K");
   });
 
-  it("그림·기호 방식은 기호를 그대로 둔다", () => {
-    expect(suitText("♠13", "outline")).toBe("♠13");
-    expect(suitText("♠13", "symbol")).toBe("♠13");
+  it("그림 방식은 문구의 기호를 그대로 둔다(그림은 SuitText가 그린다)", () => {
+    expect(suitText("♠13 · ♣A", "outline")).toBe("♠13 · ♣A");
+  });
+
+  it("기호 방식은 ◆·♣를 속이 빈 글자로", () => {
+    expect(suitText("♠13 · ♣A · ♥Q · ◆K", "symbol")).toBe("♠13 · ♧A · ♥Q · ♢K");
   });
 
   it("무늬가 없으면 그대로", () => {

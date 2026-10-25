@@ -238,4 +238,6 @@ test("무늬 표기: 기본은 그림, 옵션에서 이름·첫 글자로 바꾼
   );
   await page.getByRole("button", { name: "첫 글자", exact: true }).click();
   await expect(sample).toHaveText("스13 · 클A · 하Q · 다K");
+  await page.getByRole("button", { name: "기호", exact: true }).click();
+  await expect(sample).toHaveText("♠13 · ♧A · ♥Q · ♢K");
 });

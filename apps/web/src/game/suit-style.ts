@@ -22,7 +22,11 @@ export const SUIT_STYLES: readonly {
     label: "채운 그림",
     description: "카드에 그려진 모양 그대로",
   },
-  { value: "symbol", label: "기호", description: "기기 글꼴의 ♠◆♥♣ 글자" },
+  {
+    value: "symbol",
+    label: "기호",
+    description: "기기 글꼴의 무늬 글자. 그림처럼 ◆·♣는 속이 빈 글자(♢·♧)",
+  },
   { value: "name", label: "이름", description: "스페이드 13, 클로버 A" },
   { value: "initial", label: "첫 글자", description: "스13, 클A" },
 ];
@@ -78,10 +82,19 @@ function needsSpace(next: SuitPiece | undefined): boolean {
   return typeof next === "string" && /^[0-9A-Za-z]/.test(next);
 }
 
-/** 무늬 하나를 글자로(이름·첫 글자·기호). 그림 방식은 기호로 둔다 */
+/** 기호 방식의 글자. 그림 방식과 같이 ◆·♣는 속이 빈 글자로 써서 ♠·♥와 구별한다 */
+const SUIT_SYMBOL_TEXT: Record<Suit, string> = {
+  S: "♠",
+  D: "♢",
+  H: "♥",
+  C: "♧",
+};
+
+/** 무늬 하나를 글자로(이름·첫 글자·기호). 그림 방식은 문구에 쓰는 기호(♠◆♥♣)로 둔다 */
 export function suitWord(suit: Suit, style: SuitStyle): string {
   if (style === "name") return SUIT_WORD[suit];
   if (style === "initial") return SUIT_INITIAL[suit];
+  if (style === "symbol") return SUIT_SYMBOL_TEXT[suit];
   return SUIT_GLYPH[suit];
 }
 
