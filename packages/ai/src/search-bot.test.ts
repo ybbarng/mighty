@@ -13,7 +13,12 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { heuristicBot } from "./heuristic-bot";
-import { createSearchBot, inferFromPlays, sampleHands } from "./search-bot";
+import {
+  createSearchBot,
+  inferFromPlays,
+  sampleHands,
+  searchBot,
+} from "./search-bot";
 import { simulate } from "./simulate";
 
 const standard5 = presetRules("standard5");
@@ -201,5 +206,41 @@ describe("2단계 봇의 판 전체 계획", () => {
     // 버린 카드에 마이티·조커는 없다.
     expect(state.round.discarded).not.toContain("DA");
     expect(state.round.discarded).not.toContain("JK");
+  });
+});
+
+describe("공약: 가망 없는 패", () => {
+  it("마이티·조커·높은 기루다가 없으면 공격형도 출마하지 않는다(잡음으로 ◆13에 나선 사례)", () => {
+    const hand: Card[] = [
+      "H5",
+      "D4",
+      "D6",
+      "SQ",
+      "D9",
+      "D3",
+      "SK",
+      "H6",
+      "C10",
+      "S9",
+    ];
+    const rest = fullDeck().filter((c) => !hand.includes(c));
+    // 3번 자리가 공격형이고 선이다.
+    const hands = [
+      rest.slice(0, 10),
+      rest.slice(10, 20),
+      rest.slice(20, 30),
+      hand,
+      rest.slice(30, 40),
+    ];
+    const { state } = createMatch({
+      rules: standard5,
+      seed: 1,
+      firstBeginner: 3,
+      presetDeal: { hands, kitty: rest.slice(40) },
+    });
+    const view = viewOf(state, 3);
+    expect(view.decision?.kind).toBe("election");
+    for (let seed = 0; seed < 8; seed++)
+      expect(searchBot.decide(view, { seed })).toEqual({ type: "pass" });
   });
 });

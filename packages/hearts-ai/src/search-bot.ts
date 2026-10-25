@@ -420,6 +420,61 @@ function chooseCard(
   return cards[values.indexOf(best)] as Card;
 }
 
+/**
+ * 낼 수 있는 카드마다 남의 손패를 추측해 끝까지 둬 본 평균(다른 사람 평균 점수 − 내 점수).
+ * 복기 해설에도 쓴다. 카드 내기 차례가 아니거나 추측이 안 되면 null
+ */
+export function evaluateHeartsPlays(
+  view: PlayerView,
+  rng: RngState,
+  worlds = 30,
+  persona: HeartsPersona = heartsPersonaForSeat(view.seat),
+): { card: Card; mean: number }[] | null {
+  const decision = view.decision;
+  if (decision?.kind !== "play") return null;
+  // 끝난 턴의 낮은 카드는 성향에 따라 잊는다(사람은 하트와 높은 카드 위주로 센다).
+  const forgotten = new Set(
+    view.tricks
+      .flatMap((t) => t.plays.map((p) => p.card))
+      .filter(
+        (c) =>
+          !isMemorable(c) && forgets(persona, view.seat, view.roundNumber, c),
+      ),
+  );
+  const trick = view.trick ?? { leader: view.seat, plays: [] };
+  const base: Omit<Sim, "hands"> = {
+    rules: view.rules,
+    trick: { ...trick, plays: [...trick.plays] },
+    trickIndex: view.trickIndex,
+    tricks: [...view.tricks],
+    heartsBroken: view.heartsBroken,
+    taken: PLAYERS.map((s) =>
+      view.tricks
+        .filter((t) => t.winner === s)
+        .flatMap((t) => t.plays.map((p) => p.card)),
+    ),
+    done: false,
+  };
+  const totals = decision.cards.map(() => 0);
+  let counted = 0;
+  for (let w = 0; w < worlds; w++) {
+    const hands = sampleHeartsHands(view, rng, forgotten);
+    if (!hands) continue;
+    counted++;
+    decision.cards.forEach((card, i) => {
+      const sim = cloneSim({ ...base, hands });
+      apply(sim, view.seat, card);
+      playOut(sim, rng);
+      totals[i] = (totals[i] ?? 0) + utility(sim, view.seat);
+    });
+  }
+  if (counted === 0) return null;
+  return decision.cards.map((card, i) => ({
+    card,
+    mean: (totals[i] ?? 0) / counted,
+  }));
+}
+
 export interface HeartsSearchOptions {
   /** 카드 한 장을 고를 때 추측해 보는 판 수 */
   worlds?: number;
@@ -444,48 +499,12 @@ export function createHeartsSearchBot(
         return planPass(view, decision, passWorlds, rng) ?? fallback;
       if (decision?.kind !== "play" || decision.cards.length <= 1)
         return fallback;
-      // 끝난 턴의 낮은 카드는 성향에 따라 잊는다(사람은 하트와 높은 카드 위주로 센다).
-      const forgotten = new Set(
-        view.tricks
-          .flatMap((t) => t.plays.map((p) => p.card))
-          .filter(
-            (c) =>
-              !isMemorable(c) &&
-              forgets(persona, view.seat, view.roundNumber, c),
-          ),
-      );
-      const trick = view.trick ?? { leader: view.seat, plays: [] };
-      const base: Omit<Sim, "hands"> = {
-        rules: view.rules,
-        trick: { ...trick, plays: [...trick.plays] },
-        trickIndex: view.trickIndex,
-        tricks: [...view.tricks],
-        heartsBroken: view.heartsBroken,
-        taken: PLAYERS.map((s) =>
-          view.tricks
-            .filter((t) => t.winner === s)
-            .flatMap((t) => t.plays.map((p) => p.card)),
-        ),
-        done: false,
-      };
-      const totals = decision.cards.map(() => 0);
-      let counted = 0;
-      for (let w = 0; w < worlds; w++) {
-        const hands = sampleHeartsHands(view, rng, forgotten);
-        if (!hands) continue;
-        counted++;
-        decision.cards.forEach((card, i) => {
-          const sim = cloneSim({ ...base, hands });
-          apply(sim, view.seat, card);
-          playOut(sim, rng);
-          totals[i] = (totals[i] ?? 0) + utility(sim, view.seat);
-        });
-      }
-      if (counted === 0) return fallback;
+      const values = evaluateHeartsPlays(view, rng, worlds, persona);
+      if (!values) return fallback;
       const fallbackCard = fallback.type === "play" ? fallback.card : null;
       const card = chooseCard(
-        decision.cards,
-        totals.map((t) => t / counted),
+        values.map((v) => v.card),
+        values.map((v) => v.mean),
         fallbackCard,
         persona,
         rng,

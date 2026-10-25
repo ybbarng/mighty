@@ -31,7 +31,7 @@ import {
 
 import { type Bias, bidBias, friendCardExcluded, isMemorable } from "./belief";
 import type { Bot } from "./bot";
-import { cardKeepValue, estimatePoints, KIRUDAS } from "./hand";
+import { bestKiruda, cardKeepValue, estimatePoints, KIRUDAS } from "./hand";
 import { heuristicBot } from "./heuristic-bot";
 import { chance, forgets, type Persona, personaForSeat } from "./persona";
 
@@ -48,7 +48,7 @@ import { chance, forgets, type Persona, personaForSeat } from "./persona";
  */
 
 type PlayDecision = Extract<Decision, { kind: "play" }>;
-type PlayAction = Extract<Action, { type: "play" }>;
+export type PlayAction = Extract<Action, { type: "play" }>;
 
 interface Sim {
   rules: RuleSet;
@@ -589,6 +589,12 @@ export const SEARCH_TUNING = {
   electZ: 0,
   /** 성향 이름별 출마 기준을 덮어쓴다 */
   bidMargins: null as Record<string, number> | null,
+  /**
+   * 패 어림값(`bestKiruda`)이 가장 낮은 공약보다 이만큼 넘게 모자라면 추측 판을 돌리지 않고 포기한다.
+   * 추측 판이 24개라 표준 오차가 1.5~2점이어서, 잡음만으로 출마 쪽이 앞서 마이티·조커·기루다 A도 없는
+   * 패로 ◆13에 나선 적이 있다(2026-10-25, 공격형 문턱 0.1)
+   */
+  hopelessGap: 2,
 };
 
 function pickSure(
@@ -760,17 +766,32 @@ function passPayoffs(
   });
 }
 
-function planElection(
+/** 공약 판단의 근거(복기 해설에도 쓴다) */
+export interface ElectionAnalysis {
+  /** 패 어림값이 가장 좋은 기루다와 어림 장수 */
+  estimate: { kiruda: Kiruda; estimate: number };
+  /** 지금 부를 수 있는 가장 낮은 공약 숫자 */
+  floor: number;
+  /** 어림값이 너무 모자라 추측 판을 돌리지 않았다 */
+  hopeless: boolean;
+  /** 출마한다면 가장 나은 공약과 추측한 판에서의 돈(판마다) */
+  bid: { goal: Goal; samples: number[] } | null;
+  /** 포기했을 때 같은 추측 판에서의 돈 */
+  stay: number[];
+}
+
+/** 출마했을 때와 포기했을 때를 같은 추측 판끼리 둬 보고 비교한다 */
+export function analyzeElection(
   view: PlayerView,
   decision: Extract<Decision, { kind: "election" }>,
   worldCount: number,
   rng: RngState,
-  persona: Persona,
-): Action | null {
-  if (decision.canDealMiss || decision.bids.length === 0) return null;
-  // 6·7마는 당선 뒤 한 사람을 죽이고 다시 나눠 손패가 달라지므로 어림으로 둔다.
-  if (view.rules.playerCount > 5) return null;
+): ElectionAnalysis {
   const { rules } = view;
+  const floor = Math.min(...decision.bids.map((g) => g.score));
+  const estimate = bestKiruda(rules, view.hand);
+  if (decision.canPass && estimate.estimate < floor - SEARCH_TUNING.hopelessGap)
+    return { estimate, floor, hopeless: true, bid: null, stay: [] };
   const kitty = view.kittyCount;
   const worlds = sampleWorlds(view, view.hand, worldCount, rng);
 
@@ -802,16 +823,95 @@ function planElection(
     if (!best || mean(samples) > mean(best.samples))
       best = { goal: lowest, samples };
   }
-  // 포기했을 때(프렌드·야당)와 같은 추측 판끼리 비교해, 출마가 확실히 나은 정도가 성향의 기준을 넘어야
-  // 나선다. 마이티를 들었어도 주공으로 이기는 판이 많으면 출마하고, 애매하면 포기한다.
-  const floor = Math.min(...decision.bids.map((g) => g.score));
   const stay = decision.canPass
     ? passPayoffs(view, floor, worlds, rng)
     : worlds.map(() => 0);
+  return { estimate, floor, hopeless: false, bid: best, stay };
+}
+
+function planElection(
+  view: PlayerView,
+  decision: Extract<Decision, { kind: "election" }>,
+  worldCount: number,
+  rng: RngState,
+  persona: Persona,
+): Action | null {
+  if (decision.canDealMiss || decision.bids.length === 0) return null;
+  // 6·7마는 당선 뒤 한 사람을 죽이고 다시 나눠 손패가 달라지므로 어림으로 둔다.
+  if (view.rules.playerCount > 5) return null;
+  const { hopeless, bid, stay } = analyzeElection(
+    view,
+    decision,
+    worldCount,
+    rng,
+  );
+  if (hopeless) return { type: "pass" };
+  // 포기했을 때(프렌드·야당)와 같은 추측 판끼리 비교해, 출마가 확실히 나은 정도가 성향의 기준을 넘어야
+  // 나선다. 마이티를 들었어도 주공으로 이기는 판이 많으면 출마하고, 애매하면 포기한다.
   const margin = SEARCH_TUNING.bidMargins?.[persona.name] ?? persona.bidMargin;
-  if (best && sureGain(best.samples, stay, SEARCH_TUNING.electZ) > margin)
-    return { type: "bid", goal: best.goal };
+  if (bid && sureGain(bid.samples, stay, SEARCH_TUNING.electZ) > margin)
+    return { type: "bid", goal: bid.goal };
   return decision.canPass ? { type: "pass" } : null;
+}
+
+/**
+ * 낼 수 있는 수마다 남의 손패를 추측해 끝까지 둬 본 평균 돈(복기 해설에도 쓴다).
+ * 카드 내기 차례가 아니면 null
+ */
+export function evaluatePlays(
+  view: PlayerView,
+  rng: RngState,
+  worlds = 64,
+  persona: Persona = personaForSeat(view.seat),
+): { action: PlayAction; mean: number }[] | null {
+  const decision = view.decision;
+  if (decision?.kind !== "play" || view.goal === null) return null;
+  const actions = candidates(decision);
+  // 끝난 턴의 낮은 잡카드는 성향에 따라 잊는다(사람은 기루다와 큰 카드 위주로 센다).
+  const remembered = view.tricks
+    .flatMap((t) => t.plays.map((p) => p.card))
+    .filter(
+      (c) =>
+        isMemorable(view, c) ||
+        !forgets(persona, view.seat, view.roundNumber, c),
+    );
+  const seen = new Set<Card>([
+    ...view.hand,
+    ...remembered,
+    ...(view.trick?.plays.map((p) => p.card) ?? []),
+    ...(view.discarded ?? []),
+  ]);
+  const pool = fullDeck().filter((c) => !seen.has(c));
+  const needs = new Map<number, number>();
+  for (const s of view.players) {
+    if (s !== view.seat) needs.set(s, view.handCounts[s] ?? 0);
+  }
+  const held = [...needs.values()].reduce((a, b) => a + b, 0);
+  needs.set(-1, pool.length - held);
+  const inference = inferFromPlays(view);
+  const bias = bidBias(view);
+  const base = baseSim(view);
+
+  const totals = actions.map(() => 0);
+  for (let w = 0; w < worlds; w++) {
+    const world = fillWorld(
+      base,
+      view,
+      sampleHands(pool, needs, inference, rng, bias, (s, c) =>
+        friendCardExcluded(view, s, c),
+      ),
+    );
+    actions.forEach((action, i) => {
+      const sim = cloneSim(world);
+      apply(sim, view.seat, action);
+      playOut(sim, rng);
+      totals[i] = (totals[i] ?? 0) + payoff(sim, view.seat, view.money);
+    });
+  }
+  return actions.map((action, i) => ({
+    action,
+    mean: (totals[i] ?? 0) / worlds,
+  }));
 }
 
 export interface SearchBotOptions {
@@ -850,54 +950,13 @@ export function createSearchBot(options: SearchBotOptions = {}): Bot {
         if (planned) return planned;
       }
       if (decision?.kind !== "play" || view.goal === null) return fallback;
-      const actions = candidates(decision);
-      if (actions.length <= 1) return fallback;
+      if (candidates(decision).length <= 1) return fallback;
 
-      // 끝난 턴의 낮은 잡카드는 성향에 따라 잊는다(사람은 기루다와 큰 카드 위주로 센다).
-      const remembered = view.tricks
-        .flatMap((t) => t.plays.map((p) => p.card))
-        .filter(
-          (c) =>
-            isMemorable(view, c) ||
-            !forgets(persona, view.seat, view.roundNumber, c),
-        );
-      const seen = new Set<Card>([
-        ...view.hand,
-        ...remembered,
-        ...(view.trick?.plays.map((p) => p.card) ?? []),
-        ...(view.discarded ?? []),
-      ]);
-      const pool = fullDeck().filter((c) => !seen.has(c));
-      const needs = new Map<number, number>();
-      for (const s of view.players) {
-        if (s !== view.seat) needs.set(s, view.handCounts[s] ?? 0);
-      }
-      const held = [...needs.values()].reduce((a, b) => a + b, 0);
-      needs.set(-1, pool.length - held);
-      const inference = inferFromPlays(view);
-      const bias = bidBias(view);
-      const base = baseSim(view);
-
-      const totals = actions.map(() => 0);
-      for (let w = 0; w < worlds; w++) {
-        const world = fillWorld(
-          base,
-          view,
-          sampleHands(pool, needs, inference, rng, bias, (s, c) =>
-            friendCardExcluded(view, s, c),
-          ),
-        );
-        actions.forEach((action, i) => {
-          const sim = cloneSim(world);
-          apply(sim, view.seat, action);
-          playOut(sim, rng);
-          totals[i] = (totals[i] ?? 0) + payoff(sim, view.seat, view.money);
-        });
-      }
-
+      const values = evaluatePlays(view, rng, worlds, persona);
+      if (!values) return fallback;
       return chooseAction(
-        actions,
-        totals.map((t) => t / worlds),
+        values.map((v) => v.action),
+        values.map((v) => v.mean),
         fallback,
         persona,
         rng,
