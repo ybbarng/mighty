@@ -17,6 +17,7 @@ import { OptionsScreen } from "./OptionsScreen";
 import { Splash } from "./Splash";
 import { StartScreen } from "./StartScreen";
 import { LessonPlayer } from "./tutorial/LessonPlayer";
+import { mightyTutorial } from "./tutorial/mighty-tutorial";
 import { TutorialHome } from "./tutorial/TutorialHome";
 
 type Screen =
@@ -99,6 +100,7 @@ export function MightyApp() {
   if (screen.kind === "tutorial") {
     return (
       <TutorialHome
+        tutorial={mightyTutorial}
         onBack={backToStart}
         onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
       />
@@ -108,6 +110,7 @@ export function MightyApp() {
   if (screen.kind === "lesson") {
     return (
       <LessonPlayer
+        tutorial={mightyTutorial}
         key={screen.lessonId}
         lessonId={screen.lessonId}
         onExit={() => setScreen({ kind: "tutorial" })}

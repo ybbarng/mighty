@@ -4,7 +4,10 @@ import { useEffect } from "react";
 
 import { useSettings } from "@/game/settings";
 import { useHeartsSettings } from "@/hearts/settings";
-import { useTutorialProgress } from "@/tutorial/progress";
+import {
+  useHeartsTutorialProgress,
+  useTutorialProgress,
+} from "@/tutorial/progress";
 
 /**
  * 브라우저에 저장해 둔 설정과 튜토리얼 진행을 첫 그리기 뒤에 불러온다.
@@ -15,6 +18,7 @@ export function StoreHydration() {
     void useSettings.persist.rehydrate();
     void useTutorialProgress.persist.rehydrate();
     void useHeartsSettings.persist.rehydrate();
+    void useHeartsTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

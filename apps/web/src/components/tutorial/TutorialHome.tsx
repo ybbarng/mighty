@@ -3,37 +3,44 @@
 import { useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { LESSONS } from "@/tutorial/lessons";
-import { lessonStates, useTutorialProgress } from "@/tutorial/progress";
 
+import { lessonStates } from "@/tutorial/progress";
 import { GlossarySheet } from "./GlossarySheet";
+import type { TutorialKit } from "./kit";
 
 /** 튜토리얼 단원 목록. 언어 학습 앱처럼 한 단원씩 쌓아 간다 */
-export function TutorialHome({
+export function TutorialHome<View, Event, Scenario, Action>({
+  tutorial,
   onOpen,
   onBack,
 }: {
   onOpen: (lessonId: string) => void;
   onBack: () => void;
+  tutorial: TutorialKit<View, Event, Scenario, Action>;
 }) {
-  const completed = useTutorialProgress((s) => s.completed);
-  const states = lessonStates(completed);
+  const { lessons } = tutorial;
+  const completed = tutorial.progress((s) => s.completed);
+  const states = lessonStates(lessons, completed);
   const doneCount = states.filter((s) => s === "done").length;
   const [glossary, setGlossary] = useState(false);
 
   return (
-    <main className="flex min-h-dvh justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
+    <main
+      className={cn("flex min-h-dvh justify-center p-4", tutorial.background)}
+    >
       <div className="flex w-full max-w-md flex-col gap-4 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="font-black text-2xl">마이티 배우기</h1>
+          <h1 className="font-black text-2xl">{tutorial.title}</h1>
           <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => setGlossary(true)}
-              className="rounded-lg bg-white/10 px-3 py-1 text-sm"
-            >
-              용어 사전
-            </button>
+            {tutorial.glossary && (
+              <button
+                type="button"
+                onClick={() => setGlossary(true)}
+                className="rounded-lg bg-white/10 px-3 py-1 text-sm"
+              >
+                용어 사전
+              </button>
+            )}
             <button
               type="button"
               onClick={onBack}
@@ -48,14 +55,14 @@ export function TutorialHome({
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full bg-amber-400 transition-[width] duration-500"
-              style={{ width: `${(doneCount / LESSONS.length) * 100}%` }}
+              style={{ width: `${(doneCount / lessons.length) * 100}%` }}
             />
           </div>
           <span className="text-sm tabular-nums opacity-80">
-            {doneCount}/{LESSONS.length}
+            {doneCount}/{lessons.length}
           </span>
         </div>
-        {doneCount === LESSONS.length && (
+        {doneCount === lessons.length && (
           <div className="pop-in flex flex-col gap-2 rounded-2xl border border-emerald-300/50 bg-emerald-500/15 p-4">
             <p className="font-bold">모든 단원을 마쳤어요! 🎉</p>
             <p className="text-sm opacity-80">
@@ -72,7 +79,7 @@ export function TutorialHome({
           </div>
         )}
         <ol className="flex flex-col gap-2">
-          {LESSONS.map((lesson, i) => {
+          {lessons.map((lesson, i) => {
             const state = states[i];
             return (
               <li key={lesson.id}>

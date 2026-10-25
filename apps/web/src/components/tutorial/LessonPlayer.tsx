@@ -1,40 +1,30 @@
 "use client";
 
-import { beginnerBot } from "@mighty/ai";
-import { type Card, createScenario, type GameEvent } from "@mighty/engine";
+import type { Card } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_BOT_NAMES } from "@/game/bot-names";
-import { LocalMatch } from "@/game/local-match";
 import { useCardTheme } from "@/game/settings";
-import { useGame } from "@/game/store";
 import { cn } from "@/lib/cn";
 import { termOf } from "@/tutorial/glossary";
-import {
-  LESSONS,
-  type MissionStatus,
-  TUTORIAL_RULES,
-} from "@/tutorial/lessons";
-import { useTutorialProgress } from "@/tutorial/progress";
+import type { MissionStatus } from "@/tutorial/types";
 
 import { CardArt } from "../card-art/CardArt";
-import { GameTable } from "../GameTable";
 import { ActionButton } from "../panels/common";
 import { TermAside } from "../TermHint";
+import type { TutorialKit } from "./kit";
 import { RichText } from "./RichText";
 
-const NAMES = ["나", ...DEFAULT_BOT_NAMES.slice(0, 4)];
-
 /** 한 단원: 설명 → 퀴즈 → 미션을 차례로 진행한다 */
-export function LessonPlayer({
+export function LessonPlayer<View, Event, Scenario, Action>({
+  tutorial,
   lessonId,
   onExit,
 }: {
+  tutorial: TutorialKit<View, Event, Scenario, Action>;
   lessonId: string;
   onExit: () => void;
 }) {
-  const lesson = LESSONS.find((l) => l.id === lessonId);
-  const complete = useTutorialProgress((s) => s.complete);
-  const attachOnline = useGame((s) => s.attachOnline);
+  const lesson = tutorial.lessons.find((l) => l.id === lessonId);
+  const complete = tutorial.progress((s) => s.complete);
   const [index, setIndex] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -42,7 +32,7 @@ export function LessonPlayer({
   const [finished, setFinished] = useState(false);
   // 다시 하기마다 늘려 진행 구독과 결과 타이머를 새로 건다.
   const [attempt, setAttempt] = useState(0);
-  const events = useRef<GameEvent[]>([]);
+  const events = useRef<Event[]>([]);
 
   const step = lesson?.steps[index];
 
@@ -51,10 +41,9 @@ export function LessonPlayer({
   useEffect(() => {
     if (!playing || step?.kind !== "mission") return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = useGame.subscribe((state, prev) => {
-      if (state.seq === prev.seq || !state.view) return;
-      events.current.push(...state.events);
-      const result = step.check({ view: state.view, events: events.current });
+    const unsubscribe = tutorial.subscribe((view, fresh) => {
+      events.current.push(...fresh);
+      const result = step.check({ view, events: events.current });
       // 트릭이 정리되는 것을 볼 시간을 조금 준다.
       if (result && timer === null)
         timer = setTimeout(() => setStatus(result), 900);
@@ -63,7 +52,7 @@ export function LessonPlayer({
       unsubscribe();
       if (timer) clearTimeout(timer);
     };
-  }, [playing, step, attempt]);
+  }, [playing, step, attempt, tutorial]);
 
   if (!lesson || !step) return null;
 
@@ -83,26 +72,15 @@ export function LessonPlayer({
     if (step.kind !== "mission") return;
     events.current = [];
     setStatus(null);
-    const seed = Math.floor(Math.random() * 2 ** 31);
-    const match = step.scenario
-      ? new LocalMatch({
-          rules: TUTORIAL_RULES,
-          seed,
-          initialState: createScenario({
-            rules: TUTORIAL_RULES,
-            ...step.scenario,
-          }),
-        })
-      : // 실전 한 판은 입문 컴퓨터와 한다. 추천 카드는 중수 기준이다.
-        new LocalMatch({ rules: TUTORIAL_RULES, seed, bot: beginnerBot });
-    attachOnline(match, NAMES);
+    tutorial.startMission(step.scenario);
     setAttempt((a) => a + 1);
     setPlaying(true);
   };
 
   if (playing && step.kind === "mission") {
+    const { Table } = tutorial;
     return (
-      <GameTable
+      <Table
         onExit={() => setPlaying(false)}
         hints={step.scenario === null}
         mission={{
@@ -120,7 +98,12 @@ export function LessonPlayer({
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
+    <main
+      className={cn(
+        "flex min-h-dvh items-center justify-center p-4",
+        tutorial.background,
+      )}
+    >
       <div className="flex w-full max-w-lg flex-col gap-4 py-4">
         <div className="flex items-center gap-3">
           <button

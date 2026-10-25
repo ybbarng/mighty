@@ -1,6 +1,5 @@
 import {
   type Action,
-  type Card,
   type GameEvent,
   isJoker,
   mightyOf,
@@ -9,56 +8,30 @@ import {
   type ScenarioOptions,
 } from "@mighty/engine";
 
+import type {
+  MissionStatus,
+  MissionContext as TutorialContext,
+  Lesson as TutorialLesson,
+  Step as TutorialStep,
+} from "./types";
+
 const rules = presetRules("standard5");
 
-export type MissionStatus = "success" | "fail" | null;
+export type { MissionStatus, Text } from "./types";
 
-export interface MissionContext {
-  view: PlayerView;
-  /** 미션을 시작한 뒤 생긴 모든 이벤트 */
-  events: readonly GameEvent[];
-}
-
-/** 화면에 보여 줄 짧은 글. `**굵게**`만 쓴다 */
-export type Text = string;
-
-export type Step =
-  | {
-      kind: "explain";
-      title: string;
-      body: Text[];
-      cards?: Card[];
-      terms?: string[];
-    }
-  | {
-      kind: "quiz";
-      question: Text;
-      cards?: Card[];
-      options: string[];
-      answer: number;
-      explain: Text;
-    }
-  | {
-      kind: "mission";
-      title: string;
-      objective: Text;
-      hint: Text;
-      /** 정해진 장면. 없으면 처음부터 한 판 */
-      scenario: Omit<ScenarioOptions, "rules"> | null;
-      check: (ctx: MissionContext) => MissionStatus;
-      success: Text;
-      fail: Text;
-      /** 테스트용: 성공해야 하는 행동과 실패해야 하는 행동 */
-      solution?: Action[];
-      mistake?: Action[];
-    };
-
-export interface Lesson {
-  id: string;
-  title: string;
-  summary: string;
-  steps: Step[];
-}
+export type MissionContext = TutorialContext<PlayerView, GameEvent>;
+export type Step = TutorialStep<
+  PlayerView,
+  GameEvent,
+  Omit<ScenarioOptions, "rules">,
+  Action
+>;
+export type Lesson = TutorialLesson<
+  PlayerView,
+  GameEvent,
+  Omit<ScenarioOptions, "rules">,
+  Action
+>;
 
 /** 턴을 하나 끝냈을 때 내가 이겼는가 */
 function wonFirstTrick({ events, view }: MissionContext): MissionStatus {
