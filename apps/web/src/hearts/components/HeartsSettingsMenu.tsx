@@ -25,7 +25,7 @@ function Chips<T extends string | number>({
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-full border px-3 py-1 text-xs",
+            "whitespace-nowrap rounded-full border px-3 py-1 text-xs",
             o.value === value
               ? "border-amber-300 bg-white text-black"
               : "border-white/15 bg-white/5",

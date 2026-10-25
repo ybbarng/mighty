@@ -24,7 +24,7 @@ export function SuitStylePicker({ detail = false }: { detail?: boolean }) {
             aria-pressed={o.value === style}
             onClick={() => setStyle(o.value)}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs",
+              "whitespace-nowrap rounded-full border px-3 py-1 text-xs",
               o.value === style
                 ? "border-amber-300 bg-white text-black"
                 : "border-white/15 bg-white/5",
