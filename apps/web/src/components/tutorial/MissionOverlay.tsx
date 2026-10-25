@@ -23,9 +23,12 @@ export interface MissionProps {
 export function MissionOverlay({
   mission,
   top,
+  span,
 }: {
   mission: MissionProps;
   top: number;
+  /** 가로 자리(왼쪽, 너비). 없으면 가운데에 둔다 */
+  span?: { left: number; width: number };
 }) {
   const [showHint, setShowHint] = useState(false);
   // 성공 안내를 잠시 접고 뒤에 깔린 판 결과를 볼 수 있다.
@@ -35,8 +38,11 @@ export function MissionOverlay({
   return (
     <>
       <div
-        className="absolute inset-x-0 z-[260] mx-auto flex w-[min(92%,30rem)] items-start gap-2 rounded-2xl border border-amber-300/40 bg-black/75 px-3 py-2 text-sm shadow-xl backdrop-blur"
-        style={{ top }}
+        className={cn(
+          "absolute z-[260] flex items-start gap-2 rounded-2xl border border-amber-300/40 bg-black/75 px-3 py-2 text-sm shadow-xl backdrop-blur",
+          !span && "inset-x-0 mx-auto w-[min(92%,30rem)]",
+        )}
+        style={{ top, ...span }}
       >
         <span className="shrink-0 rounded-md bg-amber-400 px-1.5 py-0.5 font-bold text-black text-xs">
           미션

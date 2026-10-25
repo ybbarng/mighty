@@ -8,16 +8,21 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 
 import { ActionButton } from "@/components/panels/common";
+import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
+import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
+import { useHeartsTutorialProgress } from "@/tutorial/progress";
 
 import { HEARTS_LEVELS } from "../bots";
 import { endHeartsSession } from "../session";
 import { heartsRules, useHeartsSettings } from "../settings";
 import { clearHearts, type HeartsSaved, loadHearts, useHearts } from "../store";
+import { HEARTS_LESSONS } from "../tutorial";
 import { HeartsOnlineScreen } from "./HeartsOnlineScreen";
 import { HeartsTable } from "./HeartsTable";
+import { heartsTutorial } from "./hearts-tutorial";
 
 type Screen =
   | { kind: "start" }
@@ -28,7 +33,9 @@ type Screen =
     }
   | { kind: "playing" }
   | { kind: "options" }
-  | { kind: "rules" };
+  | { kind: "rules" }
+  | { kind: "tutorial" }
+  | { kind: "lesson"; lessonId: string };
 
 const BG =
   "flex min-h-dvh justify-center bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)] p-4";
@@ -77,6 +84,7 @@ export function HeartsApp() {
   const level = useHeartsSettings((s) => s.level);
   const newGame = useHearts((s) => s.newGame);
   const resume = useHearts((s) => s.resume);
+  const learned = useHeartsTutorialProgress((s) => s.completed.length);
 
   useEffect(() => {
     if (screen.kind === "start") setSaved(loadHearts());
@@ -127,6 +135,23 @@ export function HeartsApp() {
     return <HeartsOptions onBack={() => setScreen({ kind: "start" })} />;
   if (screen.kind === "rules")
     return <HeartsRulesScreen onBack={() => setScreen({ kind: "start" })} />;
+  if (screen.kind === "tutorial")
+    return (
+      <TutorialHome
+        tutorial={heartsTutorial}
+        onBack={backToStart}
+        onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
+      />
+    );
+  if (screen.kind === "lesson")
+    return (
+      <LessonPlayer
+        key={screen.lessonId}
+        tutorial={heartsTutorial}
+        lessonId={screen.lessonId}
+        onExit={() => setScreen({ kind: "tutorial" })}
+      />
+    );
 
   const levelLabel = HEARTS_LEVELS.find((l) => l.value === level)?.label;
   return (
@@ -179,6 +204,18 @@ export function HeartsApp() {
           title="다함께 하트"
           detail="링크로 친구를 부릅니다. 빈자리는 컴퓨터가 앉습니다"
           onClick={() => setScreen({ kind: "online", room: null })}
+        />
+        <MenuItem
+          icon="🎓"
+          title="하트 배우기"
+          detail={
+            learned >= HEARTS_LESSONS.length
+              ? "모든 단원을 마쳤어요. 언제든 다시 볼 수 있어요"
+              : learned > 0
+                ? `${learned}/${HEARTS_LESSONS.length} 단원 마침`
+                : `처음이라면 여기부터. ${HEARTS_LESSONS.length}단원, 미션 3개`
+          }
+          onClick={() => setScreen({ kind: "tutorial" })}
         />
         <div className="mt-1 flex justify-center gap-2 text-sm">
           <button

@@ -160,3 +160,64 @@ test("하트: 방장이 방을 만들고 친구가 들어와 한 판을 둔다",
   ).toBeVisible({ timeout: 10_000 });
   expect(errors).toEqual([]);
 });
+
+test("하트 배우기: 설명·퀴즈·미션으로 단원을 끝낸다", async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await prepare(page);
+  await page.goto("/hearts");
+  await page.getByRole("button", { name: /하트 배우기/ }).click();
+  await expect(page.getByText("0/4")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("hearts-learn-1-home.png") });
+
+  // 1단원: 설명 네 쪽, 퀴즈 두 개, 하트 떠넘기기 미션
+  await page.getByRole("button", { name: /하트는 어떤 게임/ }).click();
+  for (let i = 0; i < 4; i++)
+    await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "16점" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "클로버 2" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "미션 시작" }).click();
+  await expect(page.getByText(/하트를 남에게 떠넘기세요/)).toBeVisible();
+  await expect(page.getByText(/낼 카드를 고르세요/)).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.screenshot({
+    path: info.outputPath("hearts-learn-2-mission.png"),
+  });
+  await page
+    .getByRole("button", { name: "♥A", exact: true })
+    .click({ position: { x: 8, y: 8 } });
+  await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.screenshot({
+    path: info.outputPath("hearts-learn-3-success.png"),
+  });
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await expect(page.getByText("단원 완료!")).toBeVisible();
+  await page.getByRole("button", { name: "단원 목록으로" }).click();
+  await expect(page.getByText("1/4")).toBeVisible();
+
+  // 2단원: 넘기기 미션
+  await page.getByRole("button", { name: /카드 넘기기/ }).click();
+  for (let i = 0; i < 2; i++)
+    await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "넘기지 않는다" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "미션 시작" }).click();
+  const pass = page.getByRole("button", { name: "넘기기", exact: true });
+  await expect(pass).toBeVisible({ timeout: 20_000 });
+  for (const card of ["♠Q", "♠K", "♠A"])
+    await page
+      .getByRole("button", { name: card, exact: true })
+      .click({ position: { x: 8, y: 8 } });
+  await pass.click();
+  await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
+    timeout: 20_000,
+  });
+  expect(errors).toEqual([]);
+});

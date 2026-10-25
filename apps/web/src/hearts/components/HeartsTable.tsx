@@ -15,6 +15,10 @@ import { FairOverlays, FairStatus } from "@/components/FairOverlays";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { ResultBanner } from "@/components/ResultBanner";
+import {
+  MissionOverlay,
+  type MissionProps,
+} from "@/components/tutorial/MissionOverlay";
 import { botName } from "@/game/bot-names";
 import type { ResultBanner as Banner } from "@/game/result-banner";
 import { useSettings } from "@/game/settings";
@@ -56,7 +60,19 @@ function tilt(card: Card): number {
 type PlayDecision = Extract<Decision, { kind: "play" }>;
 
 /** 하트 게임 화면 */
-export function HeartsTable({ onExit }: { onExit: () => void }) {
+/** 미션 띠의 높이(두 줄일 때) */
+const MISSION_BAND_H = 64;
+/** 맞은편 자리 옆으로 좁힐 때 이보다 좁으면 읽기 어렵다 */
+const MISSION_BAND_MIN_W = 220;
+
+export function HeartsTable({
+  onExit,
+  mission,
+}: {
+  onExit: () => void;
+  /** 튜토리얼 미션 목표와 결과 안내 */
+  mission?: MissionProps;
+}) {
   const stage = useStageSize();
   const view = useHearts((s) => s.view);
   const events = useHearts((s) => s.events);
@@ -186,6 +202,22 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
         y: layout.center.y + layout.center.h / 2,
       }
     : { x: 0, y: 0 };
+  // 미션 띠는 막대 바로 아래 가운데에 둔다. 맞은편 자리(낸 카드 포함)를 가리면
+  // 가로 화면은 그 왼쪽 빈 곳으로 좁히고, 세로 화면은 그 아래로 내린다.
+  const missionPlace = (() => {
+    if (!layout) return { top: 0 };
+    const below = layout.hud.y + layout.hud.h + 8;
+    const plate = layout.seats[2]?.plate;
+    const slot = layout.trick.slots[2];
+    if (!plate || !slot) return { top: below };
+    const { w, h } = layout.trick.card;
+    const acrossTop = Math.min(plate.y, slot.y - h / 2);
+    if (below + MISSION_BAND_H <= acrossTop) return { top: below };
+    const width = Math.min(plate.x, slot.x - w / 2) - 2 * layout.gutter;
+    if (stage.width > stage.height && width >= MISSION_BAND_MIN_W)
+      return { top: below, span: { left: layout.gutter, width } };
+    return { top: Math.max(plate.y + plate.h, slot.y + h / 2) + 8 };
+  })();
   const myPile: Point = layout
     ? { x: stage.width / 2, y: layout.hand.slots[0]?.y ?? layout.hand.top }
     : { x: 0, y: 0 };
@@ -478,6 +510,8 @@ export function HeartsTable({ onExit }: { onExit: () => void }) {
               shuffleMs={dealing.shuffleMs}
             />
           )}
+
+          {mission && <MissionOverlay mission={mission} {...missionPlace} />}
 
           <FairOverlays
             incident={incident}
