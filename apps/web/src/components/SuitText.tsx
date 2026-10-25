@@ -11,7 +11,7 @@ import {
   suitText,
 } from "@/game/suit-style";
 
-import { SUIT_PATHS } from "./card-art/suits";
+import { HOLLOW_CLUB, SUIT_PATHS } from "./card-art/suits";
 
 /** ◆·♣를 테두리로 그리는가(그림 방식) */
 const HOLLOW: Record<Suit, boolean> = { S: false, H: false, D: true, C: true };
@@ -42,13 +42,20 @@ export function SuitIcon({
           verticalAlign: "-0.12em",
         }}
       >
-        <path
-          d={SUIT_PATHS[suit]}
-          fill={hollow ? "none" : "currentColor"}
-          stroke={hollow ? "currentColor" : "none"}
-          strokeWidth={hollow ? 11 : 0}
-          strokeLinejoin="round"
-        />
+        {hollow ? (
+          <>
+            <path
+              d={suit === "C" ? HOLLOW_CLUB.lobes : SUIT_PATHS[suit]}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={11}
+              strokeLinejoin="round"
+            />
+            {suit === "C" && <path d={HOLLOW_CLUB.stem} fill="currentColor" />}
+          </>
+        ) : (
+          <path d={SUIT_PATHS[suit]} fill="currentColor" />
+        )}
       </svg>
       <span style={{ fontSize: 0 }}>{SUIT_GLYPH[suit]}</span>
     </>
