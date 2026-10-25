@@ -108,10 +108,11 @@ export const useSettings = create<Settings>()(
         }),
       cardTip: false,
       setCardTip: (cardTip) => set({ cardTip }),
-      slangTerms: false,
+      // 은어에 익숙해지도록 처음부터 켜 둔다(2026-10-25).
+      slangTerms: true,
+      setSlangTerms: (slangTerms) => set({ slangTerms }),
       suitStyle: "outline",
       setSuitStyle: (suitStyle) => set({ suitStyle }),
-      setSlangTerms: (slangTerms) => set({ slangTerms }),
       fairPlay: true,
       setFairPlay: (fairPlay) => set({ fairPlay }),
       volume: 0.8,
@@ -143,6 +144,12 @@ export const useSettings = create<Settings>()(
       storage: createJSONStorage(() => localStorage),
       // 미리 그려 둔 HTML과 첫 화면이 같아야 하므로 저장값은 첫 그리기 뒤에 읽는다(StoreHydration).
       skipHydration: true,
+      // 1: 은어 기본값을 켜기로 바꿨다. 예전 기본값(끄기)이 저장된 사람도 한 번 켜 준다.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<Settings>;
+        return version < 1 ? { ...state, slangTerms: true } : state;
+      },
       // 저장해 둔 음량을 소리 출력에도 알려 준다.
       onRehydrateStorage: () => (state) => {
         if (state) setSoundVolume(state.volume);
@@ -151,7 +158,8 @@ export const useSettings = create<Settings>()(
   ),
 );
 
-// 화면 문구를 만드는 함수(terms.ts)가 설정을 따라가게 한다.
+// 화면 문구를 만드는 함수(terms.ts)가 설정을 따라가게 한다. 기본값도 처음부터 알려 준다.
+applySlangTerms(useSettings.getState().slangTerms);
 useSettings.subscribe((s) => applySlangTerms(s.slangTerms));
 
 export function useCardTheme(): CardTheme {
