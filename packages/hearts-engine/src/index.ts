@@ -3,5 +3,6 @@ export * from "./match";
 export * from "./replay";
 export * from "./rule-string";
 export * from "./rules";
+export * from "./scenario";
 export * from "./state";
 export * from "./view";
