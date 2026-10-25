@@ -17,7 +17,7 @@ function OutLink({ href, children }: { href: string; children: string }) {
 export function MadeWith() {
   return (
     <>
-      © 2026 ybbarng with{" "}
+      © 2026 <OutLink href="https://github.com/ybbarng">ybbarng</OutLink> with{" "}
       <OutLink href="https://claude.com/claude-code">Claude Code</OutLink> ·{" "}
       <OutLink href={REPO_URL}>GitHub</OutLink>
     </>
