@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { SuitText } from "@/components/SuitText";
 import { Box, Btn, Result } from "@/components/security/demos";
 import { cn } from "@/lib/cn";
 
@@ -105,7 +105,7 @@ export function LockToy() {
         <span className="w-20 text-white/70">카드</span>
         {TOY_CARDS.map(([n, v], i) => (
           <Btn key={n} onClick={() => setCard(i)} active={i === card}>
-            {n} = {v}
+            <SuitText text={n} /> = {v}
           </Btn>
         ))}
       </div>
@@ -113,7 +113,7 @@ export function LockToy() {
       <Picker label="영희 열쇠 b" value={b} options={keys} onChange={setB} />
       <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm">
         <li>
-          {name}는 수 <Num>{m}</Num>로 나타낸다.
+          <SuitText text={name} />는 수 <Num>{m}</Num>로 나타낸다.
         </li>
         <li>
           철수가 잠근다: {m}
@@ -132,7 +132,7 @@ export function LockToy() {
           푸는 열쇠는 a의 역수 mod 11: a′ = <Num>{ai}</Num>(a·a′ = {a * ai} ≡ 1
           mod 11). 철수가 먼저 풀어도 {mab}
           <sup>{ai}</sup> = <Num>{afterA}</Num>, 영희가 마저 풀면{" "}
-          <Num>{back}</Num> = {name}
+          <Num>{back}</Num> = <SuitText text={name} />
         </li>
       </ol>
       <Result ok={mab === mba && back === m}>
@@ -211,8 +211,9 @@ export function QrLeakToy() {
       {locked && (
         <>
           <p className="text-sm text-white/80">
-            상대가 모르는 열쇠로 잠그고 섞었다. 어느 것이 빨강(♥)일까? 눌러서
-            고르고, "판정 돌려 보기"로 수학의 힘을 빌려 보자.
+            상대가 모르는 열쇠로 잠그고 섞었다. 어느 것이 빨강(
+            <SuitText text="♥" />
+            )일까? 눌러서 고르고, "판정 돌려 보기"로 수학의 힘을 빌려 보자.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {locked.map((c, i) => (
@@ -243,7 +244,7 @@ export function QrLeakToy() {
                 )}
                 {judged && (
                   <span className={c.red ? "text-rose-300" : "text-white"}>
-                    {c.label}
+                    <SuitText text={c.label} />
                   </span>
                 )}
               </button>
@@ -574,7 +575,9 @@ export function RenegeToy() {
   const step = steps[i] as (typeof steps)[number];
   return (
     <Box title="무늬 안 따르기는 드러나는 순간 잡는다">
-      <p className="text-sm">{step.text}</p>
+      <p className="text-sm">
+        <SuitText text={step.text} />
+      </p>
       <div className="flex flex-wrap gap-1.5">
         <Btn onClick={() => setI((x) => Math.max(0, x - 1))} disabled={i === 0}>
           ◀ 이전
@@ -588,9 +591,9 @@ export function RenegeToy() {
       </div>
       {step.caught && (
         <Result ok>
-          ♠9는 1턴에도 철수 손에 있었다(카드는 줄기만 한다). 그때 ♠를 따라야
-          했으므로 ◆5는 규칙 위반이다. 모든 기기가 이 순간 철수를 짚고 판을
-          멈춘다. 거짓 양성이 없다 — 손에 카드가 늘어도 풀리지 않는 금지라서다.
+          <SuitText text="♠9는 1턴에도 철수 손에 있었다(카드는 줄기만 한다). 그때 ♠를 따라야 했으므로 ◆5는 규칙 위반이다." />{" "}
+          모든 기기가 이 순간 철수를 짚고 판을 멈춘다. 거짓 양성이 없다 — 손에
+          카드가 늘어도 풀리지 않는 금지라서다.
         </Result>
       )}
     </Box>
@@ -641,7 +644,7 @@ export function ElGamalToy() {
             }}
             active={i === card}
           >
-            {n} = {v}
+            <SuitText text={n} /> = {v}
           </Btn>
         ))}
       </div>
@@ -898,8 +901,8 @@ export function OrProofToy() {
               {score.right}번 — 두 쪽 기록이 똑같이 생겨 반반 찍기보다 나을 수
               없다. 모르는 쪽은 도전값을 미리 정해 흉내 내고, 두 도전값의 합만
               확인하는 사람의 c와 맞으면 된다. "선 무늬가 없다"는 손의 카드마다
-              "♥이거나 ◆이거나 ♣이다"를 이런 OR 증명(또는 Groth–Kohlweiss의
-              one-out-of-many)으로 보이는 것이다.
+              <SuitText text={'"♥이거나 ◆이거나 ♣이다"'} />를 이런 OR 증명(또는
+              Groth–Kohlweiss의 one-out-of-many)으로 보이는 것이다.
             </Result>
           )}
         </>

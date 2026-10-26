@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { MadeWith } from "@/components/brand/MadeWith";
+import { SuitText } from "@/components/SuitText";
 import {
   ChatRoutingDemo,
   CommitRevealDemo,
@@ -750,7 +751,9 @@ export function LearnPage() {
                 </span>
                 <span>
                   <span className="font-semibold">{l.title}</span>
-                  <span className="block text-white/55 text-xs">{l.hook}</span>
+                  <span className="block text-white/55 text-xs">
+                    <SuitText text={l.hook} />
+                  </span>
                 </span>
               </a>
             ))}
@@ -817,7 +820,9 @@ export function LearnPage() {
                 <span className="text-emerald-300 text-xs">✓ 마침</span>
               )}
             </div>
-            <p className="text-sm text-white/55">{l.hook}</p>
+            <p className="text-sm text-white/55">
+              <SuitText text={l.hook} />
+            </p>
             {l.body}
             {l.demo}
             <ul className="flex flex-col gap-1 rounded-xl bg-white/[0.04] px-4 py-3 text-sm">

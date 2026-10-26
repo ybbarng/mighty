@@ -29,7 +29,8 @@ import {
 } from "@mighty/fair-play";
 import { useEffect, useMemo, useState } from "react";
 
-import { cardLabel } from "@/game/terms";
+import { SuitText } from "@/components/SuitText";
+import { cardLabel, goalLabel } from "@/game/terms";
 import { cn } from "@/lib/cn";
 import { commit, deriveSeed } from "@/net/fairness";
 import {
@@ -51,7 +52,7 @@ function CardChip({ card, dim = false }: { card: Card; dim?: boolean }) {
         dim && "opacity-40",
       )}
     >
-      {cardLabel(card)}
+      <SuitText text={cardLabel(card)} />
     </span>
   );
 }
@@ -314,7 +315,7 @@ export function CommitRevealDemo() {
         (result.ok ? (
           <Result ok>
             seed = SHA-256(r0|r1|r2) 앞 32비트 = {result.seed} → 철수의 패:{" "}
-            {result.hand.map(cardLabel).join(" ")}
+            <SuitText text={result.hand.map(cardLabel).join(" ")} />
           </Result>
         ) : (
           <Result ok={false}>참가자 검증 실패: {result.reason}</Result>
@@ -359,7 +360,7 @@ function viewsAlong(log: readonly LoggedAction[], seed: number, seat: number) {
 function describe(action: Action): string {
   switch (action.type) {
     case "bid":
-      return `공약 ${action.goal.kiruda}${action.goal.score}`;
+      return `공약 ${goalLabel(action.goal)}`;
     case "pass":
       return "포기";
     case "play":
@@ -466,7 +467,9 @@ export function ReplayAuditDemo() {
             >
               <span className="w-6 text-right opacity-50">{i + 1}</span>
               <span className="w-10">자리 {entry.seat}</span>
-              <span className="flex-1">{describe(entry.action)}</span>
+              <span className="flex-1">
+                <SuitText text={describe(entry.action)} />
+              </span>
               {entry.action.type === "play" && !changed && (
                 <button
                   type="button"
@@ -919,7 +922,7 @@ export function MentalPokerDemo() {
                     onClick={() => void play(slot)}
                     disabled={busy}
                   >
-                    {cardLabel(real)} 내기
+                    <SuitText text={cardLabel(real)} /> 내기
                   </Btn>
                 );
               })}
@@ -943,9 +946,11 @@ export function MentalPokerDemo() {
         </div>
       )}
       <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
-        {state.log.length === 0
-          ? "1번부터 눌러 보세요. 방장 화면으로 봐도 남의 카드는 '열 수 없음'입니다."
-          : state.log.join("\n")}
+        {state.log.length === 0 ? (
+          "1번부터 눌러 보세요. 방장 화면으로 봐도 남의 카드는 '열 수 없음'입니다."
+        ) : (
+          <SuitText text={state.log.join("\n")} />
+        )}
       </pre>
     </Box>
   );
@@ -1067,7 +1072,7 @@ export function KeyProofDemo() {
         </Btn>
       </div>
       <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
-        {log.join("\n")}
+        <SuitText text={log.join("\n")} />
       </pre>
     </Box>
   );
@@ -1157,9 +1162,11 @@ export function ShuffleProofDemo() {
         </Btn>
       </div>
       <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-[11px] leading-relaxed">
-        {log.length === 0
-          ? "눌러 보세요. 9장을 섞고 16회짜리 증명을 만들어 확인합니다."
-          : log.join("\n")}
+        {log.length === 0 ? (
+          "눌러 보세요. 9장을 섞고 16회짜리 증명을 만들어 확인합니다."
+        ) : (
+          <SuitText text={log.join("\n")} />
+        )}
       </pre>
     </Box>
   );
