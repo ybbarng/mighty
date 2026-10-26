@@ -50,6 +50,7 @@ import {
   RoundResultPanel,
 } from "./panels/OtherPanels";
 import { ResultBanner } from "./ResultBanner";
+import { useRelayoutFade } from "./relayout";
 import { Scoreboard } from "./Scoreboard";
 import { SeatPlate } from "./SeatPlate";
 import { SettingsMenu } from "./SettingsMenu";
@@ -127,6 +128,7 @@ export function GameTable({
       ? { marginTop: topInset, height: `calc(100dvh - ${topInset}px)` }
       : undefined;
   const stage = useStageSize();
+  const fade = useRelayoutFade(stage.width, stage.height);
   const theme = useCardTheme();
   const view = useGame((s) => s.view);
   const shownTrick = useGame((s) => s.shownTrick);
@@ -528,8 +530,11 @@ export function GameTable({
     <TermProvider>
       <div
         ref={stage.ref}
-        className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]"
-        style={insetStyle}
+        className={cn(
+          "relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]",
+          fade.className,
+        )}
+        style={{ ...insetStyle, ...fade.style }}
         {...controls.handlers}
       >
         {layout && (

@@ -269,3 +269,9 @@ button {
     font-size: 1.5rem;
   }
 }
+
+/* 화면이 크게 바뀌는 동안(useRelayoutFade) 카드를 날리지 않고 새 자리에 바로 놓는다 */
+.relayout * {
+  /* biome-ignore lint/complexity/noImportantStyles: 카드마다 붙은 전환 class보다 앞서야 한다 */
+  transition: none !important;
+}

@@ -317,3 +317,39 @@ test("무늬 표기: 기본은 그림, 옵션에서 이름·첫 글자로 바꾼
   await page.getByRole("button", { name: "기호", exact: true }).click();
   await expect(sample).toHaveText("♠13 · ♧A · ♥Q · ♢K");
 });
+
+test("화면을 돌리면 카드를 날리지 않고 가렸다가 다시 보인다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+  await prepare(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/hearts");
+  await page.getByRole("button", { name: /나홀로 하트/ }).click();
+  await expect(page.getByText(/넘길 카드 3장/)).toBeVisible({
+    timeout: 20_000,
+  });
+  // 가리는 순간이 짧아 class가 붙는지를 지켜본다.
+  await page.evaluate(() => {
+    const w = window as unknown as { relayoutSeen: boolean };
+    w.relayoutSeen = false;
+    new MutationObserver(() => {
+      if (document.querySelector(".relayout")) w.relayoutSeen = true;
+    }).observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { relayoutSeen: boolean }).relayoutSeen,
+      ),
+    )
+    .toBe(true);
+  await expect(page.locator(".relayout")).toHaveCount(0);
+  // 넘기기 패널이 새 화면에서도 보인다.
+  await expect(page.getByText(/넘길 카드 3장/)).toBeVisible();
+});

@@ -17,6 +17,7 @@ import { OpenHand } from "@/components/OpenHand";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
 import { ResultBanner } from "@/components/ResultBanner";
+import { useRelayoutFade } from "@/components/relayout";
 import { SuitText } from "@/components/SuitText";
 import {
   MissionOverlay,
@@ -87,6 +88,7 @@ export function HeartsTable({
       ? { marginTop: topInset, height: `calc(100dvh - ${topInset}px)` }
       : undefined;
   const stage = useStageSize();
+  const fade = useRelayoutFade(stage.width, stage.height);
   const view = useHearts((s) => s.view);
   const events = useHearts((s) => s.events);
   const seq = useHearts((s) => s.seq);
@@ -355,8 +357,11 @@ export function HeartsTable({
   return (
     <div
       ref={stage.ref}
-      className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)]"
-      style={insetStyle}
+      className={cn(
+        "relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)]",
+        fade.className,
+      )}
+      style={{ ...insetStyle, ...fade.style }}
       {...controls.handlers}
     >
       {layout && (
