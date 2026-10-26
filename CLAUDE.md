@@ -19,8 +19,8 @@
 
 ## 작업 규칙(사용자가 정한 것)
 - `main`에서 바로 작은 단위로 커밋하고 push한다. 커밋 메시지는 한국어, 끝에 Co-Authored-By 줄.
-- push하면 Image 워크플로가 이미지를 만들어 서버에 배포한다. CI는 따로 돈다(25~30분).
-- push 전 검사(lefthook: lint·typecheck·test)가 2분 넘게 걸려 GitHub 연결이 끊길 때가 있다. 그때는 시험을 직접 돌려 통과를 확인한 뒤 `--no-verify`로 올린다.
+- push하면 Image 워크플로가 이미지를 만들어 서버에 배포한다. CI는 따로 돈다(약 6분. 단위 시험과 화면 시험 3조각을 동시에 돌린다).
+- push 전 검사(lefthook: lint·typecheck·test)는 1분 반쯤 걸린다. 예전처럼 오래 걸려 GitHub 연결이 끊기면 시험을 직접 돌려 통과를 확인한 뒤 `--no-verify`로 올린다. 오래 걸리는 시험 파일은 나눠서 동시에 돌게 한다(한 파일 안의 시험은 차례로 돈다).
 - 기능은 따로 말하지 않아도 **마이티와 하트 모두**에 넣는다. 공통 모듈(GameKit, HostRoom, GuestRoom, LocalMatch, 공통 화면 조각)에 두고, 게임마다 다른 부분은 `GameKit`의 필수 항목으로 둔다(`retireAction`, `stats`, `review` 등).
 - 화면을 바꾸면 화면 시험 스크린숏으로 직접 확인한다.
 - 사용자에게 보이는 글은 쉬운 한국어(영어 음역·무거운 한자어 피하기).
