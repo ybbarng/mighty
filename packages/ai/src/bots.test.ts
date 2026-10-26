@@ -266,4 +266,97 @@ describe("정석", () => {
       expect(played(state, 1, plain)).toMatchObject({ card: "H5" });
     });
   });
+
+  describe("조커 자살: ♣A 프렌드를 보면 첫 트릭에 조커를 버린다", () => {
+    const suicide = createRuleBot({ book: ["jokerSuicide"] });
+    const plain = createRuleBot();
+    const firstJoker = { ...rules, jokerInFirstTrick: true };
+    /** 기루다 ♥(조커콜 ♣3), ♣A 프렌드. 0번 주공이 ◆A로 첫 트릭을 연다 */
+    const opened: [number, Card][] = [[0, "DA"]];
+    const thenFriend: [number, Card][] = [...opened, [1, "S2"]];
+    function scene(
+      hands: Card[][],
+      plays: [number, Card][],
+      ruleSet = firstJoker,
+    ) {
+      let state: MatchState = createScenario({
+        rules: ruleSet,
+        phase: "play",
+        declarer: 0,
+        goal: { kiruda: "H", score: 13 },
+        friend: { kind: "card", card: "CA" },
+        leader: 0,
+        trickIndex: 0,
+        hands,
+      });
+      for (const [seat, card] of plays) {
+        const result = step(state, seat, { type: "play", card });
+        if (!result.ok) throw new Error(result.error);
+        state = result.state;
+      }
+      return state;
+    }
+    const played = (state: MatchState, seat: number, bot = suicide) =>
+      bot.decide(viewOf(state, seat), createRng(1));
+
+    it("조커와 ♣A를 함께 가진 프렌드는 조커를 버린다", () => {
+      const state = scene(
+        [
+          ["DA", "S5", "C3"],
+          ["JK", "CA", "S2"],
+          ["D3", "S6", "S7"],
+          ["D4", "S8", "S9"],
+          ["D5", "H8", "H9"],
+        ],
+        opened,
+      );
+      expect(played(state, 1)).toMatchObject({ card: "JK" });
+      // 정석이 없으면 ♣A를 실어 버린다. 2구 조커콜에 조커는 그래도 힘없이 끌려 나온다.
+      expect(played(state, 1, plain)).toMatchObject({ card: "CA" });
+    });
+
+    it("야당도 조커콜에 끌려 나오기 전에 조커를 버린다", () => {
+      const state = scene(
+        [
+          ["DA", "S5", "C3"],
+          ["CA", "S2", "S3"],
+          ["JK", "D3", "S6"],
+          ["D4", "S8", "S9"],
+          ["D5", "H8", "H9"],
+        ],
+        thenFriend,
+      );
+      expect(played(state, 2)).toMatchObject({ card: "JK" });
+      expect(played(state, 2, plain)).toMatchObject({ card: "D3" });
+    });
+
+    it("조커콜을 내가 쥐었으면 버리지 않는다", () => {
+      const state = scene(
+        [
+          ["DA", "S5", "S4"],
+          ["CA", "S2", "S3"],
+          ["JK", "D3", "C3"],
+          ["D4", "S8", "S9"],
+          ["D5", "H8", "H9"],
+        ],
+        thenFriend,
+      );
+      expect(played(state, 2)).toMatchObject({ card: "D3" });
+    });
+
+    it("첫 트릭에 조커를 못 내는 기본 규칙에서는 버리지 않는다", () => {
+      const state = scene(
+        [
+          ["DA", "S5", "C3"],
+          ["CA", "S2", "S3"],
+          ["JK", "D3", "S6"],
+          ["D4", "S8", "S9"],
+          ["D5", "H8", "H9"],
+        ],
+        thenFriend,
+        rules,
+      );
+      expect(played(state, 2)).toMatchObject({ card: "D3" });
+    });
+  });
 });

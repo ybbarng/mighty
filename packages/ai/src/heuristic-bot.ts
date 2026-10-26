@@ -37,6 +37,7 @@ type Relation = "me" | "partner" | "opponent" | "unknown";
  * - `countKiruda` 기루다 세기: 밖에 남은 기루다가 없으면 기루다를 더 빼지 않는다
  * - `voidSuit` 무늬 비우기: 바닥 카드를 버릴 때 A 없는 짧은 무늬를 통째로 묻는다
  * - `kirudaCut` 초간: 선 무늬가 없어 기루다로 간을 칠 때 편과 뒷사람을 보고 어느 기루다로 칠지 고른다
+ * - `jokerSuicide` 조커 자살: 조커콜 무늬 A 프렌드(보통 ♣A)를 보면 첫 트릭에 조커를 버린다
  */
 export type BookRule =
   | "mightyAttack"
@@ -44,7 +45,8 @@ export type BookRule =
   | "kirudaAceFriend"
   | "countKiruda"
   | "voidSuit"
-  | "kirudaCut";
+  | "kirudaCut"
+  | "jokerSuicide";
 
 export const BOOK_RULES: readonly BookRule[] = [
   "mightyAttack",
@@ -53,6 +55,7 @@ export const BOOK_RULES: readonly BookRule[] = [
   "countKiruda",
   "voidSuit",
   "kirudaCut",
+  "jokerSuicide",
 ];
 
 export interface RuleBotOptions {
@@ -177,6 +180,31 @@ function kirudaCut(
       .filter((c) => rankPower(c) > top)
       .sort((a, b) => rankPower(a) - rankPower(b))[0] ?? null
   );
+}
+
+/**
+ * 조커 자살(나무위키 "전술 및 전략" 4.2.1). 주공이 조커콜 무늬 A(보통 ♣A)를 프렌드로 불렀으면
+ * 조커콜을 쥐고 2구에 조커를 힘없이 끌어낼 생각이다. 그 전에 첫 트릭에 조커를 버린다.
+ * 조커와 그 A를 함께 가진 프렌드는 조커콜 때 A를 못 내고 힘없는 조커를 내 트릭을 넘겨주니 꼭 버리고,
+ * 야당은 주공의 조커콜을 그냥 3으로 만든다.
+ * 첫 트릭에 조커를 낼 수 있고, 조커콜을 당한 조커가 힘을 잃는 규칙에서만 쓴다.
+ */
+function jokerSuicide(view: PlayerView, cards: readonly Card[]): Card | null {
+  const joker = cards.find(isJoker);
+  if (
+    joker === undefined ||
+    view.trickIndex !== 0 ||
+    view.seat === view.declarer ||
+    view.rules.calledJokerKeepsEffect
+  )
+    return null;
+  const call = jokerCallOf(view.rules, kirudaOf(view));
+  const declared = view.friendDeclaration;
+  if (declared?.kind !== "card" || declared.card !== `${suitOf(call)}A`)
+    return null;
+  // 조커콜이 내 손에 있거나 이미 나왔으면 끌려 나올 일이 없다.
+  if (seenCards(view).has(call)) return null;
+  return joker;
 }
 
 function trickState(view: PlayerView): {
@@ -322,6 +350,11 @@ function follow(
       trick.cards.length,
   );
   const nonPoint = cards.filter((c) => countPoints([c]) === 0);
+
+  const suicide = style.book.has("jokerSuicide")
+    ? jokerSuicide(view, cards)
+    : null;
+  if (suicide) return playCard(view, suicide);
 
   if (relation === "partner") {
     const pointCards = cards.filter(
@@ -539,7 +572,9 @@ export const plainRuleBot: Bot = createRuleBot({ name: "plain" });
  * 쓰는 정석. `secureFirst`는 재 보니 오히려 약해져서(판당 −0.05) 뺐다.
  * 각 정석의 효과(2400판, 정석 없는 봇 대비): 마공 +0.12, 무늬 비우기 +0.15,
  * 기루다 A 프렌드 운영 +0.02, 기루다 세기 +0.01.
- * 초간은 +0.009(12만 판, 표준 오차 0.017)로 세기 차이는 잴 수 없지만 손해도 아니라 사람처럼 두려고 넣었다
+ * 초간은 +0.009(12만 판, 표준 오차 0.017)로 세기 차이는 잴 수 없지만 손해도 아니라 사람처럼 두려고 넣었다.
+ * 조커 자살은 기본 규칙(첫 트릭에 조커를 못 냄)에서는 쓸 일이 없고, 봇은 조커를 쥐었을 때만 ♣A를
+ * 프렌드로 불러 봇끼리는 잴 수 없다. 사람을 상대로 정석대로 두려고 넣었다
  */
 export const NORMAL_BOOK: readonly BookRule[] = [
   "mightyAttack",
@@ -547,6 +582,7 @@ export const NORMAL_BOOK: readonly BookRule[] = [
   "countKiruda",
   "voidSuit",
   "kirudaCut",
+  "jokerSuicide",
 ];
 
 /** 입문: 정석을 모르고 초보 실수를 30% 확률로 한다 */
