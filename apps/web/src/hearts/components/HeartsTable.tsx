@@ -72,13 +72,20 @@ export function HeartsTable({
   onExit,
   mission,
   openHands = null,
+  topInset = 0,
 }: {
   onExit: () => void;
   /** 튜토리얼 미션 목표와 결과 안내 */
   mission?: MissionProps;
   /** 다시 보기: 다른 사람 손패를 앞면으로 펼친다(자리마다 정렬한 패) */
   openHands?: readonly (readonly Card[])[] | null;
+  /** 다시 보기: 위에 막대가 있어 그 아래 공간에만 그린다(px) */
+  topInset?: number;
 }) {
+  const insetStyle =
+    topInset > 0
+      ? { marginTop: topInset, height: `calc(100dvh - ${topInset}px)` }
+      : undefined;
   const stage = useStageSize();
   const view = useHearts((s) => s.view);
   const events = useHearts((s) => s.events);
@@ -129,7 +136,8 @@ export function HeartsTable({
     return () => clearTimeout(id);
   }, [notice, clearNotice]);
 
-  if (!view) return <div ref={stage.ref} className="h-dvh w-full" />;
+  if (!view)
+    return <div ref={stage.ref} className="h-dvh w-full" style={insetStyle} />;
 
   const me = view.seat;
   const offsetOf = (seat: number) => (seat - me + 4) % 4;
@@ -348,6 +356,7 @@ export function HeartsTable({
     <div
       ref={stage.ref}
       className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)]"
+      style={insetStyle}
       {...controls.handlers}
     >
       {layout && (

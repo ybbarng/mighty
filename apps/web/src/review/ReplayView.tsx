@@ -79,6 +79,7 @@ export function ReplayView({
   const heartsIdle = useHearts((s) => !s.busy && s.queue.length === 0);
   const idle = hearts ? heartsIdle : mightyIdle;
   const compact = useNarrowPortrait();
+  const bar = useBarBottom();
 
   const jump = useCallback(
     (i: number) => {
@@ -132,15 +133,24 @@ export function ReplayView({
       : null;
 
   return (
-    <div className="relative">
+    <div className="relative min-h-dvh bg-black">
       {ready &&
         (hearts ? (
-          <HeartsTable onExit={onExit} openHands={openHands} />
+          <HeartsTable
+            onExit={onExit}
+            openHands={openHands}
+            topInset={bar.bottom}
+          />
         ) : (
-          <GameTable onExit={onExit} openHands={openHands} />
+          <GameTable
+            onExit={onExit}
+            openHands={openHands}
+            topInset={bar.bottom}
+          />
         ))}
       <div className="pointer-events-none fixed inset-x-0 top-3.5 z-[400] flex justify-center px-2">
         <div
+          ref={bar.ref}
           className="pointer-events-auto flex flex-wrap items-center justify-center gap-1 rounded-2xl bg-black/85 px-2 py-1.5 text-sm shadow-2xl"
           role="toolbar"
           aria-label="다시 보기"
@@ -596,6 +606,26 @@ function Explanation({
 }
 
 /** 세로로 든 좁은 화면(휴대폰)인가 */
+/**
+ * 다시 보기 막대의 아래 끝(px). 게임 화면은 그 아래에만 그려 막대가 자리 판이나 상태 줄을
+ * 가리지 않게 한다(좁은 화면에서는 막대가 두 줄로 접힌다)
+ */
+function useBarBottom() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [bottom, setBottom] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () =>
+      setBottom(Math.ceil(el.getBoundingClientRect().bottom) + 6);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, bottom };
+}
+
 function useNarrowPortrait(): boolean {
   const query = "(max-width: 639px) and (orientation: portrait)";
   const [narrow, setNarrow] = useState(false);
