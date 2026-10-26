@@ -8,9 +8,11 @@ import {
   isJokerEffective,
   jokerCallOf,
   type Kiruda,
+  leadSuitOf,
   mightyOf,
   nextFloat,
   type PlayerView,
+  RANKS,
   type RngState,
   rankOf,
   rankPower,
@@ -34,13 +36,15 @@ type Relation = "me" | "partner" | "opponent" | "unknown";
  * - `kirudaAceFriend` 기루다 A 프렌드면 주공은 낮은 기루다부터 내 프렌드의 A가 나올 자리를 만든다
  * - `countKiruda` 기루다 세기: 밖에 남은 기루다가 없으면 기루다를 더 빼지 않는다
  * - `voidSuit` 무늬 비우기: 바닥 카드를 버릴 때 A 없는 짧은 무늬를 통째로 묻는다
+ * - `kirudaCut` 초간: 선 무늬가 없어 기루다로 간을 칠 때 편과 뒷사람을 보고 어느 기루다로 칠지 고른다
  */
 export type BookRule =
   | "mightyAttack"
   | "secureFirst"
   | "kirudaAceFriend"
   | "countKiruda"
-  | "voidSuit";
+  | "voidSuit"
+  | "kirudaCut";
 
 export const BOOK_RULES: readonly BookRule[] = [
   "mightyAttack",
@@ -48,6 +52,7 @@ export const BOOK_RULES: readonly BookRule[] = [
   "kirudaAceFriend",
   "countKiruda",
   "voidSuit",
+  "kirudaCut",
 ];
 
 export interface RuleBotOptions {
@@ -116,6 +121,62 @@ function cost(view: PlayerView, card: Card): number {
 
 function cheapest(view: PlayerView, cards: readonly Card[]): Card {
   return [...cards].sort((a, b) => cost(view, a) - cost(view, b))[0] as Card;
+}
+
+/** 기루다 10·J: 점수 카드이면서 웬만한 기루다보다 높다 */
+function isMiddlePoint(card: Card): boolean {
+  const rank = rankOf(card);
+  return rank === "10" || rank === "J";
+}
+
+/**
+ * 초간(`kirudaCut`): 선 무늬가 없어 기루다로 간을 칠 때 어느 기루다로 칠지. 가장 싼 기루다가 좋으면 null.
+ * - 뒤에 나를 다시 자를 만한 사람이 없으면 10·J로 쳐 그 점수를 내가 챙긴다.
+ * - 야당이 기루다 1~2장뿐이면 10·J로 친다. 여당이 기루다를 뺄 때 어차피 먹힐 점수를 먼저 챙기고,
+ *   애매한 점수라 뒷사람이 마이티로 덮기도 아깝다.
+ * - 프렌드는 점수가 2장 넘게 걸렸으면, 밖에 남은 기루다로는 넘을 수 없는 기루다 가운데 가장 싼 것으로
+ *   쳐 야당에게 다시 잘리지 않게 한다. 주공은 높은 기루다를 기루다 빼기에 아껴 가장 싼 것으로 친다.
+ */
+function kirudaCut(
+  view: PlayerView,
+  winning: readonly Card[],
+  points: number,
+): Card | null {
+  const kiruda = kirudaOf(view);
+  if (kiruda === "NT") return null;
+  const lead = leadSuitOf(trickState(view).trick);
+  if (lead === null || lead === kiruda) return null;
+  const mighty = mightyOf(view.rules, kiruda);
+  const plain = (c: Card) =>
+    !isJoker(c) && c !== mighty && suitOf(c) === kiruda;
+  const cuts = winning.filter(plain);
+  if (cuts.length === 0) return null;
+  const middle = cuts
+    .filter(isMiddlePoint)
+    .sort((a, b) => rankPower(a) - rankPower(b));
+
+  const played = new Set(view.trick?.plays.map((p) => p.seat) ?? []);
+  const hostileAfter = view.players.some(
+    (s) =>
+      s !== view.seat && !played.has(s) && relationTo(view, s) !== "partner",
+  );
+  if (!hostileAfter) return middle[0] ?? null;
+
+  if (!isRulingSelf(view)) {
+    const mine = view.hand.filter(plain).length;
+    return mine <= 2 ? (middle.at(-1) ?? null) : null;
+  }
+  if (view.seat !== view.friend || points < 2) return null;
+  const seen = seenCards(view);
+  const outside = RANKS.map((r) => `${kiruda}${r}` as Card).filter(
+    (c) => c !== mighty && !seen.has(c),
+  );
+  const top = Math.max(-1, ...outside.map(rankPower));
+  return (
+    cuts
+      .filter((c) => rankPower(c) > top)
+      .sort((a, b) => rankPower(a) - rankPower(b))[0] ?? null
+  );
 }
 
 function trickState(view: PlayerView): {
@@ -293,7 +354,12 @@ function follow(
       isLast ||
       view.trickIndex >= 8 ||
       (!expensive && points >= 1);
-    if (!expensive || worthIt) return playCard(view, best);
+    if (!expensive || worthIt) {
+      const cut = style.book.has("kirudaCut")
+        ? kirudaCut(view, winning, points)
+        : null;
+      return playCard(view, cut ?? best);
+    }
   }
   return playCard(view, cheapest(view, nonPoint.length > 0 ? nonPoint : cards));
 }
@@ -472,13 +538,15 @@ export const plainRuleBot: Bot = createRuleBot({ name: "plain" });
 /**
  * 쓰는 정석. `secureFirst`는 재 보니 오히려 약해져서(판당 −0.05) 뺐다.
  * 각 정석의 효과(2400판, 정석 없는 봇 대비): 마공 +0.12, 무늬 비우기 +0.15,
- * 기루다 A 프렌드 운영 +0.02, 기루다 세기 +0.01
+ * 기루다 A 프렌드 운영 +0.02, 기루다 세기 +0.01.
+ * 초간은 +0.009(12만 판, 표준 오차 0.017)로 세기 차이는 잴 수 없지만 손해도 아니라 사람처럼 두려고 넣었다
  */
 export const NORMAL_BOOK: readonly BookRule[] = [
   "mightyAttack",
   "kirudaAceFriend",
   "countKiruda",
   "voidSuit",
+  "kirudaCut",
 ];
 
 /** 입문: 정석을 모르고 초보 실수를 30% 확률로 한다 */

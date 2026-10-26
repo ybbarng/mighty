@@ -1,8 +1,11 @@
 import {
+  type Card,
   createRng,
   createScenario,
+  type MatchState,
   presetRules,
   RULE_PRESETS,
+  step,
   viewOf,
 } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
@@ -160,5 +163,107 @@ describe("정석", () => {
     expect(action.type).toBe("exchange");
     // ♣Q 한 장뿐인 ♣를 비운다.
     if (action.type === "exchange") expect(action.discard).toContain("CQ");
+  });
+
+  describe("초간: ♣ 선에 ♣가 없어 ♥(기루다)로 간을 친다", () => {
+    const cut = createRuleBot({ book: ["kirudaCut"] });
+    const plain = createRuleBot();
+    /** 기루다 ♥, 마이티 ♠A. 0번이 주공, ◆A를 가진 1번이 프렌드 */
+    function scene(leader: number, hands: Card[][], plays: [number, Card][]) {
+      let state: MatchState = createScenario({
+        rules,
+        phase: "play",
+        declarer: 0,
+        goal: { kiruda: "H", score: 13 },
+        friend: { kind: "card", card: "DA" },
+        leader,
+        hands,
+      });
+      for (const [seat, card] of plays) {
+        const result = step(state, seat, { type: "play", card });
+        if (!result.ok) throw new Error(result.error);
+        state = result.state;
+      }
+      return state;
+    }
+    const played = (state: MatchState, seat: number, bot = cut) =>
+      bot.decide(viewOf(state, seat), createRng(1));
+
+    it("기루다가 두 장뿐인 야당은 10·J로 쳐 점수를 먼저 챙긴다", () => {
+      const state = scene(
+        0,
+        [
+          ["CA", "S5", "S6"],
+          ["C2", "DA", "D2"],
+          ["H3", "H10", "D5"],
+          ["C3", "D6", "D7"],
+          ["C4", "D8", "D9"],
+        ],
+        [
+          [0, "CA"],
+          [1, "C2"],
+        ],
+      );
+      expect(played(state, 2)).toMatchObject({ card: "H10" });
+      expect(played(state, 2, plain)).toMatchObject({ card: "H3" });
+    });
+
+    it("기루다가 넉넉한 야당은 가장 싼 기루다로 친다", () => {
+      const state = scene(
+        0,
+        [
+          ["CA", "S5", "S6"],
+          ["C2", "DA", "D2"],
+          ["H3", "H10", "H4"],
+          ["C3", "D6", "D7"],
+          ["C4", "D8", "D9"],
+        ],
+        [
+          [0, "CA"],
+          [1, "C2"],
+        ],
+      );
+      expect(played(state, 2)).toMatchObject({ card: "H3" });
+    });
+
+    it("뒤에 다시 자를 사람이 없으면 10·J로 쳐 점수를 챙긴다", () => {
+      const state = scene(
+        0,
+        [
+          ["CA", "S5", "S6"],
+          ["C2", "DA", "D2"],
+          ["C5", "D3", "D5"],
+          ["C3", "D6", "D7"],
+          ["H3", "H10", "H4"],
+        ],
+        [
+          [0, "CA"],
+          [1, "C2"],
+          [2, "C5"],
+          [3, "C3"],
+        ],
+      );
+      expect(played(state, 4)).toMatchObject({ card: "H10" });
+    });
+
+    it("프렌드는 점수가 걸리면 밖의 기루다로 넘을 수 없는 카드로 친다", () => {
+      // 밖에 남은 ♥ 가운데 가장 높은 것은 2번의 ♥K다. ♥5로 치면 다시 잘린다.
+      const state = scene(
+        4,
+        [
+          ["C10", "S5", "S6"],
+          ["H5", "HA", "DA"],
+          ["HK", "D3", "D4"],
+          ["C3", "D6", "D7"],
+          ["CK", "D8", "D9"],
+        ],
+        [
+          [4, "CK"],
+          [0, "C10"],
+        ],
+      );
+      expect(played(state, 1)).toMatchObject({ card: "HA" });
+      expect(played(state, 1, plain)).toMatchObject({ card: "H5" });
+    });
   });
 });
