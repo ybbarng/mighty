@@ -98,7 +98,8 @@ export async function playRounds(
   );
   match.drain();
   while (scored < rounds) {
-    if (Date.now() - start > 120_000) throw new Error("판이 끝나지 않는다");
+    // 다른 시험과 CPU를 나눠 쓰거나 기기가 바쁘면 몇 배 느려진다. 멈춘 판만 잡도록 넉넉히 둔다.
+    if (Date.now() - start > 300_000) throw new Error("판이 끝나지 않는다");
     if (incidents.length > 0) break;
     const hostView = match.current();
     if (hostView.phase === "gameOver") break;

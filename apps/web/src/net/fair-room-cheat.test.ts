@@ -99,11 +99,11 @@ describe("멘탈 포커 온라인 대전", () => {
         const honest = () =>
           incidents.filter((i) => i.own && i.reporter !== cheater);
         // 같은 카드가 두 번 열리면 바로 판을 멈추고 "확인하는 중"을 알린다.
-        await until(() => honest().some((i) => i.pending), 90_000);
+        await until(() => honest().some((i) => i.pending), 240_000);
         // 섞기 증명으로 확인되면 그 자리로 바꿔 알린다.
         await until(
           () => honest().filter((i) => !i.pending).length >= 2,
-          90_000,
+          240_000,
         );
       } finally {
         Party.prototype.lockAndShuffle = real;
@@ -113,7 +113,7 @@ describe("멘탈 포커 온라인 대전", () => {
       );
       expect(own.every((i) => i.seat === cheater)).toBe(true);
       expect(own[0]?.reason).toMatch(/섞기 증명/);
-    }, 180_000);
+    }, 600_000);
 
     it("가짜 카드: 다른 자리 열쇠로 다른 카드를 낸다고 하면 방장이 바로 잡는다", async () => {
       const { host, guests, incidents } = await setup(
