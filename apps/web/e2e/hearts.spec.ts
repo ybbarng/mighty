@@ -125,6 +125,74 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   expect(errors).toEqual([]);
 });
 
+/** 카드가 손패를 떠나 판 가운데로 갔는지(다 모아 가면 사라진다) */
+async function expectPlayed(page: Page, card: string, fromY: number) {
+  const button = page.locator(`button[data-card="${card}"]`);
+  await expect
+    .poll(async () => (await button.boundingBox())?.y ?? -1, {
+      timeout: 5_000,
+    })
+    .toBeLessThan(fromY - 40);
+}
+
+test("하트: 키보드로 넘기고 내며, 터치로 끌어 낸다", async ({ page }) => {
+  await prepare(page);
+  await page.goto("/hearts");
+  await page.getByRole("button", { name: /나홀로 하트/ }).click();
+  await expect(page.getByText(/넘길 카드 3장/)).toBeVisible({
+    timeout: 20_000,
+  });
+  for (let k = 0; k < 3; k++)
+    await myCards(page)
+      .nth(k)
+      .click({ position: { x: 8, y: 8 } });
+  // 카드 단추에서 손을 떼고 Enter를 누르면 패널의 넘기기 단추가 눌린다.
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "넘기기", exact: true }),
+  ).toBeHidden();
+
+  // 키보드: → 로 첫 카드를 고르고 Enter로 낸다.
+  const turn = page.getByText(/낼 카드를 고르세요/);
+  await expect(turn).toBeVisible({ timeout: 20_000 });
+  const first = myCards(page).first();
+  const card = (await first.getAttribute("data-card")) as string;
+  const y = (await first.boundingBox())?.y ?? 0;
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expectPlayed(page, card, y);
+
+  // 터치: 다음 내 차례에 카드를 짚고 위로 끌어 올려 놓는다.
+  await expect(turn).toBeHidden();
+  await expect(turn).toBeVisible({ timeout: 20_000 });
+  const target = myCards(page).last();
+  const dragged = (await target.getAttribute("data-card")) as string;
+  const box = await target.boundingBox();
+  if (!box) throw new Error("카드 자리를 모른다");
+  await target.evaluate(
+    (el, { x, y, h }) => {
+      const fire = (type: string, cy: number) =>
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerType: "touch",
+            isPrimary: true,
+            clientX: x,
+            clientY: cy,
+          }),
+        );
+      fire("pointerdown", y);
+      fire("pointermove", y - 20);
+      fire("pointermove", y - h * 1.5);
+      fire("pointerup", y - h * 1.5);
+    },
+    { x: box.x + 6, y: box.y + 10, h: box.height },
+  );
+  await expectPlayed(page, dragged, box.y);
+});
+
 test("하트: 방장이 방을 만들고 친구가 들어와 한 판을 둔다", async ({
   context,
 }, info) => {

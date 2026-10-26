@@ -37,6 +37,7 @@ import { ChatBox } from "./ChatBox";
 import { CardArt } from "./card-art/CardArt";
 import { DealAnimation } from "./DealAnimation";
 import { FairOverlays, FairStatus } from "./FairOverlays";
+import { useHandControls } from "./hand-controls";
 import { OpenHand } from "./OpenHand";
 import { PlayingCard } from "./PlayingCard";
 import { ElectionPanel } from "./panels/ElectionPanel";
@@ -141,15 +142,8 @@ export function GameTable({
 
   const [discards, setDiscards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
-  // 터치로 손패를 훑거나 위로 끄는 중. 손을 떼기 전까지 카드 단추의 누르기를 대신한다.
-  const touchGesture = useRef<{
-    x: number;
-    y: number;
-    moved: boolean;
-    /** 처음 짚은 카드 */
-    card: Card;
-  } | null>(null);
-  const [dragArmed, setDragArmed] = useState(false);
+  const controls = useHandControls();
+  const { dragArmed } = controls;
   const [hovered, setHovered] = useState<Card | null>(null);
   const cardTipOn = useSettings((s) => s.cardTip);
   // 은어 보기를 바꾸면 문구를 다시 그린다(문구 함수는 terms.ts가 설정을 따라간다).
@@ -222,21 +216,6 @@ export function GameTable({
     return () => clearTimeout(id);
   }, [notice, clearNotice]);
 
-  // 키보드 처리는 렌더할 때마다 최신 손패·선택지를 보도록 ref에 담아 둔다.
-  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // 카드 단추가 Enter를 이미 처리했으면 두 번 내지 않는다.
-      if (e.defaultPrevented) return;
-      const target = e.target as HTMLElement | null;
-      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
-        return;
-      keyHandler.current(e);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   if (!view) return <div ref={stage.ref} className="h-dvh w-full" />;
 
   const { rules } = view;
@@ -304,50 +283,26 @@ export function GameTable({
     act({ type: "play", card, slot: hand.indexOf(card) });
   };
 
-  /** 손가락 아래 손패 카드 */
-  const cardAt = (x: number, y: number): Card | null => {
-    const el = document
-      .elementFromPoint(x, y)
-      ?.closest<HTMLElement>("[data-card]");
-    const card = el?.dataset.card as Card | undefined;
-    return card && hand.includes(card) ? card : null;
-  };
-  const touchPlaying =
-    decision?.kind === "play" && leadChoice === null && layout !== null;
-  const onHandPointerDown = (e: React.PointerEvent) => {
-    if (e.pointerType !== "touch" || !touchPlaying) return;
-    const card = cardAt(e.clientX, e.clientY);
-    if (!card) return;
-    touchGesture.current = { x: e.clientX, y: e.clientY, moved: false, card };
-  };
-  const onHandPointerMove = (e: React.PointerEvent) => {
-    const g = touchGesture.current;
-    if (!g || !layout) return;
-    if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < 10) return;
-    g.moved = true;
-    // 고른 카드 없이 바로 끌면 처음 짚은 카드를 낸다.
-    const held = selected ?? (playable?.has(g.card) ? g.card : null);
-    if (held !== selected) setSelected(held);
-    const top = stage.ref.current?.getBoundingClientRect().top ?? 0;
-    // 손패 위쪽 끝보다 카드 반 장 넘게 올라가면 낼 준비
-    const armed = e.clientY - top < layout.hand.top - layout.hand.card.h * 0.5;
-    setDragArmed(armed && held !== null);
-    if (armed) return;
-    // 손패 위를 훑으면 손가락 아래의 낼 수 있는 카드를 고른다.
-    const under = cardAt(e.clientX, e.clientY);
-    if (under && playable?.has(under) && under !== selected) setSelected(under);
-  };
-  const onHandPointerUp = () => {
-    const g = touchGesture.current;
-    touchGesture.current = null;
-    if (!g?.moved) return;
-    if (dragArmed && selected && playable?.has(selected)) playCard(selected);
-    setDragArmed(false);
-  };
+  controls.update({
+    stage: stage.ref.current,
+    hand,
+    playable,
+    selected,
+    setSelected,
+    canPlay:
+      decision?.kind === "play" && leadChoice === null && layout !== null,
+    handTop: layout?.hand.top ?? 0,
+    cardHeight: layout?.hand.card.h ?? 0,
+    play: playCard,
+    cancel: () => {
+      setLeadChoice(null);
+      setSelected(null);
+    },
+  });
 
   const onCardActivate = (card: Card, pointerType: string) => {
-    // 훑거나 끈 것은 손을 뗄 때 따로 처리한다(onHandPointerUp).
-    if (touchGesture.current?.moved) return;
+    // 훑거나 끈 것은 손을 뗄 때 따로 처리한다(useHandControls).
+    if (controls.gestureMoved()) return;
     if (exchanging && decision?.kind === "exchange") {
       // 원작은 버릴 카드를 고를 때 카드받기 소리를 냈다.
       playUiCue("pickCard");
@@ -383,52 +338,6 @@ export function GameTable({
       return;
     }
     playCard(card);
-  };
-
-  keyHandler.current = (e) => {
-    if (e.key === "Escape") {
-      setLeadChoice(null);
-      setSelected(null);
-      return;
-    }
-    // 판 가운데 패널: 숫자 키로 n번째 선택지, ↑↓·+−로 숫자, Enter로 주 단추.
-    const panel = stage.ref.current?.querySelector(".panel-area");
-    if (panel && !(e.target instanceof HTMLButtonElement)) {
-      const press = (selector: string, index = 0) => {
-        const button = panel.querySelectorAll<HTMLButtonElement>(
-          `${selector}:not([disabled])`,
-        )[index];
-        if (!button) return false;
-        e.preventDefault();
-        button.click();
-        return true;
-      };
-      if (/^[1-9]$/.test(e.key) && press("[data-choice]", Number(e.key) - 1))
-        return;
-      if (
-        (e.key === "ArrowUp" || e.key === "+" || e.key === "=") &&
-        press('[data-step="up"]')
-      )
-        return;
-      if (
-        (e.key === "ArrowDown" || e.key === "-") &&
-        press('[data-step="down"]')
-      )
-        return;
-      if (e.key === "Enter" && !selected && press("[data-primary]")) return;
-    }
-    if (decision?.kind !== "play" || leadChoice) return;
-    const options = hand.filter((c) => playable?.has(c));
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-      const i = selected ? options.indexOf(selected) : -1;
-      const step = e.key === "ArrowRight" ? 1 : -1;
-      const next = options[(i + step + options.length) % options.length];
-      if (next) setSelected(next);
-    } else if (e.key === "Enter" && selected && playable?.has(selected)) {
-      e.preventDefault();
-      playCard(selected);
-    }
   };
 
   const trick = shownTrick ?? view.trick;
@@ -612,13 +521,7 @@ export function GameTable({
       <div
         ref={stage.ref}
         className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)]"
-        onPointerDown={onHandPointerDown}
-        onPointerMove={onHandPointerMove}
-        onPointerUp={onHandPointerUp}
-        onPointerCancel={() => {
-          touchGesture.current = null;
-          setDragArmed(false);
-        }}
+        {...controls.handlers}
       >
         {layout && (
           <>

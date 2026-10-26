@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { DealAnimation } from "@/components/DealAnimation";
 import { FairOverlays, FairStatus } from "@/components/FairOverlays";
+import { useHandControls } from "@/components/hand-controls";
 import { OpenHand } from "@/components/OpenHand";
 import { PlayingCard } from "@/components/PlayingCard";
 import { ActionButton, Panel } from "@/components/panels/common";
@@ -113,6 +114,7 @@ export function HeartsTable({
   const [selected, setSelected] = useState<Card | null>(null);
   const [showScores, setShowScores] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const controls = useHandControls();
 
   const phaseKey = `${view?.roundNumber}-${view?.phase}-${view?.trickIndex}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: 단계가 바뀔 때만 비운다
@@ -242,7 +244,24 @@ export function HeartsTable({
     }
   };
 
+  const playCard = (card: Card) =>
+    act({ type: "play", card, slot: hand.indexOf(card) });
+  controls.update({
+    stage: stage.ref.current,
+    hand,
+    playable,
+    selected,
+    setSelected,
+    canPlay: playable !== null && layout !== null,
+    handTop: layout?.hand.top ?? 0,
+    cardHeight: layout?.hand.card.h ?? 0,
+    play: playCard,
+    cancel: () => setSelected(null),
+  });
+
   const onCard = (card: Card, pointer: string) => {
+    // 훑거나 끈 것은 손을 뗄 때 따로 처리한다(useHandControls).
+    if (controls.gestureMoved()) return;
     if (passing && decision?.kind === "pass") {
       playUiCue("pickCard");
       setPassPick((p) =>
@@ -273,7 +292,7 @@ export function HeartsTable({
       setSelected(card);
       return;
     }
-    act({ type: "play", card, slot: hand.indexOf(card) });
+    playCard(card);
   };
 
   // 게임 끝 승패 문구. 하트는 판마다 승패가 없어 게임이 끝날 때만 띄운다(누가 그만둬 끝나면 띄우지 않는다).
@@ -329,6 +348,7 @@ export function HeartsTable({
     <div
       ref={stage.ref}
       className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)]"
+      {...controls.handlers}
     >
       {layout && (
         <>
@@ -567,7 +587,8 @@ export function HeartsTable({
                     y:
                       slot.y -
                       (lifted
-                        ? layout.hand.card.h * 0.2
+                        ? layout.hand.card.h *
+                          (controls.dragArmed && selected === card ? 0.6 : 0.2)
                         : acting
                           ? 0
                           : -layout.hand.card.h * 0.04),
