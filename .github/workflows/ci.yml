@@ -24,14 +24,30 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  # 화면 시험은 기계 한 대에서 11분 넘게 걸려 셋으로 나눠 동시에 돌린다.
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm --filter @mighty/web exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - run: pnpm e2e --shard=${{ matrix.shard }}/3
       # 화면 시험이 실패했을 때만 스크린숏을 남긴다. 저장 공간이 차서 올리지 못해도 CI를 실패로 만들지 않는다.
       - uses: actions/upload-artifact@v7
         if: failure()
         continue-on-error: true
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.shard }}
           path: apps/web/test-results
           retention-days: 3
