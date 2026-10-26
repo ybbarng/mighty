@@ -13,7 +13,7 @@
 
 ## 명령
 - 개발 서버: `pnpm dev` (포트 3456)
-- 시험: `pnpm test`(단위, 약 2~3분) · `pnpm lint` · `pnpm typecheck`
+- 시험: `pnpm test`(단위, 약 1분 반) · `pnpm lint` · `pnpm typecheck`
 - 화면 시험: `pnpm --filter @mighty/web build` 뒤 `pnpm --filter @mighty/web exec playwright test`. 여러 탭 멘탈 포커는 `FAIR_MULTI=1`
 - 멘탈 포커 계산 시간: `pnpm --filter @mighty/fair-play bench`
 
