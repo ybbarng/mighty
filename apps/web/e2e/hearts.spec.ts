@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /** 하트: 숨은 입구, 혼자 한 판, 친구와 한 판 */
 async function prepare(page: Page) {
@@ -125,6 +125,18 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   expect(errors).toEqual([]);
 });
 
+/** 카드가 움직임을 멈춘 뒤의 자리(차례가 오면 손패가 0.3초 동안 내려앉는다) */
+async function settledBox(card: Locator) {
+  let last = await card.boundingBox();
+  for (let i = 0; i < 20; i++) {
+    await card.page().waitForTimeout(100);
+    const now = await card.boundingBox();
+    if (now && last && now.x === last.x && now.y === last.y) return now;
+    last = now;
+  }
+  return last;
+}
+
 /** 카드가 손패를 떠나 판 가운데로 갔는지(다 모아 가면 사라진다) */
 async function expectPlayed(page: Page, card: string, fromY: number) {
   const button = page.locator(`button[data-card="${card}"]`);
@@ -158,7 +170,7 @@ test("하트: 키보드로 넘기고 내며, 터치로 끌어 낸다", async ({ 
   await expect(turn).toBeVisible({ timeout: 20_000 });
   const first = myCards(page).first();
   const card = (await first.getAttribute("data-card")) as string;
-  const y = (await first.boundingBox())?.y ?? 0;
+  const y = (await settledBox(first))?.y ?? 0;
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
@@ -169,7 +181,7 @@ test("하트: 키보드로 넘기고 내며, 터치로 끌어 낸다", async ({ 
   await expect(turn).toBeVisible({ timeout: 20_000 });
   const target = myCards(page).last();
   const dragged = (await target.getAttribute("data-card")) as string;
-  const box = await target.boundingBox();
+  const box = await settledBox(target);
   if (!box) throw new Error("카드 자리를 모른다");
   await target.evaluate(
     (el, { x, y, h }) => {
