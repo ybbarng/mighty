@@ -11,6 +11,12 @@ describe("메시지로 하는 멘탈 포커", () => {
   it("셋이 섞고 나누면 각자 자기 자리만 열고, 공개한 자리는 모두가 연다", async () => {
     const rules = presetRules("standard5");
     const devices = network([0, 1, 2]);
+    // 연결 진단: 판 시작과 무거운 계산마다 걸린 시간을 알린다.
+    const timings: string[] = [];
+    devices[1]?.on("timing", (deal, what, ms, stage) => {
+      if (deal === 1 && ms >= 0)
+        timings.push(stage ? `${what}:${stage}` : what);
+    });
     const plan = tokenDeal(rules);
     // 자리 0·3·4는 0번 기기(방장과 컴퓨터), 1·2는 각자
     const deviceOf = (seat: number) => (seat === 1 || seat === 2 ? seat : 0);
@@ -42,6 +48,11 @@ describe("메시지로 하는 멘탈 포커", () => {
     await settle(devices);
     const cards = devices[2]?.openAll(1);
     expect(cards?.size).toBe(53);
+    // 섞기 증명은 카드를 연 뒤 따로 이어서 계산한다.
+    await settle(devices);
+    expect(timings).toEqual(
+      expect.arrayContaining(["begin", "compute:shuffle", "proof:shuffle"]),
+    );
   }, 60_000);
 
   describe("열쇠 증명: 카드가 열리지 않으면 누가 틀린 열쇠를 냈는지 짚는다", () => {

@@ -26,7 +26,7 @@ import type { GameKit, KitLoggedAction } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import type { ArchiveSource } from "@/review/recorder";
 import { serializeDeals } from "@/review/replay";
-
+import { watchFairDevice } from "./diag";
 import { type FairReplayGame, verifyFairLog } from "./fair-verify";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import { verifyHostProof, welcomeStatement } from "./identity";
@@ -548,6 +548,7 @@ export class GuestRoom<
     this.fair = fair;
     this.restoredSent = saved?.sent ?? [];
     fair.device.on("persist", () => this.persistFair());
+    watchFairDevice(fair.device);
     for (const { message, from } of this.fairEarly.splice(0))
       fair.receive(message, from);
     return fair;

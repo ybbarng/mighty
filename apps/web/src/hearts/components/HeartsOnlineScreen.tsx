@@ -164,7 +164,10 @@ export function HeartsOnlineScreen({
     setPlayerName(trimmed);
     setPhase("connecting");
     try {
-      const transport = await openTransport(roomCode);
+      const transport = await openTransport(roomCode, {
+        role: isHost ? "host" : "guest",
+        game: "hearts",
+      });
       if (isHost) {
         const host = new HostRoom({
           kit: heartsKit,
@@ -474,6 +477,10 @@ export function HeartsOnlineScreen({
         >
           이 방은 어떻게 지켜지나요?
         </a>
+        <p className="text-center text-[11px] leading-relaxed opacity-50">
+          연결 문제를 고치려고 연결에 걸린 시간을 서버에 보냅니다(패·이름·채팅은
+          보내지 않습니다)
+        </p>
         <button
           type="button"
           onClick={onBack}

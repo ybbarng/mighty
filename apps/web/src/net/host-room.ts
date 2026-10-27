@@ -26,6 +26,7 @@ import { LocalMatch } from "@/game/local-match";
 import { mightyKit } from "@/game/mighty-kit";
 import type { ArchiveSource } from "@/review/recorder";
 import { serializeDeals } from "@/review/replay";
+import { watchFairDevice } from "./diag";
 import { commit, deriveSeed, newSecret, tokenProof } from "./fairness";
 import type { HostRestore, HostSaved, HostStore } from "./host-store";
 import {
@@ -743,6 +744,7 @@ export class HostRoom<
     });
     this.fair = table;
     table.device.on("persist", () => this.persist());
+    watchFairDevice(table.device);
     match = new LocalMatch({
       rules: this.rules as unknown as RuleSet,
       seed,
@@ -828,6 +830,7 @@ export class HostRoom<
     });
     this.fair = table;
     table.device.on("persist", () => this.persist());
+    watchFairDevice(table.device);
     const kit = this.kit as unknown as GameKit<
       HeartsRules,
       HeartsState,

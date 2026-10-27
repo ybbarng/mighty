@@ -1,4 +1,5 @@
 import { useChat } from "./chat";
+import type { DiagContext } from "./diag";
 import type { FairSaved, GuestRoom } from "./guest-room";
 import type { HostRoom } from "./host-room";
 import { clearHostingRoom } from "./host-store";
@@ -32,11 +33,14 @@ export function testVoteDelayMs():
   return value > 0 ? { voteDelayMs: value } : {};
 }
 
-export async function openTransport(roomCode: string): Promise<Transport> {
+export async function openTransport(
+  roomCode: string,
+  context: DiagContext,
+): Promise<Transport> {
   if (isLocalNet()) return joinBroadcast(roomCode);
   // WebRTC 라이브러리는 친구와 할 때만 받는다.
   const { joinP2P } = await import("./p2p-transport");
-  return joinP2P(roomCode);
+  return joinP2P(roomCode, context);
 }
 
 /**

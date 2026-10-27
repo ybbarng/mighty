@@ -158,6 +158,16 @@ export interface DeviceEvents {
   ) => void;
   /** 새 열쇠를 만들었다(새로고침에 대비해 남겨 둘 때) */
   persist: () => void;
+  /**
+   * 시간 재기(연결 진단). `begin`은 새 판을 시작한 때(ms 0), 그 밖은 이 기기가 한 무거운 계산에
+   * 걸린 시간: `compute`(섞기·다시 잠그기 단계), `proof`(섞기 증명 약속), `answer`(섞기 증명 응답)
+   */
+  timing: (
+    deal: number,
+    what: "begin" | "compute" | "proof" | "answer",
+    ms: number,
+    stage?: string,
+  ) => void;
 }
 
 interface DealCtx {
@@ -241,6 +251,7 @@ export class FairDevice {
     keys: new Set(),
     problem: new Set(),
     persist: new Set(),
+    timing: new Set(),
   };
   /** 새로고침 전에 남겨 둔 열쇠(판 번호 → 열쇠) */
   private readonly restored: Map<number, PartySnapshot>;
@@ -372,6 +383,7 @@ export class FairDevice {
       this.pendingKeys.push({ deal, slot, from: of, key });
     }
     this.deals.set(deal, ctx);
+    this.emit("timing", deal, "begin", 0);
     // 새로고침 전에 연 카드는 그대로 쓴다. 넘긴 카드(하트)는 이제 남의 자리라 다시 열 수 없지만 화면에는 남는다.
     for (const [slot, card] of ctx.party.hand) ctx.mine.set(slot, card);
     if (ctx.mine.size > 0)
@@ -712,7 +724,9 @@ export class FairDevice {
           // (다시 섞으면 남들이 쓴 덱과 달라진다). 계산만 하고 보내지 못했으면 아무도 못 봤으니 다시 한다.
           if (ctx.sent ? ctx.sent.has(key) : this.alreadyDone(ctx, stage))
             return;
+          const started = Date.now();
           const output = await this.compute(ctx, stage, input);
+          this.emit("timing", ctx.id, "compute", Date.now() - started, stage);
           ctx.chains.set(key, output);
           const passes = RELOCK_PASSES[stage];
           const v = passes
@@ -1210,12 +1224,14 @@ export class FairDevice {
     if (e === null || !io) return;
     state.proving = true;
     void (async () => {
+      const started = Date.now();
       const work = await commitShuffle(
         this.g,
         this.label(ctx, state, this.id),
         io.input,
         e,
       );
+      this.emit("timing", ctx.id, "proof", Date.now() - started, state.stage);
       state.work = work;
       state.commits.set(this.id, work.commit);
       this.send({
@@ -1316,6 +1332,7 @@ export class FairDevice {
         state.sentAnswer = true;
         const work = state.work;
         void (async () => {
+          const started = Date.now();
           const answers = await answerShuffle(
             this.g,
             this.label(ctx, state, this.id),
@@ -1324,6 +1341,13 @@ export class FairDevice {
             e,
             work,
             bits,
+          );
+          this.emit(
+            "timing",
+            ctx.id,
+            "answer",
+            Date.now() - started,
+            state.stage,
           );
           state.answers.set(this.id, answers);
           this.send({
