@@ -43,6 +43,9 @@ import {
 
 declare function setTimeout(callback: () => void, ms: number): unknown;
 
+/** 내 카드가 이만큼 안 열리면 섞기 증명을 그냥 만든다(scheduleShuffleProof). 남이 기다리는 시간(proofTimeoutMs)보다 짧아야 한다 */
+const PROOF_DEFER_MS = 10_000;
+
 export type GroupName = "1024" | "2048";
 export const GROUPS: Record<GroupName, SraGroup> = {
   "1024": GROUP_1024,
@@ -198,6 +201,8 @@ interface DealCtx {
   blamed: Set<number>;
   /** 섞는 단계마다 섞기 증명 진행 */
   shuffles: Map<string, ShuffleState>;
+  /** 내 카드가 열리기를 기다리는 내 섞기 증명(scheduleShuffleProof) */
+  deferredProofs: Set<ShuffleState>;
   /** 기기 → 바꾸기(convert) 증명 */
   cproofs: Map<number, KeyProof>;
   /** 판 끝 공개를 했는데 섞기 사슬이 아직이다(새로고침 뒤 다시 처리할 때). 끝나면 공개한다 */
@@ -367,6 +372,7 @@ export class FairDevice {
       proofs: new Map(),
       blamed: new Set(),
       shuffles: new Map(),
+      deferredProofs: new Set(),
       cproofs: new Map(),
       auditPending: false,
       sent: this.restored.has(deal)
@@ -697,7 +703,7 @@ export class FairDevice {
         if (from !== this.id) this.watch(ctx, state, "commit", from);
       }
       // 새로고침 전에 보낸 내 섞기가 돌아왔으면 증명을 다시 만든다(섞기 열쇠에서 정해져 같다).
-      if (from === this.id) this.startShuffleProof(ctx, state);
+      if (from === this.id) this.scheduleShuffleProof(ctx, state);
     }
     return this.advance(ctx);
   }
@@ -762,7 +768,7 @@ export class FairDevice {
           });
           ctx.sent?.add(key);
           this.emit("persist");
-          if (state) this.startShuffleProof(ctx, state);
+          if (state) this.scheduleShuffleProof(ctx, state);
         }
       }
       const doneKey = `${round}`;
@@ -980,7 +986,10 @@ export class FairDevice {
       ctx.mine.set(slot, card);
       opened = true;
     }
-    if (opened) this.emit("cards", ctx.id, ctx.mine);
+    if (opened) {
+      this.emit("cards", ctx.id, ctx.mine);
+      this.startDeferredProofs(ctx);
+    }
   }
 
   private replaying = false;
@@ -1214,6 +1223,26 @@ export class FairDevice {
     const input = this.inputOf(ctx, state.round, stages, si, index);
     const output = ctx.chains.get(`${state.round}:${state.stage}:${index}`);
     return input && output ? { input, output } : null;
+  }
+
+  /**
+   * 내 섞기 증명을 언제 만들지 정한다. 증명은 크고 무거워(휴대폰에서 1초 넘게 계산하고 약속이 약 150KB)
+   * 바로 보내면 나눠 주기에 필요한 메시지가 그 뒤에 줄을 선다. 이미 공개한 섞기 결과에 대한 증명이라
+   * 늦게 내도 속일 여지가 없으니, 내 카드가 열린 뒤(사람들이 고민하는 동안) 만든다.
+   * 부정으로 내 카드가 안 열려도 내 증명은 나가야 하므로(안 내면 내가 범인으로 몰린다) 정한 시간 뒤에는 그냥 만든다.
+   */
+  private scheduleShuffleProof(ctx: DealCtx, state: ShuffleState): void {
+    if (ctx.mine.size > 0) {
+      this.startShuffleProof(ctx, state);
+      return;
+    }
+    ctx.deferredProofs.add(state);
+    setTimeout(() => this.startDeferredProofs(ctx), PROOF_DEFER_MS);
+  }
+
+  private startDeferredProofs(ctx: DealCtx): void {
+    for (const state of ctx.deferredProofs) this.startShuffleProof(ctx, state);
+    ctx.deferredProofs.clear();
   }
 
   /** 내 섞기의 약속을 만들어 보낸다(판 진행 줄 밖에서 계산한다) */
