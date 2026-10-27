@@ -214,7 +214,7 @@ export function FairLine({
           onClick={() => {
             const next = !fairPlay;
             setFairPlay(next);
-            setFair(next ? { group: "2048" } : null);
+            setFair(next ? { group: "r255" } : null);
           }}
           className="shrink-0 rounded bg-white/10 px-1.5 py-0.5"
         >

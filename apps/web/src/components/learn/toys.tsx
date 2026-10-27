@@ -6,7 +6,7 @@ import { Box, Btn, Result } from "@/components/security/demos";
 import { cn } from "@/lib/cn";
 
 /*
- * 작은 수로 원리를 보여 주는 장난감들. 실제 게임은 2048비트 수를 쓰지만, 원리는 23 같은 작은 소수로도 같다.
+ * 작은 수로 원리를 보여 주는 장난감들. 실제 게임은 타원곡선(ristretto255)을 쓰지만, 원리는 23 같은 작은 소수로도 같다.
  * 작은 군: 안전 소수 p = 23 = 2·11 + 1, 이차잉여(제곱수) 11개가 크기 q = 11의 부분군이고 g = 4가 생성원이다.
  */
 
@@ -762,8 +762,8 @@ export function PolyCheckToy() {
       {tampered && stats.tries > 0 && (
         <p className="text-xs text-white/70">
           t를 {stats.tries}번 뽑아 {stats.caught}번 잡았다. 두 다항식이 다르면
-          같아지는 t는 많아야 6개(차수)라, 23개 중에서는 가끔 빠져나가지만
-          2048비트 수 중에서는 사실상 빠져나갈 수 없다.
+          같아지는 t는 많아야 6개(차수)라, 23개 중에서는 가끔 빠져나가지만 실제
+          게임의 큰 수(2²⁵²개쯤) 중에서는 사실상 빠져나갈 수 없다.
         </p>
       )}
       <Result ok={!tampered || pa !== pb}>

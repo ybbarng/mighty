@@ -182,7 +182,7 @@ export function HeartsOnlineScreen({
           pace: (next) => setTimeout(next, 0),
           ...testVoteDelayMs(),
           ...(useSettings.getState().fairPlay
-            ? { fair: { group: "2048" as const } }
+            ? { fair: { group: "r255" as const } }
             : {}),
         });
         heartsSession.host = host;

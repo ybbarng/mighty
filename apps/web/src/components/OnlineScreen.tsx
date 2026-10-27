@@ -211,7 +211,7 @@ export function OnlineScreen({
           pace: browserPace,
           ...testVoteDelayMs(),
           ...(useSettings.getState().fairPlay
-            ? { fair: { group: "2048" as const } }
+            ? { fair: { group: "r255" as const } }
             : {}),
         });
         onlineSession.host = host;
