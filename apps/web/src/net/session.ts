@@ -39,11 +39,15 @@ export async function openTransport(
   context: DiagContext,
 ): Promise<Transport> {
   // 멘탈 포커 잠그기 군(타원곡선)을 미리 불러 둔다. 방장이 고른 군은 대기실에서 알게 된다.
+  const started = performance.now();
   await prepareGroup("r255");
   if (isLocalNet()) return joinBroadcast(roomCode);
   // WebRTC 라이브러리는 친구와 할 때만 받는다.
   const { joinP2P } = await import("./p2p-transport");
-  return joinP2P(roomCode, context);
+  return joinP2P(roomCode, {
+    ...context,
+    beforeMs: Math.round(performance.now() - started),
+  });
 }
 
 /**

@@ -1,7 +1,12 @@
-import { defaultRelayUrls, joinRoom, selfId } from "trystero/nostr";
+import {
+  defaultRelayUrls,
+  getRelaySockets,
+  joinRoom,
+  selfId,
+} from "trystero/nostr";
 
 import { type DiagContext, diag, startDiag } from "./diag";
-import { trackedPeerConnections } from "./rtc-diag";
+import { trackedPeerConnections, watchRelays } from "./rtc-diag";
 import { sdpFingerprint, type Transport } from "./transport";
 import { turnConfig } from "./turn";
 
@@ -65,7 +70,14 @@ export async function joinP2P(
   };
   let peers = 0;
   // 참가자는 방장과 이어지기 전, 방장은 첫 참가자가 오기 전까지 연결 시도 상황을 보낸다.
-  const stopWatching = tracking.watchWaiting(() => peers > 0);
+  const stopWaiting = tracking.watchWaiting(() => peers > 0);
+  const stopRelays = watchRelays(
+    () => getRelaySockets() as Record<string, WebSocket>,
+  );
+  const stopWatching = () => {
+    stopWaiting();
+    stopRelays();
+  };
   room.onPeerJoin = (peerId) => {
     peers++;
     diag("peer", { peers });

@@ -16,6 +16,8 @@ const MAX_BATCH = 20;
 export interface DiagContext {
   role: "host" | "guest";
   game: string;
+  /** 들어가기를 누른 뒤 기록을 시작하기 전까지 걸린 시간(ms): 암호 라이브러리·WebRTC 코드 받기 */
+  beforeMs?: number;
 }
 
 interface Session {
