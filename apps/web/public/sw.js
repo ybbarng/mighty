@@ -2,7 +2,10 @@
 // 게임은 모두 브라우저에서 돌기 때문에 한 번 받은 파일만 있으면 인터넷 없이 할 수 있다.
 // - 페이지(HTML): 네트워크 먼저, 안 되면 저장해 둔 것
 // - 그 밖의 같은 출처 파일(JS, CSS, 아이콘): 저장해 둔 것 먼저, 없으면 받아서 저장
-const CACHE = "mighty-v1";
+// TURN 계정 주소를 빼기 전 판(v1)이 계정을 저장해 두었을 수 있어, 이름을 올려 그 캐시를 비운다.
+const CACHE = "mighty-v2";
+/** 저장하면 안 되는 주소: 요청마다 새로 받는 시간 제한 TURN 계정 */
+const NO_STORE = new Set(["/turn-credentials"]);
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -21,9 +24,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const url = new URL(request.url);
   if (
     request.method !== "GET" ||
-    new URL(request.url).origin !== self.location.origin
+    url.origin !== self.location.origin ||
+    NO_STORE.has(url.pathname)
   )
     return;
 

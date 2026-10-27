@@ -71,11 +71,14 @@ networks:
 CODE=$(docker compose exec -T mighty wget -qO /dev/null -S http://127.0.0.1/healthz 2>&1 | awk '/HTTP\//{print $2; exit}' || echo 000)
 ```
 
-## TURN 은 아직 하지 않는다
+## TURN 중계 (2026-10-27)
 
-직접 연결이 막힌 네트워크용 TURN(`deploy/turnserver.conf`)은 UDP 포트를 열어야 해서 서버 규칙("포트를 열지 않는다")과 맞지 않는다.
-앱은 빌드 값 `NEXT_PUBLIC_TURN_URLS`·`_USERNAME`·`_CREDENTIAL` 이 있을 때만 TURN 을 쓰므로, 지금은 넣지 않는다.
-필요해지면 서버 쪽에서 방식을 정한다.
+직접 연결이 막힌 네트워크(회사 와이파이 등)를 위한 TURN(coturn)은 servers 저장소 `byb.kr/apps/turn/` 이 맡는다.
+
+- 주소: `turns:turn.byb.kr:443?transport=tcp` 하나. traefik 이 443 에서 넘긴다(새 포트를 열지 않는다). 그래서 두 사람 모두 이 TURN 으로 중계할 때만 이어진다.
+- 계정: 앱이 방에 들어갈 때 같은 출처 `GET /turn-credentials` → `{username, credential, urls, ttl}`(요청마다 새 계정, 6시간). 계정을 번들에 넣지 않는다. 못 받으면 TURN 없이 잇는다(`apps/web/src/net/turn.ts`).
+- 서비스 워커는 이 주소를 저장하지 않는다(`public/sw.js` 의 `NO_STORE`).
+- 남용 막기(대역폭·동시 중계 수 제한, 내부 주소로 중계 금지)는 servers 쪽 설정에 있다.
 
 ## 확인
 
