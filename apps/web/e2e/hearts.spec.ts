@@ -51,9 +51,23 @@ test("마이티 로고를 다섯 번 누르면 하트로 간다", async ({ page 
   for (let i = 0; i < 5; i++) await logo.click();
   await expect(page).toHaveURL(/\/hearts$/);
   await expect(page.getByRole("button", { name: /나홀로 하트/ })).toBeVisible();
+  // 안드로이드 아래 막대에 비치는 색도 하트 색으로 바뀐다.
+  const colors = () =>
+    page.evaluate(() => ({
+      theme: document
+        .querySelector('meta[name="theme-color"]')
+        ?.getAttribute("content"),
+      html: getComputedStyle(document.documentElement).backgroundColor,
+    }));
+  await expect
+    .poll(colors)
+    .toEqual({ theme: "#3b0a0a", html: "rgb(59, 10, 10)" });
   // 한 번 찾으면 마이티 첫 화면에 ♥ 단추가 남는다.
   await page.goto("/");
   await expect(page.getByRole("button", { name: "하트" })).toBeVisible();
+  await expect
+    .poll(colors)
+    .toEqual({ theme: "#0a3622", html: "rgb(10, 54, 34)" });
 });
 
 test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page }, info) => {

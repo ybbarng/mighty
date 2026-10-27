@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { HeartsApp } from "@/hearts/components/HeartsApp";
 
@@ -17,6 +17,14 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+/** 안드로이드 위아래 막대 색. 하트 화면 가장자리 색(#3b0a0a)과 맞춘다 */
+export const viewport: Viewport = { themeColor: "#3b0a0a" };
+
 export default function HeartsPage() {
-  return <HeartsApp />;
+  // data-game으로 문서 바탕색도 하트 색으로 바꾼다(globals.css).
+  return (
+    <div data-game="hearts" className="contents">
+      <HeartsApp />
+    </div>
+  );
 }
