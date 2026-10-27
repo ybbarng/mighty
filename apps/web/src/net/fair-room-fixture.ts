@@ -1,11 +1,15 @@
 /** 멘탈 포커 온라인 대전 시험이 같이 쓰는 도우미. 시험이 오래 걸려 파일을 나눠 동시에 돌린다 */
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import type { Action, PlayerView, RuleSet } from "@mighty/engine";
+import { prepareGroup } from "@mighty/fair-play";
 import { type FairSaved, GuestRoom } from "./guest-room";
 
 import { HostRoom, type IncidentNotice } from "./host-room";
 import type { HostStore } from "./host-store";
 import { MemoryNetwork } from "./transport";
+
+// 실제 방과 같은 타원곡선 군(r255). 앱에서는 방에 들어갈 때(openTransport) 준비한다.
+await prepareGroup("r255");
 
 export async function until(
   condition: () => boolean,
@@ -37,7 +41,7 @@ export function hostOptions(rules: RuleSet, store?: HostStore) {
     revealTimeoutMs: 500,
     bot: intermediateBot,
     botLevel: 1,
-    fair: { group: "1024" as const },
+    fair: { group: "r255" as const },
     ...(store ? { store } : {}),
   };
 }

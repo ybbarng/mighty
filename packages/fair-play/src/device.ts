@@ -13,6 +13,7 @@ import {
   PublicLedger,
   type RevealReason,
 } from "./protocol";
+import { loadRistretto255 } from "./ristretto";
 import {
   answerShuffle,
   challengeBits,
@@ -39,11 +40,25 @@ declare function setTimeout(callback: () => void, ms: number): unknown;
 /** 내 카드가 이만큼 안 열리면 섞기 증명을 그냥 만든다(scheduleShuffleProof). 남이 기다리는 시간(proofTimeoutMs)보다 짧아야 한다 */
 const PROOF_DEFER_MS = 10_000;
 
-export type GroupName = "1024" | "2048";
-export const GROUPS: Record<GroupName, SraGroup> = {
+/** 잠그기 군. r255(타원곡선 ristretto255)가 기본이고, 곱셈군은 예전 방과 시험용이다 */
+export type GroupName = "1024" | "2048" | "r255";
+const GROUPS: Partial<Record<GroupName, SraGroup>> = {
   "1024": GROUP_1024,
   "2048": GROUP_2048,
 };
+
+/** 군을 쓸 수 있게 준비한다(r255는 libsodium을 불러온다). 기기를 만들기 전에 부른다 */
+export async function prepareGroup(name: GroupName): Promise<SraGroup> {
+  if (name === "r255") GROUPS.r255 ??= await loadRistretto255();
+  return groupOf(name);
+}
+
+/** 준비한 군. 준비하지 않았으면 던진다 */
+export function groupOf(name: GroupName): SraGroup {
+  const g = GROUPS[name];
+  if (!g) throw new Error(`잠그기 군 ${name}을 준비하지 않았다(prepareGroup)`);
+  return g;
+}
 
 type Stage = "shuffle" | "relock" | "convert" | "poolShuffle" | "poolRelock";
 
@@ -256,7 +271,7 @@ export class FairDevice {
 
   constructor(options: FairDeviceOptions) {
     this.id = options.id;
-    this.g = GROUPS[options.group];
+    this.g = groupOf(options.group);
     this.send = options.send;
     this.sendTo = options.sendTo ?? null;
     this.proofTimeoutMs = options.proofTimeoutMs ?? 30_000;

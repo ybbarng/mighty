@@ -1,7 +1,10 @@
 /** 멘탈 포커 기기 시험이 같이 쓰는 도우미. 시험이 오래 걸려 파일을 나눠 동시에 돌린다 */
 declare function setTimeout(callback: () => void, ms: number): unknown;
 
-import { FairDevice, type FairWire } from "./device";
+import { FairDevice, type FairWire, prepareGroup } from "./device";
+
+// 실제 방과 같은 타원곡선 군(r255)으로 시험한다.
+await prepareGroup("r255");
 
 /** 기기 셋을 메모리로 잇는다(메시지는 비동기로, 보낸 기기 번호와 함께) */
 export function network(
@@ -15,7 +18,7 @@ export function network(
     devices.push(
       new FairDevice({
         id,
-        group: "1024",
+        group: "r255",
         ...(proofTimeoutMs ? { proofTimeoutMs } : {}),
         send: (m: FairWire) => {
           if (drop?.(m, id)) return;

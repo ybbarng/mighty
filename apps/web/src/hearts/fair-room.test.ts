@@ -1,4 +1,4 @@
-import { Party } from "@mighty/fair-play";
+import { Party, prepareGroup } from "@mighty/fair-play";
 import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,9 @@ import { describe, expect, it } from "vitest";
 import { type AuditResult, GuestRoom } from "@/net/guest-room";
 import { HostRoom, type IncidentNotice } from "@/net/host-room";
 import { type HostStore, memoryHostStore } from "@/net/host-store";
+
+await prepareGroup("r255");
+
 import { MemoryNetwork } from "@/net/transport";
 import type { ArchiveSource } from "@/review/recorder";
 import { replayArchive } from "@/review/replay";
@@ -29,7 +32,7 @@ function hostOptions(store?: HostStore) {
     bot: heartsIntermediateBot,
     botLevel: 1,
     revealTimeoutMs: 500,
-    fair: { group: "1024" as const },
+    fair: { group: "r255" as const },
     ...(store ? { store } : {}),
   };
 }

@@ -110,12 +110,21 @@ export async function nonceCommit(nonce: string): Promise<string> {
 }
 
 async function secretsOf(
+  g: SraGroup,
   e: bigint,
   l: ShuffleLabel,
   r: number,
   n: number,
 ): Promise<{ sigma: number[]; t: bigint }> {
-  const t = 1n + ((await hash(["t", e, ...labelParts(l), r])) % (1n << T_BITS));
+  const h = await hash(["t", e, ...labelParts(l), r]);
+  // 곱셈군은 q가 커서 짧은 t(해시 그대로)를 쓴다. 타원곡선은 q가 해시보다 작아, 해시 둘(512비트)을
+  // 이어 q 안으로 줄여 고르게 뽑는다(D = g^(e/t)가 e를 드러내지 않게).
+  const t =
+    g.q > 1n << T_BITS
+      ? 1n + (h % (1n << T_BITS))
+      : 1n +
+        (((h << 256n) | (await hash(["t2", e, ...labelParts(l), r]))) %
+          (g.q - 1n));
   const sigma = Array.from({ length: n }, (_, i) => i);
   for (let i = n - 1; i > 0; i--) {
     const j = Number(
@@ -150,7 +159,7 @@ export async function commitShuffle(
     ts: [],
   };
   for (let r = 0; r < SHUFFLE_ROUNDS; r++) {
-    const { sigma, t } = await secretsOf(e, l, r, input.length);
+    const { sigma, t } = await secretsOf(g, e, l, r, input.length);
     const z: bigint[] = [];
     for (const [j, from] of sigma.entries()) {
       z.push(g.pow(input[from] as bigint, t));
