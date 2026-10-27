@@ -1,4 +1,4 @@
-import { jacobi, modPow, randomBelow, type SraGroup } from "./sra";
+import { randomBelow, type SraGroup } from "./sra";
 
 /*
  * 열쇠 증명(Chaum–Pedersen, 1992). "같은 비밀 지수 u로 두 쌍이 이어져 있다"를 u를 보이지 않고 증명한다.
@@ -12,9 +12,6 @@ import { jacobi, modPow, randomBelow, type SraGroup } from "./sra";
  *
  * 비대화식(Fiat–Shamir): 도전값 c를 상대가 내지 않고 (g, V, A, B, a, b)의 해시로 정한다.
  */
-
-/** 이차잉여 부분군(크기 q)의 생성원. 2²은 이차잉여이고 q가 소수라 1이 아닌 원소는 모두 생성원이다 */
-export const GENERATOR = 4n;
 
 /** 같은 지수 증명: a = g^r, b = A^r, z = r + c·u (mod q) */
 export interface KeyProof {
@@ -75,12 +72,12 @@ async function combineStatement(
     st.v,
     ...st.items.flatMap((i) => [i.slot, i.input, i.output, i.key]),
   ]);
-  let A = 1n;
-  let B = 1n;
+  let A = g.one;
+  let B = g.one;
   for (const [index, item] of st.items.entries()) {
     const w = (await hash([seed, index])) & 0xffff_ffff_ffff_ffffn;
-    A = (A * modPow(item.input, (item.key * w) % g.q, g.p)) % g.p;
-    B = (B * modPow(item.output, w, g.p)) % g.p;
+    A = g.mul(A, g.pow(item.input, (item.key * w) % g.q));
+    B = g.mul(B, g.pow(item.output, w));
   }
   return { A, B };
 }
@@ -93,7 +90,7 @@ async function challenge(
   a: bigint,
   b: bigint,
 ): Promise<bigint> {
-  return (await hash(["c", st.device, GENERATOR, st.v, A, B, a, b])) % g.q;
+  return (await hash(["c", st.device, g.generator, st.v, A, B, a, b])) % g.q;
 }
 
 /** 증명을 만든다. `u`는 잠근 단계의 지수(V = g^u) */
@@ -104,8 +101,8 @@ export async function proveKeys(
 ): Promise<KeyProof> {
   const { A, B } = await combineStatement(g, st);
   const r = 1n + randomBelow(g.q - 1n);
-  const a = modPow(GENERATOR, r, g.p);
-  const b = modPow(A, r, g.p);
+  const a = g.pow(g.generator, r);
+  const b = g.pow(A, r);
   const c = await challenge(g, st, A, B, a, b);
   const z = (r + c * u) % g.q;
   return { a: a.toString(16), b: b.toString(16), z: z.toString(16) };
@@ -130,10 +127,10 @@ export async function verifyKeys(
   if (st.items.length === 0) return false;
   const { A, B } = await combineStatement(g, st);
   // 크기 q 부분군 밖의 값을 섞어 짝수·홀수 도전값만 맞추는 속임을 막는다.
-  if (![st.v, a, b, A, B].every((x) => jacobi(x, g.p) === 1)) return false;
+  if (![st.v, a, b, A, B].every((x) => g.isElement(x))) return false;
   const c = await challenge(g, st, A, B, a, b);
   return (
-    modPow(GENERATOR, z, g.p) === (a * modPow(st.v, c, g.p)) % g.p &&
-    modPow(A, z, g.p) === (b * modPow(B, c, g.p)) % g.p
+    g.pow(g.generator, z) === g.mul(a, g.pow(st.v, c)) &&
+    g.pow(A, z) === g.mul(b, g.pow(B, c))
   );
 }

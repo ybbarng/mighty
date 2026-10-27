@@ -1,12 +1,11 @@
 import {
-  GENERATOR,
   hash,
   type KeyProof,
   type KeyStatement,
   proveKeys,
   verifyKeys,
 } from "./proof";
-import { jacobi, modInverse, modPow, type SraGroup } from "./sra";
+import { modInverse, type SraGroup } from "./sra";
 
 /*
  * 섞기 증명(cut-and-choose, Sako–Kilian 1995식). 섞은 사람이 "출력 Y는 입력 X를 같은 비밀 지수 e로
@@ -154,7 +153,7 @@ export async function commitShuffle(
     const { sigma, t } = await secretsOf(e, l, r, input.length);
     const z: bigint[] = [];
     for (const [j, from] of sigma.entries()) {
-      z.push(modPow(input[from] as bigint, t, g.p));
+      z.push(g.pow(input[from] as bigint, t));
       if (j % 8 === 7) await breathe();
     }
     const d = (e * modInverse(t, g.q)) % g.q;
@@ -162,7 +161,7 @@ export async function commitShuffle(
     work.sigmas.push(sigma);
     work.ts.push(t);
     work.commit.z.push(z.map(toB64));
-    work.commit.d.push(modPow(GENERATOR, d, g.p).toString(16));
+    work.commit.d.push(g.pow(g.generator, d).toString(16));
   }
   return work;
 }
@@ -227,7 +226,7 @@ export async function answerShuffle(
   // 앞사람이 같은 값을 둘 넣었으면(복제) 같은 값끼리 서로 다른 자리를 짝지어 내 증명은 맞게 한다.
   const positions = new Map<bigint, number[]>();
   for (const [i, x] of input.entries()) {
-    const key = modPow(x, e, g.p);
+    const key = g.pow(x, e);
     positions.set(key, [...(positions.get(key) ?? []), i]);
     if (i % 8 === 7) await breathe();
   }
@@ -252,7 +251,7 @@ export async function answerShuffle(
       work.z[r] as bigint[],
       output,
       tau,
-      modPow(GENERATOR, d, g.p),
+      g.pow(g.generator, d),
     );
     answers.push({ b: 1, tau, proof: await proveKeys(g, st, d) });
     await breathe();
@@ -309,7 +308,7 @@ export async function verifyShuffle(
   )
     return false;
   // 넘긴 덱도 부분군 안에 있어야 한다(가중치 묶음이 부분군 밖 성분을 반만 잡는다).
-  if (!output.every((y) => jacobi(y, g.p) === 1)) return false;
+  if (!output.every((y) => g.isElement(y))) return false;
   for (let r = 0; r < SHUFFLE_ROUNDS; r++) {
     const answer = answers[r];
     const zText = commit.z[r];
@@ -322,8 +321,7 @@ export async function verifyShuffle(
     } catch {
       return false;
     }
-    if (!z.every((v) => v > 0n && v < g.p && jacobi(v, g.p) === 1))
-      return false;
+    if (!z.every((v) => g.isElement(v))) return false;
     if (answer.b !== bits[r]) return false;
     if (answer.b === 0) {
       // Z_j = X_σ(j)^t 를 가중치로 묶어 본다: Π Z_j^w_j = (Π X_σ(j)^w_j)^t
@@ -339,20 +337,16 @@ export async function verifyShuffle(
         ["zero", ...labelParts(l), r, t, ...answer.sigma, ...zText],
         n,
       );
-      let left = 1n;
-      let right = 1n;
+      let left = g.one;
+      let right = g.one;
       for (let j = 0; j < n; j++) {
-        left = (left * modPow(z[j] as bigint, w[j] as bigint, g.p)) % g.p;
-        right =
-          (right *
-            modPow(
-              input[answer.sigma[j] as number] as bigint,
-              w[j] as bigint,
-              g.p,
-            )) %
-          g.p;
+        left = g.mul(left, g.pow(z[j] as bigint, w[j] as bigint));
+        right = g.mul(
+          right,
+          g.pow(input[answer.sigma[j] as number] as bigint, w[j] as bigint),
+        );
       }
-      if (left !== modPow(right, t, g.p)) return false;
+      if (left !== g.pow(right, t)) return false;
     } else {
       if (!isPermutation(answer.tau, n)) return false;
       const st = linkStatement(l, r, z, output, answer.tau, D);

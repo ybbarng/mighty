@@ -1,10 +1,12 @@
 /**
- * SRA(Shamir·Rivest·Adleman, 1979) 교환 가능한 암호. 안전 소수 p = 2q + 1의 이차잉여 부분군(크기 q)에서
- *   잠그기: E_k(m) = m^k mod p,  풀기: m = c^(k⁻¹ mod q) mod p
+ * SRA(Shamir·Rivest·Adleman, 1979) 교환 가능한 암호. 크기 q(소수)인 군에서
+ *   잠그기: E_k(m) = m^k,  풀기: m = c^(k⁻¹ mod q)
  * 지수끼리 곱해지므로 잠근 순서와 상관없이 풀 수 있다: E_a(E_b(m)) = E_b(E_a(m)).
  *
- * 카드는 이차잉여(제곱수)로만 나타낸다. 이차잉여가 아닌 값을 섞어 쓰면 잠가도 "이차잉여인가"가
- * 그대로 남아 카드 정보가 샌다(SRA의 잘 알려진 약점).
+ * 군은 두 가지다(`SraGroup`). 원소는 어느 쪽이든 bigint로 다룬다.
+ * - 곱셈군: 안전 소수 p = 2q + 1의 이차잉여 부분군. 카드는 이차잉여(제곱수)로만 나타낸다.
+ *   이차잉여가 아닌 값을 섞어 쓰면 잠가도 "이차잉여인가"가 그대로 남아 카드 정보가 샌다(SRA의 잘 알려진 약점).
+ * - 타원곡선: ristretto255(`ristretto.ts`). 거듭은 점에 수 곱하기, 곱은 점 더하기다.
  */
 
 /** 브라우저와 Node(전역 Web Crypto) 모두에 있는 난수 함수. 패키지는 DOM 타입을 쓰지 않는다 */
@@ -12,18 +14,56 @@ declare const crypto: {
   getRandomValues<T extends Uint8Array>(array: T): T;
 };
 
+/** 잠그기에 쓰는 군. 원소는 bigint, 지수는 q로 나눈 나머지다 */
 export interface SraGroup {
   name: string;
-  /** 안전 소수 */
-  p: bigint;
-  /** (p − 1) / 2, 소수 */
+  /** 군의 크기(소수). 지수는 이것으로 나눈 나머지로 다룬다 */
   q: bigint;
+  /** 원소 하나의 크기(비트). 메시지 크기를 가늠할 때 */
   bits: number;
+  /** 생성원. 열쇠 증명의 V = g^u 등에 쓴다 */
+  generator: bigint;
+  /** 곱의 항등원 */
+  one: bigint;
+  /** 섞기·자리 열쇠 길이(비트). null이면 1 ≤ k < q 전체에서 고른다 */
+  keyBits: number | null;
+  /** x^e (타원곡선: e·X) */
+  pow(x: bigint, e: bigint): bigint;
+  /** a·b (타원곡선: A + B) */
+  mul(a: bigint, b: bigint): bigint;
+  /** 이 군의 원소인가. 남에게 받은 값이 군 밖이면 증명을 속일 수 있어 확인한다 */
+  isElement(x: bigint): boolean;
+  /** 카드 번호를 원소로 */
+  encodeIndex(index: number): bigint;
 }
 
-function group(name: string, hex: string): SraGroup {
+/** 곱셈군(안전 소수 p의 이차잉여 부분군) */
+export interface ModGroup extends SraGroup {
+  /** 안전 소수 */
+  p: bigint;
+}
+
+function group(name: string, hex: string): ModGroup {
   const p = BigInt(`0x${hex.replace(/\s+/g, "")}`);
-  return { name, p, q: (p - 1n) / 2n, bits: p.toString(2).length };
+  return {
+    name,
+    p,
+    q: (p - 1n) / 2n,
+    bits: p.toString(2).length,
+    // 2²은 이차잉여이고 q가 소수라 1이 아닌 원소는 모두 생성원이다
+    generator: 4n,
+    one: 1n,
+    // 짧은 지수도 이 군에서는 안전하다(찾는 데 2^160번쯤, RFC 3526 권장 크기)
+    keyBits: 320,
+    pow: (x, e) => modPow(x, e, p),
+    mul: (a, b) => (a * b) % p,
+    isElement: (x) => x > 0n && x < p && jacobi(x, p) === 1,
+    // 카드 번호 i를 이차잉여 (i + 2)² mod p로 나타낸다
+    encodeIndex: (index) => {
+      const x = BigInt(index + 2);
+      return (x * x) % p;
+    },
+  };
 }
 
 /** RFC 2409 Oakley Group 2 (1024비트 안전 소수). 학습·시험용 */
@@ -128,12 +168,14 @@ export function newKey(g: SraGroup): bigint {
   return 1n + randomBelow(g.q - 1n);
 }
 
-/**
- * 섞을 때 쓰는 짧은 열쇠(320비트). 잠그기는 열쇠 길이만큼 걸리므로 빨라진다.
- * 짧은 지수도 이 군에서는 안전하다(찾는 데 2^160번쯤, RFC 3526 권장 크기)
- */
+/** 섞을 때 쓰는 짧은 열쇠(곱셈군). 잠그기는 열쇠 길이만큼 걸리므로 빨라진다 */
 export function newShortKey(bits = 320): bigint {
   return 1n + randomBelow((1n << BigInt(bits)) - 1n);
+}
+
+/** 섞기·자리 열쇠: 군이 짧은 열쇠를 쓰면 그 길이로, 아니면 1 ≤ k < q */
+export function newPassKey(g: SraGroup): bigint {
+  return g.keyBits === null ? newKey(g) : newShortKey(g.keyBits);
 }
 
 /** 여러 열쇠로 한꺼번에 잠그거나 푸는 지수: 곱(mod q) */
@@ -146,14 +188,13 @@ export function unlockExponent(g: SraGroup, key: bigint): bigint {
   return modInverse(key, g.q);
 }
 
-/** 카드 번호 i를 이차잉여 (i + 2)² mod p로 나타낸다 */
+/** 카드 번호를 원소로 */
 export function encodeIndex(g: SraGroup, index: number): bigint {
-  const x = BigInt(index + 2);
-  return (x * x) % g.p;
+  return g.encodeIndex(index);
 }
 
 /** 이차잉여인가(오일러 판정) */
-export function isQuadraticResidue(g: SraGroup, value: bigint): boolean {
+export function isQuadraticResidue(g: ModGroup, value: bigint): boolean {
   return modPow(value, g.q, g.p) === 1n;
 }
 

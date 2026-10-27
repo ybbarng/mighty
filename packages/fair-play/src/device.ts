@@ -1,7 +1,6 @@
 import type { Card } from "@mighty/engine";
 
 import {
-  GENERATOR,
   type KeyProof,
   type KeyStatement,
   proveKeys,
@@ -26,13 +25,7 @@ import {
   shuffleNonce,
   verifyShuffle,
 } from "./shuffle-proof";
-import {
-  GROUP_1024,
-  GROUP_2048,
-  modInverse,
-  modPow,
-  type SraGroup,
-} from "./sra";
+import { GROUP_1024, GROUP_2048, modInverse, type SraGroup } from "./sra";
 
 /*
  * 메시지로 하는 멘탈 포커. 기기마다 FairDevice 하나가 섞기 사슬에 끼고, 열쇠를 공개하고, 자기 카드를 연다.
@@ -1466,7 +1459,7 @@ export class FairDevice {
     const p = ctx.party.passKey("pool");
     return p === null
       ? null
-      : modPow(GENERATOR, modInverse(p, this.g.q), this.g.p);
+      : this.g.pow(this.g.generator, modInverse(p, this.g.q));
   }
 
   /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GENERATOR, type KeyStatement, proveKeys, verifyKeys } from "./proof";
+import { type KeyStatement, proveKeys, verifyKeys } from "./proof";
 import {
   combine,
   encodeIndex,
@@ -29,7 +29,7 @@ describe("열쇠 증명 계산 시간 (pnpm --filter @mighty/fair-play bench)", 
         });
         const st: KeyStatement = {
           device: 1,
-          v: modPow(GENERATOR, u, g.p),
+          v: g.pow(g.generator, u),
           items,
         };
         const t0 = performance.now();

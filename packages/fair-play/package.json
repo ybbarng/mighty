@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@mighty/engine": "workspace:*",
-    "@mighty/hearts-engine": "workspace:*"
+    "@mighty/hearts-engine": "workspace:*",
+    "@noble/curves": "2.4.0"
   },
   "devDependencies": {
     "@mighty/ai": "workspace:*"

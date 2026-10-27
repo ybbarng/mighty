@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GENERATOR, type KeyStatement, proveKeys, verifyKeys } from "./proof";
+import { type KeyStatement, proveKeys, verifyKeys } from "./proof";
 import {
   combine,
   encodeIndex,
@@ -24,7 +24,7 @@ function relocked() {
   );
   const st: KeyStatement = {
     device: 2,
-    v: modPow(GENERATOR, u, g.p),
+    v: g.pow(g.generator, u),
     items: keys.map((key, i) => ({
       slot: i,
       input: input[i] as bigint,
@@ -95,7 +95,7 @@ describe("열쇠 증명(Chaum–Pedersen)", () => {
     const d = 12345n;
     const lie: KeyStatement = {
       device: 1,
-      v: modPow(GENERATOR, u, g.p),
+      v: g.pow(g.generator, u),
       items: [
         { ...(honest[0] as (typeof honest)[0]), key: k1 + d },
         { ...(honest[1] as (typeof honest)[0]), key: k2 - d },

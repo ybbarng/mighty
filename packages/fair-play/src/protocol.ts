@@ -1,11 +1,10 @@
 import { type Card, fullDeck } from "@mighty/engine";
 
-import { GENERATOR, type KeyProof } from "./proof";
+import type { KeyProof } from "./proof";
 import {
   combine,
   encodeIndex,
-  modPow,
-  newShortKey,
+  newPassKey,
   randomBelow,
   type SraGroup,
   unlockExponent,
@@ -69,13 +68,13 @@ function yieldNow(): Promise<void> {
 }
 
 async function powEach(
+  g: SraGroup,
   values: readonly bigint[],
   exponent: (index: number) => bigint,
-  p: bigint,
 ): Promise<bigint[]> {
   const out: bigint[] = [];
   for (const [i, value] of values.entries()) {
-    out.push(modPow(value, exponent(i), p));
+    out.push(g.pow(value, exponent(i)));
     if (i % YIELD_EVERY === YIELD_EVERY - 1) await yieldNow();
   }
   return out;
@@ -101,7 +100,7 @@ export class Party {
   private pass(name: string): bigint {
     let key = this.passes.get(name);
     if (key === undefined) {
-      key = newShortKey();
+      key = newPassKey(this.g);
       this.passes.set(name, key);
     }
     return key;
@@ -111,7 +110,7 @@ export class Party {
     let key = this.slotKeys.get(slot);
     if (key === undefined) {
       // 짧은 열쇠: 공개한 열쇠를 증명할 때(proof.ts) 거듭제곱이 짧아진다. 섞기 열쇠와 같은 크기라 안전하다.
-      key = newShortKey();
+      key = newPassKey(this.g);
       this.slotKeys.set(slot, key);
     }
     return key;
@@ -137,7 +136,7 @@ export class Party {
     pass: string,
   ): Promise<bigint[]> {
     const key = this.pass(pass);
-    const locked = await powEach(deck, () => key, this.g.p);
+    const locked = await powEach(this.g, deck, () => key);
     for (let i = locked.length - 1; i > 0; i--) {
       const j = Number(randomBelow(BigInt(i + 1)));
       [locked[i], locked[j]] = [locked[j] as bigint, locked[i] as bigint];
@@ -155,7 +154,7 @@ export class Party {
 
   /** 다시 잠그기와 함께 내는 V = g^u. 나중에 공개한 자리 열쇠가 이때 쓴 것인지 증명한다 */
   relockCommitment(passes: readonly string[]): bigint {
-    return modPow(GENERATOR, this.unlockOf(passes), this.g.p);
+    return this.g.pow(this.g.generator, this.unlockOf(passes));
   }
 
   /** 다시 잠그기: 섞기 열쇠들을 풀고 `slots[i]`의 자리 열쇠로 잠근다. `deck[i]`가 새 자리 `slots[i]`다 */
@@ -165,10 +164,8 @@ export class Party {
     passes: readonly string[],
   ): Promise<bigint[]> {
     const unlock = this.unlockOf(passes);
-    return powEach(
-      deck,
-      (i) => combine(this.g, [unlock, this.slotKey(slots[i] as number)]),
-      this.g.p,
+    return powEach(this.g, deck, (i) =>
+      combine(this.g, [unlock, this.slotKey(slots[i] as number)]),
     );
   }
 
@@ -179,14 +176,11 @@ export class Party {
     pass: string,
   ): Promise<bigint[]> {
     const key = this.pass(pass);
-    return powEach(
-      deck,
-      (i) =>
-        combine(this.g, [
-          unlockExponent(this.g, this.slotKey(fromSlots[i] as number)),
-          key,
-        ]),
-      this.g.p,
+    return powEach(this.g, deck, (i) =>
+      combine(this.g, [
+        unlockExponent(this.g, this.slotKey(fromSlots[i] as number)),
+        key,
+      ]),
     );
   }
 
@@ -210,7 +204,7 @@ export class Party {
       ...othersKeys.map((k) => unlockExponent(this.g, k)),
       unlockExponent(this.g, this.slotKey(slot)),
     ]);
-    const card = decode(this.g, modPow(cipher, exponent, this.g.p));
+    const card = decode(this.g, this.g.pow(cipher, exponent));
     if (card !== null) this.hand.set(slot, card);
     return card;
   }
@@ -300,7 +294,7 @@ export class PublicLedger {
       this.g,
       parties.map((s) => unlockExponent(this.g, known.get(s) as bigint)),
     );
-    const card = decode(this.g, modPow(cipher, exponent, this.g.p));
+    const card = decode(this.g, this.g.pow(cipher, exponent));
     this.opened.set(slot, { by, card });
     return card;
   }
