@@ -56,14 +56,14 @@ export const joinRoom = createTopicStrategy<Relay>({
     };
     const opened = new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
-        diag("signal", { kind, lane: relay.lane, ok: false });
+        diag("signal", { topic: kind, lane: relay.lane, ok: false });
         resolve();
       }, OPEN_TIMEOUT_MS);
       source.onopen = () => {
         clearTimeout(timer);
         source.onopen = null;
         diag("signal", {
-          kind,
+          topic: kind,
           lane: relay.lane,
           ok: true,
           ms: Math.round(performance.now() - relay.started),
