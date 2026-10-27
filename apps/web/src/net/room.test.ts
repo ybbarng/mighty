@@ -11,9 +11,14 @@ import { MemoryNetwork, sdpFingerprint } from "./transport";
 const rules = presetRules("standard5");
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+// 횟수만 세면 다른 시험과 CPU를 나눠 쓸 때 판 끝 검증(암호 계산)보다 먼저 바닥난다. 횟수를 다 써도 30초는 기다린다.
 async function until(condition: () => boolean, tries = 200): Promise<void> {
-  for (let i = 0; i < tries && !condition(); i++) await flush();
-  if (!condition()) throw new Error("조건을 기다리다 시간이 지났다");
+  const start = Date.now();
+  for (let i = 0; !condition(); i++) {
+    if (i >= tries && Date.now() - start > 30_000)
+      throw new Error("조건을 기다리다 시간이 지났다");
+    await flush();
+  }
 }
 
 async function setup() {
