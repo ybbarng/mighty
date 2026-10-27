@@ -120,6 +120,8 @@ export function HeartsTable({
   const chatUnread = useChat((s) => s.unread);
 
   const [passPick, setPassPick] = useState<Card[]>([]);
+  // 넘기기를 누른 뒤 방장이 받았다고 알려 오기 전까지(온라인) 넘긴 카드
+  const [sentPass, setSentPass] = useState<Card[] | null>(null);
   const [selected, setSelected] = useState<Card | null>(null);
   const [showScores, setShowScores] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -129,6 +131,7 @@ export function HeartsTable({
   // biome-ignore lint/correctness/useExhaustiveDependencies: 단계가 바뀔 때만 비운다
   useEffect(() => {
     setPassPick([]);
+    setSentPass(null);
     setSelected(null);
   }, [phaseKey]);
 
@@ -147,7 +150,9 @@ export function HeartsTable({
     seat === me
       ? "나"
       : (seatNames?.[seat] ?? botName(botNames, offsetOf(seat)));
-  const hand = sortHearts(view.hand);
+  // 넘긴 카드는 모두 고를 때까지 엔진 손패에 남아 있다. 화면에서는 손패에서 빼 따로 보인다.
+  const outgoing = view.phase === "passing" ? (view.myPass ?? sentPass) : null;
+  const hand = sortHearts(view.hand).filter((c) => !outgoing?.includes(c));
   const layout =
     stage.width > 0
       ? computeLayout({
@@ -164,7 +169,7 @@ export function HeartsTable({
     decision?.kind === "play"
       ? new Set((decision as PlayDecision).cards)
       : null;
-  const passing = decision?.kind === "pass";
+  const passing = decision?.kind === "pass" && outgoing === null;
   const trick = shownTrick ?? view.trick;
   const trickPlays = trick?.plays ?? [];
   const received = new Set(
@@ -251,6 +256,7 @@ export function HeartsTable({
     if (result.ok) {
       setSelected(null);
       setPassPick([]);
+      if (action.type === "pass") setSentPass(action.cards);
     }
   };
 
@@ -622,6 +628,32 @@ export function HeartsTable({
                 />
               );
             }),
+            // 넘긴 카드: 받을 사람 쪽으로 조금 옮겨 모아 둔다.
+            ...(outgoing && passTo !== null
+              ? outgoing.map((card, i) => {
+                  const toward = plateCenter(passTo);
+                  const base = {
+                    x: myPile.x + (toward.x - myPile.x) * 0.55,
+                    y: myPile.y + (toward.y - myPile.y) * 0.55,
+                  };
+                  const { w, h } = layout.trick.card;
+                  return (
+                    <PlayingCard
+                      key={card}
+                      card={card}
+                      width={w}
+                      height={h}
+                      at={{
+                        x: base.x + (i - (outgoing.length - 1) / 2) * w * 0.5,
+                        y: base.y,
+                      }}
+                      z={60 + i}
+                      fresh
+                      freshLabel="넘김"
+                    />
+                  );
+                })
+              : []),
             ...trickPlays.map((play, order) => {
               const offset = offsetOf(play.seat);
               const slot = layout.trick.slots[offset] as Point;
@@ -698,7 +730,7 @@ export function HeartsTable({
                       넘기기
                     </ActionButton>
                   </Panel>
-                ) : view.phase === "passing" && view.myPass ? (
+                ) : outgoing ? (
                   <p className="text-center text-sm opacity-80">
                     다른 사람이 카드를 고르는 중…
                   </p>

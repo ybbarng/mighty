@@ -251,6 +251,16 @@ test("하트: 방장이 방을 만들고 친구가 들어와 한 판을 둔다",
   await host.getByRole("button", { name: "시작하기" }).click();
   await expect(guest.getByRole("button", { name: "점수판" })).toBeVisible();
 
+  // 방장이 먼저 넘기면, 넘긴 세 장은 손패에서 빠져 "넘김" 표를 달고 모여 있다.
+  // 암호화 방은 함께 섞고 나누는 데 시간이 걸린다.
+  await expect(
+    host.getByRole("button", { name: "넘기기", exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
+  await stepOnce(host);
+  await expect(host.getByText("다른 사람이 카드를 고르는 중")).toBeVisible();
+  await expect(host.getByText("넘김", { exact: true })).toHaveCount(3);
+  await host.screenshot({ path: info.outputPath("hearts-passed.png") });
+
   for (let i = 0; i < 600; i++) {
     const [h, g] = [await stepOnce(host), await stepOnce(guest)];
     if (h && g) break;
