@@ -223,6 +223,11 @@ test("하트: 방장이 방을 만들고 친구가 들어와 한 판을 둔다",
   const link = await host.locator("input[readonly]").inputValue();
   expect(link).toContain("/hearts");
   expect(link).toContain("room=");
+  // 링크 복사가 기본 단추다.
+  await host.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await host.getByRole("button", { name: "복사", exact: true }).click();
+  await expect(host.getByRole("button", { name: "복사됨" })).toBeVisible();
+  expect(await host.evaluate(() => navigator.clipboard.readText())).toBe(link);
 
   await guest.goto(link);
   await guest.getByPlaceholder("친구들에게 보일 이름").fill("철수");
