@@ -12,7 +12,7 @@
 
 | 층 | 지금 있는 것 | 위치 |
 |---|---|---|
-| 연결 | WebRTC로 기기끼리 바로 잇기(Nostr 릴레이로 서로 찾기), 같은 브라우저 탭끼리(시험용), 메모리(단위 시험). TURN 중계는 준비 중 | `apps/web/src/net/p2p-transport.ts`, `transport.ts` |
+| 연결 | WebRTC로 기기끼리 바로 잇기(우리 신호 서버 `/signal/`로 서로 찾기, 막힌 망은 TURN 중계), 같은 브라우저 탭끼리(시험용), 메모리(단위 시험) | `apps/web/src/net/p2p-transport.ts`, `signal.ts`, `transport.ts` |
 | 방 | 방 만들기, 초대 링크·QR, 대기실, 빈자리 컴퓨터, 채팅, 끊기면 다시 잇기, 기다리다 투표로 끝내기 | `HostRoom`, `GuestRoom`, `LocalMatch` |
 | 진행 | 방장 기기가 순수 함수 엔진을 돌리고 참가자는 행동만 보낸다. 여러 자리가 동시에 결정하는 것도 된다(`pendingSeats`, 하트 카드 넘기기) | `GameKit` (`apps/web/src/game/kit.ts`) |
 | 공정성 | 멘탈 포커: 함께 섞기(SRA), 자기 자리만 열기, 공개, 열쇠 증명, 섞기 증명, 판 끝에 모두가 다시 계산 | `packages/fair-play` |

@@ -1,12 +1,8 @@
-import {
-  defaultRelayUrls,
-  getRelaySockets,
-  joinRoom,
-  selfId,
-} from "trystero/nostr";
+import { selfId } from "@trystero-p2p/core";
 
 import { type DiagContext, diag, startDiag } from "./diag";
-import { trackedPeerConnections, watchRelays } from "./rtc-diag";
+import { trackedPeerConnections } from "./rtc-diag";
+import { joinRoom } from "./signal";
 import { sdpFingerprint, type Transport } from "./transport";
 import { turnConfig } from "./turn";
 
@@ -14,16 +10,7 @@ import { turnConfig } from "./turn";
 const APP_ID = "mighty-card-game-v1";
 
 /**
- * 직접 운영하는 Nostr 릴레이(빌드할 때 `NEXT_PUBLIC_RELAY_URLS`, 쉼표로 여럿).
- * 있으면 그것과 공개 릴레이 두 곳을 예비로 쓴다. 없으면 공개 릴레이만 쓴다.
- */
-const OWN_RELAYS = (process.env.NEXT_PUBLIC_RELAY_URLS ?? "")
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
-
-/**
- * 인터넷 대전: WebRTC로 기기끼리 바로 잇는다. 서로를 찾는 단계(시그널링)만 Nostr 릴레이를 거친다. 방 코드를 비밀번호로도 써서 릴레이를 지나는 연결 정보를 암호화한다.
+ * 인터넷 대전: WebRTC로 기기끼리 바로 잇는다. 서로를 찾는 단계(시그널링)만 우리 신호 서버(`./signal`)를 거친다. 방 코드를 비밀번호로도 써서 서버를 지나는 연결 정보를 암호화한다.
  */
 export async function joinP2P(
   roomId: string,
@@ -43,14 +30,6 @@ export async function joinP2P(
       password: roomId,
       rtcPolyfill: tracking.Tracked,
       ...(turn ? { turnConfig: turn } : {}),
-      ...(OWN_RELAYS.length > 0
-        ? {
-            // urls를 주면 목록 전부에 붙는다. 같은 빌드끼리는 목록이 같아 늘 같은 릴레이에서 만난다.
-            relayConfig: {
-              urls: [...OWN_RELAYS, ...defaultRelayUrls.slice(0, 2)],
-            },
-          }
-        : {}),
     },
     roomId,
   );
@@ -70,14 +49,7 @@ export async function joinP2P(
   };
   let peers = 0;
   // 참가자는 방장과 이어지기 전, 방장은 첫 참가자가 오기 전까지 연결 시도 상황을 보낸다.
-  const stopWaiting = tracking.watchWaiting(() => peers > 0);
-  const stopRelays = watchRelays(
-    () => getRelaySockets() as Record<string, WebSocket>,
-  );
-  const stopWatching = () => {
-    stopWaiting();
-    stopRelays();
-  };
+  const stopWatching = tracking.watchWaiting(() => peers > 0);
   room.onPeerJoin = (peerId) => {
     peers++;
     diag("peer", { peers });

@@ -48,10 +48,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # 정적 빌드라 주소가 빌드할 때 들어간다. 릴레이 주소는 저장소 변수 RELAY_URLS(없으면 공개 릴레이만)
+          # 정적 빌드라 주소가 빌드할 때 들어간다
           build-args: |
             NEXT_PUBLIC_SITE_URL=https://mighty.byb.kr
-            NEXT_PUBLIC_RELAY_URLS=${{ vars.RELAY_URLS }}
           cache-from: type=gha,scope=mighty
           cache-to: type=gha,scope=mighty,mode=max
 

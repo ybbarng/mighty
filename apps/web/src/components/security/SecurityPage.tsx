@@ -110,7 +110,7 @@ const THREATS: {
   },
   {
     attack: "방장 사칭·중간자",
-    who: "링크를 아는 사람·신호 릴레이",
+    who: "링크를 아는 사람·신호 서버",
     status: "막음",
     how: "초대 링크의 열쇠 지문 + ECDSA 서명(연결 인증서 지문까지)",
     link: "identity",
@@ -166,7 +166,7 @@ const THREATS: {
   },
   {
     attack: "엿듣기",
-    who: "릴레이·네트워크",
+    who: "신호 서버·네트워크",
     status: "막음",
     how: "연결 정보는 방 코드로 암호화, 게임 데이터는 WebRTC(DTLS, 순방향 비밀성)",
     link: "network",
@@ -272,11 +272,6 @@ const RESOURCES: { title: string; url: string; note: string }[] = [
     title: "A Study of WebRTC Security",
     url: "https://webrtc-security.github.io/",
     note: "DTLS·SRTP, 시그널링 보안 정리",
-  },
-  {
-    title: "Nostr NIP-01",
-    url: "https://github.com/nostr-protocol/nips/blob/master/01.md",
-    note: "서로를 찾는 데 쓰는 릴레이 프로토콜",
   },
   {
     title: "Trystero",
@@ -386,12 +381,12 @@ export function SecurityPage() {
           </div>
         </Section>
 
-        <Section id="network" title="서버 없이 연결하기">
+        <Section id="network" title="기기끼리 바로 잇기">
           <svg
             viewBox="0 0 600 200"
             className="w-full"
             role="img"
-            aria-label="Nostr 릴레이로 서로를 찾고, WebRTC로 방장과 참가자가 바로 이어지는 구조"
+            aria-label="신호 서버로 서로를 찾고, WebRTC로 방장과 참가자가 바로 이어지는 구조"
           >
             <title>연결 구조</title>
             <rect
@@ -409,7 +404,7 @@ export function SecurityPage() {
               fontSize={13}
               fill="#e2e8f0"
             >
-              Nostr 릴레이(공개 + byb.kr)
+              신호 서버(byb.kr)
             </text>
             {[
               [80, 150, "참가자 A"],
@@ -483,12 +478,16 @@ export function SecurityPage() {
             </text>
           </svg>
           <P>
-            릴레이는 "이 방에 누가 있나"를 알리는 게시판 역할만 합니다. 연결
-            정보 (SDP)는 방 코드를 비밀번호로 암호화해 올리므로 링크를 모르는
-            사람은 들어올 수 없습니다(Trystero). 연결이 맺어진 뒤의 게임
-            데이터는 WebRTC 데이터 채널(DTLS)로 기기끼리 바로 오가고 릴레이를
-            거치지 않습니다. 참가자는 방장하고만 게임 메시지를 주고받습니다(별
-            모양). 코드: <code>apps/web/src/net/p2p-transport.ts</code>.
+            신호 서버는 "이 방에 누가 있나"를 알리는 게시판 역할만 합니다.
+            아무것도 저장하지 않고, 지금 같은 방을 보고 있는 사람에게만
+            넘깁니다. 연결 정보(SDP)는 방 코드를 비밀번호로 암호화해 올리므로
+            서버도 읽지 못하고, 링크를 모르는 사람은 들어올 수
+            없습니다(Trystero). 연결이 맺어진 뒤의 게임 데이터는 WebRTC 데이터
+            채널(DTLS)로 기기끼리 바로 오가고 신호 서버를 거치지 않습니다. 회사
+            와이파이처럼 기기끼리 바로 잇는 길이 막힌 곳에서만 TURN 서버가
+            암호화된 채로 중계합니다. 참가자는 방장하고만 게임 메시지를
+            주고받습니다(별 모양). 코드:{" "}
+            <code>apps/web/src/net/p2p-transport.ts</code>.
           </P>
         </Section>
 
@@ -848,11 +847,12 @@ export function SecurityPage() {
           <P>
             nonce는 예전 서명을 다시 써먹는 것(재전송)을, 연결 아이디는 진짜
             방장과 참가자 사이에 끼어드는 중간자를 막습니다. 인증서 지문은
-            서로를 찾게 해 주는 신호 릴레이가 연결 정보를 바꿔치기해 가운데 끼는
-            것을 막습니다. 그러면 참가자가 연결한 상대는 릴레이의 인증서라
-            방장이 서명한 지문과 다릅니다. 릴레이는 방장 서명 열쇠가 없어 지문을
-            고쳐 다시 서명할 수 없습니다(메신저의 "보안 코드 비교"를 기계가 하는
-            셈입니다). 코드: <code>apps/web/src/net/identity.ts</code>.
+            서로를 찾게 해 주는 신호 서버가 연결 정보를 바꿔치기해 가운데 끼는
+            것을 막습니다. 그러면 참가자가 연결한 상대는 신호 서버의 인증서라
+            방장이 서명한 지문과 다릅니다. 신호 서버는 방장 서명 열쇠가 없어
+            지문을 고쳐 다시 서명할 수 없습니다(메신저의 "보안 코드 비교"를
+            기계가 하는 셈입니다). 코드:{" "}
+            <code>apps/web/src/net/identity.ts</code>.
           </P>
           <HostSignatureDemo />
         </Section>

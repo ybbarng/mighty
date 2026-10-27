@@ -87,29 +87,3 @@ export function trackedPeerConnections(): {
 
   return { Tracked, watchWaiting };
 }
-
-/** 신호 릴레이(Nostr) 연결이 열린 때를 기록한다. 방장을 찾는 시간은 대부분 여기서 갈린다 */
-export function watchRelays(
-  sockets: () => Record<string, WebSocket>,
-  limitMs = 15_000,
-): () => void {
-  const started = performance.now();
-  const opened = new Set<string>();
-  const timer = setInterval(() => {
-    const all = Object.entries(sockets());
-    for (const [url, socket] of all)
-      if (socket.readyState === WebSocket.OPEN && !opened.has(url)) {
-        opened.add(url);
-        diag("relay", {
-          host: new URL(url).host,
-          ms: Math.round(performance.now() - started),
-        });
-      }
-    if (
-      performance.now() - started > limitMs ||
-      (all.length > 0 && opened.size === all.length)
-    )
-      clearInterval(timer);
-  }, 100);
-  return () => clearInterval(timer);
-}
