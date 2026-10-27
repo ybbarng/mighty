@@ -79,13 +79,61 @@ export const joinRoom = createTopicStrategy<Relay>({
   },
   publishTopic: async (relay, topic, message) => {
     await Promise.all(relay.opening);
-    // 본문을 글자로 보내면 단순 요청이라 다른 출처(개발 서버)에서도 사전 확인 요청 없이 간다.
-    await fetch(`${relay.base}/pub?t=${topic}`, {
-      method: "POST",
-      body: JSON.stringify(message),
-    }).catch(() => undefined);
+    await enqueue(relay.base, topic, message);
   },
 });
+
+/** 같은 순간의 메시지를 모으는 시간. 통로 셋이 같은 메시지를 함께 올리고 경로 후보도 몰려 나온다 */
+const BATCH_MS = 15;
+/** 서버가 묶음 하나에 받는 한도(64개·64KB)보다 조금 작게 */
+const BATCH_MAX = 64;
+const BATCH_MAX_CHARS = 48 * 1024;
+
+let pending: { t: string; m: unknown }[] = [];
+let flushing: Promise<void> | null = null;
+
+/**
+ * 메시지를 모아 POST 한 번으로 보낸다. 하나씩 보내면 다섯 명이 들어올 때 1초에 200번 가까이 몰려
+ * 서버의 IP당 횟수 제한(회사 와이파이는 모두 같은 IP)에 걸렸다.
+ */
+function enqueue(base: string, topic: string, message: unknown) {
+  pending.push({ t: topic, m: message });
+  flushing ??= new Promise<void>((resolve) => {
+    setTimeout(async () => {
+      const batch = pending;
+      pending = [];
+      flushing = null;
+      // 본문을 글자로 보내면 단순 요청이라 다른 출처(개발 서버)에서도 사전 확인 요청 없이 간다.
+      for (const body of chunks(batch))
+        await fetch(`${base}/pub`, { method: "POST", body }).catch(
+          () => undefined,
+        );
+      resolve();
+    }, BATCH_MS);
+  });
+  return flushing;
+}
+
+function chunks(batch: { t: string; m: unknown }[]): string[] {
+  const out: string[] = [];
+  let current: string[] = [];
+  let size = 0;
+  for (const item of batch) {
+    const text = JSON.stringify(item);
+    if (
+      current.length > 0 &&
+      (current.length >= BATCH_MAX || size + text.length > BATCH_MAX_CHARS)
+    ) {
+      out.push(`[${current.join(",")}]`);
+      current = [];
+      size = 0;
+    }
+    current.push(text);
+    size += text.length + 1;
+  }
+  if (current.length > 0) out.push(`[${current.join(",")}]`);
+  return out;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
