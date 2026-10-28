@@ -187,8 +187,8 @@ interface RoundCtx {
   floorOk: boolean;
   /** 내 패를 다 열어 준비를 알렸다 */
   readySent: boolean;
-  /** 준비를 알린 기기(방장이 센다) */
-  ready: Set<number>;
+  /** 준비를 알린 기기와 그 기기가 먼저 보인 자리(총통). 방장이 센다 */
+  ready: Map<number, number[]>;
   /** 다음에 열 더미 자리(layout.deck의 몇 번째) */
   deckNext: number;
   requests: DeckRequest[];
@@ -212,7 +212,7 @@ export class HwatuCoordinator<
   private readonly deviceOf: (seat: number) => number;
   readonly devices: readonly number[];
   private readonly onIncident: (incident: Incident) => void;
-  private readonly onReady: (deal: number) => void;
+  private readonly onReady: (deal: number, shown: number[]) => void;
   halted = false;
   private pendingIncident = false;
   readonly rounds = new Map<number, RoundCtx>();
@@ -230,8 +230,8 @@ export class HwatuCoordinator<
     deviceOf: (seat: number) => number;
     devices: readonly number[];
     onIncident: (incident: Incident) => void;
-    /** 내 패를 다 열었다(참가자는 방장에게 알린다) */
-    onReady: (deal: number) => void;
+    /** 내 패를 다 열었다(참가자는 방장에게 알린다). `shown`은 먼저 보인 자리(총통) */
+    onReady: (deal: number, shown: number[]) => void;
   }) {
     this.spec = options.spec;
     this.rules = options.rules;
@@ -272,7 +272,7 @@ export class HwatuCoordinator<
       layout: hwatuLayout(shape.hands, shape.floor),
       floorOk: false,
       readySent: false,
-      ready: new Set(),
+      ready: new Map(),
       deckNext: 0,
       requests: [],
       allRevealed: false,
@@ -287,7 +287,7 @@ export class HwatuCoordinator<
     ctx.dealId = hwatuDealId(ctx.round, ctx.attempt);
     ctx.floorOk = false;
     ctx.readySent = false;
-    ctx.ready = new Set();
+    ctx.ready = new Map();
     this.byDeal.set(ctx.dealId, ctx);
     const owners = new Map<number, number>();
     ctx.layout.hands.forEach((slots, seat) => {
@@ -359,25 +359,35 @@ export class HwatuCoordinator<
     return ctx?.readySent === true;
   }
 
-  /** 모두 준비됐다(방장이 본다): 내 준비 + 참가자 기기 모두의 준비 */
+  /**
+   * 모두 준비됐다(방장이 본다): 내 준비 + 참가자 기기 모두의 준비, 그리고 그 기기들이 먼저 보인
+   * 자리(총통)가 다 열렸다(열쇠 메시지가 준비 알림보다 늦게 처리될 수 있다)
+   */
   readyAll(round: number): boolean {
     const ctx = this.rounds.get(round);
     if (!ctx?.readySent) return false;
-    return this.devices.every((d) => d === this.device.id || ctx.ready.has(d));
+    for (const d of this.devices) {
+      const shown = ctx.ready.get(d);
+      if (!shown) return false;
+      if (shown.some((s) => this.device.open(ctx.dealId, s) === null))
+        return false;
+    }
+    return true;
   }
 
-  /** 다른 기기가 준비를 알렸다 */
-  receiveReady(deal: number, from: number): void {
+  /** 다른 기기가 준비를 알렸다(`shown`: 먼저 보인 자리) */
+  receiveReady(deal: number, from: number, shown: readonly number[]): void {
+    const slots = shown.filter((s) => Number.isInteger(s) && s >= 0 && s < 48);
     const ctx = this.byDeal.get(deal);
-    if (!ctx || ctx.dealId !== deal) {
-      this.earlyReady.push({ deal, from });
+    if (!ctx || ctx.dealId !== deal || !ctx.readySent) {
+      this.earlyReady.push({ deal, from, shown: slots });
       return;
     }
-    ctx.ready.add(from);
+    ctx.ready.set(from, slots);
     this.notify();
   }
 
-  private earlyReady: { deal: number; from: number }[] = [];
+  private earlyReady: { deal: number; from: number; shown: number[] }[] = [];
 
   private check(): void {
     for (const ctx of this.rounds.values()) this.checkRound(ctx);
@@ -416,24 +426,27 @@ export class HwatuCoordinator<
         .map((slots, seat) => ({ slots, seat }))
         .filter((h) => this.deviceOf(h.seat) === me);
       if (mySeats.some((h) => h.slots.some((s) => !mine.has(s)))) return;
+      const shown: number[] = [];
       if (this.spec.chongtong) {
         // 총통: 같은 달 넉 장을 받았으면 모두에게 보인다(엔진이 판을 바로 끝낸다).
         for (const { slots } of mySeats) {
           const cards = slots.map((s) => mine.get(s) as Card);
           const month = fourMonth(cards);
           if (month === null) continue;
-          this.device.reveal(
-            dealId,
-            slots.filter((s) => cardOf(mine.get(s) as string).month === month),
-            "proof",
+          shown.push(
+            ...slots.filter(
+              (s) => cardOf(mine.get(s) as string).month === month,
+            ),
           );
         }
+        if (shown.length > 0) this.device.reveal(dealId, shown, "proof");
       }
       ctx.readySent = true;
+      ctx.ready.set(this.device.id, shown);
       for (const r of this.earlyReady.filter((e) => e.deal === dealId))
-        ctx.ready.add(r.from);
+        ctx.ready.set(r.from, r.shown);
       this.earlyReady = this.earlyReady.filter((e) => e.deal !== dealId);
-      this.onReady(dealId);
+      this.onReady(dealId, shown);
       this.updateBusy();
     }
     if (ctx.allRevealed && !ctx.opened) {
@@ -1022,7 +1035,11 @@ export class HwatuHostTable<
     switch (message.k) {
       case "ready":
         if (message.from === from)
-          this.coordinator.receiveReady(message.deal, from);
+          this.coordinator.receiveReady(
+            message.deal,
+            from,
+            Array.isArray(message.shown) ? message.shown : [],
+          );
         break;
       case "chain":
       case "keys":
@@ -1119,8 +1136,14 @@ export class HwatuGuestSeat<
       deviceOf: (seat) => this.deviceOf(seat),
       devices: [0, ...[...this.guests].sort((a, b) => a - b)],
       onIncident: options.onIncident,
-      onReady: (deal) =>
-        options.broadcast({ t: "fp", k: "ready", deal, from: this.seat }),
+      onReady: (deal, shown) =>
+        options.broadcast({
+          t: "fp",
+          k: "ready",
+          deal,
+          from: this.seat,
+          ...(shown.length > 0 ? { shown } : {}),
+        }),
     });
     this.coordinator.watch(() => this.flush());
     this.device.on("cards", () => this.flush());
@@ -1187,6 +1210,16 @@ export class HwatuGuestSeat<
     if (!resync) {
       this.steps++;
       this.handleEvents(events);
+    }
+    // 화면으로도 판 끝을 본다(첫 판이 총통으로 바로 끝나면 판 끝 사건 없이 첫 화면이 온다).
+    if (this.spec.viewRoundOver(view) && !this.ended.has(view.roundNumber)) {
+      this.ended.add(view.roundNumber);
+      const retired = (view as { retired?: boolean }).retired === true;
+      if (!retired)
+        this.coordinator.roundEnded(
+          view.roundNumber,
+          this.spec.viewGameOver(view),
+        );
     }
     this.queue.push({ view, events: resync ? [] : events });
     this.flush();

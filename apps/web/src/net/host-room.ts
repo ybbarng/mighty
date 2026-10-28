@@ -702,6 +702,8 @@ export class HostRoom<
       if (!preset) throw new Error("첫 판을 나누다 멈췄다");
       const match = this.cardTableMatch(table, derived.seed, { preset });
       this.match = match;
+      // 첫 판이 바로 끝날 수 있다(고스톱 총통): 다음 판 섞기를 시작한다.
+      table.after(match.rawState(), match.created);
       this.subscribeGuests(match);
       for (const [seat, guest] of this.guests)
         if (guest.peerId)

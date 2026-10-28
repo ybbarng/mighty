@@ -30,4 +30,4 @@ export type FairControl =
   /** 화투: 판이 끝나기 전에 모든 열쇠를 공개한다(나이롱뽕: 손패 합이 점수다) */
   | { t: "fp"; k: "all"; deal: number }
   /** 화투: 내 패를 다 열었다(고스톱 총통이면 그 넉 장을 먼저 공개했다). 방장은 모두 준비되면 판을 시작한다 */
-  | { t: "fp"; k: "ready"; deal: number; from: number };
+  | { t: "fp"; k: "ready"; deal: number; from: number; shown?: number[] };
