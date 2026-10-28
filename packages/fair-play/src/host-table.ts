@@ -22,6 +22,7 @@ import {
   tokenDeal,
   tokenOf,
 } from "./blind";
+import { type Clock, realClock } from "./clock";
 import {
   FairCoordinator,
   type Incident,
@@ -62,6 +63,8 @@ export interface HostTableOptions {
   hooks: HostTableHooks;
   /** 참가자 답을 기다리는 시간 */
   answerTimeoutMs?: number;
+  /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
   /** 새로고침 전에 남겨 둔 방장 기기 열쇠(`snapshot`) */
   restore?: Record<number, PartySnapshot>;
 }
@@ -93,6 +96,7 @@ export class FairHostTable {
   private answerWaiters = new Set<() => void>();
   private queryId = 0;
   private readonly answerTimeoutMs: number;
+  private readonly clock: Clock;
   /** 판 번호 → 실제 패 */
   readonly deals = new Map<number, RoundDeal>();
 
@@ -102,10 +106,12 @@ export class FairHostTable {
     this.guests = new Set(options.guestSeats);
     this.hooks = options.hooks;
     this.answerTimeoutMs = options.answerTimeoutMs ?? 15_000;
+    this.clock = options.clock ?? realClock;
     this.device = new FairDevice({
       id: 0,
       group: options.group,
       send: (m) => this.hooks.broadcast(m),
+      clock: this.clock,
       ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new FairCoordinator({
@@ -536,9 +542,11 @@ export class FairHostTable {
         const value = probe();
         if (value !== undefined) done(value);
       };
-      const timer = setTimeout(() => done(undefined), this.answerTimeoutMs);
+      const cancel = this.clock.after(this.answerTimeoutMs, () =>
+        done(undefined),
+      );
       const done = (value: T | undefined) => {
-        clearTimeout(timer);
+        cancel();
         this.answerWaiters.delete(tryNow);
         resolve(value);
       };
@@ -547,9 +555,6 @@ export class FairHostTable {
     });
   }
 }
-
-declare function setTimeout(callback: () => void, ms: number): unknown;
-declare function clearTimeout(timer: unknown): void;
 
 /**
  * 화면의 자리 표를 내 카드로 바꾸고, 내 패에 따라 달라지는 것(숨은 프렌드인지, 낼 수 있는 카드)을 다시 계산한다.

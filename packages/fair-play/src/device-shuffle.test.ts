@@ -1,12 +1,13 @@
 import { deckFor, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
-declare function setTimeout(callback: () => void, ms: number): unknown;
-
 import { tokenDeal } from "./blind";
 import type { FairDevice } from "./device";
-import { network, settle } from "./device-fixture";
+import { network } from "./device-fixture";
 import { type Party, Party as PartyClass } from "./protocol";
+
+/** 기기가 기다리는 시간(증명 미루기 10초, 응답 30초의 두 배)을 넉넉히 넘긴다 */
+const PROOF_WAIT_MS = 120_000;
 
 describe("메시지로 하는 멘탈 포커", () => {
   describe("섞기 증명: 섞을 때 카드를 바꾸면 그 기기를 짚는다", () => {
@@ -31,23 +32,13 @@ describe("메시지로 하는 멘탈 포커", () => {
       ).deals
         .get(1)
         ?.shuffles.get("0:shuffle");
-    const timedOut = (devices: FairDevice[]) =>
-      devices.some(
-        (d) => (stateOf(d) as { timedOut?: boolean } | undefined)?.timedOut,
-      );
-    const proofsDone = (devices: FairDevice[]) =>
-      devices.every((d) => (stateOf(d)?.checked.size ?? 0) === 2);
-
     async function run(cheater: number | null, hideNonce = false) {
       const rules = presetRules("standard5");
       // 고친 프로그램이 nonce를 숨기면(남의 nonce를 보고 도전값이 불리하다고 보고 멈춘다) 보내지 않는다.
-      const devices = network(
-        [0, 1, 2],
-        // 느린 CI에서도 정직한 기기가 증명을 끝낼 만큼 넉넉히(실제 게임은 30초)
-        20_000,
-        (m, from) =>
+      const { devices, clock, settle } = network([0, 1, 2], {
+        drop: (m, from) =>
           hideNonce && from === cheater && m.k === "sproof" && !!m.nonce,
-      );
+      });
       const problems: { by: number; device: number | null; reason: string }[] =
         [];
       for (const d of devices)
@@ -75,15 +66,11 @@ describe("메시지로 하는 멘탈 포커", () => {
           d.start(1, [0, 1, 2], deckFor(rules));
           d.assign(1, owners);
         }
-        await settle(devices);
-        // 섞기 증명은 판 진행 줄 밖에서 계산한다. 확인이 다 끝날 때까지 기다린다.
-        for (
-          let i = 0;
-          i < 2400 && !proofsDone(devices) && !timedOut(devices);
-          i++
-        )
-          await new Promise<void>((r) => setTimeout(() => r(), 25));
-        await settle(devices);
+        // 정직한 기기는 할 수 있는 일(섞기 증명 계산·확인까지)을 모두 마친다.
+        await settle();
+        // 그 뒤에 기다리는 시간이 다 지나게 한다. 정직한 기기의 증명은 이미 와 있어 늦은 것으로 몰리지 않는다.
+        clock.advance(PROOF_WAIT_MS);
+        await settle();
       } finally {
         PartyClass.prototype.lockAndShuffle = real;
       }

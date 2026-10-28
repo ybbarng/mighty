@@ -24,19 +24,42 @@ import {
   shuffleAndDeal,
 } from "./protocol";
 import { RenegeWatch } from "./renege";
-import { TEST_GROUPS } from "./test-groups";
+import { loadRistretto255 } from "./ristretto";
+import { GROUP_1024, type SraGroup } from "./sra";
 
 /** 마이티 5마: 자리 0~49는 10장씩, 50~52는 바닥 카드 */
 const OWNERS = Array.from({ length: 53 }, (_, s) =>
   s < 50 ? Math.floor(s / 10) : -1,
 );
 
-describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
-  async function table(tamper?: Parameters<typeof shuffleAndDeal>[3]) {
-    const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g));
-    const deal = await shuffleAndDeal(g, parties, OWNERS, tamper);
-    return { parties, deal };
-  }
+/*
+ * 진행 논리(나눠 주기·공개·다시 나누기)는 군에 따라 갈라지지 않는다. 게임이 쓰는 r255로 모두 시험하고,
+ * 군마다 다른 계산은 sra·ristretto·proof·shuffle-proof 시험이 두 군 모두로 본다.
+ */
+const R255 = await loadRistretto255();
+
+async function dealTable(
+  g: SraGroup,
+  tamper?: Parameters<typeof shuffleAndDeal>[3],
+) {
+  const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g));
+  const deal = await shuffleAndDeal(g, parties, OWNERS, tamper);
+  return { parties, deal };
+}
+
+describe("보안 체험의 곱셈군(1024)", () => {
+  it("나눠 주고 판 끝에 모두 열쇠를 공개하면 53장이 한 번씩 있다", async () => {
+    const { parties, deal } = await dealTable(GROUP_1024);
+    const audit = finalAudit(deal, parties);
+    expect(audit.ok).toBe(true);
+    if (audit.ok) expect(new Set(audit.cards).size).toBe(53);
+  });
+});
+
+describe("게임이 쓰는 군(r255)", () => {
+  const g = R255;
+  const table = (tamper?: Parameters<typeof shuffleAndDeal>[3]) =>
+    dealTable(g, tamper);
 
   describe("멘탈 포커 나눠 주기", () => {
     it("각자 자기 10장만 보고, 다 모으면 바닥 카드 3장을 뺀 50장이 겹치지 않는다", async () => {

@@ -1,5 +1,6 @@
 export * from "./audit";
 export * from "./blind";
+export * from "./clock";
 export * from "./coordinator";
 export * from "./device";
 export * from "./dropout";

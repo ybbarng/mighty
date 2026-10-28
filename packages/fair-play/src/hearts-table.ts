@@ -15,6 +15,7 @@ import {
 } from "@mighty/hearts-engine";
 
 import { isToken, slotOfToken, tokenOf } from "./blind";
+import { type Clock, realClock } from "./clock";
 import {
   type BusyReason,
   type Incident,
@@ -33,9 +34,6 @@ import {
 } from "./hearts";
 import type { FairControl } from "./messages";
 import type { PartySnapshot } from "./protocol";
-
-declare function setTimeout(callback: () => void, ms: number): unknown;
-declare function clearTimeout(timer: unknown): void;
 
 /*
  * 하트 멘탈 포커 진행(마이티의 coordinator·host-table·guest-seat에 해당).
@@ -333,6 +331,7 @@ export class HeartsHostTable {
   private gate: Promise<void> = Promise.resolve();
   private openGate: (() => void) | null = null;
   private waiters = new Set<() => void>();
+  private readonly clock: Clock;
 
   constructor(options: {
     rules: HeartsRules;
@@ -342,16 +341,20 @@ export class HeartsHostTable {
     hooks: HeartsHostHooks;
     /** 새로고침 전에 남겨 둔 방장 기기 열쇠 */
     restore?: Record<number, PartySnapshot>;
+    /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+    clock?: Clock;
   }) {
     this.rules = options.rules;
     this.seed = options.seed;
     this.guests = new Set(options.guestSeats);
     this.hooks = options.hooks;
+    this.clock = options.clock ?? realClock;
     this.device = new FairDevice({
       id: 0,
       group: options.group,
       send: (m) => this.hooks.broadcast(m),
       sendTo: (m, device) => this.hooks.sendTo(m, device),
+      clock: this.clock,
       ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new HeartsCoordinator({
@@ -635,9 +638,9 @@ export class HeartsHostTable {
         const value = probe();
         if (value !== undefined) done(value);
       };
-      const timer = setTimeout(() => done(undefined), ms);
+      const cancel = this.clock.after(ms, () => done(undefined));
       const done = (value: T | undefined) => {
-        clearTimeout(timer);
+        cancel();
         this.waiters.delete(tryNow);
         resolve(value);
       };
@@ -673,6 +676,8 @@ export class HeartsGuestSeat {
       onSnapshot: (view: PlayerView, events: GameEvent[]) => void;
       onVerify: (deal: number, log: HeartsLogged[]) => void;
       restore?: Record<number, PartySnapshot>;
+      /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+      clock?: Clock;
     },
   ) {
     this.seat = options.seat;
@@ -683,6 +688,7 @@ export class HeartsGuestSeat {
       group: options.group,
       send: (m) => options.broadcast(m),
       sendTo: (m, device) => options.sendTo(m, device),
+      clock: options.clock ?? realClock,
       ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new HeartsCoordinator({

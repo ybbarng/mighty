@@ -1,5 +1,5 @@
 import type { Card } from "@mighty/engine";
-
+import { type Clock, realClock } from "./clock";
 import {
   type KeyProof,
   type KeyStatement,
@@ -240,6 +240,8 @@ export interface FairDeviceOptions {
   restore?: Record<number, PartySnapshot>;
   /** 섞기 증명 도전값이 정해진 뒤 응답을 기다리는 시간. 지나도 응답하지 않으면 그 기기를 짚는다 */
   proofTimeoutMs?: number;
+  /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
 }
 
 /** 다시 잠그는 단계에서 푸는 섞기 열쇠(그 단계의 V를 낸다) */
@@ -254,6 +256,7 @@ export class FairDevice {
   private readonly send: (message: FairWire) => void;
   private readonly sendTo: ((message: FairWire, device: number) => void) | null;
   private readonly proofTimeoutMs: number;
+  private readonly clock: Clock;
   private readonly deals = new Map<number, DealCtx>();
   private work: Promise<void> = Promise.resolve();
   private readonly listeners: {
@@ -275,6 +278,7 @@ export class FairDevice {
     this.send = options.send;
     this.sendTo = options.sendTo ?? null;
     this.proofTimeoutMs = options.proofTimeoutMs ?? 30_000;
+    this.clock = options.clock ?? realClock;
     this.restored = new Map(
       Object.entries(options.restore ?? {}).map(([deal, snap]) => [
         Number(deal),
@@ -331,9 +335,22 @@ export class FairDevice {
     return this.work;
   }
 
-  /** 모든 일이 끝날 때까지 기다린다(시험용) */
-  idle(): Promise<void> {
-    return this.work;
+  /** 작업 줄 밖에서 도는 계산(섞기 증명). idle이 함께 기다린다 */
+  private readonly background = new Set<Promise<unknown>>();
+  private track(p: Promise<unknown>): void {
+    this.background.add(p);
+    const forget = () => this.background.delete(p);
+    p.then(forget, forget);
+  }
+
+  /** 작업 줄과 섞기 증명 계산이 모두 끝날 때까지 기다린다(시험용) */
+  async idle(): Promise<void> {
+    for (;;) {
+      const work = this.work;
+      const background = [...this.background];
+      await Promise.all([work, ...background.map((p) => p.catch(() => {}))]);
+      if (work === this.work && this.background.size === 0) return;
+    }
   }
 
   ledger(deal: number): PublicLedger | null {
@@ -1245,7 +1262,7 @@ export class FairDevice {
       return;
     }
     ctx.deferredProofs.add(state);
-    setTimeout(() => this.startDeferredProofs(ctx), PROOF_DEFER_MS);
+    this.clock.after(PROOF_DEFER_MS, () => this.startDeferredProofs(ctx));
   }
 
   private startDeferredProofs(ctx: DealCtx): void {
@@ -1260,7 +1277,7 @@ export class FairDevice {
     const io = this.shuffleIO(ctx, state, this.id);
     if (e === null || !io) return;
     state.proving = true;
-    void (async () => {
+    const proving = (async () => {
       const started = Date.now();
       const work = await commitShuffle(
         this.g,
@@ -1284,6 +1301,7 @@ export class FairDevice {
     })().catch(() => {
       // 내 섞기로 증명을 만들 수 없으면 보내지 않는다(남들이 응답 없음으로 알아챈다).
     });
+    this.track(proving);
   }
 
   private onShuffleProof(
@@ -1355,11 +1373,11 @@ export class FairDevice {
         [],
       );
       // 도전값이 정해진 뒤 오래 응답하지 않으면 그 기기를 짚는다. 속인 덱은 응답을 만들 수 없다.
-      setTimeout(() => {
+      this.clock.after(this.proofTimeoutMs, () => {
         // 응답이 늦은 것만으로는 탓하지 않는다(다른 앱으로 넘어가 탭이 느려진 정직한 사람일 수 있다).
         // 조작이 드러나면 그때 증명을 끝내지 않은 기기를 범인으로 본다(chainCulprit).
         state.timedOut = true;
-      }, this.proofTimeoutMs);
+      });
     }
     const bits = state.bits;
     if (bits === null) return;
@@ -1368,7 +1386,7 @@ export class FairDevice {
       if (io) {
         state.sentAnswer = true;
         const work = state.work;
-        void (async () => {
+        const answering = (async () => {
           const started = Date.now();
           const answers = await answerShuffle(
             this.g,
@@ -1399,6 +1417,7 @@ export class FairDevice {
         })().catch(() => {
           // 내 섞기 출력이 입력과 맞지 않으면 응답을 만들 수 없다.
         });
+        this.track(answering);
       }
     }
     for (const d of ctx.devices) {
@@ -1420,6 +1439,7 @@ export class FairDevice {
         ).catch(() => false),
       );
       this.checking = check.then(() => undefined);
+      this.track(check);
       state.checked.set(d, check);
       void check.then((ok) => {
         if (!ok)
@@ -1452,7 +1472,7 @@ export class FairDevice {
     /** 약속 단계: 그 기기가 섞은 덱을 받은 때부터 잰다 */
     device?: number,
   ): void {
-    setTimeout(() => {
+    this.clock.after(this.proofTimeoutMs, () => {
       if (state.bits !== null || !this.isCurrent(ctx)) return;
       const map = step === "commit" ? state.commits : state.nonces;
       // nonce 단계는 모두의 약속이 모였을 때만 따진다(약속이 빠진 것은 약속 단계에서 짚는다).
@@ -1466,7 +1486,7 @@ export class FairDevice {
       );
       // 늦은 것만으로는 탓하지 않고, 조작이 드러날 때 범인을 찾는 데 쓴다(chainCulprit).
       if (missing.length > 0) state.timedOut = true;
-    }, this.proofTimeoutMs);
+    });
   }
 
   /** 다시 나누기 바꾸기(convert)의 V = g^(1/p) */
@@ -1533,8 +1553,8 @@ export class FairDevice {
           (state.bits !== null &&
             ctx.devices.every((d) => d === this.id || state.checked.has(d))),
       );
-    const started = Date.now();
-    while (!settled() && Date.now() - started < this.proofTimeoutMs * 2)
+    const started = this.clock.now();
+    while (!settled() && this.clock.now() - started < this.proofTimeoutMs * 2)
       await new Promise<void>((r) => setTimeout(r, 100));
     for (const state of ctx.shuffles.values())
       for (const [d, check] of state.checked)

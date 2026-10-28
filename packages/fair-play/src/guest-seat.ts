@@ -10,6 +10,7 @@ import {
 
 import type { FairLogged, RoundDeal } from "./audit";
 import { cardText, tokenOf } from "./blind";
+import { type Clock, realClock } from "./clock";
 import {
   FairCoordinator,
   type Incident,
@@ -29,9 +30,6 @@ import type { PartySnapshot } from "./protocol";
  * - 마지막 턴에 모든 카드가 열리면 행동 기록을 받아 판 전체를 직접 다시 계산한다(검증은 부르는 쪽).
  */
 
-declare function setTimeout(callback: () => void, ms: number): unknown;
-declare function clearTimeout(timer: unknown): void;
-
 export interface GuestSeatOptions {
   rules: RuleSet;
   seat: number;
@@ -46,6 +44,8 @@ export interface GuestSeatOptions {
   onVerify: (deal: number, log: FairLogged[]) => void;
   /** 새로고침 전에 남겨 둔 열쇠 */
   restore?: Record<number, PartySnapshot>;
+  /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
 }
 
 export class FairGuestSeat {
@@ -62,16 +62,19 @@ export class FairGuestSeat {
   private expectKill: Card | null = null;
   private readonly logs = new Map<number, FairLogged[]>();
   readonly deals = new Map<number, RoundDeal>();
+  private readonly clock: Clock;
 
   constructor(options: GuestSeatOptions) {
     this.options = options;
     this.seat = options.seat;
     this.rules = options.rules;
     this.guests = new Set(options.guestSeats);
+    this.clock = options.clock ?? realClock;
     this.device = new FairDevice({
       id: options.seat,
       group: options.group,
       send: (m) => options.broadcast(m),
+      clock: this.clock,
       ...(options.restore ? { restore: options.restore } : {}),
     });
     this.coordinator = new FairCoordinator({
@@ -271,13 +274,13 @@ export class FairGuestSeat {
         resolve();
         return;
       }
-      const timer = setTimeout(() => {
+      const cancel = this.clock.after(10_000, () => {
         off();
         resolve();
-      }, 10_000);
+      });
       const off = this.device.on("keys", () => {
         if (this.device.open(deal, slot) === null) return;
-        clearTimeout(timer);
+        cancel();
         off();
         resolve();
       });
