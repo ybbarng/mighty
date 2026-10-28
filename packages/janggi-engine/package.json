@@ -1,0 +1,16 @@
+{
+  "name": "@mighty/janggi-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "장기 규칙 엔진 — 한국 장기, 순수 함수",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*"
+  }
+}

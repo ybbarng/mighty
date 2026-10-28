@@ -312,6 +312,12 @@ importers:
         specifier: workspace:*
         version: link:../engine
 
+  packages/janggi-engine:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
   packages/omok-ai:
     dependencies:
       '@mighty/engine':
