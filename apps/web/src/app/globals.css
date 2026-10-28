@@ -23,6 +23,12 @@ html:has([data-game="hearts"]) body {
   background: var(--color-hearts-dark);
 }
 
+/* 게임 목록 첫 화면: 당겨 넘칠 때 비치는 바탕도 첫 화면 색으로 */
+html:has([data-game="center"]),
+html:has([data-game="center"]) body {
+  background: #020617;
+}
+
 main,
 button {
   user-select: none;

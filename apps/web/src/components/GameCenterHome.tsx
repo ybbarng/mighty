@@ -1,3 +1,4 @@
+import { SITE } from "@/components/brand/brand";
 import { GAMES } from "@/games/registry";
 
 import { IconArt } from "./brand/icon-art";
@@ -31,10 +32,13 @@ const SHARED_LINKS = [
  */
 export function GameCenterHome() {
   return (
-    <main className="min-h-dvh bg-[radial-gradient(ellipse_at_top,#1e293b_0%,#020617_70%)] px-4 py-8 text-white">
+    <main
+      data-game="center"
+      className="min-h-dvh bg-[radial-gradient(ellipse_at_top,#1e293b_0%,#020617_70%)] px-4 py-8 text-white"
+    >
       <div className="mx-auto flex max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-1 text-center">
-          <h1 className="font-black text-3xl tracking-tight">게임</h1>
+          <h1 className="font-black text-3xl tracking-tight">{SITE.name}</h1>
           <p className="text-sm text-white/70">
             서버 없이 친구와 바로. 혼자라면 컴퓨터와.
           </p>

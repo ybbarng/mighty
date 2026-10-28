@@ -1,4 +1,4 @@
-import { HEART_PATH, SPADE_PATH } from "./brand";
+import { HEART_PATH, SITE, SPADE_PATH } from "./brand";
 
 const INK = "#111111";
 const PAPER = "#ffffff";
@@ -128,8 +128,59 @@ function HeartsCorner() {
   );
 }
 
+/** 판 위 격자 줄의 자리(100×100 상자) */
+const GRID = [12.5, 37.5, 62.5, 87.5];
+
 /**
- * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트 아이콘을 그린다.
+ * 게임 센터 아이콘. 나무 판 격자 위에 흑돌 둘과 백돌 하나: 카드 게임 둘과 겹치지 않고,
+ * 첫 공개 게임인 오목과 이어서 만들 바둑을 떠올리게 한다.
+ */
+function CenterBoard() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "flex" }}
+    >
+      <rect width="100" height="100" fill={SITE.board} />
+      {GRID.map((p) => (
+        <g key={p}>
+          <line
+            x1={p}
+            y1="0"
+            x2={p}
+            y2="100"
+            stroke={SITE.ink}
+            strokeWidth="2.4"
+          />
+          <line
+            x1="0"
+            y1={p}
+            x2="100"
+            y2={p}
+            stroke={SITE.ink}
+            strokeWidth="2.4"
+          />
+        </g>
+      ))}
+      <circle cx="37.5" cy="37.5" r="11.5" fill={INK} />
+      <circle
+        cx="62.5"
+        cy="37.5"
+        r="10.3"
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth="2.4"
+      />
+      <circle cx="62.5" cy="62.5" r="11.5" fill={INK} />
+    </svg>
+  );
+}
+
+/**
+ * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "center"면 게임 센터 아이콘을 그린다.
  * `maskable`이면 안드로이드가 잘라 쓰는 안전 영역(가운데 80%) 안에 들어가게 줄인다.
  */
 export function IconArt({
@@ -137,7 +188,7 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts";
+  game?: "mighty" | "hearts" | "center";
 }) {
   return (
     <div
@@ -147,7 +198,7 @@ export function IconArt({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: PAPER,
+        background: game === "center" ? SITE.board : PAPER,
         borderRadius: maskable ? 0 : "18%",
         overflow: "hidden",
       }}
@@ -159,7 +210,13 @@ export function IconArt({
           height: maskable ? "78%" : "100%",
         }}
       >
-        {game === "hearts" ? <HeartsCorner /> : <MightyCorner />}
+        {game === "center" ? (
+          <CenterBoard />
+        ) : game === "hearts" ? (
+          <HeartsCorner />
+        ) : (
+          <MightyCorner />
+        )}
       </div>
     </div>
   );

@@ -17,5 +17,8 @@ export function generateImageMetadata() {
 
 /** iOS가 모서리를 직접 둥글리므로 꽉 채운 그림을 쓴다 */
 export default function AppleIcon() {
-  return new ImageResponse(<IconArt maskable />, { width: 180, height: 180 });
+  return new ImageResponse(<IconArt game="center" maskable />, {
+    width: 180,
+    height: 180,
+  });
 }

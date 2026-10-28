@@ -4,7 +4,7 @@ import { IconArt } from "@/components/brand/icon-art";
 
 export const dynamic = "force-static";
 
-/** 하트 화면의 브라우저 탭 아이콘. 홈 화면 앱(manifest)은 사이트 하나라 마이티 아이콘을 그대로 쓴다 */
+/** 하트 화면의 브라우저 탭 아이콘. 홈 화면 앱(manifest)은 사이트 하나라 게임 센터 아이콘을 쓴다 */
 export function generateImageMetadata() {
   return [
     { id: "32.png", size: { width: 32, height: 32 }, contentType: "image/png" },
