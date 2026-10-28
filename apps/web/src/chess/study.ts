@@ -33,7 +33,8 @@ export function solutionMove(puzzle: ChessPuzzle): Move {
 }
 
 /**
- * 내 수를 판정한다. 마지막 수는 메이트면 어느 수든 정답, 그 앞 수는 문제의 정답 수만
+ * 내 수를 판정한다. 전술 문제는 정답 수만 맞다.
+ * 메이트 문제의 마지막 수는 메이트면 어느 수든 정답, 그 앞 수는 문제의 정답 수만
  */
 export function judgeMove(
   puzzle: ChessPuzzle,
@@ -41,6 +42,8 @@ export function judgeMove(
   move: Move,
   step: number,
 ): "solved" | "next" | "wrong" {
+  if (puzzle.kind === "tactic")
+    return sameMove(move, solutionMove(puzzle)) ? "solved" : "wrong";
   if (isCheckmate(applyMove(state.position, move))) return "solved";
   if (step >= puzzle.mateIn - 1) return "wrong";
   return sameMove(move, solutionMove(puzzle)) ? "next" : "wrong";

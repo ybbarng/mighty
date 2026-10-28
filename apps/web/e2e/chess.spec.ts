@@ -377,6 +377,40 @@ test("체스 수 배우기: 메이트 문제를 틀렸다 다시 풀고, 진행�
   ).toBeVisible();
 });
 
+test("체스 수 배우기: 포크 문제를 틀렸다 다시 풀고, 진행이 목록에 남는다", async ({
+  page,
+}, info) => {
+  const touch = info.project.name.startsWith("phone");
+  await page.goto("/chess");
+  await page.getByRole("button", { name: /체스 배우기/ }).click();
+  await page.getByRole("button", { name: /수 배우기/ }).click();
+  const fork = page.getByRole("region", { name: "포크" });
+  await expect(fork.getByText("0/8")).toBeVisible();
+  await fork.getByRole("button", { name: "풀기 시작" }).click();
+  await expect(page.getByRole("status")).toHaveText("포크로 기물을 얻으세요");
+
+  // 킹을 옮기는 수로는 기물을 얻지 못한다.
+  await tapSquare(page, "b3", touch);
+  const to = await page
+    .locator("[data-target]")
+    .first()
+    .getAttribute("data-target");
+  await tapSquare(page, to as string, touch);
+  await expect(page.getByRole("status")).toHaveText(
+    "그 수로는 기물을 얻지 못해요",
+  );
+  await page.getByRole("button", { name: "다시 하기" }).click();
+
+  // 정답: 퀸 d5 → h1. 킹과 비숍을 함께 노린다.
+  await tapSquare(page, "d5", touch);
+  await tapSquare(page, "h1", touch);
+  await expect(page.getByRole("status")).toHaveText("포크!");
+  await expect(page.getByText(/함께 노린다\(포크\)/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("chess-fork.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+  await expect(fork.getByText("1/8")).toBeVisible();
+});
+
 test("체스 개인 시간: 내 시계가 가고, 다 쓰면 시간패다", async ({
   page,
 }, info) => {

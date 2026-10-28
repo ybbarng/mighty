@@ -403,7 +403,7 @@ export function ChessApp() {
         onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
         extra={{
           title: "수 배우기",
-          detail: `메이트 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
+          detail: `메이트·전술 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
           onClick: () => setScreen({ kind: "study" }),
         }}
       />

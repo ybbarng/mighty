@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
+import { StudyHome } from "@/components/study/StudyHome";
 import {
   TimePresetPicker,
   timePresetLabel,
@@ -13,7 +14,8 @@ import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { badukOnline } from "../online";
-import { useBadukTutorialProgress } from "../progress";
+import { useBadukStudyProgress, useBadukTutorialProgress } from "../progress";
+import { BADUK_PUZZLE_SETS } from "../puzzles";
 import { endBadukSession } from "../session";
 import {
   BADUK_LEVELS,
@@ -25,6 +27,7 @@ import {
 import { type BadukSaved, clearBaduk, loadBaduk, useBaduk } from "../store";
 import { BADUK_LESSONS } from "../tutorial";
 import { BadukGame, StoneDot } from "./BadukGame";
+import { BadukPuzzleScreen } from "./BadukPuzzleScreen";
 import { badukTutorial } from "./baduk-tutorial";
 
 /** 바둑 화면들의 배경(대국 화면의 짙은 색과 이어진다) */
@@ -340,7 +343,17 @@ type Screen =
   | { kind: "options" }
   | { kind: "rules" }
   | { kind: "tutorial" }
-  | { kind: "lesson"; lessonId: string };
+  | { kind: "lesson"; lessonId: string }
+  | { kind: "study" }
+  | { kind: "puzzle"; puzzleId: string };
+
+/** 수 배우기 목록에 보일 문제 묶음 */
+const STUDY_SETS = BADUK_PUZZLE_SETS.map((s) => ({
+  id: s.id,
+  title: s.title,
+  summary: s.summary,
+  puzzleIds: s.puzzles.map((p) => p.id),
+}));
 
 /** 바둑(/baduk): 첫 화면, 옵션, 규칙, 배우기, 다함께 바둑 방, 대국 화면 */
 export function BadukApp() {
@@ -355,6 +368,7 @@ export function BadukApp() {
   useEffect(() => {
     void useBadukSettings.persist.rehydrate();
     void useBadukTutorialProgress.persist.rehydrate();
+    void useBadukStudyProgress.persist.rehydrate();
   }, []);
 
   // 다 끝난 게임은 이어하기에 남기지 않는다(튜토리얼 미션은 이어하기 저장과 상관없다).
@@ -408,6 +422,31 @@ export function BadukApp() {
         tutorial={badukTutorial}
         onBack={backToStart}
         onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
+        extra={{
+          title: "수 배우기",
+          detail: `잡기·사활 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
+          onClick: () => setScreen({ kind: "study" }),
+        }}
+      />
+    );
+  if (screen.kind === "study")
+    return (
+      <StudyHome
+        title="바둑 수 배우기"
+        background={BG}
+        sets={STUDY_SETS}
+        progress={useBadukStudyProgress}
+        onOpen={(puzzleId) => setScreen({ kind: "puzzle", puzzleId })}
+        onBack={() => setScreen({ kind: "tutorial" })}
+      />
+    );
+  if (screen.kind === "puzzle")
+    return (
+      <BadukPuzzleScreen
+        key={screen.puzzleId}
+        puzzleId={screen.puzzleId}
+        onExit={() => setScreen({ kind: "study" })}
+        onOpen={(puzzleId) => setScreen({ kind: "puzzle", puzzleId })}
       />
     );
   if (screen.kind === "lesson")

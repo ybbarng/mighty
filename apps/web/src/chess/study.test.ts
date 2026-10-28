@@ -22,8 +22,9 @@ import {
 
 const all = CHESS_PUZZLE_SETS.flatMap((s) => s.puzzles);
 const rows = (ps: readonly ChessPuzzle[]) => ps.map((p) => [p.id, p] as const);
-const one = all.filter((p) => p.mateIn === 1);
-const two = all.filter((p) => p.mateIn === 2);
+const mates = all.filter((p) => p.kind === "mate");
+const one = mates.filter((p) => p.kind === "mate" && p.mateIn === 1);
+const two = mates.filter((p) => p.kind === "mate" && p.mateIn === 2);
 
 describe("체스 문제 데이터", () => {
   it("한 수 10개 이상, 두 수 6개 이상이고 번호가 겹치지 않는다", () => {
