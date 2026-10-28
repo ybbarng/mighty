@@ -11,9 +11,13 @@ import { MemoryNetwork } from "./transport";
 // 실제 방과 같은 타원곡선 군(r255). 앱에서는 방에 들어갈 때(openTransport) 준비한다.
 await prepareGroup("r255");
 
+/**
+ * 조건이 맞을 때까지 기다린다. 상한은 멈춘 시험을 잡는 안전장치일 뿐이라 시험 상한(180초) 바로 아래로 둔다.
+ * 60초였을 때 다른 시험과 함께 돌아 CPU가 바쁜 기기에서 정상 진행이 상한에 걸린 적이 있다
+ */
 export async function until(
   condition: () => boolean,
-  ms = 60_000,
+  ms = 170_000,
 ): Promise<void> {
   const start = Date.now();
   while (!condition()) {
