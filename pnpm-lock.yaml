@@ -312,6 +312,15 @@ importers:
         specifier: workspace:*
         version: link:../engine
 
+  packages/janggi-ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/janggi-engine':
+        specifier: workspace:*
+        version: link:../janggi-engine
+
   packages/janggi-engine:
     dependencies:
       '@mighty/engine':

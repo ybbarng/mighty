@@ -21,6 +21,7 @@ COPY packages/fair-play/package.json packages/fair-play/
 COPY packages/omok-engine/package.json packages/omok-engine/
 COPY packages/omok-ai/package.json packages/omok-ai/
 COPY packages/janggi-engine/package.json packages/janggi-engine/
+COPY packages/janggi-ai/package.json packages/janggi-ai/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
