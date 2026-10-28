@@ -61,3 +61,7 @@ export function lessonStates(
 
 /** 오목 튜토리얼 진행 기록 */
 export const useOmokTutorialProgress = createTutorialProgress("omok-tutorial");
+
+/** 장기 튜토리얼 진행 기록 */
+export const useJanggiTutorialProgress =
+  createTutorialProgress("janggi-tutorial");

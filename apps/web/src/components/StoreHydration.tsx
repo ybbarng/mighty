@@ -4,9 +4,11 @@ import { useEffect } from "react";
 
 import { useSettings } from "@/game/settings";
 import { useHeartsSettings } from "@/hearts/settings";
+import { useJanggiSettings } from "@/janggi/settings";
 import { useOmokSettings } from "@/omok/settings";
 import {
   useHeartsTutorialProgress,
+  useJanggiTutorialProgress,
   useOmokTutorialProgress,
   useTutorialProgress,
 } from "@/tutorial/progress";
@@ -23,6 +25,8 @@ export function StoreHydration() {
     void useHeartsTutorialProgress.persist.rehydrate();
     void useOmokSettings.persist.rehydrate();
     void useOmokTutorialProgress.persist.rehydrate();
+    void useJanggiSettings.persist.rehydrate();
+    void useJanggiTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

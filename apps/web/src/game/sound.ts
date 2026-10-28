@@ -60,7 +60,13 @@ export type Cue =
   /** 하트: 한 판이 끝나 점수표가 뜰 때 */
   | "roundEnd"
   /** 오목: 나무 판에 돌을 놓는 "딱" */
-  | "stone";
+  | "stone"
+  /** 장기: 나무 기물을 판에 놓는 묵직한 "탁" */
+  | "piece"
+  /** 장기: 상대 기물을 쳐서 잡는 "탁-딱" */
+  | "capture"
+  /** 장기: 장군을 부르는 짧은 나팔 */
+  | "check";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -92,6 +98,9 @@ export const CUE_LABELS: Record<Cue, string> = {
   penalty: "하트: 벌점 먹음",
   roundEnd: "하트: 판 끝 점수표",
   stone: "오목: 돌 놓기",
+  piece: "장기: 기물 놓기",
+  capture: "장기: 잡기",
+  check: "장기: 장군",
 };
 
 /**
@@ -102,6 +111,9 @@ export const CUE_LABELS: Record<Cue, string> = {
 const TRIM_DB: Partial<Record<Cue, number>> = {
   card: 6.8,
   stone: 7.5,
+  piece: 6,
+  capture: 3,
+  check: -3,
   pickCard: 8.5,
   click: 7.7,
   beep: 10,
@@ -788,6 +800,53 @@ function render(cue: Cue, v: Voice): void {
       thump(v, 0, 190 * vary, 120, 0.08, 0.22);
       break;
     }
+    case "piece": {
+      // 돌보다 크고 무거운 나무 기물: 낮은 "탁"과 판이 울리는 "퉁"
+      const vary = 0.94 + random() * 0.12;
+      noise(v, 0, 0.035, {
+        filter: "bandpass",
+        freq: 1500 * vary,
+        q: 1.4,
+        gain: 0.9,
+        attack: 0.001,
+      });
+      tone(v, 420 * vary, 0, 0.11, {
+        type: "triangle",
+        gain: 0.13,
+        endFreq: 360,
+        attack: 0.002,
+      });
+      thump(v, 0, 140 * vary, 90, 0.11, 0.26);
+      break;
+    }
+    case "capture": {
+      // 상대 기물을 치는 "탁"과 바로 이어 판에 닿는 "딱"
+      for (const [at, freq] of [
+        [0, 1300],
+        [0.07, 2100],
+      ] as const) {
+        noise(v, at, 0.035, {
+          filter: "bandpass",
+          freq,
+          q: 1.6,
+          gain: 0.9,
+          attack: 0.001,
+        });
+        thump(v, at, 160, 95, 0.1, 0.22);
+      }
+      tone(v, 520, 0.07, 0.12, {
+        type: "triangle",
+        gain: 0.1,
+        endFreq: 440,
+        attack: 0.002,
+      });
+      break;
+    }
+    case "check":
+      // "장군!": 짧게 두 번 부는 나팔
+      brass(v, 392, 0, 0.12, { gain: 0.1 });
+      brass(v, 523.25, 0.13, 0.32, { gain: 0.11, vibrato: [6, 3] });
+      break;
     case "roundEnd":
       // 점수표를 펼치는 "사락"과 "띵동"
       noise(v, 0, 0.18, {

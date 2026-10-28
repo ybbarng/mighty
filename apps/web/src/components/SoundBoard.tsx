@@ -72,6 +72,17 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "roundEnd", when: "비김" },
     ],
   },
+  {
+    title: "장기",
+    cues: [
+      { cue: "piece", when: "기물을 옮김(나·상대 모두)" },
+      { cue: "capture", when: "기물을 잡음" },
+      { cue: "check", when: "장군(누가 부르든)" },
+      { cue: "invalid", when: "둘 수 없는 수를 두려 함" },
+      { cue: "win", when: "외통·상대 기권·점수로 이김" },
+      { cue: "lose", when: "외통당함·내가 기권·점수로 짐" },
+    ],
+  },
 ];
 
 interface Level {

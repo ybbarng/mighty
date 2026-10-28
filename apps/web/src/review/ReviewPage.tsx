@@ -9,6 +9,7 @@ import type { GameKit } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import { useSettings } from "@/game/settings";
 import { heartsKit } from "@/hearts/kit";
+import { JanggiReplay } from "@/janggi/components/JanggiReplay";
 import { OmokReplay } from "@/omok/components/OmokReplay";
 
 import {
@@ -31,6 +32,7 @@ const GAME_NAME: Record<string, string> = {
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
   omok: "● 오목",
+  janggi: "楚 장기",
 };
 
 function when(at: number): string {
@@ -210,12 +212,13 @@ function ArchiveView({
   onBack: () => void;
 }) {
   // 판 게임은 카드 게임 화면을 쓰지 않고 판 전용 다시 보기를 쓴다.
-  if (archive.game === "omok")
-    return <OmokArchiveView archive={archive} onBack={onBack} />;
+  if (archive.game === "omok" || archive.game === "janggi")
+    return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
 }
 
-function OmokArchiveView({
+/** 판 게임(오목·장기) 다시 보기 */
+function BoardArchiveView({
   archive,
   onBack,
 }: {
@@ -235,10 +238,15 @@ function OmokArchiveView({
           ← 목록
         </button>
         <h1 className="font-black text-xl">
-          {GAME_NAME.omok} · {archive.mode === "solo" ? "혼자" : "친구와"} ·{" "}
+          {GAME_NAME[archive.game] ?? archive.game} ·{" "}
+          {archive.mode === "solo" ? "혼자" : "친구와"} ·{" "}
           {when(archive.startedAt)}
         </h1>
-        <OmokReplay archive={archive} name={name} />
+        {archive.game === "janggi" ? (
+          <JanggiReplay archive={archive} name={name} />
+        ) : (
+          <OmokReplay archive={archive} name={name} />
+        )}
       </div>
     </main>
   );

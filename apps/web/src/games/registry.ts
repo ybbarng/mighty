@@ -3,7 +3,7 @@
  * 새 게임은 여기에 한 줄 더하고 `app/<id>/page.tsx`를 둔다.
  */
 export type GameEntry = {
-  id: "mighty" | "hearts" | "omok";
+  id: "mighty" | "hearts" | "omok" | "janggi";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -20,6 +20,15 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "다섯 개를 먼저 잇는 사람이 이긴다. 일반·자유·렌주 규칙",
     players: "2명",
     path: "/omok",
+  },
+  {
+    id: "janggi",
+    name: "장기",
+    englishName: "Janggi",
+    tagline:
+      "차·포·마·상으로 상대 궁을 외통으로 몬다. 상차림부터 한국 장기 그대로",
+    players: "2명",
+    path: "/janggi",
   },
   {
     id: "mighty",

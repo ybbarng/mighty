@@ -28,9 +28,11 @@ html:has([data-game="hearts"]) body {
   background: var(--color-hearts-dark);
 }
 
-/* 오목 대국 화면 */
+/* 오목·장기 화면 */
 html:has([data-game="omok"]),
-html:has([data-game="omok"]) body {
+html:has([data-game="omok"]) body,
+html:has([data-game="janggi"]),
+html:has([data-game="janggi"]) body {
   background: #1c1917;
 }
 

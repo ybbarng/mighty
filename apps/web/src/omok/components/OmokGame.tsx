@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
 import { ResultBanner } from "@/components/ResultBanner";
+import { RoundOutcome } from "@/components/RoundOutcome";
 import {
   MissionOverlay,
   type MissionProps,
@@ -212,36 +213,12 @@ export function OmokGame({
         <ResultBanner banner={banner} seq={view.roundNumber} />
       </div>
 
-      {/* 판이 끝나면 결과를 크게 남긴다(가운데 띠가 사라진 뒤에도 보이게) */}
-      <div
-        data-outcome={outcome ?? undefined}
-        className={cn(
-          "flex flex-col items-center text-center short-landscape:col-start-2 short-landscape:row-start-3",
-          outcome &&
-            "pop-in w-full max-w-xl rounded-2xl border px-6 py-3 shadow-xl",
-          outcome === "win" && "border-amber-300 bg-amber-400/20",
-          outcome === "loss" && "border-white/15 bg-black/40",
-          outcome === "draw" && "border-white/20 bg-white/10",
-        )}
-      >
-        <p
-          role="status"
-          className={cn(
-            "min-h-6",
-            outcome ? "font-black text-3xl tracking-tight" : "font-semibold",
-            outcome === "win" && "text-amber-300",
-          )}
-        >
-          {notice ?? status}
-        </p>
-        {outcome && (
-          <p className="mt-1 text-sm text-white/80">
-            나 {view.wins[me] ?? 0} : {view.wins[1 - me] ?? 0} {opponent}
-            {view.rules.winsToFinish > 1 &&
-              ` · ${view.rules.winsToFinish}승 먼저`}
-          </p>
-        )}
-      </div>
+      <RoundOutcome
+        outcome={outcome}
+        status={notice ?? status}
+        summary={`나 ${view.wins[me] ?? 0} : ${view.wins[1 - me] ?? 0} ${opponent}${view.rules.winsToFinish > 1 ? ` · ${view.rules.winsToFinish}승 먼저` : ""}`}
+        className="short-landscape:col-start-2 short-landscape:row-start-3"
+      />
 
       <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 short-landscape:col-start-2 short-landscape:row-start-4 short-landscape:content-start">
         {view.phase === "play" && (

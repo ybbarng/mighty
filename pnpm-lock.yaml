@@ -211,6 +211,12 @@ importers:
       '@mighty/hearts-engine':
         specifier: workspace:*
         version: link:../../packages/hearts-engine
+      '@mighty/janggi-ai':
+        specifier: workspace:*
+        version: link:../../packages/janggi-ai
+      '@mighty/janggi-engine':
+        specifier: workspace:*
+        version: link:../../packages/janggi-engine
       '@mighty/omok-ai':
         specifier: workspace:*
         version: link:../../packages/omok-ai

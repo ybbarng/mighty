@@ -6,6 +6,7 @@ import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
 import { kirudaName } from "@/game/terms";
 import { summarizeHearts } from "@/hearts/stats";
+import { summarizeJanggi } from "@/janggi/kit";
 import { cn } from "@/lib/cn";
 import { summarizeOmok } from "@/omok/kit";
 
@@ -22,10 +23,11 @@ import {
   TrendLine,
 } from "./widgets";
 
-type GameTab = "mighty" | "hearts" | "omok";
+type GameTab = "mighty" | "hearts" | "omok" | "janggi";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
+  janggi: "楚 장기",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
 };
@@ -60,7 +62,12 @@ export function ProfilePage() {
     setBook(loadStats());
     // 게임에서 들어왔으면 그 게임 기록부터 보이고 그 게임으로 돌아간다.
     const game = new URLSearchParams(window.location.search).get("game");
-    if (game === "mighty" || game === "hearts" || game === "omok") {
+    if (
+      game === "mighty" ||
+      game === "hearts" ||
+      game === "omok" ||
+      game === "janggi"
+    ) {
       setBack(`/${game}`);
       setTab(game);
     }
@@ -139,7 +146,7 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="flex gap-1.5" role="tablist">
-            {(["omok", "mighty", "hearts"] as const).map((t) => (
+            {(["omok", "janggi", "mighty", "hearts"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -161,6 +168,8 @@ export function ProfilePage() {
           <MightyStats book={book} />
         ) : tab === "hearts" ? (
           <HeartsStats book={book} />
+        ) : tab === "janggi" ? (
+          <JanggiStats book={book} />
         ) : (
           <OmokStats book={book} />
         )}
@@ -502,6 +511,43 @@ function OmokStats({ book }: { book: StatsBook }) {
         <ResultStrip
           title="최근 판 결과"
           results={s.recent.filter((r) => r !== 0).map((r) => ({ won: r > 0 }))}
+        />
+      </Card>
+    </>
+  );
+}
+
+function JanggiStats({ book }: { book: StatsBook }) {
+  const s = summarizeJanggi(book.rounds);
+  if (s.rounds === 0) return <Empty what="장기" />;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile
+          label="판 승률"
+          value={pct(s.wins, s.rounds)}
+          sub={`${s.wins}승 ${s.losses}패`}
+        />
+        <StatTile
+          label="평균 수"
+          value={s.averageMoves.toFixed(0)}
+          sub="판에 둔 수"
+        />
+        <StatTile
+          label="외통으로 이김"
+          value={s.byCheckmate}
+          sub={`점수승 ${s.byScore}판`}
+        />
+        <StatTile label="기권승" value={s.byResign} sub="상대가 기권한 판" />
+      </div>
+      <Card title="편별 승률">
+        <RateBar label="초(먼저)" won={s.cho.won} n={s.cho.n} />
+        <RateBar label="한" won={s.han.won} n={s.han.n} />
+      </Card>
+      <Card title={`최근 ${s.recent.length}판`}>
+        <ResultStrip
+          title="최근 판 결과"
+          results={s.recent.map((r) => ({ won: r > 0 }))}
         />
       </Card>
     </>

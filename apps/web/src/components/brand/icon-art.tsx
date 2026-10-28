@@ -252,8 +252,105 @@ function OmokFive() {
   );
 }
 
+/** 장기 아이콘의 팔각형 말(반지름 r) */
+function octagonPoints(cx: number, cy: number, r: number): string {
+  return Array.from({ length: 8 }, (_, i) => {
+    const a = Math.PI / 8 + (i * Math.PI) / 4;
+    return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+  }).join(" ");
+}
+
 /**
- * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "omok"이면 오목, "center"면 게임 센터 아이콘을 그린다.
+ * 장기 아이콘. 대각선이 그려진 궁성 위에 초(초록)·한(빨강) 말 둘.
+ * 아이콘을 만들 때 한글 글꼴이 없어 글자 대신 테두리 색과 안쪽 고리로 편을 보인다
+ */
+function JanggiPalace() {
+  const lines = [10, 50, 90];
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "flex" }}
+    >
+      <rect width="100" height="100" fill={SITE.board} />
+      {lines.map((p) => (
+        <g key={p}>
+          <line
+            x1={p}
+            y1="0"
+            x2={p}
+            y2="100"
+            stroke={SITE.ink}
+            strokeWidth="2.2"
+          />
+          <line
+            x1="0"
+            y1={p}
+            x2="100"
+            y2={p}
+            stroke={SITE.ink}
+            strokeWidth="2.2"
+          />
+        </g>
+      ))}
+      <line
+        x1="10"
+        y1="10"
+        x2="90"
+        y2="90"
+        stroke={SITE.ink}
+        strokeWidth="2.2"
+      />
+      <line
+        x1="90"
+        y1="10"
+        x2="10"
+        y2="90"
+        stroke={SITE.ink}
+        strokeWidth="2.2"
+      />
+      <polygon
+        points={octagonPoints(68, 34, 21)}
+        fill="#000000"
+        opacity="0.3"
+      />
+      <polygon
+        points={octagonPoints(66, 31, 21)}
+        fill="#f1e2c0"
+        stroke="#b91c1c"
+        strokeWidth="3.4"
+      />
+      <polygon
+        points={octagonPoints(66, 31, 12)}
+        fill="none"
+        stroke="#b91c1c"
+        strokeWidth="2.6"
+      />
+      <polygon
+        points={octagonPoints(38, 66, 26)}
+        fill="#000000"
+        opacity="0.35"
+      />
+      <polygon
+        points={octagonPoints(35, 62, 26)}
+        fill="#f1e2c0"
+        stroke="#0f6b3a"
+        strokeWidth="3.8"
+      />
+      <polygon
+        points={octagonPoints(35, 62, 15)}
+        fill="none"
+        stroke="#0f6b3a"
+        strokeWidth="3"
+      />
+    </svg>
+  );
+}
+
+/**
+ * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "omok"이면 오목, "janggi"면 장기, "center"면 게임 센터 아이콘을 그린다.
  * `maskable`이면 안드로이드가 잘라 쓰는 안전 영역(가운데 80%) 안에 들어가게 줄인다.
  */
 export function IconArt({
@@ -261,7 +358,7 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts" | "omok" | "center";
+  game?: "mighty" | "hearts" | "omok" | "janggi" | "center";
 }) {
   return (
     <div
@@ -272,7 +369,11 @@ export function IconArt({
         alignItems: "center",
         justifyContent: "center",
         background:
-          game === "center" ? SITE.bg : game === "omok" ? SITE.board : PAPER,
+          game === "center"
+            ? SITE.bg
+            : game === "omok" || game === "janggi"
+              ? SITE.board
+              : PAPER,
         borderRadius: maskable ? 0 : "18%",
         overflow: "hidden",
       }}
@@ -286,6 +387,8 @@ export function IconArt({
       >
         {game === "omok" ? (
           <OmokFive />
+        ) : game === "janggi" ? (
+          <JanggiPalace />
         ) : game === "center" ? (
           <CenterPad />
         ) : game === "hearts" ? (
