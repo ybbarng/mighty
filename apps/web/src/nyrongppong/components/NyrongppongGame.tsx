@@ -23,7 +23,7 @@ import { botName } from "@/game/bot-names";
 import type { ResultBanner as Banner } from "@/game/result-banner";
 import { useSettings } from "@/game/settings";
 import { HwatuCardView } from "@/hwatu/components/HwatuCard";
-import { HwatuBacks, HwatuDeck } from "@/hwatu/components/HwatuLayout";
+import { HwatuDeck } from "@/hwatu/components/HwatuLayout";
 import { cn } from "@/lib/cn";
 
 import { NYRONGPPONG_LEVELS } from "../settings";
@@ -83,6 +83,33 @@ export function endText(
   }
 }
 
+/**
+ * 남의 손패 뒷면과 장수. 공통 `HwatuBacks`는 겹침이 커서 작은 자리 표에서는 한 장처럼 보여
+ * 덜 겹쳐 펼친다(docs/30 9절, 화투 기초에 겹침 정도를 고르는 값을 바란다)
+ */
+function SeatBacks({ count, small }: { count: number; small: boolean }) {
+  const width = small ? 14 : 18;
+  return (
+    <span
+      role="img"
+      aria-label={`뒷면 ${count}장`}
+      className="flex items-end gap-1"
+    >
+      <span className="flex -space-x-2">
+        {Array.from({ length: count }, (_, i) => (
+          <HwatuCardView
+            // biome-ignore lint/suspicious/noArrayIndexKey: 뒷면은 순서가 곧 정체다
+            key={i}
+            faceDown
+            width={width}
+          />
+        ))}
+      </span>
+      <span className="text-[10px] text-white/60 tabular-nums">{count}</span>
+    </span>
+  );
+}
+
 /** 남의 자리: 이름, 선 표시, 손패 뒷면, 뽕한 묶음, 합계 */
 function SeatPlate({
   view,
@@ -131,10 +158,7 @@ function SeatPlate({
             ))}
           </div>
         ) : (
-          <HwatuBacks
-            count={view.handCounts[seat] ?? 0}
-            width={small ? 16 : 20}
-          />
+          <SeatBacks count={view.handCounts[seat] ?? 0} small={small} />
         )}
         {(view.melds[seat] ?? []).map((meld) => (
           <div key={meld[0]} className="flex -space-x-2" data-meld={seat}>
@@ -497,8 +521,12 @@ export function NyrongppongGame({
                 id={id}
                 width={handWidth}
                 selected={selected === id}
-                highlight={view.drawn === id}
-                dim={!myDiscard && !roundOver}
+                highlight={
+                  view.drawn === id ||
+                  (d?.kind === "call" &&
+                    view.call !== null &&
+                    cardOf(id).month === cardOf(view.call.card).month)
+                }
                 {...(myDiscard ? { onClick: () => onCard(id) } : {})}
               />
             ),
