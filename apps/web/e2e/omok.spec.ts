@@ -82,6 +82,15 @@ async function finishedOmokGames(): Promise<number> {
   });
 }
 
+/** 첫 화면 → 옵션에서 컴퓨터(고르면)와 흑을 고르고 → 나홀로 오목 */
+async function startSolo(page: Page, level?: string) {
+  await page.getByRole("button", { name: "옵션" }).click();
+  if (level) await page.getByRole("button", { name: level }).click();
+  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await page.getByRole("button", { name: /나홀로 오목/ }).click();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
@@ -97,9 +106,8 @@ test("오목: 게임 목록에서 들어가 입문 컴퓨터와 한 판을 끝�
   await page.getByRole("link", { name: /오목/ }).first().click();
   await expect(page).toHaveURL(/\/omok$/);
   await expect(page.getByRole("heading", { name: "오목" })).toBeVisible();
-  await page.getByRole("button", { name: "입문" }).click();
-  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
-  await page.getByRole("button", { name: "컴퓨터와 시작" }).click();
+  await page.screenshot({ path: info.outputPath("omok-home.png") });
+  await startSolo(page, "입문");
 
   await expect(board(page)).toBeVisible();
   const overflow = await page.evaluate(
@@ -132,23 +140,20 @@ test("오목: 게임 목록에서 들어가 입문 컴퓨터와 한 판을 끝�
 
   // 다 끝난 게임은 이어하기에 남지 않는다.
   await page.getByRole("button", { name: "다시 하기" }).click();
-  await expect(
-    page.getByRole("button", { name: "컴퓨터와 시작" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "이어하기" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /나홀로 오목/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /이어하기/ })).toHaveCount(0);
 });
 
 test("오목: 두던 게임은 새로고침해도 이어 둔다", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "저장은 화면 크기와 상관없다");
   await page.goto("/omok");
-  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
-  await page.getByRole("button", { name: "컴퓨터와 시작" }).click();
+  await startSolo(page);
   await placeOne(page, false);
   await expect(stones(page)).toHaveCount(2);
   // 처음에 지운 저장을 다시 지우지 않게 한다.
   await page.evaluate(() => sessionStorage.setItem("keep", "1"));
   await page.goto("/omok?keep");
-  await page.getByRole("button", { name: "이어하기" }).click();
+  await page.getByRole("button", { name: /이어하기/ }).click();
   await expect(stones(page)).toHaveCount(2);
 });
 
@@ -163,7 +168,7 @@ test("오목: 방장이 방을 만들고 친구가 링크로 들어와 한 판�
     p.on("pageerror", (e) => errors.push(e.message));
 
   await host.goto("/omok?net=local");
-  await host.getByRole("button", { name: "친구와 하기" }).click();
+  await host.getByRole("button", { name: /다함께 오목/ }).click();
   await host.getByPlaceholder("친구에게 보일 이름").fill("방장");
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();
   // 친구가 들어오기 전에는 시작할 수 없다.
@@ -214,8 +219,7 @@ test("오목: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
 }, info) => {
   test.skip(info.project.name !== "desktop", "기록은 화면 크기와 상관없다");
   await page.goto("/omok");
-  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
-  await page.getByRole("button", { name: "컴퓨터와 시작" }).click();
+  await startSolo(page);
   await placeOne(page, false);
   await expect(stones(page)).toHaveCount(2);
   await page.getByRole("button", { name: "기권" }).click();
@@ -299,5 +303,5 @@ test("오목 배우기: 단원을 끝내고, 미션은 틀리면 다시 한다",
   // 튜토리얼 대국은 이어하기에 남지 않는다.
   await page.goto("/omok");
   await expect(page.getByText("1/5 단원 마침")).toBeVisible();
-  await expect(page.getByRole("button", { name: "이어하기" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /이어하기/ })).toHaveCount(0);
 });

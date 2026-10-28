@@ -6,15 +6,12 @@ import {
   WINDOWS_RULE_CODE,
 } from "@mighty/hearts-engine";
 import { type ReactNode, useEffect, useState } from "react";
-
-import { BackToGames } from "@/components/BackToGames";
-import { MadeWith } from "@/components/brand/MadeWith";
+import { GameHome } from "@/components/GameHome";
 import { ActionButton } from "@/components/panels/common";
 import { SuitStylePicker } from "@/components/SuitStylePicker";
 import { SuitText } from "@/components/SuitText";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
-import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { useHeartsTutorialProgress } from "@/tutorial/progress";
@@ -43,42 +40,6 @@ type Screen =
 
 const BG =
   "flex min-h-dvh justify-center bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)] p-4";
-
-function MenuItem({
-  title,
-  detail,
-  onClick,
-  primary = false,
-  icon,
-}: {
-  title: string;
-  detail: string;
-  onClick: () => void;
-  primary?: boolean;
-  icon: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        playUiCue("click");
-        onClick();
-      }}
-      className={cn(
-        "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition",
-        primary
-          ? "border-rose-300 bg-rose-500 text-white hover:bg-rose-400"
-          : "border-white/15 bg-white/5 hover:bg-white/10",
-      )}
-    >
-      <span className="w-7 text-center text-2xl">{icon}</span>
-      <span className="flex flex-1 flex-col">
-        <span className="font-bold text-base">{title}</span>
-        <span className="text-xs opacity-70">{detail}</span>
-      </span>
-    </button>
-  );
-}
 
 /** 하트(/hearts) */
 export function HeartsApp() {
@@ -159,25 +120,24 @@ export function HeartsApp() {
 
   const levelLabel = HEARTS_LEVELS.find((l) => l.value === level)?.label;
   return (
-    <main className={cn(BG, "items-center")}>
-      <div className="flex w-full max-w-sm flex-col gap-3">
-        <BackToGames />
-        <div className="mb-3 text-center">
+    <GameHome
+      game="hearts"
+      background="bg-[radial-gradient(ellipse_at_center,#7f1d1d_0%,#3b0a0a_80%)]"
+      primaryClass="border-rose-300 bg-rose-500 text-white hover:bg-rose-400"
+      hero={
+        <>
           <div className="text-7xl text-red-500 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
             ♥
           </div>
           <h1 className="mt-1 font-black text-4xl tracking-wide">하트</h1>
-          <p className="mt-2 text-sm opacity-80">
-            <SuitText text="하트와 ♠Q를 피하고, 가장 적게 먹은 사람이 이긴다" />
-          </p>
-        </div>
-        {saved && (
-          <MenuItem
-            primary
-            icon="▶"
-            title="하던 게임 이어하기"
-            detail="멈춘 곳부터 다시 둡니다"
-            onClick={() => {
+        </>
+      }
+      tagline={
+        <SuitText text="하트와 ♠Q를 피하고, 가장 적게 먹은 사람이 이긴다" />
+      }
+      {...(saved
+        ? {
+            resume: () => {
               try {
                 resume(saved);
                 setScreen({ kind: "playing" });
@@ -185,72 +145,42 @@ export function HeartsApp() {
                 clearHearts();
                 setSaved(null);
               }
-            }}
-          />
-        )}
-        <MenuItem
-          primary={!saved}
-          icon="♥"
-          title="나홀로 하트"
-          detail={`컴퓨터 3명과 · ${ruleCode === WINDOWS_RULE_CODE ? "윈도우 하트" : "직접 정한 규칙"} · ${levelLabel ?? ""}`}
-          onClick={() => {
-            const seed = Number(
-              new URLSearchParams(window.location.search).get("seed"),
-            );
-            newGame({
-              rules,
-              ...(Number.isInteger(seed) && seed > 0 ? { seed } : {}),
-            });
-            setScreen({ kind: "playing" });
-          }}
-        />
-        <MenuItem
-          icon="👥"
-          title="다함께 하트"
-          detail="링크로 친구를 부릅니다. 빈자리는 컴퓨터가 앉습니다"
-          onClick={() => setScreen({ kind: "online", room: null })}
-        />
-        <MenuItem
-          icon="🎓"
-          title="하트 배우기"
-          detail={
-            learned >= HEARTS_LESSONS.length
-              ? "모든 단원을 마쳤어요. 언제든 다시 볼 수 있어요"
-              : learned > 0
-                ? `${learned}/${HEARTS_LESSONS.length} 단원 마침`
-                : `처음이라면 여기부터. ${HEARTS_LESSONS.length}단원, 미션 3개`
+            },
           }
-          onClick={() => setScreen({ kind: "tutorial" })}
-        />
-        <div className="mt-1 flex justify-center gap-2 text-sm">
-          <button
-            type="button"
-            onClick={() => setScreen({ kind: "options" })}
-            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
-          >
-            옵션
-          </button>
-          <button
-            type="button"
-            onClick={() => setScreen({ kind: "rules" })}
-            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
-          >
-            하트는?
-          </button>
-          <a
-            href="/profile?game=hearts"
-            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
-          >
-            내 기록
-          </a>
-        </div>
-        <p className="mt-2 text-center text-[11px] opacity-40">
-          윈도우에 들어 있던 하트 규칙을 따라 만들었습니다
-          <br />
-          <MadeWith />
-        </p>
-      </div>
-    </main>
+        : {})}
+      solo={{
+        icon: "♥",
+        title: "나홀로 하트",
+        detail: `컴퓨터 3명과 · ${ruleCode === WINDOWS_RULE_CODE ? "윈도우 하트" : "직접 정한 규칙"} · ${levelLabel ?? ""}`,
+        onClick: () => {
+          const seed = Number(
+            new URLSearchParams(window.location.search).get("seed"),
+          );
+          newGame({
+            rules,
+            ...(Number.isInteger(seed) && seed > 0 ? { seed } : {}),
+          });
+          setScreen({ kind: "playing" });
+        },
+      }}
+      together={{
+        icon: "👥",
+        title: "다함께 하트",
+        detail: "링크로 친구를 부릅니다. 빈자리는 컴퓨터가 앉습니다",
+        onClick: () => setScreen({ kind: "online", room: null }),
+      }}
+      learn={{
+        title: "하트 배우기",
+        learned,
+        total: HEARTS_LESSONS.length,
+        firstHint: `처음이라면 여기부터. ${HEARTS_LESSONS.length}단원, 미션 3개`,
+        onClick: () => setScreen({ kind: "tutorial" }),
+      }}
+      onOptions={() => setScreen({ kind: "options" })}
+      aboutLabel="하트는?"
+      onAbout={() => setScreen({ kind: "rules" })}
+      credit="윈도우에 들어 있던 하트 규칙을 따라 만들었습니다"
+    />
   );
 }
 
