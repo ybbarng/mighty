@@ -200,7 +200,6 @@ export function BadukGame({
     `나 ${view.wins[me] ?? 0} : ${view.wins[1 - me] ?? 0} ${opponent}`,
   ];
   if (result?.kind === "score") summaryParts.push(countText(result.count));
-  else if (liveCount) summaryParts.push(`지금 세면 ${countText(liveCount)}`);
 
   return (
     <main
@@ -274,6 +273,11 @@ export function BadukGame({
       />
 
       <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 short-landscape:col-start-2 short-landscape:row-start-4 short-landscape:content-start">
+        {liveCount && view.phase === "play" && (
+          <p className="w-full text-center text-sm text-white/80">
+            지금 세면 {countText(liveCount)}
+          </p>
+        )}
         {view.phase === "play" && (
           <>
             {!online && !mission && (

@@ -61,11 +61,16 @@ describe("바둑 컴퓨터", () => {
     [badukBeginnerBot, badukIntermediateBot, createBadukSearchBot(400)].map(
       (b) => [b.name, b] as const,
     ),
-  )("%s: 판 끝까지 규칙에 맞는 수만 둔다", (_name, bot) => {
-    const end = playGame([bot, badukBeginnerBot], STANDARD_RULES, 3);
-    expect(end.phase).toBe("gameOver");
-    expect(end.result?.kind).toBe("score");
-  });
+  )(
+    "%s: 판 끝까지 규칙에 맞는 수만 둔다",
+    (_name, bot) => {
+      const end = playGame([bot, badukBeginnerBot], STANDARD_RULES, 3);
+      expect(end.phase).toBe("gameOver");
+      expect(end.result?.kind).toBe("score");
+    },
+    // 한 판을 끝까지 두는 계산이라 다른 시험과 함께 돌면 몇 초 걸린다. 상한은 멈춘 시험을 잡는 안전장치다.
+    60_000,
+  );
 
   it.each(BOTS.map((b) => [b.name, b] as const))(
     "%s: 단수에 걸린 석 점을 따낸다",

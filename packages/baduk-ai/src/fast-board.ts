@@ -1,4 +1,4 @@
-import { nextFloat, nextInt, type RngState } from "@mighty/engine";
+import { nextInt, type RngState } from "@mighty/engine";
 
 /*
  * 컴퓨터가 수를 읽을 때 쓰는 빠른 판. 엔진(`@mighty/baduk-engine`)은 배열을 새로 만들며 규칙을 지키는 데 집중하고,
@@ -375,9 +375,4 @@ export function playout(
     board.play(at);
   }
   return board.score(komi);
-}
-
-/** 0 이상 1 미만 무작위 수(봇 모듈이 함께 쓴다) */
-export function random(rng: RngState): number {
-  return nextFloat(rng);
 }
