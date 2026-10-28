@@ -9,10 +9,12 @@ import {
   SIDE_NAMES,
   seatToMove,
   sideOfSeat,
+  timeControlOf,
 } from "@mighty/janggi-engine";
 import { useEffect, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
+import { GameClock } from "@/components/GameClock";
 import { ResultBanner } from "@/components/ResultBanner";
 import { type Outcome, RoundOutcome } from "@/components/RoundOutcome";
 import {
@@ -46,6 +48,7 @@ function PlayerPlate({
   const labels = useJanggiSettings((s) => s.labels);
   const side = sideOfSeat(view, seat);
   const turn = seatToMove(view) === seat;
+  const control = timeControlOf(view.rules);
   return (
     <div
       data-turn={turn || undefined}
@@ -66,6 +69,13 @@ function PlayerPlate({
       <span className="ml-auto whitespace-nowrap text-white/70 text-xs">
         {materialScore(view.board, side)}점 · {view.wins[seat] ?? 0}승
       </span>
+      {control && view.clocks?.[seat] && (
+        <GameClock
+          clock={view.clocks[seat]}
+          control={control}
+          running={turn && view.phase === "play"}
+        />
+      )}
     </div>
   );
 }

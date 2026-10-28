@@ -218,6 +218,12 @@ export const janggiKit: JanggiKit = {
         ? { ...action, spent }
         : action,
     timeout: (spent) => ({ type: "timeout", spent }),
+    strip: (action) => {
+      if (action.type === "timeout") return null;
+      if (!("spent" in action)) return action;
+      const { spent: _spent, ...rest } = action;
+      return rest as Action;
+    },
   },
 };
 

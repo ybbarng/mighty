@@ -1,3 +1,4 @@
+import type { TimePreset } from "@mighty/engine";
 import type { Variant } from "@mighty/omok-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -15,6 +16,8 @@ interface OmokSettings {
   pick: StonePick;
   /** 내 차례에 금지 자리를 ×로 보인다 */
   showForbidden: boolean;
+  /** 개인 시간(기본 시간 + 초읽기) */
+  time: TimePreset;
   set(patch: Partial<Omit<OmokSettings, "set">>): void;
 }
 
@@ -26,6 +29,7 @@ export const useOmokSettings = create<OmokSettings>()(
       level: 0,
       pick: "black",
       showForbidden: true,
+      time: "none",
       set: (patch) => set(patch),
     }),
     {

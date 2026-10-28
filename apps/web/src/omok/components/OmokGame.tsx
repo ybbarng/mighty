@@ -5,10 +5,12 @@ import {
   pointName,
   seatToMove,
   stoneOfSeat,
+  timeControlOf,
 } from "@mighty/omok-engine";
 import { useEffect, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
+import { GameClock } from "@/components/GameClock";
 import { ResultBanner } from "@/components/ResultBanner";
 import { RoundOutcome } from "@/components/RoundOutcome";
 import {
@@ -34,6 +36,7 @@ function PlayerPlate({
 }) {
   const black = stoneOfSeat(view, seat) === 1;
   const turn = seatToMove(view) === seat;
+  const control = timeControlOf(view.rules);
   return (
     <div
       data-turn={turn || undefined}
@@ -54,7 +57,16 @@ function PlayerPlate({
         }}
       />
       <span className="truncate font-semibold text-sm">{name}</span>
-      <span className="ml-auto text-sm text-white/70">
+      {control && view.clocks?.[seat] && (
+        <span className="ml-auto">
+          <GameClock
+            clock={view.clocks[seat]}
+            control={control}
+            running={turn && view.phase === "play"}
+          />
+        </span>
+      )}
+      <span className={cn("text-sm text-white/70", !control && "ml-auto")}>
         {view.wins[seat] ?? 0}승
       </span>
     </div>

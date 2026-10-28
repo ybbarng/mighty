@@ -1034,9 +1034,13 @@ export class GuestRoom<
     }
     // 기록 속 내 자리 행동이 내가 보낸 행동과 같아야 한다(방장의 바꿔치기, 모의 침투 A3).
     // 끊긴 적이 있으면 그동안 컴퓨터가 대신 둔 수가 끼어 있을 수 있으므로, 내가 보낸 것이 빠짐없이 차례대로 들어 있는지만 본다.
+    // 개인 시간: 방장이 실은 쓴 시간(spent)과 방장 시계가 남긴 시간패는 내가 보낸 것이 아니라 빼고 본다.
+    const timing = this.kit.timing;
     const mineInLog = log
       .filter((entry) => entry.seat === this.seat)
-      .map((entry) => JSON.stringify(entry.action));
+      .map((entry) => (timing ? timing.strip(entry.action) : entry.action))
+      .filter((action) => action !== null)
+      .map((action) => JSON.stringify(action));
     const sent = this.match.sent;
     if (!this.everDisconnected) {
       if (JSON.stringify(mineInLog) !== JSON.stringify(sent))

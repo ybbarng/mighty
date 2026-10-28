@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { ConnectingNotice } from "@/components/ConnectingNotice";
 import { InviteLink } from "@/components/InviteLink";
+import { timePresetLabel } from "@/components/TimePresetPicker";
 import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 import { recordAudit } from "@/net/audit-history";
@@ -300,6 +301,9 @@ export function OmokOnlineScreen({
             </label>
             {isHost && (
               <p className="text-white/60 text-xs">
+                {timePresetLabel(rules.time)
+                  ? `${timePresetLabel(rules.time)} · `
+                  : ""}
                 {variant?.label} 규칙 · {variant?.description}. 첫 판 흑은
                 무작위, 판마다 흑백을 바꿉니다.
               </p>

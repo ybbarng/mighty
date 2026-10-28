@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { ConnectingNotice } from "@/components/ConnectingNotice";
 import { InviteLink } from "@/components/InviteLink";
+import { timePresetLabel } from "@/components/TimePresetPicker";
 import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 import { recordAudit } from "@/net/audit-history";
@@ -301,6 +302,9 @@ export function JanggiOnlineScreen({
             </label>
             {isHost && (
               <p className="text-white/60 text-xs">
+                {timePresetLabel(rules.time)
+                  ? `${timePresetLabel(rules.time)} · `
+                  : ""}
                 {bikjang?.label} · {bikjang?.description}. 첫 판 초(먼저 둠)는
                 무작위, 판마다 초·한을 바꿉니다.
               </p>

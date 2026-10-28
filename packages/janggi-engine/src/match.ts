@@ -89,11 +89,11 @@ function spendClock(
   const clock = state.clocks?.[seat];
   if (!control || !clock) return false;
   const result = spendTime(clock, spent ?? 0, control);
+  (state.clocks as PlayerClock[])[seat] = result.clock;
   if (result.flagged) {
     endRound(state, { kind: "time", seat: 1 - seat }, events);
     return true;
   }
-  (state.clocks as PlayerClock[])[seat] = result.clock;
   return false;
 }
 
@@ -295,6 +295,8 @@ export function step(
       return fail("아직 시간이 남았다");
     const next = clone(state);
     const events: GameEvent[] = [];
+    // 시간을 다 쓴 사람의 시계는 0으로 보인다.
+    (next.clocks as PlayerClock[])[seat] = { main: 0, periods: 0 };
     endRound(next, { kind: "time", seat: 1 - seat }, events);
     return { ok: true, state: next, events };
   }

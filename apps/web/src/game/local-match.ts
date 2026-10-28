@@ -479,8 +479,10 @@ export class LocalMatch<
 
   private apply(seat: number, raw: ActionT, bot = false): SubmitResult {
     // 개인 시간: 이 수에 쓴 시간을 싣는다(대국을 돌리는 이 기기가 잰다. 참가자가 보낸 값은 덮어쓴다).
-    const action = this.kit.timing
-      ? this.kit.timing.stamp(raw, this.clock.now() - this.turnSince)
+    // 시간 규칙이 없는 판은 싣지 않아 예전 기록과 같다.
+    const timing = this.kit.timing;
+    const action = timing?.turn(this.state)
+      ? timing.stamp(raw, this.clock.now() - this.turnSince)
       : raw;
     const result = this.stepper(this.state, seat, action);
     if (!result.ok) return result;

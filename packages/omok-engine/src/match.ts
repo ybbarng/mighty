@@ -184,6 +184,8 @@ export function step(
       return fail("아직 시간이 남았다");
     const next = clone(state);
     const events: GameEvent[] = [];
+    // 시간을 다 쓴 사람의 시계는 0으로 보인다.
+    (next.clocks as PlayerClock[])[seat] = { main: 0, periods: 0 };
     endRound(next, { kind: "time", seat: 1 - seat }, events);
     return { ok: true, state: next, events };
   }
@@ -208,6 +210,7 @@ export function step(
   if (control && clock) {
     const spent = spendTime(clock, action.spent ?? 0, control);
     if (spent.flagged) {
+      (next.clocks as PlayerClock[])[seat] = spent.clock;
       const events: GameEvent[] = [];
       endRound(next, { kind: "time", seat: 1 - seat }, events);
       return { ok: true, state: next, events };

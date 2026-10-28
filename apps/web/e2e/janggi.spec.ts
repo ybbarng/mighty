@@ -325,3 +325,23 @@ test("장기 수 배우기: 외통 문제를 틀렸다 다시 풀고, 진행이 
     timeout: 10_000,
   });
 });
+
+test("장기 개인 시간: 상차림 뒤부터 시계가 가고, 다 쓰면 시간패다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
+  await page.clock.install();
+  await page.goto("/janggi");
+  await page.getByRole("button", { name: "옵션" }).click();
+  await page.getByRole("button", { name: "빠른 3분" }).click();
+  await page.getByRole("button", { name: "초(먼저)" }).click();
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await page.getByRole("button", { name: /나홀로 장기/ }).click();
+  // 상차림을 고르는 동안은 시계가 가지 않는다.
+  await page.clock.runFor(60_000);
+  await page.getByRole("button", { name: "마상마상" }).click();
+  await expect(page.locator("[data-clock]").first()).toHaveText("3:00");
+  await page.clock.runFor(270_001);
+  await expect(page.getByRole("status")).toHaveText("시간이 다 돼 졌어요");
+  await page.screenshot({ path: info.outputPath("janggi-time.png") });
+});

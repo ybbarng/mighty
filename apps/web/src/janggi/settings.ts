@@ -1,3 +1,4 @@
+import type { TimePreset } from "@mighty/engine";
 import type { Bikjang } from "@mighty/janggi-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -18,6 +19,8 @@ interface JanggiSettings {
   level: JanggiLevel;
   pick: SidePick;
   labels: PieceLabels;
+  /** 개인 시간(기본 시간 + 초읽기) */
+  time: TimePreset;
   set(patch: Partial<Omit<JanggiSettings, "set">>): void;
 }
 
@@ -29,6 +32,7 @@ export const useJanggiSettings = create<JanggiSettings>()(
       level: 0,
       pick: "cho",
       labels: "hanja",
+      time: "none",
       set: (patch) => set(patch),
     }),
     {

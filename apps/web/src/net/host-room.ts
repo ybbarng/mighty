@@ -357,6 +357,7 @@ export class HostRoom<
         humanSeat: 0,
         humanSeats: [0, ...this.guests.keys()],
         ...(this.bot ? { bot: this.bot } : {}),
+        clock: this.clock,
         ...(this.pace ? { pace: this.pace } : {}),
         afterStep: () => this.persist(),
         resume,
@@ -690,6 +691,7 @@ export class HostRoom<
           humanSeat: 0,
           humanSeats: [0, ...this.guests.keys()],
           ...(this.bot ? { bot: this.bot } : {}),
+          clock: this.clock,
           ...(this.pace ? { pace: this.pace } : {}),
           afterStep: () => this.persist(),
         });
@@ -762,6 +764,7 @@ export class HostRoom<
       ...(this.bot
         ? { bot: this.bot as unknown as KitBot<PlayerView, Action> }
         : {}),
+      clock: this.clock,
       ...(this.pace ? { pace: this.pace } : {}),
       step: (state, seat, action) => table.step(state, seat, action),
       prepare: (state, seat, action) => table.prepare(state, seat, action),
@@ -858,6 +861,7 @@ export class HostRoom<
       ...(this.bot
         ? { bot: this.bot as unknown as KitBot<HeartsView, HeartsAction> }
         : {}),
+      clock: this.clock,
       ...(this.pace ? { pace: this.pace } : {}),
       step: (state, seat, action) => table.step(state, seat, action),
       prepare: (state, seat, action) => table.prepare(state, seat, action),

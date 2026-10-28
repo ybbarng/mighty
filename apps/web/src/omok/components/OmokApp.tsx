@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { GameHome } from "@/components/GameHome";
+import {
+  TimePresetPicker,
+  timePresetLabel,
+} from "@/components/TimePresetPicker";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
@@ -141,6 +145,9 @@ function OmokOptions({ onBack }: { onBack: () => void }) {
           ))}
         </div>
         <p className="text-xs opacity-60">{variant?.description}</p>
+      </Section>
+      <Section title="개인 시간">
+        <TimePresetPicker value={s.time} onChange={(time) => s.set({ time })} />
       </Section>
       <Section title="판 수">
         <div className="flex flex-wrap gap-1.5">
@@ -291,7 +298,15 @@ function OmokHome({
           />
         ),
         title: "나홀로 오목",
-        detail: `컴퓨터와 · ${variant ?? ""} 규칙 · ${wins ?? ""} · ${level ?? ""}`,
+        detail: [
+          "컴퓨터와",
+          `${variant ?? ""} 규칙`,
+          wins,
+          timePresetLabel(s.time),
+          level,
+        ]
+          .filter(Boolean)
+          .join(" · "),
         onClick: () => onStart(),
       }}
       together={{
@@ -335,6 +350,7 @@ export function OmokApp() {
   const view = useOmok((s) => s.view);
   const variant = useOmokSettings((s) => s.variant);
   const winsToFinish = useOmokSettings((s) => s.winsToFinish);
+  const time = useOmokSettings((s) => s.time);
 
   // 다 끝난 게임은 이어하기에 남기지 않는다.
   useEffect(() => {
@@ -367,7 +383,7 @@ export function OmokApp() {
   if (screen.kind === "online")
     return (
       <OmokOnlineScreen
-        rules={{ variant, winsToFinish }}
+        rules={{ variant, winsToFinish, ...(time !== "none" ? { time } : {}) }}
         roomFromUrl={screen.room}
         {...(screen.resume ? { resume: screen.resume } : {})}
         onBack={backToStart}
@@ -407,7 +423,11 @@ export function OmokApp() {
         else {
           const s = useOmokSettings.getState();
           useOmok.getState().newGame({
-            rules: { variant: s.variant, winsToFinish: s.winsToFinish },
+            rules: {
+              variant: s.variant,
+              winsToFinish: s.winsToFinish,
+              ...(s.time !== "none" ? { time: s.time } : {}),
+            },
             level: s.level,
             pick: s.pick,
           });

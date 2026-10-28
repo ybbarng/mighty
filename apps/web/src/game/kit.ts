@@ -148,4 +148,9 @@ export interface KitTiming<State, Action> {
   stamp(action: Action, spent: number): Action;
   /** 시간을 다 썼을 때 그 자리로 기록에 남기는 행동 */
   timeout(spent: number): Action;
+  /**
+   * 참가자가 보낸 그대로의 행동으로 되돌린다(판 끝 검증에서 내가 보낸 행동과 맞춰 볼 때).
+   * 쓴 시간을 빼고, 방장 시계가 남긴 시간패는 null
+   */
+  strip(action: Action): Action | null;
 }

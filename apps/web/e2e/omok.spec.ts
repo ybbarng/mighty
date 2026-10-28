@@ -305,3 +305,34 @@ test("오목 배우기: 단원을 끝내고, 미션은 틀리면 다시 한다",
   await expect(page.getByText("1/5 단원 마침")).toBeVisible();
   await expect(page.getByRole("button", { name: /이어하기/ })).toHaveCount(0);
 });
+
+test("오목 개인 시간: 빠른 3분으로 두면 내 시계가 가고, 다 쓰면 시간패다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
+  // 시계를 시험이 움직인다(실제로 4분 반을 기다리지 않는다).
+  await page.clock.install();
+  await page.goto("/omok");
+  await page.getByRole("button", { name: "옵션" }).click();
+  await page.getByRole("button", { name: "빠른 3분" }).click();
+  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await expect(page.getByRole("button", { name: /나홀로 오목/ })).toContainText(
+    "빠른 3분",
+  );
+  await page.getByRole("button", { name: /나홀로 오목/ }).click();
+  await expect(page.locator("[data-clock]").first()).toHaveText("3:00");
+
+  await page.clock.runFor(20_000);
+  await expect(page.locator("[data-clock]").first()).toHaveText("2:40");
+  await placeOne(page, false);
+  await expect(page.getByRole("status")).toContainText("내 차례", {
+    timeout: 10_000,
+  });
+
+  // 남은 2분 40초 + 초읽기 30초×3을 넘기면 시간패
+  await page.clock.runFor(250_001);
+  await expect(page.getByRole("status")).toHaveText("시간이 다 돼 졌어요");
+  await expect(page.locator('[data-result-banner="lose"]')).toBeVisible();
+  await page.screenshot({ path: info.outputPath("omok-time.png") });
+});
