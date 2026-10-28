@@ -1,4 +1,4 @@
-# 배포 (mighty.byb.kr)
+# 배포 (game.byb.kr)
 
 byb.kr 서버의 규칙(`servers` 저장소 `byb.kr/apps/README.md`)을 따른다. 이미지는 GitHub Actions 가 빌드해 GHCR 에 올리고,
 서버는 받아서 띄우기만 한다. 서버에서는 빌드하지 않는다.
@@ -20,7 +20,7 @@ byb.kr 서버의 규칙(`servers` 저장소 `byb.kr/apps/README.md`)을 따른�
 ## servers 저장소에 둘 compose.yaml 초안
 
 ```yaml
-# mighty.byb.kr — 이미지는 ybbarng/mighty 의 GitHub Actions 가 GHCR 에 올린다. 배포는 deploy.sh.
+# game.byb.kr — 이미지는 ybbarng/mighty 의 GitHub Actions 가 GHCR 에 올린다. 배포는 deploy.sh.
 services:
   mighty:
     image: ghcr.io/ybbarng/mighty:${MIGHTY_TAG:-latest}
@@ -34,7 +34,7 @@ services:
     networks: [web]
     labels:
       - traefik.enable=${MIGHTY_TRAEFIK:-true} # 시험 판(deploy.sh test)은 false
-      - traefik.http.routers.mighty-secure.rule=Host(`mighty.byb.kr`)
+      - traefik.http.routers.mighty-secure.rule=Host(`game.byb.kr`)
       - traefik.http.routers.mighty-secure.entrypoints=websecure
       - traefik.http.routers.mighty-secure.tls.certresolver=le
       - traefik.http.services.mighty.loadbalancer.server.port=80
@@ -63,15 +63,15 @@ CODE=$(docker compose exec -T mighty wget -qO /dev/null -S http://127.0.0.1/heal
 
 방에서 서로를 찾는 신호(trystero의 알리기·연결 정보)는 servers 저장소 `byb.kr/apps/mighty-signal/` 이 맡는다(2026-10-27부터, 그 전에는 공개 Nostr 릴레이).
 
-- 주소: 같은 출처 `https://mighty.byb.kr/signal/`. `GET /signal/sub?t=<주제>` 로 구독(SSE), `POST /signal/pub?t=<주제>` 로 올린다. 주제는 방 코드에서 만든 SHA-1 해시(바이트마다 36진수, 20~40자).
+- 주소: 같은 출처 `https://game.byb.kr/signal/`. `GET /signal/sub?t=<주제>` 로 구독(SSE), `POST /signal/pub?t=<주제>` 로 올린다. 주제는 방 코드에서 만든 SHA-1 해시(바이트마다 36진수, 20~40자).
 - 저장하지 않고 지금 구독한 사람에게만 넘긴다. 내용은 trystero가 방 코드로 암호화한 연결 정보라 서버가 읽지 못한다.
-- 앱 쪽은 `apps/web/src/net/signal.ts`(trystero `createTopicStrategy`). 같은 서버를 통로 셋(`LANES`)으로 써서 연결 시도를 겹친다(한 사람이 들어갈 때 구독 6개, 올리기 수십 번). 주소는 `NEXT_PUBLIC_SIGNAL_URL`(기본 `https://mighty.byb.kr/signal`). 개발 서버(localhost:3456)도 같은 서버를 쓴다.
+- 앱 쪽은 `apps/web/src/net/signal.ts`(trystero `createTopicStrategy`). 같은 서버를 통로 셋(`LANES`)으로 써서 연결 시도를 겹친다(한 사람이 들어갈 때 구독 6개, 올리기 수십 번). 주소는 `NEXT_PUBLIC_SIGNAL_URL`(기본 `https://game.byb.kr/signal`). 개발 서버(localhost:3456)도 같은 서버를 쓴다.
 - 서비스 워커는 `/signal/` 아래를 건드리지 않는다(`public/sw.js` 의 `NO_STORE_PREFIX`).
 - 남용 막기: Traefik 요청 횟수 제한, 본문 16KB, 연결 수(전체·IP·주제), 다른 사이트 출처 거절.
 
 ## 확인
 
-- `https://mighty.byb.kr` 첫 화면, `/cards` 카드 모음, `/healthz` 가 열린다.
+- `https://game.byb.kr` 첫 화면, `/cards` 카드 모음, `/healthz` 가 열린다.
 - 홈 화면에 추가했을 때 아이콘과 이름이 나온다(`manifest.webmanifest`).
 - 휴대폰 두 대(다른 네트워크)로 방을 만들고 들어가 한 판을 끝까지 둔다. 끝에 "공정성 확인" 문구가 나온다.
 - 방에 들어가면 브라우저 개발자 도구의 네트워크 탭에서 `/signal/sub` 구독 두 개(방 공용·내 주제)가 열려 있다.
