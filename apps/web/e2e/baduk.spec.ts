@@ -300,3 +300,60 @@ test("바둑 개인 시간: 시계가 가고, 다 쓰면 시간패다", async ({
   await expect(page.getByRole("status")).toHaveText("시간이 다 돼 졌어요");
   await page.screenshot({ path: info.outputPath("baduk-time.png") });
 });
+
+test("바둑 수 배우기: 단수 방향을 틀렸다 다시 풀고, 축으로 몰아 따내고, 급소로 잡는다", async ({
+  page,
+}, info) => {
+  const touch = info.project.name.startsWith("phone");
+  await page.goto("/baduk");
+  await page.getByRole("button", { name: /바둑 배우기/ }).click();
+  await page.getByRole("button", { name: /수 배우기/ }).click();
+  const atari = page.getByRole("region", { name: "단수 방향" });
+  await expect(atari.getByText("0/8")).toBeVisible();
+  await atari.getByRole("button", { name: "풀기 시작" }).click();
+  await expect(page.getByRole("status")).toHaveText("△ 백 돌을 따내세요");
+
+  // G1에서 단수 치면 백이 F2로 뻗어 달아난다.
+  await placeAt(page, "G1", touch);
+  await expect(page.getByRole("status")).toHaveText("그 수로는 못 따내요");
+  await page.getByRole("button", { name: "다시 하기" }).click();
+
+  // 정답: F2에서 단수 → 백이 받고(달아날 곳이 없어 쉰다) → 따낸다.
+  await placeAt(page, "F2", touch);
+  await expect(page.getByRole("status")).toHaveText("계속 몰아 따내세요", {
+    timeout: 10_000,
+  });
+  await placeAt(page, "G1", touch);
+  await expect(page.getByRole("status")).toHaveText("따냈어요!");
+  await expect(page.getByText(/수 만에 백 돌/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("baduk-atari.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+  await expect(atari.getByText("1/8")).toBeVisible();
+
+  // 축: 계속 단수로 몰아 따낸다(백은 늘 같은 수로 버틴다).
+  await page
+    .getByRole("region", { name: "축" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  for (const name of ["C3", "C6", "B6", "A6"]) {
+    await placeAt(page, name, touch);
+    await expect(page.getByRole("status")).toHaveText("계속 몰아 따내세요", {
+      timeout: 10_000,
+    });
+  }
+  await placeAt(page, "A3", touch);
+  await expect(page.getByRole("status")).toHaveText("따냈어요!");
+  await page.screenshot({ path: info.outputPath("baduk-ladder.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+
+  // 눈 빼앗기: 귀의 곧은 세 집은 가운데가 급소다.
+  await page
+    .getByRole("region", { name: "눈 빼앗기" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  await expect(page.getByRole("status")).toHaveText("△ 백 무리를 잡으세요");
+  await placeAt(page, "A8", touch);
+  await expect(page.getByRole("status")).toHaveText("잡았어요!");
+  await expect(page.getByText(/급소/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("baduk-kill.png") });
+});

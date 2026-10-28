@@ -326,6 +326,68 @@ test("장기 수 배우기: 외통 문제를 틀렸다 다시 풀고, 진행이 
   });
 });
 
+test("장기 수 배우기: 포 길 열기를 틀렸다 다시 풀고, 멱 막기와 세 수 외통 첫 수를 둔다", async ({
+  page,
+}, info) => {
+  const touch = info.project.name.startsWith("phone");
+  await page.goto("/janggi");
+  await page.getByRole("button", { name: /장기 배우기/ }).click();
+  await page.getByRole("button", { name: /수 배우기/ }).click();
+  const cannon = page.getByRole("region", { name: "포 길 열기" });
+  await expect(cannon.getByText("0/10")).toBeVisible();
+  await cannon.getByRole("button", { name: "풀기 시작" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "포 길을 열어 큰 기물을 노리세요",
+  );
+
+  // 궁을 옮기는 수는 포 길을 열지 않는다.
+  await tapPoint(page, "96", touch);
+  const to = await page
+    .locator("[data-target]")
+    .first()
+    .getAttribute("data-target");
+  await tapPoint(page, to as string, touch);
+  await expect(page.getByRole("status")).toHaveText(
+    "그 수로는 포 길이 열리지 않아요",
+  );
+  await page.getByRole("button", { name: "다시 하기" }).click();
+
+  // 정답: 졸 72 → 73. 졸이 다리가 되어 포가 차를 노린다.
+  await tapPoint(page, "72", touch);
+  await tapPoint(page, "73", touch);
+  await expect(page.getByRole("status")).toHaveText("포 길이 열렸어요!");
+  await expect(page.getByText(/졸이 다리가 되어/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("janggi-cannon.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+  await expect(cannon.getByText("1/10")).toBeVisible();
+
+  // 멱 막기: 포를 23으로 옮겨 상의 멱을 막는다.
+  await page
+    .getByRole("region", { name: "멱 막기" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  await tapPoint(page, "27", touch);
+  await tapPoint(page, "23", touch);
+  await expect(page.getByRole("status")).toHaveText("멱을 막았어요!");
+  await expect(page.getByText(/멱을 막아/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("janggi-block.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+
+  // 세 수 외통: 첫 수 뒤 한이 받고, 외통까지 두 수가 남는다.
+  await page
+    .getByRole("region", { name: "세 수 외통" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  await expect(page.getByRole("status")).toHaveText(
+    "세 수 만에 외통: 첫 수를 두세요",
+  );
+  await tapPoint(page, "19", touch);
+  await tapPoint(page, "14", touch);
+  await expect(page.getByRole("status")).toHaveText("외통까지 두 수 남았어요", {
+    timeout: 10_000,
+  });
+});
+
 test("장기 개인 시간: 상차림 뒤부터 시계가 가고, 다 쓰면 시간패다", async ({
   page,
 }, info) => {
