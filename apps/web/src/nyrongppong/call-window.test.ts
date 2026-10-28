@@ -60,13 +60,13 @@ describe("뽕 응답 창(혼자 하기)", () => {
     expect(match.current().call?.left).toBe(5000);
   });
 
-  it("시간 안에 뽕하면 받는다(창마다 응답이 하나라 쓴 시간은 싣지 않는다)", () => {
+  it("시간 안에 뽕하면 받는다. 응답에는 쓴 시간을 싣는다(창의 남은 시간이 이어지게)", () => {
     const { clock, match, state } = solo();
     clock.advance(1200);
     expect(match.submit({ type: "call" })).toEqual({ ok: true });
     expect(match.actionLog().at(-1)).toEqual({
       seat: 0,
-      action: { type: "call" },
+      action: { type: "call", spent: 1200 },
     });
     expect(state().melds[0]).toEqual([["03g", "03r", "03p"]]);
     expect(match.current().decision).toEqual({ kind: "discard", yak: null });

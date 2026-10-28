@@ -40,6 +40,21 @@ export function rulesOf(s: NyrongppongRules): NyrongppongRules {
   };
 }
 
+/** 온라인 뽕 응답 창(초). 버릴 때마다 모두 기다리므로 혼자 하기보다 짧게 둔다 */
+export const ONLINE_CALL_SECONDS = 3;
+
+/**
+ * 온라인 방 규칙: 버릴 때마다 모두에게 같은 응답 창을 연다(docs/30 2절).
+ * 창이 열리는 것만 보고 누가 같은 달 두 장을 들었는지 알아채지 못하게 한다
+ */
+export function onlineRules(rules: NyrongppongRules): NyrongppongRules {
+  return {
+    ...rulesOf(rules),
+    callSeconds: ONLINE_CALL_SECONDS,
+    everyDiscard: true,
+  };
+}
+
 export const NYRONGPPONG_LEVELS: readonly {
   value: NyrongppongLevel;
   label: string;

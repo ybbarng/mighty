@@ -21,6 +21,11 @@ export interface NyrongppongRules {
   bagaji: 20 | 30;
   /** 버린 패에 뽕을 부를지 정하는 시간(초). 컴퓨터는 바로 정한다 */
   callSeconds: 3 | 5 | 8;
+  /**
+   * 버릴 때마다 모두에게 같은 응답 창을 연다(온라인). 창이 열리는 것만 보고 "누가 같은 달 두 장을 들었다"를
+   * 알아채지 못하게 한다. 이때 창은 뽕을 부르거나 시간이 다 돼야 닫힌다(넘기기로 일찍 닫히지 않는다)
+   */
+  everyDiscard?: boolean;
 }
 
 export const STANDARD_RULES: NyrongppongRules = {
@@ -43,21 +48,21 @@ export function callWindowMs(rules: NyrongppongRules): number {
 
 /*
  * 규칙 문자열. 온라인 방에서 규칙을 나눌 때 쓴다.
- * 형식: `n1-p<인원>r<판 수>s<스톱 한도>b<바가지>c<응답 초>`. 예: 기본 `n1-p4r5s10b20c5`
+ * 형식: `n1-p<인원>r<판 수>s<스톱 한도>b<바가지>c<응답 초>[e1]`(e1: 버릴 때마다 창). 예: 기본 `n1-p4r5s10b20c5`
  */
 export function encodeNyrongppongRules(rules: NyrongppongRules): string {
-  return `n1-p${rules.players}r${rules.rounds}s${rules.stopLimit}b${rules.bagaji}c${rules.callSeconds}`;
+  return `n1-p${rules.players}r${rules.rounds}s${rules.stopLimit}b${rules.bagaji}c${rules.callSeconds}${rules.everyDiscard ? "e1" : ""}`;
 }
 
 export function decodeNyrongppongRules(
   text: string,
 ): { ok: true; rules: NyrongppongRules } | { ok: false; reason: string } {
-  const match = /^n1-p([2-5])r(10|[1-9])s(0|5|10)b(20|30)c([358])$/.exec(
+  const match = /^n1-p([2-5])r(10|[1-9])s(0|5|10)b(20|30)c([358])(e1)?$/.exec(
     text.trim(),
   );
   if (!match)
     return { ok: false, reason: "나이롱뽕 규칙 문자열 형식이 아니다" };
-  const [, players, rounds, stop, bagaji, seconds] = match;
+  const [, players, rounds, stop, bagaji, seconds, every] = match;
   return {
     ok: true,
     rules: {
@@ -66,6 +71,7 @@ export function decodeNyrongppongRules(
       stopLimit: Number(stop) as NyrongppongRules["stopLimit"],
       bagaji: Number(bagaji) as NyrongppongRules["bagaji"],
       callSeconds: Number(seconds) as NyrongppongRules["callSeconds"],
+      ...(every ? { everyDiscard: true } : {}),
     },
   };
 }

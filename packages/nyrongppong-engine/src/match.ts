@@ -200,7 +200,7 @@ function drawCard(
   events.push({ type: "drew", seat });
 }
 
-/** 버린 뒤: 뽕할 수 있는 자리가 있으면 응답 창을 열고, 없으면 다음 자리 차례 */
+/** 버린 뒤: 뽕할 수 있는 자리가 있으면(`everyDiscard`면 언제나) 응답 창을 열고, 없으면 다음 자리 차례 */
 function afterDiscard(
   state: NyrongppongState,
   seat: number,
@@ -210,7 +210,7 @@ function afterDiscard(
   const responses = seatsAfter(state, seat)
     .filter((s) => sameMonthIn(state.hands[s] ?? [], card).length >= 2)
     .map((s) => ({ seat: s, answer: null as CallAnswer | null }));
-  if (responses.length === 0) {
+  if (responses.length === 0 && !state.rules.everyDiscard) {
     beginTurn(state, nextSeat(state, seat), events);
     return;
   }
@@ -233,11 +233,17 @@ export function callWinner(
   return { done: true, seat: null };
 }
 
-function resolveCall(state: NyrongppongState, events: GameEvent[]): void {
+function resolveCall(
+  state: NyrongppongState,
+  events: GameEvent[],
+  timedOut: boolean,
+): void {
   const call = state.call;
   if (!call) return;
   const decided = callWinner(call.responses);
   if (!decided.done) return;
+  // 버릴 때마다 여는 창은 모두 넘겨도 시간이 다 될 때까지 연다(일찍 닫히면 누가 넘겼는지 드러난다).
+  if (decided.seat === null && state.rules.everyDiscard && !timedOut) return;
   if (decided.seat === null) {
     events.push({ type: "callClosed", from: call.from, card: call.card });
     beginTurn(state, nextSeat(state, call.from), events);
@@ -324,7 +330,7 @@ export function step(
     }
     call.used += spent;
     const events: GameEvent[] = [];
-    resolveCall(next, events);
+    resolveCall(next, events, action.type === "timeout");
     return { ok: true, state: next, events };
   }
 
@@ -387,15 +393,18 @@ export function pendingSeats(state: NyrongppongState): number[] {
   return [];
 }
 
-/** 응답 창의 시계: 아직 정하지 않은 첫 자리와 창에 남은 시간(ms). 창이 없으면 null */
+/**
+ * 응답 창의 시계: 아직 정하지 않은 첫 자리와 창에 남은 시간(ms). 창이 없으면 null.
+ * 버릴 때마다 여는 창에서 정할 자리가 없으면 버린 자리 이름으로 시간만 잰다
+ */
 export function callClock(
   state: NyrongppongState,
 ): { seat: number; left: number } | null {
   if (state.phase !== "call" || !state.call) return null;
   const waiting = state.call.responses.find((r) => r.answer === null);
-  if (!waiting) return null;
+  if (!waiting && !state.rules.everyDiscard) return null;
   return {
-    seat: waiting.seat,
+    seat: waiting ? waiting.seat : state.call.from,
     left: Math.max(0, callWindowMs(state.rules) - state.call.used),
   };
 }

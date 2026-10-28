@@ -260,12 +260,16 @@ export const nyrongppongKit: NyrongppongKit = {
   /**
    * 뽕 응답 창(docs/30 2절). 대국을 돌리는 기기(혼자 하기·방장)의 LocalMatch가 이 시계로 창을 재고,
    * 시간이 다 되면 `timeout`을 기록한다. 개인 시간과 같은 틀(docs/24)을 빌려 쓴다.
-   * 한 장에 뽕할 수 있는 자리가 많아야 하나라 창마다 응답은 하나뿐이므로, 응답에 쓴 시간은 싣지 않는다
-   * (실으면 컴퓨터 응답에도 실려, 참가자가 컴퓨터 수를 다시 계산해 맞춰 볼 때 어긋난다)
+   * 응답(뽕·넘기기)에는 쓴 시간을 실어 창의 남은 시간이 이어지게 한다. 싣지 않으면 넘긴 뒤 창이 처음부터 다시 걸려,
+   * 버릴 때마다 여는 창(`everyDiscard`)이 누가 넘겼을 때만 길어져 "같은 달 두 장"이 드러난다.
+   * 참가자 검증은 `strip`으로 시간을 떼고 견준다(컴퓨터 응답도)
    */
   timing: {
     turn: callClock,
-    stamp: (action) => action,
+    stamp: (action, spent) =>
+      action.type === "call" || action.type === "pass"
+        ? { ...action, spent }
+        : action,
     timeout: (spent) => ({ type: "timeout", spent }),
     strip: (action) => {
       if (action.type === "timeout") return null;

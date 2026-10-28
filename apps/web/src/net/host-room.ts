@@ -94,6 +94,8 @@ export interface HostRoomOptions<
   restore?: HostRestore;
   /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
   clock?: Clock;
+  /** 시드에 넣을 방장 비밀 값. 시험이 정해진 판으로 돌릴 때만 넣는다(참가자 `secret`과 같이) */
+  secret?: string;
 }
 
 /** 내 기기가 찾은 부정(`own`) 또는 다른 사람이 알린 부정 */
@@ -201,7 +203,7 @@ export class HostRoom<
     this.fairOption = options.fair ?? null;
     this.store = options.store ?? null;
     const restore = options.restore?.saved ?? null;
-    this.hostSecret = restore?.hostSecret ?? newSecret();
+    this.hostSecret = restore?.hostSecret ?? options.secret ?? newSecret();
     this.identity = restore
       ? restoreHostIdentity(restore.identity)
       : createHostIdentity();

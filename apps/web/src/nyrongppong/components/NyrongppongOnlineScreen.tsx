@@ -30,6 +30,7 @@ import { saveGuestArchive } from "@/review/recorder";
 
 import { nyrongppongKit } from "../kit";
 import { type NyrongppongHostRoom, nyrongppongSession } from "../session";
+import { ONLINE_CALL_SECONDS, onlineRules } from "../settings";
 import { BOT_PACE_MS, useNyrongppong } from "../store";
 
 type Phase = "name" | "connecting" | "lobby" | "full" | "kicked" | "error";
@@ -144,7 +145,7 @@ export function NyrongppongOnlineScreen({
           kit: nyrongppongKit,
           transport,
           hostName: resume?.restore.saved.hostName ?? trimmed,
-          rules,
+          rules: onlineRules(rules),
           store: sessionHostStore(roomCode),
           ...(resume ? { restore: resume.restore } : {}),
           bot: nyrongppongBotFor(1),
@@ -301,9 +302,11 @@ export function NyrongppongOnlineScreen({
               <p className="text-white/60 text-xs">
                 {rules.players}명 · {rules.rounds}판 · 스톱{" "}
                 {rules.stopLimit === 0 ? "없음" : `합 ${rules.stopLimit} 이하`}{" "}
-                · 바가지 +{rules.bagaji} · 뽕 응답 {rules.callSeconds}초. 빈
-                자리는 컴퓨터(중수)가 앉습니다. 패는 방장 기기가 섞고, 게임이
-                끝나면 섞은 값과 기록을 공개해 모두가 다시 확인합니다.
+                · 바가지 +{rules.bagaji} · 버릴 때마다 모두{" "}
+                {ONLINE_CALL_SECONDS}초씩 뽕을 기다립니다(누가 뽕할 수 있는지
+                드러나지 않게). 빈 자리는 컴퓨터(중수)가 앉습니다. 패는 방장
+                기기가 섞고, 게임이 끝나면 섞은 값과 기록을 공개해 모두가 다시
+                확인합니다.
               </p>
             )}
             <button

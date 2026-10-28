@@ -139,16 +139,16 @@ describe("버리기와 차례", () => {
 
 describe("뽕 응답 창", () => {
   // 0이 3월을 버린다. 1과 2가 3월 두 장씩, 3은 없다.
-  const scene = () =>
-    createNyrongppongScenario({
-      hands: [
-        ["03g", "02a", "04a", "05a", "07a", "10a"],
-        ["03r", "03p", "06a", "08g", "11g"],
-        ["03q", "01r", "09a", "09r", "11d"],
-        ["01g", "06r", "08a", "10r", "12a"],
-      ],
-      deck: ["12g", "12r", "12d", "10p", "05r"],
-    });
+  const sceneOptions = () => ({
+    hands: [
+      ["03g", "02a", "04a", "05a", "07a", "10a"],
+      ["03r", "03p", "06a", "08g", "11g"],
+      ["03q", "01r", "09a", "09r", "11d"],
+      ["01g", "06r", "08a", "10r", "12a"],
+    ],
+    deck: ["12g", "12r", "12d", "10p", "05r"],
+  });
+  const scene = () => createNyrongppongScenario(sceneOptions());
 
   it("뽕할 수 있는 자리만, 버린 사람 다음 자리부터 묻는다", () => {
     const s = run(scene(), [[0, { type: "discard", card: "03g" }]]);
@@ -257,6 +257,56 @@ describe("뽕 응답 창", () => {
     expect(t.turn).toBe(1);
     expect(t.melds[1]).toEqual([]);
     expect(t.call).toBeNull();
+  });
+
+  it("버릴 때마다 여는 창(온라인): 아무도 뽕할 수 없어도 창이 열리고 시간이 다 돼야 닫힌다", () => {
+    const rules = {
+      ...STANDARD_RULES,
+      callSeconds: 3 as const,
+      everyDiscard: true,
+    };
+    expect(encodeNyrongppongRules(rules)).toBe("n1-p4r5s10b20c3e1");
+    expect(decodeNyrongppongRules("n1-p4r5s10b20c3e1")).toEqual({
+      ok: true,
+      rules,
+    });
+    const s = run(createNyrongppongScenario({ ...sceneOptions(), rules }), [
+      [0, { type: "discard", card: "10a" }],
+    ]);
+    // 10월 두 장을 든 자리가 없지만 창이 열리고, 버린 자리 이름으로 시간만 잰다.
+    expect(s.phase).toBe("call");
+    expect(pendingSeats(s)).toEqual([]);
+    expect(callClock(s)).toEqual({ seat: 0, left: 3000 });
+    expect(viewOf(s, 3).call).toEqual({ from: 0, card: "10a", left: 3000 });
+    const t = ok(step(s, 0, { type: "timeout", spent: 3001 }));
+    expect(t.phase).toBe("discard");
+    expect(t.turn).toBe(1);
+  });
+
+  it("버릴 때마다 여는 창: 넘겨도 일찍 닫히지 않고(누가 넘겼는지 드러나지 않게) 남은 시간이 이어진다", () => {
+    const rules = {
+      ...STANDARD_RULES,
+      callSeconds: 3 as const,
+      everyDiscard: true,
+    };
+    let s = run(createNyrongppongScenario({ ...sceneOptions(), rules }), [
+      [0, { type: "discard", card: "03g" }],
+      [1, { type: "pass", spent: 1000 }],
+    ]);
+    // 뽕할 수 있던 1이 넘겼지만 창은 그대로, 남은 시간은 2초다. 밖에서 보기엔 넘기지 않은 창과 같다.
+    expect(s.phase).toBe("call");
+    expect(callClock(s)).toEqual({ seat: 0, left: 2000 });
+    expect(viewOf(s, 3).call).toEqual({ from: 0, card: "03g", left: 2000 });
+    s = ok(step(s, 0, { type: "timeout", spent: 2001 }));
+    expect(s.turn).toBe(1);
+    expect(s.melds[1]).toEqual([]);
+    // 뽕을 부르면 시간 전이라도 바로 닫힌다.
+    const t = run(createNyrongppongScenario({ ...sceneOptions(), rules }), [
+      [0, { type: "discard", card: "03g" }],
+      [1, { type: "call", spent: 500 }],
+    ]);
+    expect(t.melds[1]).toEqual([["03g", "03r", "03p"]]);
+    expect(t.phase).toBe("discard");
   });
 
   it("응답 창 밖에서는 뽕할 수 없다. 이미 정한 자리는 다시 정할 수 없다", () => {

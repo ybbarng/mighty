@@ -999,7 +999,9 @@ export class GuestRoom<
     const replayedViews = [JSON.stringify(this.kit.viewOf(state, this.seat))];
     for (const [index, entry] of log.entries()) {
       const { seat, action } = entry;
-      if (bot) {
+      // 방장 시계가 남긴 기록(시간패, 응답 창 끝)은 누가 둔 수가 아니다. 엔진이 시간이 다 됐는지 확인한다.
+      const byClock = this.kit.timing?.strip(action) === null;
+      if (bot && !byClock) {
         if (botSeats.has(seat) && !entry.bot)
           return {
             ok: false,
