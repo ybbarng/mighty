@@ -12,7 +12,6 @@ const hand = (page: Page) => page.getByRole("region", { name: "내 손패" });
 const handCards = (page: Page) => hand(page).locator("[data-card]");
 const floorButtons = (page: Page) =>
   page.getByRole("region", { name: "바닥" }).getByRole("button");
-const status = (page: Page) => page.getByRole("status").last();
 
 async function prepare(page: Page) {
   await page.addInitScript(() => {
