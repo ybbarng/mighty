@@ -143,6 +143,29 @@ describe("화투 암호화방: 새로고침과 끊긴 사람", () => {
     expect(audits).toEqual([{ ok: true }]);
   }, 180_000);
 
+  it("한 판짜리 게임도 마지막 판 카드가 열린 뒤에 게임 끝 검증을 통과한다", async () => {
+    const { host, guests, incidents, audits } = await setupHwatu({
+      kit: minhwatuKit,
+      rules: { ...STANDARD_RULES, rounds: 1 },
+      guests: 2,
+      bot: minhwatuIntermediateBot,
+      botLevel: 1,
+      HostRoom: HostRoom as never,
+      GuestRoom: GuestRoom as never,
+    });
+    await host.start();
+    await playHwatu({
+      host,
+      guests,
+      bot: minhwatuBeginnerBot,
+      incidents,
+      done: () => phase(host) === "gameOver",
+    });
+    await until(() => audits.length === 2, "판 끝 검증");
+    expect(audits).toEqual([{ ok: true }, { ok: true }]);
+    expect(incidents).toEqual([]);
+  }, 120_000);
+
   it("끊긴 사람을 기다리다 투표가 열리고, 방장이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
     const { net, clock, host, guests } = await setup(2);
     await host.start();
@@ -206,7 +229,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     // 참가자 프로그램: 낼 카드 열쇠는 그대로 공개하고, 낸다고 하는 카드만 손패의 다른 카드로 바꾼다.
     seat.outgoing = (action) => {
       const out = honest(action);
-      if (!out || out.type !== "play") return out;
+      if (out?.type !== "play") return out;
       const hand = (guest.match as { current(): MinhwatuView }).current().hand;
       const other = hand.find((c) => c !== action.card);
       return other ? { ...out, card: other } : out;

@@ -1184,6 +1184,27 @@ export class HwatuGuestSeat<
     return this.queue.length > 0;
   }
 
+  /**
+   * 이 판의 카드가 모두 열릴 때까지 기다린다(게임 끝 검증 기록이 마지막 판 열쇠보다 먼저 올 수 있다).
+   * `ms`가 지나면 false
+   */
+  whenOpened(round: number, ms = 30_000): Promise<boolean> {
+    if (this.deals.has(round)) return Promise.resolve(true);
+    const clock = this.options.clock ?? realClock;
+    return new Promise((resolve) => {
+      const off = this.coordinator.onOpened(() => {
+        if (!this.deals.has(round)) return;
+        done(true);
+      });
+      const cancel = clock.after(ms, () => done(false));
+      const done = (ok: boolean) => {
+        off();
+        cancel();
+        resolve(ok);
+      };
+    });
+  }
+
   /** 게임이 시작했다(시드가 공개됐다): 첫 판을 함께 섞는다 */
   start(): void {
     this.coordinator.beginRound(1);

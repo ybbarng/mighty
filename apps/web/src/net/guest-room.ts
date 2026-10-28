@@ -1006,6 +1006,16 @@ export class GuestRoom<
   /** 멘탈 포커 판 끝: 다 열린 판까지 기록 전체를 다시 계산한다 */
   private async verifyFairEnd(log: FairLogged[]): Promise<AuditResult> {
     if (this.startProblem) return { ok: false, reason: this.startProblem };
+    // 화투: 마지막 판 카드가 다 열리기 전에 게임 끝 기록이 올 수 있다(판 끝에 열쇠를 공개한다).
+    const view = this.match?.current() as
+      | { roundNumber?: number; retired?: boolean }
+      | undefined;
+    if (
+      this.fair instanceof HwatuGuestSeat &&
+      typeof view?.roundNumber === "number" &&
+      !view.retired
+    )
+      await this.fair.whenOpened(view.roundNumber);
     const input = this.fairInput(log);
     if (!input) return { ok: false, reason: "검증할 정보가 없다" };
     // 끝까지 하지 못한 판(그만두기 등)은 열쇠가 다 모이지 않아 그 앞까지만 본다(verifyFairLog).
