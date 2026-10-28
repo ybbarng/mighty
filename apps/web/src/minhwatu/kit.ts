@@ -1,4 +1,4 @@
-import { cardOf, sortCards } from "@mighty/hwatu";
+import { cardOf, type PresetDeal, sortCards } from "@mighty/hwatu";
 import {
   greedyValue,
   minhwatuBotFor,
@@ -25,6 +25,9 @@ import {
 
 import type { Commentary, GameKit, Verdict } from "@/game/kit";
 
+import { hwatuReviewDeals } from "@/hwatu/fair";
+
+import { minhwatuFair } from "./fair";
 import { minhwatuStats } from "./stats";
 
 export type MinhwatuKit = GameKit<
@@ -33,7 +36,7 @@ export type MinhwatuKit = GameKit<
   MinhwatuView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 
 /** 행동 한 줄 설명 */
@@ -98,10 +101,12 @@ export function explainMinhwatu(
 /** 민화투 엔진을 대국 진행·온라인 방에 잇는다 */
 export const minhwatuKit: MinhwatuKit = {
   id: "minhwatu",
-  createMatch: (rules, seed) => createMatch(rules, seed),
+  // 멘탈 포커 판은 판마다 미리 정한 패(`preset`)로 나눈다.
+  createMatch: (rules, seed, preset) => createMatch(rules, seed, preset),
   step,
   viewOf,
-  replay: (rules, seed, log) => replay(rules, seed, log),
+  replay: (rules, seed, log, preset) => replay(rules, seed, log, preset),
+  cardTable: minhwatuFair,
   pendingSeats,
   playerCount: (rules) => rules.players,
   encodeRules: encodeMinhwatuRules,
@@ -119,12 +124,9 @@ export const minhwatuKit: MinhwatuKit = {
   guestMayAct: (action) => action.type !== "retire",
   retireAction: { type: "retire" },
   stats: minhwatuStats,
-  // 방장 기기가 시드로 섞는다. 판마다 넣을 패가 없다.
+  // 멘탈 포커 판은 판마다 진짜 패를 넣어 가며 돌린다(일반방은 시드로 섞어 넣을 패가 없다).
   review: {
-    firstExtra: () => undefined,
-    prepare: (state) => state,
-    cleanup: (state) => state,
-    realAction: (action) => action,
+    ...hwatuReviewDeals<MinhwatuState>(),
     situation: (state) => ({
       voids: state.hands.map(() => []),
       tally: state.captured.map((ids, seat) => {

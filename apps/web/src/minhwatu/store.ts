@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import { minhwatuBotFor } from "@mighty/minhwatu-ai";
 import type {
   Action,
@@ -24,14 +25,14 @@ export type MinhwatuLocalMatch = LocalMatch<
   MinhwatuView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 /** 화면이 아는 대국 창구: 혼자 하기·방장은 LocalMatch, 참가자는 RemoteMatch */
 export type MinhwatuHost = MatchHost<MinhwatuView, Action, GameEvent> & {
   drain(): Snapshot<MinhwatuView, GameEvent>[];
 };
 
-export type MinhwatuSaved = SavedMatch<MinhwatuRules, Action, undefined> & {
+export type MinhwatuSaved = SavedMatch<MinhwatuRules, Action, PresetDeal> & {
   /** 컴퓨터 단계(0 입문, 1 중수, 2 고수) */
   level: number;
 };
