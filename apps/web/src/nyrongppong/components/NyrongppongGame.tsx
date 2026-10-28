@@ -24,6 +24,7 @@ import type { ResultBanner as Banner } from "@/game/result-banner";
 import { useSettings } from "@/game/settings";
 import { HwatuCardView } from "@/hwatu/components/HwatuCard";
 import { HwatuDeck } from "@/hwatu/components/HwatuLayout";
+import { HwatuFairBar } from "@/hwatu/fair-bar";
 import { cn } from "@/lib/cn";
 
 import { NYRONGPPONG_LEVELS } from "../settings";
@@ -380,6 +381,7 @@ export function NyrongppongGame({
         </span>
       </header>
 
+      {online && <HwatuFairBar me={me} over={view.phase === "gameOver"} />}
       {online && (reconnecting || hostLeft) && (
         <p
           role="alert"

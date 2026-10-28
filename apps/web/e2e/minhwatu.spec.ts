@@ -242,7 +242,7 @@ test("민화투: 방장이 방을 만들고 친구가 들어와 컴퓨터 하나
 
   // 방장이 나가면 기록이 공개되고, 참가자가 처음부터 다시 돌려 확인한다.
   await host.getByRole("button", { name: "← 민화투" }).click();
-  await expect(guest.getByText(/검증.*문제없음/)).toBeVisible({
+  await expect(guest.getByText(/\[검증\] 나 — 문제없음/)).toBeVisible({
     timeout: 20_000,
   });
   expect(errors).toEqual([]);

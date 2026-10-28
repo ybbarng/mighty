@@ -292,7 +292,7 @@ test("나이롱뽕: 방장이 방을 만들고 친구가 링크로 들어와 끝
 
   // 방장이 나가면 기록과 섞은 값이 공개되고, 참가자가 처음부터 다시 계산해 확인한다.
   await host.getByRole("button", { name: "← 나이롱뽕" }).click();
-  await expect(guest.getByText(/검증.*문제없음/)).toBeVisible({
+  await expect(guest.getByText(/\[검증\] 나 — 문제없음/)).toBeVisible({
     timeout: 10_000,
   });
   expect(errors).toEqual([]);
