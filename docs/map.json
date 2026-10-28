@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T18:24:44Z",
+  "updatedAt": "2026-10-28T18:42:53Z",
   "here": "fairness-hwatu-poker",
   "regions": [
     {
@@ -163,6 +163,56 @@
         {
           "label": "작업 규칙",
           "path": "CLAUDE.md"
+        }
+      ]
+    },
+    {
+      "id": "platform-presence",
+      "title": "접속·인기 현황",
+      "parent": "platform",
+      "status": "fog",
+      "size": 2,
+      "summary": "지금 몇 명이 어느 게임을 하는지, 최근 인기 게임. 1분마다 모은 숫자만, 사람을 가리키는 값은 남기지 않는다",
+      "next": "신호 서버가 열린 방 수를 내놓는 것부터",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "랭킹·현황 설계",
+          "path": "docs/32-ranking-presence.md"
+        }
+      ]
+    },
+    {
+      "id": "platform-ranking",
+      "title": "공유 랭킹",
+      "parent": "platform",
+      "status": "fog",
+      "size": 4,
+      "summary": "시작 서명 + 서버가 판 기록을 다시 계산해 결과를 정한다. 친구 리그부터, 전체 순위는 나중",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "랭킹·현황 설계",
+          "path": "docs/32-ranking-presence.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "ranking-forks",
+          "type": "fork",
+          "title": "랭킹·현황 갈림길 13개(서버가 게임을 알아도 되나, 순위 범위, 신원, 레이팅 등. docs/32 8절)",
+          "owner": "me",
+          "options": [
+            "추천대로",
+            "하나씩 정하기"
+          ],
+          "recommend": "추천대로(친구 리그·기기 열쇠·OpenSkill)",
+          "status": "open"
+        },
+        {
+          "id": "ranking-sybil",
+          "type": "risk",
+          "title": "여러 신원·져 주기·봇은 어떤 구조로도 완전히 막지 못한다(영향을 줄이는 것까지)"
         }
       ]
     },
