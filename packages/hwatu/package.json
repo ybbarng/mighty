@@ -1,0 +1,16 @@
+{
+  "name": "@mighty/hwatu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "화투 48장과 공통 도구 — 고스톱·민화투·나이롱뽕이 함께 쓴다",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*"
+  }
+}

@@ -22,6 +22,7 @@ COPY packages/omok-engine/package.json packages/omok-engine/
 COPY packages/omok-ai/package.json packages/omok-ai/
 COPY packages/janggi-engine/package.json packages/janggi-engine/
 COPY packages/janggi-ai/package.json packages/janggi-ai/
+COPY packages/hwatu/package.json packages/hwatu/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

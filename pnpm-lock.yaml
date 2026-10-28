@@ -211,6 +211,9 @@ importers:
       '@mighty/hearts-engine':
         specifier: workspace:*
         version: link:../../packages/hearts-engine
+      '@mighty/hwatu':
+        specifier: workspace:*
+        version: link:../../packages/hwatu
       '@mighty/janggi-ai':
         specifier: workspace:*
         version: link:../../packages/janggi-ai
@@ -313,6 +316,12 @@ importers:
         version: link:../hearts-engine
 
   packages/hearts-engine:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/hwatu:
     dependencies:
       '@mighty/engine':
         specifier: workspace:*
