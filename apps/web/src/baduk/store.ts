@@ -152,7 +152,7 @@ export const useBaduk = create<BadukStore>((set, get) => {
   /** 쌓인 화면을 차례로 보인다. 컴퓨터가 둔 수는 조금 기다렸다가 */
   const advance = (): void => {
     if (timer !== null) return;
-    const [next, ...rest] = get().queue;
+    const next = get().queue[0];
     if (next === undefined) return;
     const host = get().host;
     // 컴퓨터 상대(혼자 하기)만 기다린다. 온라인 상대 수는 바로 보인다.
@@ -164,7 +164,12 @@ export const useBaduk = create<BadukStore>((set, get) => {
       );
     const show = () => {
       timer = null;
-      set({ queue: rest, view: next.view, events: next.events });
+      // 기다리는 사이 새 화면이 쌓였을 수 있어, 그때의 줄에서 첫 장만 뺀다.
+      set({
+        queue: get().queue.slice(1),
+        view: next.view,
+        events: next.events,
+      });
       cuesFor(next.events, host?.seat ?? 0);
       advance();
     };
