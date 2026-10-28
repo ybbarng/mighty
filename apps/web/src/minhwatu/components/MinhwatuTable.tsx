@@ -28,12 +28,12 @@ import {
   HwatuBacks,
   HwatuCaptured,
   HwatuDeck,
-  HwatuFloor,
 } from "@/hwatu/components/HwatuLayout";
 import { cn } from "@/lib/cn";
 
 import { MINHWATU_LEVELS } from "../settings";
 import { useMinhwatu } from "../store";
+import { MinhwatuFloor } from "./MinhwatuFloor";
 
 /** 민화투 화면 바탕 */
 export const MINHWATU_BG =
@@ -152,6 +152,9 @@ function Opponent({
         <span className="ml-auto shrink-0">
           <HwatuBacks count={view.handCounts[seat] ?? 0} width={backWidth} />
         </span>
+        <span className="shrink-0 text-[10px] text-white/60 tabular-nums">
+          {view.handCounts[seat] ?? 0}장
+        </span>
       </div>
       <HwatuCaptured
         ids={view.captured[seat] ?? []}
@@ -172,12 +175,12 @@ export function ScoreTable({
   totals: readonly number[];
   name: (seat: number) => string;
 }) {
-  const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
+  const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
   return (
-    <table className="mt-2 w-full text-xs tabular-nums">
+    <table className="mt-2 w-full text-xs tabular-nums [&_td]:px-1 [&_td]:text-right [&_th]:px-1 [&_th]:text-right">
       <thead className="text-white/60">
         <tr>
-          <th className="text-left font-normal">이름</th>
+          <th className="!text-left font-normal">이름</th>
           <th className="font-normal">광</th>
           <th className="font-normal">열끗</th>
           <th className="font-normal">띠</th>
@@ -195,7 +198,7 @@ export function ScoreTable({
             data-seat-score={seat}
             className={cn(result.winners.includes(seat) && "text-amber-200")}
           >
-            <td className="text-left">
+            <td className="!text-left">
               {name(seat)}
               {s.yaks.length > 0 && (
                 <span className="ml-1 text-[10px] text-amber-300">
@@ -446,7 +449,7 @@ export function MinhwatuTable({
         "relative flex min-h-dvh flex-col items-center gap-2 overflow-x-hidden px-3 py-3 text-white",
         "short-landscape:grid short-landscape:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] short-landscape:grid-rows-[auto_auto_1fr_auto] short-landscape:items-start short-landscape:gap-x-3 short-landscape:py-2",
         MINHWATU_BG,
-        mission && "pt-16",
+        mission && "pt-16 short-landscape:pt-16",
       )}
     >
       {mission && <MissionOverlay mission={mission} top={8} />}
@@ -501,7 +504,7 @@ export function MinhwatuTable({
       >
         <div className="flex w-full items-center gap-3">
           <div className="min-w-0 flex-1">
-            <HwatuFloor
+            <MinhwatuFloor
               ids={view.floor}
               width={sizes.floor}
               highlight={(id) => targets.includes(id)}

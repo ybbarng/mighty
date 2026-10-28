@@ -3,7 +3,8 @@
 import type { Action, MinhwatuState } from "@mighty/minhwatu-engine";
 import { sumPoints, YAK_NAMES, yaksOf } from "@mighty/minhwatu-engine";
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { botName } from "@/game/bot-names";
+import { useSettings } from "@/game/settings";
 import {
   HwatuCaptured,
   HwatuFloor,
@@ -26,11 +27,17 @@ const PLAY_MS = 900;
  */
 export function MinhwatuReplay({
   archive,
-  name,
+  name: baseName,
 }: {
   archive: GameArchive;
   name: (seat: number) => string;
 }) {
+  // 혼자 한 게임은 자리 이름이 없어 게임 화면처럼 컴퓨터 이름을 붙인다.
+  const botNames = useSettings((s) => s.botNames);
+  const name = (seat: number) =>
+    archive.seatNames || seat === archive.seat
+      ? baseName(seat)
+      : botName(botNames, seat);
   const replayed = useMemo(
     () => replayArchive(minhwatuKit, archive),
     [archive],
