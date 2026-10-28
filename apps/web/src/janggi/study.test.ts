@@ -20,6 +20,7 @@ import {
   defenseFor,
   explainFork,
   explainMate,
+  explainTrade,
   judgeMove,
   parseMove,
   puzzleState,
@@ -27,10 +28,18 @@ import {
 
 type Mate = Extract<JanggiPuzzle, { kind: "mate" }>;
 type Fork = Extract<JanggiPuzzle, { kind: "fork" }>;
+type Trade = Extract<JanggiPuzzle, { kind: "trade" }>;
 
 const all = JANGGI_PUZZLE_SETS.flatMap((s) => s.puzzles);
 const mates = all.filter((p): p is Mate => p.kind === "mate");
 const forks = all.filter((p): p is Fork => p.kind === "fork");
+const trades = all.filter((p): p is Trade => p.kind === "trade");
+
+/** 두 수 앞까지 읽은 초 쪽 값(점수 ×100) */
+const scoreOf = (board: Parameters<typeof applyMove>[0], m: Move) =>
+  -negamax(applyMove(board, m), "h", 2, -Infinity, Infinity, {
+    bikjangScore: true,
+  });
 const name = (m: Move) => `${pointName(m.from)}-${pointName(m.to)}`;
 const rows = <T extends { id: string }>(ps: T[]) =>
   ps.map((p) => [p.id, p] as const);
@@ -145,9 +154,38 @@ describe("양수겸장 문제", () => {
   );
 });
 
+describe("잡을까 말까 문제", () => {
+  it.each(rows(trades))(
+    "%s: 정답과 함정이 모두 잡는 수이고, 정답은 이득·함정은 손해다",
+    (_id, p) => {
+      const board = puzzleState(p).board;
+      const solution = parseMove(p.solution);
+      const trap = parseMove(p.trap);
+      expect(board[solution.to]?.startsWith("h")).toBe(true);
+      expect(board[trap.to]?.startsWith("h")).toBe(true);
+      expect(p.trap).not.toBe(p.solution);
+      const scored = legalMoves(board, "c")
+        .map((m) => ({ m, s: scoreOf(board, m) }))
+        .sort((a, b) => b.s - a.s);
+      expect(name(scored[0]?.m as Move)).toBe(p.solution);
+      expect(scored[0]?.s ?? 0).toBeGreaterThanOrEqual(100);
+      expect((scored[0]?.s ?? 0) - (scored[1]?.s ?? 0)).toBeGreaterThanOrEqual(
+        300,
+      );
+      expect(scoreOf(board, trap)).toBeLessThanOrEqual(-150);
+      expect(explainTrade(board, solution, trap)).toHaveLength(2);
+    },
+  );
+});
+
 describe("판정", () => {
   it("정답이 아닌 첫 수는 틀린 것이다", () => {
-    for (const p of [mates[0], forks[0], mates.find((m) => m.mateIn === 2)]) {
+    for (const p of [
+      mates[0],
+      forks[0],
+      trades[0],
+      mates.find((m) => m.mateIn === 2),
+    ]) {
       if (!p) throw new Error("문제 없음");
       const state = puzzleState(p);
       const move = legalMoves(state.board, "c").find(

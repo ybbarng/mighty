@@ -8,6 +8,7 @@ import {
   KIND_NAMES,
   type Kind,
   type Move,
+  PIECE_VALUE,
   pointAt,
   pointName,
   pseudoTargets,
@@ -41,7 +42,7 @@ export function judgeMove(
   move: Move,
   step: number,
 ): "solved" | "next" | "wrong" {
-  if (puzzle.kind === "fork")
+  if (puzzle.kind !== "mate")
     return sameMove(move, parseMove(puzzle.solution)) ? "solved" : "wrong";
   const after = applyMove(state.board, move);
   if (isCheckmate(after, "h")) return "solved";
@@ -55,10 +56,10 @@ export function defenseFor(state: JanggiState) {
   return janggiExpertBot.decide(viewOf(state, 1), { seed: 7 });
 }
 
-function attackers(board: Board, at: number): Kind[] {
+function attackers(board: Board, at: number, side: "c" | "h" = "c"): Kind[] {
   const kinds: Kind[] = [];
   board.forEach((cell, from) => {
-    if (cell.startsWith("c") && pseudoTargets(board, from).includes(at))
+    if (cell.startsWith(side) && pseudoTargets(board, from).includes(at))
       kinds.push(cell[1] as Kind);
   });
   return kinds;
@@ -134,4 +135,31 @@ export function explainFork(board: Board, move: Move): string[] {
       ? "장군이라 한은 궁부터 피해야 하고, 그사이 다른 기물을 잡는다"
       : "한이 하나를 지키거나 피하면 다른 하나를 잡는다",
   ];
+}
+
+/**
+ * 잡을까 말까를 말로 풀어 준다: 정답 잡기가 왜 이득인지, 함정 잡기는 누가 다시 잡는지.
+ * 장면에서 엔진으로 만들어 문제 데이터와 어긋나지 않는다
+ */
+export function explainTrade(board: Board, move: Move, trap: Move): string[] {
+  const takenKind = (board[move.to] as string)[1] as Kind;
+  const after = applyMove(board, move);
+  const mover = KIND_NAMES[(after[move.to] as string)[1] as Kind];
+  const taken = KIND_NAMES[takenKind];
+  const recapture = names(attackers(after, move.to, "h"));
+  const lines = [
+    recapture
+      ? `${mover}로 ${obj(taken)} 잡는다(${PIECE_VALUE[takenKind]}점). ${recapture}가 다시 잡아도 이득이다`
+      : `${mover}로 ${obj(taken)} 잡는다(${PIECE_VALUE[takenKind]}점). 지키는 기물이 없어 공짜다`,
+  ];
+  const trapKind = (board[trap.to] as string)[1] as Kind;
+  const trapAfter = applyMove(board, trap);
+  const trapper = KIND_NAMES[(trapAfter[trap.to] as string)[1] as Kind];
+  const guard = names(attackers(trapAfter, trap.to, "h"));
+  lines.push(
+    guard
+      ? `${pointName(trap.to)}의 ${obj(KIND_NAMES[trapKind])} ${trapper}로 잡으면 ${guard}가 다시 잡아 ${trapper}를 잃는다`
+      : `${pointName(trap.to)}의 ${obj(KIND_NAMES[trapKind])} 잡으면 그사이 더 큰 기물을 잃는다`,
+  );
+  return lines;
 }

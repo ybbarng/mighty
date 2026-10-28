@@ -399,7 +399,7 @@ export function JanggiApp() {
         onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
         extra={{
           title: "수 배우기",
-          detail: `외통·양수겸장 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
+          detail: `외통·전술 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
           onClick: () => setScreen({ kind: "study" }),
         }}
       />

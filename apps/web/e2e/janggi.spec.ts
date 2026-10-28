@@ -116,7 +116,7 @@ test("장기 배우기: 첫 단원 미션에서 차로 졸을 잡는다", async 
   const touch = info.project.name.startsWith("phone");
   await page.goto("/janggi");
   await page.getByRole("button", { name: /장기 배우기/ }).click();
-  await expect(page.getByText("0/6")).toBeVisible();
+  await expect(page.getByText("0/7")).toBeVisible();
   await page.getByRole("button", { name: /장기는 어떤 게임/ }).click();
   await expect(board(page)).toBeVisible();
   for (let i = 0; i < 2; i++)
@@ -159,12 +159,19 @@ test("장기: 방장이 방을 만들고 친구가 링크로 들어와 두고, �
   await host.getByRole("button", { name: "시작하기" }).click();
   await expect(board(guest)).toBeVisible();
 
-  // 상차림 둘(한 → 초)과 수 몇 개를 둔다. 한 편은 판이 뒤집혀 보여 그 쪽은 단추·기권으로만 움직인다.
-  for (const p of [host, guest, host, guest]) {
-    for (const q of [host, guest]) {
-      const setup = q.getByRole("button", { name: "마상마상" });
-      if (await setup.isVisible()) await setup.click();
-    }
+  // 상차림 둘(한 → 초): 차례인 쪽 화면에 단추가 뜨기를 기다려 고르고, 단추가 사라진 뒤 다음으로 간다.
+  // 한 편은 판이 뒤집혀 보여 그 쪽은 단추·기권으로만 움직인다.
+  const setup = (p: Page) => p.getByRole("button", { name: "마상마상" });
+  for (let i = 0; i < 2; i++) {
+    await expect
+      .poll(
+        async () =>
+          (await setup(host).isVisible()) || (await setup(guest).isVisible()),
+      )
+      .toBe(true);
+    const chooser = (await setup(host).isVisible()) ? host : guest;
+    await setup(chooser).click();
+    await expect(setup(chooser)).toHaveCount(0);
   }
   const cho = (await host.getByText("나는 초").count()) > 0 ? host : guest;
   const han = cho === host ? guest : host;

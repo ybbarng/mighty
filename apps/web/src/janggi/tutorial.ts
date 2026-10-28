@@ -8,6 +8,7 @@ import {
   placeSetup,
   pointAt,
   pointName,
+  pseudoTargets,
   STANDARD_RULES,
 } from "@mighty/janggi-engine";
 
@@ -47,6 +48,16 @@ function wonRound({ view, events }: Context): MissionStatus {
   const ended = events.find((e) => e.type === "roundEnded");
   if (ended?.type !== "roundEnded") return null;
   return ended.result.seat === view.mySeat ? "success" : "fail";
+}
+
+/** 내 첫 수 뒤 초 차 하나가 다섯 곳 넘게 갈 수 있으면 성공(차 길이 열렸다) */
+function rookOpened(ctx: Context): MissionStatus {
+  if (!myFirstMove(ctx)) return null;
+  const { board } = ctx.view;
+  const reach = board.map((cell, at) =>
+    cell === "cR" ? pseudoTargets(board, at).length : 0,
+  );
+  return Math.max(...reach) >= 5 ? "success" : "fail";
 }
 
 const move = (from: string, to: string): Action => ({
@@ -303,6 +314,56 @@ export const JANGGI_LESSONS: readonly JanggiLesson[] = [
         fail: "아직 외통이 아니에요. 한 궁이 피할 곳이 없게 장군을 불러 보세요.",
         solution: [move("59", "19")],
         mistake: [move("59", "58")],
+      },
+    ],
+  },
+  {
+    id: "opening",
+    title: "초반 원칙",
+    summary: "차 길을 열고, 마·상을 꺼내고, 궁 둘레는 지킨다",
+    steps: [
+      {
+        kind: "explain",
+        title: "차 길부터 열어요",
+        body: [
+          "처음에는 차 앞을 졸이 막고 있어 차가 두 칸밖에 못 가요. 점이 지금 차가 갈 수 있는 곳이에요.",
+          "**변 졸을 옆으로 한 칸** 비키면 차가 세로줄을 따라 쭉 나갈 수 있어요. 가장 센 기물을 일찍 쓸 수 있게 해요.",
+        ],
+        scene: { ...START, show: "01" },
+      },
+      {
+        kind: "explain",
+        title: "마·상을 꺼내고 궁은 지켜요",
+        body: [
+          "마·상은 처음 줄에 있으면 하는 일이 없어요. 앞으로 꺼내 가운데를 노리게 해요.",
+          "**궁과 사는 궁성 안에서 서로 붙어** 있게 두고, 궁을 일찍 움직이지 않아요.",
+          "같은 기물을 여러 번 움직이기보다 여러 기물을 하나씩 꺼내요. 포는 넘을 기물(다리)이 있어야 힘을 써요.",
+        ],
+        scene: START,
+      },
+      {
+        kind: "quiz",
+        question: "초반에 먼저 하면 좋은 것은?",
+        options: [
+          "졸을 비켜 차가 나갈 길을 연다",
+          "궁을 궁성 밖으로 내보낸다",
+          "같은 마를 세 번 움직인다",
+        ],
+        answer: 0,
+        explain:
+          "차는 가장 센 기물이에요. 길을 열어 일찍 쓰고, 궁은 궁성 안에서 사와 함께 지켜요.",
+      },
+      {
+        kind: "mission",
+        title: "차 길 열기",
+        objective: "한 수로 **차가 쭉 나갈 길**을 여세요.",
+        hint: "왼쪽 끝 졸(71)을 옆(72)으로 비켜 보세요. 오른쪽 끝 졸(79)도 돼요.",
+        scenario: START,
+        check: rookOpened,
+        success: "길이 열렸어요! 이제 차가 세로줄을 따라 멀리 나갈 수 있어요.",
+        fail: "아직 차 앞이 막혀 있어요. 차 바로 앞 졸을 옆으로 비켜 보세요.",
+        solution: [move("71", "72")],
+        mistake: [move("02", "83")],
       },
     ],
   },

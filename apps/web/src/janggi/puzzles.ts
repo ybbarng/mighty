@@ -10,6 +10,7 @@ import type { Piece } from "@mighty/janggi-engine";
  * 문제 하나. 늘 초가 둘 차례다.
  * - mate: `mateIn`수 만에 외통(마지막 수는 외통이면 어느 수든 정답)
  * - fork: 한 수로 두 곳을 함께 노려(양수겸장) 기물을 얻는다. 정답 수 하나뿐
+ * - trade: 잡을 수 있는 기물이 여럿인데 이득인 잡기는 하나뿐. `trap`은 잡으면 손해인 잡기
  */
 export type JanggiPuzzle = {
   id: string;
@@ -17,7 +18,11 @@ export type JanggiPuzzle = {
   pieces: Readonly<Record<string, Piece>>;
   /** 첫 정답 수 "출발-도착" */
   solution: string;
-} & ({ kind: "mate"; mateIn: 1 | 2 } | { kind: "fork" });
+} & (
+  | { kind: "mate"; mateIn: 1 | 2 }
+  | { kind: "fork" }
+  | { kind: "trade"; trap: string }
+);
 
 export interface JanggiPuzzleSet {
   id: string;
@@ -27,6 +32,7 @@ export interface JanggiPuzzleSet {
 }
 
 type Raw = { pieces: Record<string, Piece>; solution: string };
+type RawTrade = Raw & { trap: string };
 
 const MATE_IN_ONE: readonly Raw[] = [
   {
@@ -261,6 +267,169 @@ const FORKS: readonly Raw[] = [
   },
 ];
 
+/** 잡을까 말까: 이득인 잡기 하나와, 지켜져서 손해인 잡기(함정) */
+const TRADES: readonly RawTrade[] = [
+  {
+    pieces: {
+      "18": "hR",
+      "36": "hK",
+      "37": "cN",
+      "41": "cN",
+      "51": "hE",
+      "58": "hE",
+      "84": "cK",
+      "05": "cE",
+    },
+    solution: "37-18",
+    trap: "37-58",
+  },
+  {
+    pieces: {
+      "16": "hK",
+      "18": "hP",
+      "39": "cN",
+      "46": "cN",
+      "64": "hP",
+      "67": "hR",
+      "75": "cE",
+      "04": "cK",
+    },
+    solution: "46-67",
+    trap: "39-18",
+  },
+  {
+    pieces: {
+      "24": "hA",
+      "35": "hP",
+      "36": "hK",
+      "43": "hP",
+      "47": "hP",
+      "55": "cR",
+      "65": "hN",
+      "94": "cK",
+    },
+    solution: "55-65",
+    trap: "55-35",
+  },
+  {
+    pieces: {
+      "17": "hP",
+      "21": "hE",
+      "25": "hK",
+      "35": "hA",
+      "39": "cR",
+      "62": "hC",
+      "94": "cE",
+      "06": "cK",
+    },
+    solution: "94-62",
+    trap: "39-35",
+  },
+  {
+    pieces: {
+      "25": "hA",
+      "26": "hK",
+      "29": "hP",
+      "36": "hP",
+      "66": "cR",
+      "67": "hN",
+      "87": "cN",
+      "05": "cK",
+    },
+    solution: "66-67",
+    trap: "66-36",
+  },
+  {
+    pieces: {
+      "26": "hK",
+      "28": "hN",
+      "36": "hA",
+      "38": "cR",
+      "43": "cP",
+      "48": "hP",
+      "56": "hP",
+      "86": "cK",
+    },
+    solution: "38-28",
+    trap: "38-36",
+  },
+  {
+    pieces: {
+      "14": "hA",
+      "16": "hK",
+      "21": "hP",
+      "25": "hN",
+      "32": "hE",
+      "45": "cR",
+      "49": "hC",
+      "94": "cK",
+      "97": "cN",
+    },
+    solution: "45-49",
+    trap: "45-25",
+  },
+  {
+    pieces: {
+      "12": "hP",
+      "25": "hA",
+      "33": "hR",
+      "35": "hK",
+      "45": "cN",
+      "46": "cN",
+      "68": "hP",
+      "74": "cP",
+      "94": "cK",
+    },
+    solution: "45-33",
+    trap: "46-25",
+  },
+  {
+    pieces: {
+      "15": "hK",
+      "21": "hP",
+      "24": "hA",
+      "26": "hP",
+      "36": "hC",
+      "44": "cR",
+      "53": "cE",
+      "71": "hN",
+      "96": "cK",
+    },
+    solution: "53-36",
+    trap: "44-24",
+  },
+  {
+    pieces: {
+      "11": "hP",
+      "26": "hK",
+      "35": "hA",
+      "52": "hR",
+      "61": "cP",
+      "62": "hE",
+      "72": "cC",
+      "93": "cP",
+      "05": "cK",
+    },
+    solution: "72-52",
+    trap: "61-62",
+  },
+  {
+    pieces: {
+      "24": "hK",
+      "33": "hP",
+      "36": "hA",
+      "54": "cP",
+      "62": "hP",
+      "67": "hR",
+      "82": "cR",
+      "86": "cK",
+      "99": "cE",
+    },
+    solution: "99-67",
+    trap: "82-62",
+  },
+];
+
 const MATE_IN_TWO: readonly Raw[] = [
   {
     pieces: { "16": "hK", "62": "cR", "68": "cR", "05": "cK" },
@@ -315,6 +484,17 @@ export const JANGGI_PUZZLE_SETS: readonly JanggiPuzzleSet[] = [
     puzzles: FORKS.map((p, i) => ({
       id: `fork-${i + 1}`,
       kind: "fork",
+      ...p,
+    })),
+  },
+  {
+    id: "trade",
+    title: "잡을까 말까",
+    summary:
+      "잡을 수 있다고 다 잡지 않는다. 다시 잡히지 않는 이득인 잡기를 고른다",
+    puzzles: TRADES.map((p, i) => ({
+      id: `trade-${i + 1}`,
+      kind: "trade",
       ...p,
     })),
   },
