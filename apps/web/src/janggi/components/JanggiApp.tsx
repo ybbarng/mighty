@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { GameHome } from "@/components/GameHome";
+import { StudyHome } from "@/components/study/StudyHome";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
+import { useJanggiStudyProgress } from "@/study/progress";
 import { useJanggiTutorialProgress } from "@/tutorial/progress";
-
+import { JANGGI_PUZZLE_SETS } from "../puzzles";
 import { endJanggiSession } from "../session";
 import {
   BIKJANG_INFO,
@@ -22,6 +24,7 @@ import { clearJanggi, type JanggiSaved, loadJanggi, useJanggi } from "../store";
 import { JANGGI_LESSONS } from "../tutorial";
 import { JanggiGame } from "./JanggiGame";
 import { JanggiOnlineScreen } from "./JanggiOnlineScreen";
+import { JanggiPuzzleScreen } from "./JanggiPuzzleScreen";
 import { janggiTutorial } from "./janggi-tutorial";
 
 /** 장기 화면들의 배경(대국 화면의 짙은 색과 이어진다) */
@@ -330,7 +333,17 @@ type Screen =
   | { kind: "options" }
   | { kind: "rules" }
   | { kind: "tutorial" }
-  | { kind: "lesson"; lessonId: string };
+  | { kind: "lesson"; lessonId: string }
+  | { kind: "study" }
+  | { kind: "puzzle"; puzzleId: string };
+
+/** 수 배우기 목록에 보일 문제 묶음 */
+const STUDY_SETS = JANGGI_PUZZLE_SETS.map((s) => ({
+  id: s.id,
+  title: s.title,
+  summary: s.summary,
+  puzzleIds: s.puzzles.map((p) => p.id),
+}));
 
 /** 장기(/janggi): 첫 화면, 옵션, 규칙, 배우기, 다함께 장기 방, 대국 화면 */
 export function JanggiApp() {
@@ -384,6 +397,31 @@ export function JanggiApp() {
         tutorial={janggiTutorial}
         onBack={backToStart}
         onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
+        extra={{
+          title: "수 배우기",
+          detail: `외통 문제 ${STUDY_SETS.reduce((n, s) => n + s.puzzleIds.length, 0)}개. 규칙을 익혔다면 여기서 실력을 키워요`,
+          onClick: () => setScreen({ kind: "study" }),
+        }}
+      />
+    );
+  if (screen.kind === "study")
+    return (
+      <StudyHome
+        title="장기 수 배우기"
+        background={BG}
+        sets={STUDY_SETS}
+        progress={useJanggiStudyProgress}
+        onOpen={(puzzleId) => setScreen({ kind: "puzzle", puzzleId })}
+        onBack={() => setScreen({ kind: "tutorial" })}
+      />
+    );
+  if (screen.kind === "puzzle")
+    return (
+      <JanggiPuzzleScreen
+        key={screen.puzzleId}
+        puzzleId={screen.puzzleId}
+        onExit={() => setScreen({ kind: "study" })}
+        onOpen={(puzzleId) => setScreen({ kind: "puzzle", puzzleId })}
       />
     );
   if (screen.kind === "lesson")

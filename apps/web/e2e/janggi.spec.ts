@@ -254,3 +254,52 @@ test("장기: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
   await expect(page.getByText(/다음 수: /)).toBeVisible({ timeout: 10_000 });
   await page.screenshot({ path: info.outputPath("janggi-review.png") });
 });
+
+test("장기 수 배우기: 외통 문제를 틀렸다 다시 풀고, 진행이 목록에 남는다", async ({
+  page,
+}, info) => {
+  const touch = info.project.name.startsWith("phone");
+  await page.goto("/janggi");
+  await page.getByRole("button", { name: /장기 배우기/ }).click();
+  await page.getByRole("button", { name: /수 배우기/ }).click();
+  const mate1 = page.getByRole("region", { name: "한 수 외통" });
+  await expect(mate1.getByText("0/13")).toBeVisible();
+  await mate1.getByRole("button", { name: "풀기 시작" }).click();
+  await expect(page.getByRole("status")).toHaveText("한 수로 외통을 만드세요");
+
+  // 궁을 한 칸 옮기는 수는 외통이 아니다.
+  await tapPoint(page, "96", touch);
+  const to = await page
+    .locator("[data-target]")
+    .first()
+    .getAttribute("data-target");
+  await tapPoint(page, to as string, touch);
+  await expect(page.getByRole("status")).toHaveText("외통이 아니에요");
+  await page.getByRole("button", { name: "다시 하기" }).click();
+
+  // 정답: 차 48 → 44
+  await tapPoint(page, "48", touch);
+  await tapPoint(page, "44", touch);
+  await expect(page.getByRole("status")).toHaveText("외통!");
+  await expect(page.getByText(/차를 44로: 장군!/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("janggi-puzzle.png") });
+  await page.getByRole("button", { name: "다음 문제" }).click();
+  await expect(page.getByText("한 수 외통 2/13")).toBeVisible();
+  await page.getByRole("button", { name: "← 목록" }).click();
+  await expect(mate1.getByText("1/13")).toBeVisible();
+  await expect(
+    mate1.getByRole("button", { name: "한 수 외통 1번 (풂)" }),
+  ).toBeVisible();
+
+  // 두 수 외통: 첫 수 뒤 한이 받고, 다시 내 차례가 온다.
+  const mate2 = page.getByRole("region", { name: "두 수 외통" });
+  await mate2.getByRole("button", { name: "풀기 시작" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "두 수 만에 외통: 첫 수를 두세요",
+  );
+  await tapPoint(page, "62", touch);
+  await tapPoint(page, "65", touch);
+  await expect(page.getByRole("status")).toHaveText("이제 외통을 만드세요", {
+    timeout: 10_000,
+  });
+});

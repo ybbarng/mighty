@@ -13,9 +13,12 @@ export function TutorialHome<View, Event, Scenario, Action>({
   tutorial,
   onOpen,
   onBack,
+  extra,
 }: {
   onOpen: (lessonId: string) => void;
   onBack: () => void;
+  /** 단원 목록 아래 다음 단계 안내(판 게임의 "수 배우기") */
+  extra?: { title: string; detail: string; onClick: () => void };
   tutorial: TutorialKit<View, Event, Scenario, Action>;
 }) {
   const { lessons } = tutorial;
@@ -122,6 +125,22 @@ export function TutorialHome<View, Event, Scenario, Action>({
             );
           })}
         </ol>
+        {extra && (
+          <button
+            type="button"
+            onClick={extra.onClick}
+            className="flex items-center gap-3 rounded-2xl border border-sky-300/60 bg-sky-500/15 p-3 text-left hover:bg-sky-500/25"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-400 font-black text-black">
+              ♟
+            </span>
+            <span className="flex flex-col">
+              <span className="font-bold">{extra.title}</span>
+              <span className="text-xs opacity-70">{extra.detail}</span>
+            </span>
+            <span className="ml-auto text-sky-200 text-sm">열기 →</span>
+          </button>
+        )}
       </div>
     </main>
   );

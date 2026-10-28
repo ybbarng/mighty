@@ -6,6 +6,7 @@ import { useSettings } from "@/game/settings";
 import { useHeartsSettings } from "@/hearts/settings";
 import { useJanggiSettings } from "@/janggi/settings";
 import { useOmokSettings } from "@/omok/settings";
+import { useJanggiStudyProgress } from "@/study/progress";
 import {
   useHeartsTutorialProgress,
   useJanggiTutorialProgress,
@@ -27,6 +28,7 @@ export function StoreHydration() {
     void useOmokTutorialProgress.persist.rehydrate();
     void useJanggiSettings.persist.rehydrate();
     void useJanggiTutorialProgress.persist.rehydrate();
+    void useJanggiStudyProgress.persist.rehydrate();
   }, []);
   return null;
 }
