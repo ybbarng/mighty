@@ -9,6 +9,7 @@ import { kirudaName } from "@/game/terms";
 import { summarizeHearts } from "@/hearts/stats";
 import { summarizeJanggi } from "@/janggi/kit";
 import { cn } from "@/lib/cn";
+import { NyrongppongStats } from "@/nyrongppong/components/NyrongppongStats";
 import { summarizeOmok } from "@/omok/kit";
 
 import { clearStats, importStats, loadStats, type StatsBook } from "./records";
@@ -24,13 +25,21 @@ import {
   TrendLine,
 } from "./widgets";
 
-type GameTab = "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk";
+type GameTab =
+  | "mighty"
+  | "hearts"
+  | "omok"
+  | "janggi"
+  | "chess"
+  | "baduk"
+  | "nyrongppong";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
   janggi: "楚 장기",
   baduk: "⚫ 바둑",
   chess: "♞ 체스",
+  nyrongppong: "🎴 나이롱뽕",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
 };
@@ -71,7 +80,8 @@ export function ProfilePage() {
       game === "omok" ||
       game === "janggi" ||
       game === "chess" ||
-      game === "baduk"
+      game === "baduk" ||
+      game === "nyrongppong"
     ) {
       setBack(`/${game}`);
       setTab(game);
@@ -150,9 +160,17 @@ export function ProfilePage() {
               </div>
             </div>
           </div>
-          <div className="flex gap-1.5" role="tablist">
+          <div className="flex flex-wrap gap-1.5" role="tablist">
             {(
-              ["omok", "janggi", "baduk", "chess", "mighty", "hearts"] as const
+              [
+                "omok",
+                "janggi",
+                "baduk",
+                "chess",
+                "mighty",
+                "hearts",
+                "nyrongppong",
+              ] as const
             ).map((t) => (
               <button
                 key={t}
@@ -181,6 +199,8 @@ export function ProfilePage() {
           <BadukStats book={book} />
         ) : tab === "chess" ? (
           <ChessStats book={book} />
+        ) : tab === "nyrongppong" ? (
+          <NyrongppongStats book={book} />
         ) : (
           <OmokStats book={book} />
         )}

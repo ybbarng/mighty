@@ -11,6 +11,7 @@ import { mightyKit } from "@/game/mighty-kit";
 import { useSettings } from "@/game/settings";
 import { heartsKit } from "@/hearts/kit";
 import { JanggiReplay } from "@/janggi/components/JanggiReplay";
+import { NyrongppongReplay } from "@/nyrongppong/components/NyrongppongReplay";
 import { OmokReplay } from "@/omok/components/OmokReplay";
 
 import {
@@ -36,6 +37,7 @@ const GAME_NAME: Record<string, string> = {
   janggi: "楚 장기",
   baduk: "⚫ 바둑",
   chess: "♞ 체스",
+  nyrongppong: "🎴 나이롱뽕",
 };
 
 function when(at: number): string {
@@ -219,7 +221,8 @@ function ArchiveView({
     archive.game === "omok" ||
     archive.game === "janggi" ||
     archive.game === "chess" ||
-    archive.game === "baduk"
+    archive.game === "baduk" ||
+    archive.game === "nyrongppong"
   )
     return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
@@ -256,6 +259,8 @@ function BoardArchiveView({
           <BadukReplay archive={archive} name={name} />
         ) : archive.game === "chess" ? (
           <ChessReplay archive={archive} name={name} />
+        ) : archive.game === "nyrongppong" ? (
+          <NyrongppongReplay archive={archive} name={name} />
         ) : (
           <OmokReplay archive={archive} name={name} />
         )}

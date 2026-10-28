@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T17:33:26Z",
+  "updatedAt": "2026-10-28T17:58:09Z",
   "here": "hwatu-games",
   "regions": [
     {
@@ -265,7 +265,7 @@
         {
           "id": "realtime-house-rules",
           "type": "fork",
-          "title": "원카드·나이롱뽕에서 끼어들어 외치는 규칙(집마다 다르다)",
+          "title": "원카드 외치기 규칙(집마다 다르다)",
           "owner": "me",
           "options": [
             "외칠 수 있는 시간 창(속도 겨루기 없음)",
@@ -376,15 +376,15 @@
       "id": "hwatu-nyrongppong",
       "title": "나이롱뽕",
       "parent": "hwatu-games",
-      "status": "building",
+      "status": "done",
       "size": 2,
-      "summary": "서브에이전트가 만드는 중. '뽕'은 1차로 차례로 묻는 응답 창, 실시간 판정은 조사 뒤",
+      "summary": "2~5명, 뽕 응답 창(실시간 판정 없이), 스톱·박·여섯 장 약, 컴퓨터 세 단계, 온라인(방장 시드), 배우기",
       "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
         {
-          "label": "화투 기초",
-          "path": "docs/27-hwatu.md"
+          "label": "나이롱뽕",
+          "path": "docs/30-nyrongppong.md"
         }
       ],
       "signs": [
@@ -394,8 +394,8 @@
           "title": "나이롱뽕 규칙(지역마다 다르다)",
           "owner": "me",
           "options": [
-            "조사해 고른 규칙 그대로",
-            "내가 하던 규칙으로 고치기"
+            "고른 규칙 그대로(조커 없음, 스톱 10)",
+            "집 규칙으로 고치기(조커 등)"
           ],
           "recommend": "조사해 고른 규칙으로 먼저 해 보고 고치기",
           "status": "open"

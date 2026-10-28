@@ -3,7 +3,14 @@
  * 새 게임은 여기에 한 줄 더하고 `app/<id>/page.tsx`를 둔다.
  */
 export type GameEntry = {
-  id: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk";
+  id:
+    | "mighty"
+    | "hearts"
+    | "omok"
+    | "janggi"
+    | "chess"
+    | "baduk"
+    | "nyrongppong";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -62,5 +69,13 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "하트와 스페이드 Q를 피하는 윈도우 하트",
     players: "4명",
     path: "/hearts",
+  },
+  {
+    id: "nyrongppong",
+    name: "나이롱뽕",
+    englishName: "Nairong-ppong",
+    tagline: "화투로 하는 뽕! 같은 달 두 장이면 뽕, 손패 합을 가장 작게",
+    players: "2~5명",
+    path: "/nyrongppong",
   },
 ];

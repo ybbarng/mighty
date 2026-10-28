@@ -1,4 +1,5 @@
 import { ChessPawnArt } from "@/chess/icon-art";
+import { NyrongppongIconArt } from "@/nyrongppong/icon-art";
 
 import { HEART_PATH, SITE, SPADE_PATH } from "./brand";
 
@@ -415,8 +416,17 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk" | "center";
+  game?:
+    | "mighty"
+    | "hearts"
+    | "omok"
+    | "janggi"
+    | "chess"
+    | "baduk"
+    | "nyrongppong"
+    | "center";
 }) {
+  if (game === "nyrongppong") return <NyrongppongIconArt maskable={maskable} />;
   return (
     <div
       style={{

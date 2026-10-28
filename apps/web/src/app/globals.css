@@ -40,6 +40,12 @@ html:has([data-game="baduk"]) body {
   background: #1c1917;
 }
 
+/* 나이롱뽕(화투) 화면 */
+html:has([data-game="nyrongppong"]),
+html:has([data-game="nyrongppong"]) body {
+  background: #052e16;
+}
+
 /* 게임 목록 첫 화면: 당겨 넘칠 때 비치는 바탕도 첫 화면 색으로 */
 html:has([data-game="center"]),
 html:has([data-game="center"]) body {

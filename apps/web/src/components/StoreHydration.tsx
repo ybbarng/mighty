@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import { useSettings } from "@/game/settings";
 import { useHeartsSettings } from "@/hearts/settings";
 import { useJanggiSettings } from "@/janggi/settings";
+import { useNyrongppongTutorialProgress } from "@/nyrongppong/progress";
+import { useNyrongppongSettings } from "@/nyrongppong/settings";
 import { useOmokSettings } from "@/omok/settings";
 import { useJanggiStudyProgress } from "@/study/progress";
 import {
@@ -29,6 +31,8 @@ export function StoreHydration() {
     void useJanggiSettings.persist.rehydrate();
     void useJanggiTutorialProgress.persist.rehydrate();
     void useJanggiStudyProgress.persist.rehydrate();
+    void useNyrongppongSettings.persist.rehydrate();
+    void useNyrongppongTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }
