@@ -42,7 +42,9 @@ html:has([data-game="baduk"]) body {
 
 /* 나이롱뽕(화투) 화면 */
 html:has([data-game="nyrongppong"]),
-html:has([data-game="nyrongppong"]) body {
+html:has([data-game="nyrongppong"]) body,
+html:has([data-game="minhwatu"]),
+html:has([data-game="minhwatu"]) body {
   background: #052e16;
 }
 

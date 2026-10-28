@@ -238,6 +238,12 @@ importers:
       '@mighty/janggi-engine':
         specifier: workspace:*
         version: link:../../packages/janggi-engine
+      '@mighty/minhwatu-ai':
+        specifier: workspace:*
+        version: link:../../packages/minhwatu-ai
+      '@mighty/minhwatu-engine':
+        specifier: workspace:*
+        version: link:../../packages/minhwatu-engine
       '@mighty/nyrongppong-ai':
         specifier: workspace:*
         version: link:../../packages/nyrongppong-ai
@@ -416,6 +422,27 @@ importers:
       '@mighty/engine':
         specifier: workspace:*
         version: link:../engine
+
+  packages/minhwatu-ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/hwatu':
+        specifier: workspace:*
+        version: link:../hwatu
+      '@mighty/minhwatu-engine':
+        specifier: workspace:*
+        version: link:../minhwatu-engine
+
+  packages/minhwatu-engine:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/hwatu':
+        specifier: workspace:*
+        version: link:../hwatu
 
   packages/nyrongppong-ai:
     dependencies:

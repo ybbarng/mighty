@@ -356,12 +356,6 @@ export function MinhwatuApp() {
   const view = useMinhwatu((s) => s.view);
   const settings = useMinhwatuSettings();
 
-  // 저장한 설정과 배우기 진행을 첫 그리기 뒤에 불러온다(합칠 때 StoreHydration으로 옮긴다).
-  useEffect(() => {
-    void useMinhwatuSettings.persist.rehydrate();
-    void useMinhwatuTutorialProgress.persist.rehydrate();
-  }, []);
-
   // 다 끝난 게임은 이어하기에 남기지 않는다.
   useEffect(() => {
     if (view?.phase === "gameOver" && !useMinhwatu.getState().practice)

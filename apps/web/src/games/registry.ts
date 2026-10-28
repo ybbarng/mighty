@@ -11,7 +11,8 @@ export type GameEntry = {
     | "chess"
     | "baduk"
     | "nyrongppong"
-    | "gostop";
+    | "gostop"
+    | "minhwatu";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -78,6 +79,14 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "같은 달끼리 짝 맞춰 먹고, 점수가 나면 고? 스톱? 맞고·셋이서",
     players: "2~3명",
     path: "/gostop",
+  },
+  {
+    id: "minhwatu",
+    name: "민화투",
+    englishName: "Minhwatu",
+    tagline: "같은 달끼리 짝을 맞춰 먹는 화투. 초약·풍약·비약, 홍단·청단",
+    players: "2~4명",
+    path: "/minhwatu",
   },
   {
     id: "nyrongppong",

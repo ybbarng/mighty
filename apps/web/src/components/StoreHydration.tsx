@@ -7,6 +7,8 @@ import { useGostopTutorialProgress } from "@/gostop/progress";
 import { useGostopSettings } from "@/gostop/settings";
 import { useHeartsSettings } from "@/hearts/settings";
 import { useJanggiSettings } from "@/janggi/settings";
+import { useMinhwatuTutorialProgress } from "@/minhwatu/progress";
+import { useMinhwatuSettings } from "@/minhwatu/settings";
 import { useNyrongppongTutorialProgress } from "@/nyrongppong/progress";
 import { useNyrongppongSettings } from "@/nyrongppong/settings";
 import { useOmokSettings } from "@/omok/settings";
@@ -37,6 +39,8 @@ export function StoreHydration() {
     void useNyrongppongTutorialProgress.persist.rehydrate();
     void useGostopSettings.persist.rehydrate();
     void useGostopTutorialProgress.persist.rehydrate();
+    void useMinhwatuSettings.persist.rehydrate();
+    void useMinhwatuTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }
