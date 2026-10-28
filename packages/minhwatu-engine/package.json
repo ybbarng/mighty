@@ -1,0 +1,17 @@
+{
+  "name": "@mighty/minhwatu-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "민화투 규칙 엔진 — 순수 함수",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*",
+    "@mighty/hwatu": "workspace:*"
+  }
+}
