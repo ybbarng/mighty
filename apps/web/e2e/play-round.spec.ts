@@ -17,7 +17,8 @@ async function prepare(page: Page) {
 async function stepOnce(page: Page): Promise<boolean> {
   if (await page.getByRole("button", { name: "다음 판" }).isVisible())
     return true;
-  for (const name of ["포기", "그냥 내기"]) {
+  // 은어(기본으로 켜짐)면 "그냥 내기"가 "쪼콜 아님"으로 보인다.
+  for (const name of ["포기", "그냥 내기", "쪼콜 아님"]) {
     const button = page.getByRole("button", { name, exact: true });
     if (await button.isVisible()) {
       await button.click();

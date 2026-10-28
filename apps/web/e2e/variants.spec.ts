@@ -117,7 +117,8 @@ for (const variant of VARIANTS) {
         await page.locator("button[title='스페이드']").first().click();
       } else if (await page.getByText(/조커콜을 할까요/).isVisible()) {
         await shot("joker-call");
-        await page.getByRole("button", { name: "조커콜!" }).click();
+        // 은어가 기본으로 켜져 있어 "쪼카컴!"으로 보인다. 은어를 끈 설정이면 "조커콜!"
+        await page.getByRole("button", { name: /^(조커콜!|쪼카컴!)$/ }).click();
       } else if (
         await page.getByText(/선입니다|낼 카드를 고르세요/).isVisible()
       ) {

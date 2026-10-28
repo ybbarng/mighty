@@ -106,7 +106,7 @@ function stepScript(bidder: boolean): string {
         undefined,
       "jokerSuit",
     );
-  const plain = byText(/^그냥 내기$/);
+  const plain = byText(/^(그냥 내기|쪼콜 아님)$/);
   if (plain) return click(plain, "noCall");
   // 모두 포기하면 다시 나누기만 되풀이하므로 한 사람(방장 탭)은 출마한다.
   const run = byText(/^출마/);
