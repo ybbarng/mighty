@@ -11,6 +11,7 @@ import { create } from "zustand";
 import { browserPace } from "@/game/bots";
 import type { Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
+import { playUiCue } from "@/game/ui-sound";
 import { StatsRecorder } from "@/stats/recorder";
 
 import { omokKit } from "./kit";
@@ -94,6 +95,21 @@ interface OmokStore {
   clearNotice(): void;
 }
 
+/** 사건에 맞춰 소리를 낸다: 돌 놓기, 판 끝(이김·짐·비김) */
+function cuesFor(events: readonly GameEvent[], me: number): void {
+  for (const e of events) {
+    if (e.type === "placed") playUiCue("stone");
+    if (e.type === "roundEnded")
+      playUiCue(
+        e.result.kind === "draw"
+          ? "roundEnd"
+          : e.result.seat === me
+            ? "win"
+            : "lose",
+      );
+  }
+}
+
 let timer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribe: (() => void) | null = null;
 
@@ -117,6 +133,7 @@ export const useOmok = create<OmokStore>((set, get) => {
     const show = () => {
       timer = null;
       set({ queue: rest, view: next.view, events: next.events });
+      cuesFor(next.events, host?.seat ?? 0);
       advance();
     };
     if (byBot) timer = setTimeout(show, BOT_DELAY_MS);
@@ -206,7 +223,10 @@ export const useOmok = create<OmokStore>((set, get) => {
       // 컴퓨터 수를 보여 주기 전에는 두지 않는다.
       if (get().queue.length > 0) return { ok: false, error: "잠깐만요" };
       const result = host.submit(action);
-      if (!result.ok) set({ notice: result.error });
+      if (!result.ok) {
+        set({ notice: result.error });
+        playUiCue("invalid");
+      }
       return result;
     },
 

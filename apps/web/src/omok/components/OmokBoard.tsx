@@ -9,7 +9,13 @@ import {
   type Stone,
   xyOf,
 } from "@mighty/omok-engine";
-import { type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  useId,
+  useRef,
+  useState,
+} from "react";
 
 /** 판 가장자리 여백(칸 단위). 바깥 줄 위 돌이 잘리지 않게 */
 const PAD = 0.7;
@@ -55,6 +61,10 @@ export function OmokBoard({
   onPlace: (at: number) => void;
 }) {
   const svg = useRef<SVGSVGElement>(null);
+  // 돌 그러데이션 이름. 한 화면에 판이 여럿이어도 겹치지 않게 한다.
+  const id = `stone${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const blackFill = `url(#${id}-black)`;
+  const whiteFill = `url(#${id}-white)`;
   const [hover, setHover] = useState<number | null>(null);
 
   /** 화면 좌표 → 가장 가까운 교차점 */
@@ -131,6 +141,19 @@ export function OmokBoard({
       onPointerUp={onPointerUp}
       onKeyDown={onKeyDown}
     >
+      {/* 돌의 입체감: 왼쪽 위에서 오는 빛(밝은 점이 왼쪽 위로 치우친 둥근 그러데이션) */}
+      <defs>
+        <radialGradient id={`${id}-black`} cx="0.36" cy="0.32" r="0.75">
+          <stop offset="0" stopColor="#6b6b6b" />
+          <stop offset="0.35" stopColor="#2a2a2a" />
+          <stop offset="1" stopColor="#050505" />
+        </radialGradient>
+        <radialGradient id={`${id}-white`} cx="0.36" cy="0.32" r="0.8">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.55" stopColor="#f1f0ec" />
+          <stop offset="1" stopColor="#b9b6ae" />
+        </radialGradient>
+      </defs>
       {lines.map((p) => (
         <g key={p}>
           <line
@@ -195,18 +218,29 @@ export function OmokBoard({
         if (cell === 0) return null;
         const [cx, cy] = at(i);
         return (
-          <circle
+          <g
             // biome-ignore lint/suspicious/noArrayIndexKey: 판 자리 번호가 곧 정체다
             key={i}
             data-stone={cell === 1 ? "black" : "white"}
             data-point={pointName(i)}
-            cx={cx}
-            cy={cy}
-            r={0.45}
-            fill={cell === 1 ? "#111111" : "#fafafa"}
-            stroke={cell === 1 ? "#000000" : "#444444"}
-            strokeWidth={0.04}
-          />
+          >
+            {/* 오른쪽 아래로 비치는 그림자 */}
+            <circle
+              cx={cx + 0.06}
+              cy={cy + 0.08}
+              r={0.46}
+              fill="#000000"
+              opacity={0.35}
+            />
+            <circle
+              cx={cx}
+              cy={cy}
+              r={0.46}
+              fill={cell === 1 ? blackFill : whiteFill}
+              stroke={cell === 1 ? "#000000" : "#9a978f"}
+              strokeWidth={0.02}
+            />
+          </g>
         );
       })}
 
@@ -215,8 +249,8 @@ export function OmokBoard({
           cx={at(ghost)[0]}
           cy={at(ghost)[1]}
           r={0.45}
-          fill={myStone === 1 ? "#111111" : "#fafafa"}
-          opacity={0.5}
+          fill={myStone === 1 ? blackFill : whiteFill}
+          opacity={0.55}
           pointerEvents="none"
         />
       )}

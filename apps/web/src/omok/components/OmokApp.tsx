@@ -217,13 +217,14 @@ function PlayerPlate({
           : "border-white/10 bg-white/5",
       )}
     >
+      {/* 판 위 돌과 같은 빛(왼쪽 위)과 그림자 */}
       <span
-        className={cn(
-          "size-5 shrink-0 rounded-full border",
-          black
-            ? "border-black bg-neutral-900"
-            : "border-neutral-500 bg-neutral-50",
-        )}
+        className="size-5 shrink-0 rounded-full shadow-[1px_2px_2px_rgba(0,0,0,0.5)]"
+        style={{
+          background: black
+            ? "radial-gradient(circle at 36% 32%, #6b6b6b, #2a2a2a 35%, #050505)"
+            : "radial-gradient(circle at 36% 32%, #ffffff, #f1f0ec 55%, #b9b6ae)",
+        }}
       />
       <span className="truncate font-semibold text-sm">{name}</span>
       <span className="ml-auto text-sm text-white/70">

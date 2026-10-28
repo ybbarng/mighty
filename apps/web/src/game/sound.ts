@@ -58,7 +58,9 @@ export type Cue =
   /** 하트: 내가 벌점 카드를 가져갈 때 */
   | "penalty"
   /** 하트: 한 판이 끝나 점수표가 뜰 때 */
-  | "roundEnd";
+  | "roundEnd"
+  /** 오목: 나무 판에 돌을 놓는 "딱" */
+  | "stone";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -89,6 +91,7 @@ export const CUE_LABELS: Record<Cue, string> = {
   heartsBroken: "하트: 하트 깨짐",
   penalty: "하트: 벌점 먹음",
   roundEnd: "하트: 판 끝 점수표",
+  stone: "오목: 돌 놓기",
 };
 
 /**
@@ -98,6 +101,7 @@ export const CUE_LABELS: Record<Cue, string> = {
  */
 const TRIM_DB: Partial<Record<Cue, number>> = {
   card: 6.8,
+  stone: 7.5,
   pickCard: 8.5,
   click: 7.7,
   beep: 10,
@@ -765,6 +769,25 @@ function render(cue: Cue, v: Voice): void {
         attack: 0.02,
       });
       break;
+    case "stone": {
+      // 돌이 판에 닿는 짧고 단단한 "딱"과 나무 판이 울리는 낮은 "통"
+      const vary = 0.94 + random() * 0.12;
+      noise(v, 0, 0.025, {
+        filter: "bandpass",
+        freq: 2400 * vary,
+        q: 1.8,
+        gain: 0.9,
+        attack: 0.001,
+      });
+      tone(v, 640 * vary, 0, 0.09, {
+        type: "triangle",
+        gain: 0.12,
+        endFreq: 560,
+        attack: 0.002,
+      });
+      thump(v, 0, 190 * vary, 120, 0.08, 0.22);
+      break;
+    }
     case "roundEnd":
       // 점수표를 펼치는 "사락"과 "띵동"
       noise(v, 0, 0.18, {

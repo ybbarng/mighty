@@ -62,6 +62,16 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "mighty", when: "내가 문을 먹음(남이 먹으면 ♠Q 소리)" },
     ],
   },
+  {
+    title: "오목",
+    cues: [
+      { cue: "stone", when: "돌을 놓음(나·상대 모두)" },
+      { cue: "invalid", when: "금지 수(3·3 등)를 두려 함" },
+      { cue: "win", when: "다섯을 이음, 상대 기권" },
+      { cue: "lose", when: "상대가 다섯을 이음, 내가 기권" },
+      { cue: "roundEnd", when: "비김" },
+    ],
+  },
 ];
 
 interface Level {
