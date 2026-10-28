@@ -23,6 +23,6 @@
 |---|---|---|---|---|
 | A1 | 게임 등록부, 첫 화면 게임 목록, 마이티를 `/mighty`로, 하트 숨김 풀기, 화면 시험 주소 고치기 | mighty | — | 끝(`e113ac8`) |
 | A2 | 게임 센터 이름·아이콘·manifest(마이티 이름은 마이티 화면에만) | mighty | 이름(나중에) | 끝(`c03bd43`). 이름은 임시 "게임", `SITE` 한 곳만 바꾸면 된다 |
-| C1 | servers: 앱 넷의 Host를 `game.byb.kr`로, 신호 허용 출처, gatus 확인 주소. `mighty.byb.kr` 라우터는 지운다 | servers | 서버 반영 | 두 주소 함께 받기까지(servers `9fcecb8`, PLAN.md 20단계). 신호 서버 반영 |
+| C1 | servers: 앱 넷의 Host를 `game.byb.kr`로, 신호 허용 출처, gatus 확인 주소. `mighty.byb.kr` 라우터는 지운다 | servers | 서버 반영 | 끝(servers `9fcecb8`·`78b2b28`, PLAN.md 20단계). 2026-10-28 옛 주소는 404 |
 | C2 | 앱 기본 주소(`NEXT_PUBLIC_SITE_URL`, 신호 주소)를 `game.byb.kr`로. C1과 함께 배포 | mighty | — | 끝(`2e7ed57`) |
 | D | 문서·README·보안 설명의 주소, 컨테이너 이름 정리, (나중) 저장소 이름 | 둘 다 | 저장소 이름 | |
