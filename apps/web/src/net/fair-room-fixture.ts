@@ -1,7 +1,7 @@
 /** 멘탈 포커 온라인 대전 시험이 같이 쓰는 도우미. 시험이 오래 걸려 파일을 나눠 동시에 돌린다 */
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import type { Action, PlayerView, RuleSet } from "@mighty/engine";
-import { prepareGroup } from "@mighty/fair-play";
+import { ManualClock, prepareGroup } from "@mighty/fair-play";
 import { type FairSaved, GuestRoom } from "./guest-room";
 
 import { HostRoom, type IncidentNotice } from "./host-room";
@@ -23,6 +23,27 @@ export async function until(
   }
 }
 
+/**
+ * 방장과 참가자의 멘탈 포커 기기가 모두 할 일을 마칠 때까지 기다린다(섞기 증명 계산까지).
+ * 메모리 망은 메시지를 바로(마이크로태스크로) 전하니, 한 바퀴 돌고도 바쁜 기기가 없으면 조용하다.
+ * 제한 시간을 지나게 하기 전에 부른다: 정직한 기기의 증명이 이미 와 있어 늦은 것으로 몰리지 않는다.
+ */
+export async function settleDevices(
+  host: HostRoom,
+  guests: GuestRoom[],
+): Promise<void> {
+  const devices = () =>
+    [host.fair?.device, ...guests.map((g) => g.fair?.device)].filter(
+      (d) => d !== undefined,
+    );
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all(devices().map((d) => d.idle()));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (devices().every((d) => !d.busy())) return;
+  }
+}
+
 /** 참가자 브라우저 저장소(새로고침해도 남는다) */
 export function memoryStore() {
   let saved: FairSaved | null = null;
@@ -34,7 +55,12 @@ export function memoryStore() {
   };
 }
 
-export function hostOptions(rules: RuleSet, store?: HostStore) {
+/** 방장 옵션. 제한 시간은 시험의 시계로 잰다 */
+export function hostOptions(
+  rules: RuleSet,
+  clock: ManualClock,
+  store?: HostStore,
+) {
   return {
     hostName: "방장",
     rules,
@@ -42,6 +68,7 @@ export function hostOptions(rules: RuleSet, store?: HostStore) {
     bot: intermediateBot,
     botLevel: 1,
     fair: { group: "r255" as const },
+    clock,
     ...(store ? { store } : {}),
   };
 }
@@ -53,9 +80,11 @@ export async function setup(
   voteDelayMs?: number,
 ) {
   const net = new MemoryNetwork();
+  // 제한 시간(투표 열기 등)은 시험이 이 시계를 옮길 때만 지난다.
+  const clock = new ManualClock();
   const host = new HostRoom({
     transport: net.join("host"),
-    ...hostOptions(rules, store),
+    ...hostOptions(rules, clock, store),
     ...(voteDelayMs !== undefined ? { voteDelayMs } : {}),
   });
   const guests: GuestRoom[] = [];
@@ -65,6 +94,7 @@ export async function setup(
       name: `손님${i}`,
       token: null,
       fairStore: memoryStore(),
+      clock,
     });
     await until(() => guest.seat !== null);
     guests.push(guest);
@@ -75,7 +105,7 @@ export async function setup(
   const incidents: IncidentNotice[] = [];
   host.onIncident((n) => incidents.push(n));
   for (const g of guests) g.on("incident", (n) => incidents.push(n));
-  return { net, host, guests, incidents };
+  return { net, host, guests, incidents, clock };
 }
 
 export type Cheat = (view: PlayerView, key: string) => Action | null;

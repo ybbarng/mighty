@@ -8,10 +8,12 @@ import type {
   RuleSet,
 } from "@mighty/engine";
 import {
+  type Clock,
   FairHostTable,
   type GroupName,
   HeartsHostTable,
   type Incident,
+  realClock,
 } from "@mighty/fair-play";
 import type {
   Action as HeartsAction,
@@ -90,6 +92,8 @@ export interface HostRoomOptions<
   store?: HostStore;
   /** 새로고침 전에 남긴 방(`store.load()`). 있으면 그 방을 이어 간다 */
   restore?: HostRestore;
+  /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
 }
 
 /** 내 기기가 찾은 부정(`own`) 또는 다른 사람이 알린 부정 */
@@ -107,7 +111,8 @@ interface GuestSeat {
   token: string;
   commit: string;
   secret: string | null;
-  standInTimer: ReturnType<typeof setTimeout> | null;
+  /** 컴퓨터가 대신 두기를 거는 타이머를 끄는 함수 */
+  standInTimer: (() => void) | null;
 }
 
 /**
@@ -141,7 +146,8 @@ export class HostRoom<
   private readonly standInDelayMs: number;
   private readonly revealTimeoutMs: number;
   private readonly voteDelayMs: number;
-  private voteTimer: ReturnType<typeof setTimeout> | null = null;
+  private voteTimer: (() => void) | null = null;
+  private readonly clock: Clock;
   /** 끝내기 투표(열려 있을 때). 자리 → 끝내기에 찬성하는가 */
   private endVote: Map<number, boolean> | null = null;
   private readonly bot: KitBot<View, ActionT> | null;
@@ -187,6 +193,7 @@ export class HostRoom<
     this.standInDelayMs = options.standInDelayMs ?? 30_000;
     this.revealTimeoutMs = options.revealTimeoutMs ?? 8_000;
     this.voteDelayMs = options.voteDelayMs ?? 60_000;
+    this.clock = options.clock ?? realClock;
     this.bot = options.bot ?? null;
     this.botLevel = options.botLevel ?? null;
     this.pace = options.pace ?? null;
@@ -357,9 +364,8 @@ export class HostRoom<
       this.match = match;
       // 멘탈 포커가 아니면 돌아오지 않는 사람 자리는 전처럼 컴퓨터가 대신 둔다.
       for (const [seat, guest] of this.guests)
-        guest.standInTimer = setTimeout(
-          () => this.match?.setStandIn(seat, true),
-          this.standInDelayMs,
+        guest.standInTimer = this.clock.after(this.standInDelayMs, () =>
+          this.match?.setStandIn(seat, true),
         );
     }
     this.subscribeGuests(match);
@@ -519,16 +525,16 @@ export class HostRoom<
       return;
     }
     if (this.endVote || this.voteTimer) return;
-    this.voteTimer = setTimeout(() => {
+    this.voteTimer = this.clock.after(this.voteDelayMs, () => {
       this.voteTimer = null;
       if (![...this.guests.values()].some((g) => g.peerId === null)) return;
       this.endVote = new Map();
       this.broadcastLobby();
-    }, this.voteDelayMs);
+    });
   }
 
   private closeVote(): void {
-    if (this.voteTimer) clearTimeout(this.voteTimer);
+    this.voteTimer?.();
     this.voteTimer = null;
     this.endVote = null;
   }
@@ -625,8 +631,9 @@ export class HostRoom<
   private relayChat(seat: number, name: string, text: string): void {
     const trimmed = text.trim().slice(0, CHAT_MAX_LENGTH);
     if (!trimmed) return;
-    const now = Date.now();
-    if (now - (this.lastChat.get(seat) ?? 0) < 500) return;
+    const now = this.clock.now();
+    const last = this.lastChat.get(seat);
+    if (last !== undefined && now - last < 500) return;
     this.lastChat.set(seat, now);
     const message: ChatMessage = { id: randomId(8), seat, name, text: trimmed };
     this.send({ t: "chat", message });
@@ -726,6 +733,7 @@ export class HostRoom<
       seed,
       guestSeats: [...this.guests.keys()],
       group,
+      clock: this.clock,
       ...(restore ? { restore: restore.device } : {}),
       hooks: {
         patch: (fn) => {
@@ -807,6 +815,7 @@ export class HostRoom<
       seed,
       guestSeats: [...this.guests.keys()],
       group,
+      clock: this.clock,
       ...(restore ? { restore: restore.device } : {}),
       hooks: {
         patch: (fn) => {
@@ -917,12 +926,13 @@ export class HostRoom<
 
   private waitForReveals(): Promise<void> {
     return new Promise((resolve) => {
-      const started = Date.now();
+      // 기다리는 시간은 시계로 잰다. 확인은 50ms마다 다시 본다.
+      const started = this.clock.now();
       const check = () => {
         const all = [...this.guests.values()].every(
           (g) => g.secret !== null || g.peerId === null,
         );
-        if (all || Date.now() - started > this.revealTimeoutMs) resolve();
+        if (all || this.clock.now() - started > this.revealTimeoutMs) resolve();
         else setTimeout(check, 50);
       };
       check();
@@ -1125,7 +1135,7 @@ export class HostRoom<
       if (await matches(guest.token)) {
         const token = guest.token;
         guest.peerId = peerId;
-        if (guest.standInTimer) clearTimeout(guest.standInTimer);
+        guest.standInTimer?.();
         guest.standInTimer = null;
         await this.welcome(peerId, seat, token, nonce);
         if (this.match) {
@@ -1209,9 +1219,8 @@ export class HostRoom<
       this.names.delete(seat);
     } else if (!this.fair) {
       // 멘탈 포커 판은 그 사람 카드를 아무도 열 수 없어 컴퓨터가 대신 둘 수 없다. 돌아오기를 기다린다.
-      guest.standInTimer = setTimeout(
-        () => this.match?.setStandIn(seat, true),
-        this.standInDelayMs,
+      guest.standInTimer = this.clock.after(this.standInDelayMs, () =>
+        this.match?.setStandIn(seat, true),
       );
     }
     this.updateVote();

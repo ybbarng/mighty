@@ -69,7 +69,7 @@ describe("멘탈 포커 온라인 대전", () => {
   );
 
   it("판 중간에 참가자가 새로고침해도 남겨 둔 열쇠로 같은 자리에서 이어 가고, 검증도 통과한다", async () => {
-    const { net, host, guests, incidents } = await setup(
+    const { net, host, guests, incidents, clock } = await setup(
       presetRules("standard5"),
       2,
     );
@@ -109,6 +109,7 @@ describe("멘탈 포커 온라인 대전", () => {
       token,
       secret,
       fairStore: store,
+      clock,
     });
     fresh.on("incident", (n) => incidents.push(n));
     await until(
@@ -126,7 +127,7 @@ describe("멘탈 포커 온라인 대전", () => {
   }, 180_000);
 
   it("끊긴 사람을 기다리다 투표가 열리고, 남은 사람의 과반이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
-    const { net, host, guests } = await setup(
+    const { net, host, guests, clock } = await setup(
       presetRules("standard5"),
       3,
       undefined,
@@ -134,10 +135,19 @@ describe("멘탈 포커 온라인 대전", () => {
     );
     await host.start();
     await until(() => guests.every((g) => g.match !== null));
-    const [, g1, g2] = guests as [GuestRoom, GuestRoom, GuestRoom];
+    const [g0, g1, g2] = guests as [GuestRoom, GuestRoom, GuestRoom];
+    const seat0 = g0.seat ?? -1;
+    /** 방장이 0번 손님의 끊김을 안 뒤, 기다리는 시간(50ms)이 지나 투표가 열린다 */
+    const voteOpens = async () => {
+      await until(() => host.lobby().seats[seat0]?.connected === false);
+      clock.advance(49);
+      expect(g1.lobby?.endVote).toBeUndefined();
+      clock.advance(1);
+      await until(() => g1.lobby?.endVote !== undefined);
+    };
     // 돌아오면 투표를 닫는다.
     net.disconnect("g0");
-    await until(() => g1.lobby?.endVote !== undefined);
+    await voteOpens();
     net.reconnect("g0");
     (guests[0] as GuestRoom).leave();
     const back = new GuestRoom({
@@ -148,11 +158,12 @@ describe("멘탈 포커 온라인 대전", () => {
       fairStore: (
         guests[0] as unknown as { fairStore: ReturnType<typeof memoryStore> }
       ).fairStore,
+      clock,
     });
     await until(() => back.seat !== null && g1.lobby?.endVote === undefined);
     // 다시 끊기면 기다렸다 다시 연다. 한 사람(3명 중 1명)의 끝내기로는 끝나지 않는다.
     net.disconnect("g0-back");
-    await until(() => g1.lobby?.endVote !== undefined);
+    await voteOpens();
     g1.vote(true);
     host.vote(false);
     await until(() => g2.lobby?.endVote?.votes.length === 2);

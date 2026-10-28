@@ -1,11 +1,18 @@
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { type Action, presetRules } from "@mighty/engine";
-import { describe, expect, it } from "vitest";
+import { ManualClock } from "@mighty/fair-play";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
 import type { HostMessage } from "./protocol";
 import { MemoryNetwork } from "./transport";
+
+/** 시험마다 새 시계. 제한 시간은 시험이 옮길 때만 지난다(기기가 느려도 결과가 같다) */
+let clock = new ManualClock();
+beforeEach(() => {
+  clock = new ManualClock();
+});
 
 /**
  * 모의 침투 보고서(2026-10-21)의 공격을 실제로 해 본다.
@@ -13,15 +20,21 @@ import { MemoryNetwork } from "./transport";
  */
 const rules = presetRules("standard5");
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-async function until(condition: () => boolean, tries = 3000): Promise<void> {
-  for (let i = 0; i < tries && !condition(); i++) await flush();
-  if (!condition()) throw new Error("조건을 기다리다 시간이 지났다");
+/** 조건이 맞을 때까지 기다린다. 상한은 멈춘 시험을 잡는 안전장치일 뿐이다 */
+async function until(condition: () => boolean): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > 60_000)
+      throw new Error("조건을 기다리다 시간이 지났다");
+    await flush();
+  }
 }
 
 async function room() {
   const net = new MemoryNetwork();
   const host = new HostRoom({
     transport: net.join("host"),
+    clock,
     hostName: "방장",
     rules,
     revealTimeoutMs: 300,
@@ -29,6 +42,7 @@ async function room() {
   const fingerprint = await host.fingerprint();
   const a = new GuestRoom({
     transport: net.join("a"),
+    clock,
     name: "철수",
     token: null,
     hostFingerprint: fingerprint,
@@ -131,6 +145,7 @@ describe("컴퓨터 자리", () => {
     const net = new MemoryNetwork();
     const host = new HostRoom({
       transport: net.join("host"),
+      clock,
       hostName: "방장",
       rules,
       revealTimeoutMs: 300,
@@ -141,6 +156,7 @@ describe("컴퓨터 자리", () => {
     const hostFingerprint = await host.fingerprint();
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       hostFingerprint,
@@ -157,7 +173,7 @@ describe("컴퓨터 자리", () => {
     await until(() => a.match !== null);
     await playRounds(host, a, 2);
     host.finish();
-    await until(() => audits.length === 1, 20_000);
+    await until(() => audits.length === 1);
     expect(audits[0]).toEqual({ ok: true });
   }, 30_000);
 
@@ -194,7 +210,7 @@ describe("컴퓨터 자리", () => {
       await playRounds(host, a, rounds);
     expect(rigs).toBeGreaterThan(0);
     host.finish();
-    await until(() => audits.length === 1, 20_000);
+    await until(() => audits.length === 1);
     expect(audits[0]?.ok).toBe(false);
   }, 30_000);
 });
@@ -218,6 +234,7 @@ describe("참가자가 고친 경우", () => {
     a.transport.leave();
     const a2 = new GuestRoom({
       transport: net.join("a2"),
+      clock,
       name: "철수",
       token,
       secret: a.secret,
@@ -267,7 +284,18 @@ describe("참가자가 고친 경우", () => {
     const { host, a } = await room();
     // 철수가 약속과 다른 값을 공개한다.
     (a as unknown as { secret: string }).secret = "약속과 다른 값";
-    await host.start();
+    let started = false;
+    void host.start().then(() => {
+      started = true;
+    });
+    // 틀린 값은 안 낸 것으로 친다. 시계를 옮기지 않으면 기다리기만 한다.
+    for (let i = 0; i < 50; i++) await flush();
+    expect(started).toBe(false);
+    // 기다리는 시간(300ms)이 지나면 그 값 없이 시작한다.
+    while (!started) {
+      clock.advance(100);
+      await flush();
+    }
     expect(host.match).not.toBeNull();
     host.close();
   });

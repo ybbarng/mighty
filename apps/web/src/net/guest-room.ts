@@ -9,12 +9,14 @@ import {
 } from "@mighty/engine";
 
 import {
+  type Clock,
   checkHeartsReplay,
   FairGuestSeat,
   type FairLogged,
   HeartsGuestSeat,
   type Incident,
   type PartySnapshot,
+  realClock,
   realHeartsAction,
 } from "@mighty/fair-play";
 import {
@@ -156,6 +158,8 @@ export interface GuestRoomOptions<
   secret?: string;
   /** 방장과 연결이 끊긴 뒤 다시 연결되기를 기다리는 시간. 지나면 방장이 나간 것으로 본다 */
   reconnectTimeoutMs?: number;
+  /** 제한 시간을 재는 시계. 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
   /**
    * 초대 링크의 방장 공개 열쇠 지문(`?k=`). 있으면 이 열쇠로 서명한 연결만 방장으로 믿는다(identity.ts).
    * 없으면(예전 링크·시험) 처음 "어서 와"라고 답한 연결을 방장으로 믿는다.
@@ -244,7 +248,9 @@ export class GuestRoom<
   private readonly nonces = new Map<string, string>();
   /** 방장 확인(서명 검사)이 끝나기 전에 온 대기실 정보. 확인되면 그 연결의 것을 쓴다 */
   private readonly unverifiedLobby = new Map<string, LobbyState>();
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 방장이 나간 것으로 보는 타이머를 끄는 함수 */
+  private reconnectTimer: (() => void) | null = null;
+  private readonly clock: Clock;
   /** 지금 보이는 상대들. 방장이 끊긴 사이 새로 보인 상대도 기억해 끊김을 안 뒤 들어가 본다 */
   private readonly peers = new Set<string>();
   /** 마지막으로 확인한 방장 연결. 다른 연결로 돌아오면 방장이 새로고침한 것이다 */
@@ -334,6 +340,7 @@ export class GuestRoom<
     this.secret = options.secret ?? newSecret();
     this.commitHash = commit(this.secret);
     this.reconnectTimeoutMs = options.reconnectTimeoutMs ?? 60_000;
+    this.clock = options.clock ?? realClock;
     this.hostFingerprint = options.hostFingerprint ?? null;
     this.fairStore = options.fairStore ?? null;
 
@@ -358,10 +365,9 @@ export class GuestRoom<
       this.everDisconnected = true;
       // 잠깐 끊겼을 수 있으니 바로 끝내지 않고 다시 연결되기를 기다린다.
       for (const l of this.listeners.connection) l("reconnecting");
-      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = setTimeout(
-        () => this.emitHostLeft(),
-        this.reconnectTimeoutMs,
+      this.reconnectTimer?.();
+      this.reconnectTimer = this.clock.after(this.reconnectTimeoutMs, () =>
+        this.emitHostLeft(),
       );
     });
     this.transport.onMessage((message, from) => {
@@ -390,14 +396,14 @@ export class GuestRoom<
   }
 
   leave(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer?.();
     this.reconnectTimer = null;
     if (this.hostId) this.send({ t: "leave" }, this.hostId);
     this.transport.leave();
   }
 
   private emitHostLeft(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer?.();
     this.reconnectTimer = null;
     // 게임을 했는데 방장이 판 끝 기록을 공개하지 않고 나갔다(모의 침투 A2).
     if (this.match && !this.audited) {
@@ -514,6 +520,7 @@ export class GuestRoom<
         this.transport.send(message);
       },
       onIncident: (incident: Incident) => this.raiseIncident(incident),
+      clock: this.clock,
       ...(saved ? { restore: saved.snapshots } : {}),
     };
     const fair =
@@ -765,7 +772,7 @@ export class GuestRoom<
           return;
         }
         const reconnected = this.reconnectTimer !== null;
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer?.();
         this.reconnectTimer = null;
         const restarted = this.lastHostId !== null && this.lastHostId !== from;
         this.hostId = from;

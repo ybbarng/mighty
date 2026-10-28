@@ -32,7 +32,7 @@ describe("멘탈 포커 온라인 대전: 방장 새로고침", () => {
     async (_name, preset, guestCount, points) => {
       const rules = presetRules(preset);
       const store = memoryHostStore();
-      const { net, host, guests, incidents } = await setup(
+      const { net, host, guests, incidents, clock } = await setup(
         rules,
         guestCount,
         store,
@@ -54,7 +54,7 @@ describe("멘탈 포커 온라인 대전: 방장 새로고침", () => {
         expect(restore?.saved.match).not.toBeNull();
         current = new HostRoom({
           transport: net.join(`host${k + 1}`),
-          ...hostOptions(rules, store),
+          ...hostOptions(rules, clock, store),
           ...(restore ? { restore } : {}),
         });
         current.onIncident((n) => incidents.push(n));

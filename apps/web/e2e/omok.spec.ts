@@ -54,6 +54,34 @@ async function placeOne(page: Page, touch: boolean): Promise<void> {
   throw new Error("둘 곳이 없다");
 }
 
+/**
+ * 이 브라우저의 복기 기록(IndexedDB `mighty-review`)에 남은 끝난 오목 게임 수.
+ * 앱이 DB를 만들기 전에 열면 빈 DB가 먼저 생겨 앱의 저장소 만들기가 건너뛰어지므로, 있을 때만 연다
+ */
+async function finishedOmokGames(): Promise<number> {
+  const names = await indexedDB.databases();
+  if (!names.some((d) => d.name === "mighty-review")) return 0;
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open("mighty-review", 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      if (!db.objectStoreNames.contains("games")) {
+        db.close();
+        resolve(0);
+        return;
+      }
+      const all = db.transaction("games").objectStore("games").getAll();
+      all.onerror = () => reject(all.error);
+      all.onsuccess = () => {
+        const games = all.result as { game: string; over: boolean }[];
+        db.close();
+        resolve(games.filter((g) => g.game === "omok" && g.over).length);
+      };
+    };
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
@@ -192,8 +220,8 @@ test("오목: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
   await expect(stones(page)).toHaveCount(2);
   await page.getByRole("button", { name: "기권" }).click();
   await expect(page.getByRole("status")).toHaveText("기권했어요");
-  // 복기 기록은 IndexedDB에 비동기로 쓴다. 바로 떠나면 쓰기가 끊긴다.
-  await page.waitForTimeout(500);
+  // 복기 기록은 IndexedDB에 비동기로 쓴다. 끝난 판이 실제로 쓰인 뒤에 떠난다(바로 떠나면 쓰기가 끊긴다).
+  await expect.poll(() => page.evaluate(finishedOmokGames)).toBe(1);
 
   await page.goto("/profile?game=omok");
   await expect(page.getByRole("tab", { name: "● 오목" })).toHaveAttribute(

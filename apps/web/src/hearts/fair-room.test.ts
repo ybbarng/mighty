@@ -1,4 +1,4 @@
-import { Party, prepareGroup } from "@mighty/fair-play";
+import { ManualClock, Party, prepareGroup } from "@mighty/fair-play";
 import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
@@ -24,7 +24,7 @@ async function until(condition: () => boolean, ms = 60_000): Promise<void> {
   }
 }
 
-function hostOptions(store?: HostStore) {
+function hostOptions(clock: ManualClock, store?: HostStore) {
   return {
     kit: heartsKit,
     hostName: "방장",
@@ -33,6 +33,7 @@ function hostOptions(store?: HostStore) {
     botLevel: 1,
     revealTimeoutMs: 500,
     fair: { group: "r255" as const },
+    clock,
     ...(store ? { store } : {}),
   };
 }
@@ -43,9 +44,11 @@ async function setup(
   voteDelayMs?: number,
 ) {
   const net = new MemoryNetwork();
+  // 제한 시간(투표 열기 등)은 시험이 이 시계를 옮길 때만 지난다.
+  const clock = new ManualClock();
   const host = new HostRoom({
     transport: net.join("host"),
-    ...hostOptions(store),
+    ...hostOptions(clock, store),
     ...(voteDelayMs !== undefined ? { voteDelayMs } : {}),
   });
   const guests: GuestRoom<
@@ -62,6 +65,7 @@ async function setup(
       transport: net.join(`g${i}`),
       name: `손님${i}`,
       token: null,
+      clock,
     });
     await until(() => guest.seat !== null);
     guests.push(guest as never);
@@ -70,7 +74,7 @@ async function setup(
   const incidents: IncidentNotice[] = [];
   host.onIncident((n) => incidents.push(n));
   for (const g of guests) g.on("incident", (n) => incidents.push(n));
-  return { net, host, guests, incidents };
+  return { net, host, guests, incidents, clock };
 }
 
 /** 사람 자리도 중수 컴퓨터처럼 둔다. 같은 화면이면 다시 내지 않는다 */
@@ -190,7 +194,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
 
   it("방장이 카드 넘기기와 첫 판 중간에 새로고침해도 이어 가고, 모두의 검증을 통과한다", async () => {
     const store = memoryHostStore();
-    const { net, host, guests, incidents } = await setup(2, store);
+    const { net, host, guests, incidents, clock } = await setup(2, store);
     const audits: AuditResult[] = [];
     for (const g of guests) g.on("audit", (r) => audits.push(r));
     await host.start();
@@ -216,7 +220,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
       const restore = store.load();
       current = new HostRoom({
         transport: net.join(`host${k + 1}`),
-        ...hostOptions(store),
+        ...hostOptions(clock, store),
         ...(restore ? { restore } : {}),
       }) as never;
       current.onIncident((n) => incidents.push(n));
@@ -238,10 +242,15 @@ describe("하트 멘탈 포커 온라인 대전", () => {
   }, 240_000);
 
   it("카드를 넘기는 중에 끊긴 사람을 기다리다 방장이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
-    const { net, host, guests } = await setup(3, undefined, 50);
+    const { net, host, guests, clock } = await setup(3, undefined, 50);
     await host.start();
     await until(() => guests.every((g) => g.match !== null));
+    const seat0 = guests[0]?.seat ?? -1;
     net.disconnect("g0");
+    // 방장이 끊김을 안 뒤 기다리는 시간(50ms)이 지나면 투표가 열린다.
+    await until(() => host.lobby().seats[seat0]?.connected === false);
+    expect(host.lobby().endVote).toBeUndefined();
+    clock.advance(50);
     await until(() => host.lobby().endVote !== undefined);
     host.vote(true);
     const phase = (m: { current(): unknown } | null | undefined) =>

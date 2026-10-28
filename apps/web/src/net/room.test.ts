@@ -1,6 +1,7 @@
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { encodeRuleString, presetRules } from "@mighty/engine";
-import { describe, expect, it } from "vitest";
+import { ManualClock } from "@mighty/fair-play";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
@@ -10,6 +11,12 @@ import { MemoryNetwork, sdpFingerprint } from "./transport";
 
 const rules = presetRules("standard5");
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** 시험마다 새 시계. 제한 시간은 시험이 옮길 때만 지난다(기기가 느려도 결과가 같다) */
+let clock = new ManualClock();
+beforeEach(() => {
+  clock = new ManualClock();
+});
 
 // 횟수만 세면 다른 시험과 CPU를 나눠 쓸 때 판 끝 검증(암호 계산)보다 먼저 바닥난다. 횟수를 다 써도 30초는 기다린다.
 async function until(condition: () => boolean, tries = 200): Promise<void> {
@@ -25,6 +32,7 @@ async function setup() {
   const net = new MemoryNetwork();
   const host = new HostRoom({
     transport: net.join("host"),
+    clock,
     hostName: "방장",
     rules,
     revealTimeoutMs: 500,
@@ -32,6 +40,7 @@ async function setup() {
   });
   const a = new GuestRoom({
     transport: net.join("a"),
+    clock,
     name: "철수",
     token: null,
   });
@@ -39,6 +48,7 @@ async function setup() {
   await until(() => a.seat !== null);
   const b = new GuestRoom({
     transport: net.join("b"),
+    clock,
     name: "영희",
     token: null,
   });
@@ -119,10 +129,12 @@ describe("온라인 방", () => {
       bot: intermediateBot,
       botLevel: 1,
       store,
+      clock,
     };
     const host = new HostRoom({ transport: net.join("host"), ...options });
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
     });
@@ -204,23 +216,33 @@ describe("온라인 방", () => {
     const net = new MemoryNetwork();
     const host = new HostRoom({
       transport: net.join("host"),
+      clock,
       hostName: "방장",
       rules,
       revealTimeoutMs: 500,
     });
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       reconnectTimeoutMs: 20,
     });
     await until(() => a.seat !== null);
     let left = false;
+    let reconnecting = false;
     a.on("hostLeft", () => {
       left = true;
     });
+    a.on("connection", (s) => {
+      if (s === "reconnecting") reconnecting = true;
+    });
     net.disconnect("a");
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await until(() => reconnecting);
+    // 기다리는 시간 안에는 아직 나간 것으로 보지 않는다.
+    clock.advance(19);
+    expect(left).toBe(false);
+    clock.advance(1);
     expect(left).toBe(true);
     host.close();
   });
@@ -245,6 +267,9 @@ describe("온라인 방", () => {
     const token = a.token;
     const seat = a.seat;
     a.transport.leave();
+    // 방장이 끊긴 것을 알고, 기다리는 시간(10ms)이 지나면 컴퓨터가 대신 둔다.
+    await until(() => host.lobby().seats[seat ?? -1]?.connected === false);
+    clock.advance(10);
 
     // a 없이도 판이 이어진다.
     await playRounds(host, [b], 1);
@@ -252,6 +277,7 @@ describe("온라인 방", () => {
 
     const back = new GuestRoom({
       transport: net.join("a2"),
+      clock,
       name: "철수",
       token,
       secret: a.secret,
@@ -405,6 +431,7 @@ describe("대기실 관리", () => {
 
     const again = new GuestRoom({
       transport: net.join("a2"),
+      clock,
       name: "철수",
       token: a.token,
     });
@@ -459,6 +486,7 @@ describe("방장 확인(서명)", () => {
   async function hostWithLink(net: MemoryNetwork) {
     const host = new HostRoom({
       transport: net.join("host"),
+      clock,
       hostName: "방장",
       rules,
       revealTimeoutMs: 500,
@@ -472,6 +500,7 @@ describe("방장 확인(서명)", () => {
     const { host, fingerprint } = await hostWithLink(net);
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       hostFingerprint: fingerprint,
@@ -490,6 +519,7 @@ describe("방장 확인(서명)", () => {
     net.intercept("a", "host");
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       hostFingerprint: fingerprint,
@@ -527,6 +557,7 @@ describe("방장 확인(서명)", () => {
     });
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       hostFingerprint: fingerprint,
@@ -546,11 +577,13 @@ describe("방장 확인(서명)", () => {
     // 가짜 방장도 HostRoom을 그대로 돌린다(자기 열쇠로 서명한다).
     const fake = new HostRoom({
       transport: net.join("fake"),
+      clock,
       hostName: "가짜 방장",
       rules,
     });
     const a = new GuestRoom({
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
       hostFingerprint: fingerprint,

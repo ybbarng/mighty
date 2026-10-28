@@ -1,6 +1,7 @@
+import { ManualClock } from "@mighty/fair-play";
 import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { type AuditResult, GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
@@ -8,10 +9,21 @@ import { MemoryNetwork } from "@/net/transport";
 
 import { heartsKit } from "./kit";
 
+/** 시험마다 새 시계. 제한 시간은 시험이 옮길 때만 지난다(기기가 느려도 결과가 같다) */
+let clock = new ManualClock();
+beforeEach(() => {
+  clock = new ManualClock();
+});
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-async function until(condition: () => boolean, tries = 400): Promise<void> {
-  for (let i = 0; i < tries && !condition(); i++) await flush();
-  if (!condition()) throw new Error("조건을 기다리다 시간이 지났다");
+/** 조건이 맞을 때까지 기다린다. 상한은 멈춘 시험을 잡는 안전장치일 뿐이다 */
+async function until(condition: () => boolean): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > 60_000)
+      throw new Error("조건을 기다리다 시간이 지났다");
+    await flush();
+  }
 }
 
 describe("하트 온라인 방", () => {
@@ -20,6 +32,7 @@ describe("하트 온라인 방", () => {
     const host = new HostRoom({
       kit: heartsKit,
       transport: net.join("host"),
+      clock,
       hostName: "방장",
       rules: { ...WINDOWS_RULES, endScore: 30 },
       bot: heartsIntermediateBot,
@@ -29,6 +42,7 @@ describe("하트 온라인 방", () => {
     const guest = new GuestRoom({
       kit: heartsKit,
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
     });
@@ -60,12 +74,14 @@ describe("하트 온라인 방", () => {
     const net = new MemoryNetwork();
     new HostRoom({
       transport: net.join("host"),
+      clock,
       hostName: "방장",
       rules: (await import("@mighty/engine")).presetRules("standard5"),
     });
     const guest = new GuestRoom({
       kit: heartsKit,
       transport: net.join("a"),
+      clock,
       name: "철수",
       token: null,
     });

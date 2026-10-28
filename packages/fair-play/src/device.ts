@@ -324,15 +324,29 @@ export class FairDevice {
 
   /** 순서대로 처리한다(계산이 비동기라 메시지가 겹쳐 와도 섞이지 않게) */
   private queue(task: () => Promise<void> | void): Promise<void> {
-    this.work = this.work.then(task).catch((e) => {
-      this.emit(
-        "problem",
-        -1,
-        e instanceof Error ? e.message : String(e),
-        null,
-      );
-    });
+    this.queued++;
+    this.work = this.work
+      .then(task)
+      .catch((e) => {
+        this.emit(
+          "problem",
+          -1,
+          e instanceof Error ? e.message : String(e),
+          null,
+        );
+      })
+      .finally(() => {
+        this.queued--;
+      });
     return this.work;
+  }
+
+  /** 작업 줄에 남은 일의 수 */
+  private queued = 0;
+
+  /** 지금 할 일(작업 줄·섞기 증명 계산)이 남았나(시험용) */
+  busy(): boolean {
+    return this.queued > 0 || this.background.size > 0;
   }
 
   /** 작업 줄 밖에서 도는 계산(섞기 증명). idle이 함께 기다린다 */

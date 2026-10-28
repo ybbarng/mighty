@@ -132,6 +132,8 @@
 
 ## 10. 시험과 확인
 
+- [ ] 제한 시간이 있는 코드는 `Clock`을 받는다(기본 `realClock`). 시험은 `ManualClock`을 넣고 `advance`로 시간을 옮긴다. 시험에서 실제 시간을 기다려 결과를 얻지 않는다(CLAUDE.md "flaky 시험은 두지 않는다")
+- [ ] 기다림은 조건으로 한다. 기록 저장처럼 비동기인 것도 "쓰였는지"를 확인한 뒤 넘어간다(예: `omok.spec`의 `finishedOmokGames`)
 - [ ] 화면 시험 `e2e/<게임>.spec.ts`. 세 화면 크기(desktop, phone-portrait, phone-landscape)에서 돈다.
   - 목록에서 들어가 입문 컴퓨터와 한 판을 끝까지 한다
   - 가로로 넘치지 않는다

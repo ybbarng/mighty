@@ -1,8 +1,17 @@
 import { presetRules, suitOf } from "@mighty/engine";
 import { Party } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
-import { type Cheat, playRounds, setup, until } from "./fair-room-fixture";
+import {
+  type Cheat,
+  playRounds,
+  settleDevices,
+  setup,
+  until,
+} from "./fair-room-fixture";
 import type { GuestRoom } from "./guest-room";
+
+/** 기기가 기다리는 시간(증명 미루기 10초, 응답 30초의 두 배)을 넉넉히 넘긴다 */
+const PROOF_WAIT_MS = 120_000;
 
 describe("멘탈 포커 온라인 대전", () => {
   describe("고친 프로그램으로 부정하는 참가자(나머지는 정상)", () => {
@@ -74,12 +83,13 @@ describe("멘탈 포커 온라인 대전", () => {
     }, 180_000);
 
     it("섞기 조작: 섞을 때 카드 한 장을 복제하면 섞기 증명으로 모두가 그 자리를 짚는다", async () => {
-      const { host, guests, incidents } = await setup(
+      const { host, guests, incidents, clock } = await setup(
         presetRules("standard5"),
         2,
       );
       const cheater = (guests[0] as GuestRoom).seat as number;
       // 0번 참가자 프로그램: 섞은 덱에서 한 장을 다른 카드의 복제로 바꾼다(그 카드를 엿보려고).
+      // 속인 덱은 섞기 증명 응답을 만들 수 없어 보내지 않는다.
       const real = Party.prototype.lockAndShuffle;
       Party.prototype.lockAndShuffle = async function (
         this: Party,
@@ -99,12 +109,12 @@ describe("멘탈 포커 온라인 대전", () => {
         const honest = () =>
           incidents.filter((i) => i.own && i.reporter !== cheater);
         // 같은 카드가 두 번 열리면 바로 판을 멈추고 "확인하는 중"을 알린다.
-        await until(() => honest().some((i) => i.pending), 240_000);
-        // 섞기 증명으로 확인되면 그 자리로 바꿔 알린다.
-        await until(
-          () => honest().filter((i) => !i.pending).length >= 2,
-          240_000,
-        );
+        await until(() => honest().some((i) => i.pending));
+        // 정직한 기기들이 서로의 증명을 다 확인한 뒤 응답을 기다리는 시간이 지나게 한다.
+        // 그러면 응답하지 않은 기기는 속인 기기 하나뿐이라 그 자리로 바꿔 알린다.
+        await settleDevices(host, guests);
+        clock.advance(PROOF_WAIT_MS);
+        await until(() => honest().filter((i) => !i.pending).length >= 2);
       } finally {
         Party.prototype.lockAndShuffle = real;
       }
