@@ -8,7 +8,7 @@ import { diag } from "./diag";
  * 개발 서버(localhost)에서도 실제 방을 시험할 수 있게 절대 주소로 둔다. 서버가 localhost 출처를 받는다.
  */
 const SIGNAL_URL =
-  process.env.NEXT_PUBLIC_SIGNAL_URL ?? "https://mighty.byb.kr/signal";
+  process.env.NEXT_PUBLIC_SIGNAL_URL ?? "https://game.byb.kr/signal";
 /** 구독이 열리기를 기다리는 최대 시간. 넘으면 열리지 않은 채로 진행하고, 알리기를 되풀이하며 만난다 */
 const OPEN_TIMEOUT_MS = 5000;
 /**

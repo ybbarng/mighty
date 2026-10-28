@@ -24,7 +24,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 # 정적 빌드라 주소들은 빌드할 때 들어간다.
 #   NEXT_PUBLIC_SITE_URL   공유 미리보기 이미지 주소
-ARG NEXT_PUBLIC_SITE_URL=https://mighty.byb.kr
+ARG NEXT_PUBLIC_SITE_URL=https://game.byb.kr
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @mighty/web build
