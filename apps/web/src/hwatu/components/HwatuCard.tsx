@@ -555,7 +555,9 @@ export function HwatuCardView({
   const classes = cn(
     "relative shrink-0 rounded-md shadow-[1px_2px_4px_rgba(0,0,0,0.45)] transition",
     selected && "-translate-y-2 ring-2 ring-amber-300",
-    highlight && "ring-2 ring-sky-300",
+    // 휴대폰에서도 잘 보이게 두꺼운 테두리, 빛, 살짝 뜨기
+    highlight &&
+      "-translate-y-1 shadow-[0_0_14px_rgba(125,211,252,0.85)] ring-[3px] ring-sky-300",
     dim && "opacity-45",
     className,
   );

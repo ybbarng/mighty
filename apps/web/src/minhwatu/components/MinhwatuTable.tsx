@@ -28,12 +28,12 @@ import {
   HwatuBacks,
   HwatuCaptured,
   HwatuDeck,
+  HwatuFloor,
 } from "@/hwatu/components/HwatuLayout";
 import { cn } from "@/lib/cn";
 
 import { MINHWATU_LEVELS } from "../settings";
 import { useMinhwatu } from "../store";
-import { MinhwatuFloor } from "./MinhwatuFloor";
 
 /** 민화투 화면 바탕 */
 export const MINHWATU_BG =
@@ -157,6 +157,7 @@ function Opponent({
         </span>
       </div>
       <HwatuCaptured
+        piCount="cards"
         ids={view.captured[seat] ?? []}
         width={cardWidth}
         label={name}
@@ -504,7 +505,7 @@ export function MinhwatuTable({
       >
         <div className="flex w-full items-center gap-3">
           <div className="min-w-0 flex-1">
-            <MinhwatuFloor
+            <HwatuFloor
               ids={view.floor}
               width={sizes.floor}
               highlight={(id) => targets.includes(id)}
@@ -553,6 +554,7 @@ export function MinhwatuTable({
           <CapturedSummary view={view} seat={me} />
         </div>
         <HwatuCaptured
+          piCount="cards"
           ids={view.captured[me] ?? []}
           width={sizes.captured + 2}
           label="나"

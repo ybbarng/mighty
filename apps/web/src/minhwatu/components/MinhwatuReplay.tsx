@@ -125,7 +125,12 @@ export function MinhwatuReplay({
                 </span>
               </div>
               <HwatuHand ids={state.hands[seat] ?? []} width={30} />
-              <HwatuCaptured ids={ids} width={18} label={name(seat)} />
+              <HwatuCaptured
+                piCount="cards"
+                ids={ids}
+                width={18}
+                label={name(seat)}
+              />
             </div>
           );
         })}

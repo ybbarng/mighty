@@ -61,7 +61,10 @@ export function HwatuHand({
   );
 }
 
-/** 상대 손패: 뒷면만, 장수만 보인다 */
+/**
+ * 상대 손패: 뒷면만, 장수만 보인다. 겹침은 카드 너비에 맞춘다(너비의 55%).
+ * 고정 겹침은 작은 카드에서 카드보다 커져 옆 글자를 덮었다
+ */
 export function HwatuBacks({
   count,
   width = 28,
@@ -69,15 +72,18 @@ export function HwatuBacks({
   count: number;
   width?: number;
 }) {
+  const overlap = Math.round(width * 0.55);
   return (
-    <div role="img" aria-label={`뒷면 ${count}장`} className="flex -space-x-4">
+    <div role="img" aria-label={`뒷면 ${count}장`} className="flex">
       {Array.from({ length: count }, (_, i) => (
-        <HwatuCardView
+        <span
           // biome-ignore lint/suspicious/noArrayIndexKey: 뒷면은 순서가 곧 정체다
           key={i}
-          faceDown
-          width={width}
-        />
+          className="inline-flex"
+          style={{ marginLeft: i === 0 ? 0 : -overlap }}
+        >
+          <HwatuCardView faceDown width={width} />
+        </span>
       ))}
     </div>
   );
@@ -85,7 +91,8 @@ export function HwatuBacks({
 
 /**
  * 바닥 패. 같은 달끼리 겹쳐 한 묶음으로 보인다(짝 맞추기가 한눈에 보이게).
- * `highlightMonth`의 묶음은 테두리로 강조한다(고른 손패와 짝이 맞는 곳)
+ * 겹침은 카드 너비에 맞추고(너비의 45%), 강조한 카드(고른 손패와 짝이 맞는 곳)는 위로 올려 누르기 쉽게 한다.
+ * 고정 겹침은 휴대폰 가로처럼 카드가 작으면 아래 카드를 누를 수 없었다(민화투에서 먼저 고침)
  */
 export function HwatuFloor({
   ids,
@@ -101,6 +108,7 @@ export function HwatuFloor({
   width?: number;
 }) {
   const groups = [...groupByMonth(ids).entries()];
+  const overlap = Math.round(width * 0.45);
   return (
     <section
       aria-label="바닥"
@@ -110,17 +118,25 @@ export function HwatuFloor({
         <p className="py-6 text-sm text-white/50">바닥이 비었어요</p>
       )}
       {groups.map(([month, cards]) => (
-        <div key={month} data-month={month} className="flex -space-x-7">
-          {cards.map((id) => {
+        <div key={month} data-month={month} className="flex">
+          {cards.map((id, i) => {
             const on = highlight?.(id) ?? false;
             return (
-              <HwatuCardView
+              <span
                 key={id}
-                id={id}
-                width={width}
-                highlight={on}
-                {...(onPick && on ? { onClick: () => onPick(id) } : {})}
-              />
+                className="relative inline-flex"
+                style={{
+                  marginLeft: i === 0 ? 0 : -overlap,
+                  zIndex: on ? 10 : i,
+                }}
+              >
+                <HwatuCardView
+                  id={id}
+                  width={width}
+                  highlight={on}
+                  {...(onPick && on ? { onClick: () => onPick(id) } : {})}
+                />
+              </span>
             );
           })}
         </div>
@@ -157,25 +173,32 @@ export function HwatuDeck({
 }
 
 /**
- * 먹은 패. 광·열끗·띠·피로 나눠 겹쳐 보이고 장수를 단다(피는 쌍피를 2로 센다).
+ * 먹은 패. 광·열끗·띠·피로 나눠 겹쳐 보이고 장수를 단다.
  * 점수 계산은 게임마다 다르므로 여기서는 보이기만 한다
  */
 export function HwatuCaptured({
   ids,
   width = 30,
   label,
+  piCount = "value",
 }: {
   ids: readonly string[];
   width?: number;
   /** 누구의 먹은 패인가(화면 읽기 프로그램용) */
   label: string;
+  /** 피 수: `value`는 쌍피를 2로(고스톱), `cards`는 장수 그대로(피가 0점인 민화투) */
+  piCount?: "value" | "cards";
 }) {
   const split = splitCaptured(ids);
   const groups = [
     { key: "광", cards: split.gwang, count: split.gwang.length },
     { key: "열끗", cards: split.animal, count: split.animal.length },
     { key: "띠", cards: split.ribbon, count: split.ribbon.length },
-    { key: "피", cards: split.pi, count: split.piCount },
+    {
+      key: "피",
+      cards: split.pi,
+      count: piCount === "value" ? split.piCount : split.pi.length,
+    },
   ];
   return (
     <section

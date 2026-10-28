@@ -31,7 +31,9 @@ function MinhwatuSceneView({ scenario }: { scenario: MinhwatuScene }) {
     <div className="flex flex-col items-center gap-2 rounded-2xl bg-[#14532d] p-3">
       <span className="text-[10px] text-white/60">바닥</span>
       <HwatuFloor ids={scenario.floor} width={40} />
-      {mine.length > 0 && <HwatuCaptured ids={mine} width={20} label="나" />}
+      {mine.length > 0 && (
+        <HwatuCaptured piCount="cards" ids={mine} width={20} label="나" />
+      )}
       <span className="text-[10px] text-white/60">내 손패</span>
       <HwatuHand ids={scenario.hands[0] ?? []} width={40} />
     </div>
