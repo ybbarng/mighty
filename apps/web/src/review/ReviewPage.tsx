@@ -9,6 +9,7 @@ import { botName } from "@/game/bot-names";
 import type { GameKit } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import { useSettings } from "@/game/settings";
+import { GostopReplay } from "@/gostop/components/GostopReplay";
 import { heartsKit } from "@/hearts/kit";
 import { JanggiReplay } from "@/janggi/components/JanggiReplay";
 import { NyrongppongReplay } from "@/nyrongppong/components/NyrongppongReplay";
@@ -37,6 +38,7 @@ const GAME_NAME: Record<string, string> = {
   janggi: "楚 장기",
   baduk: "⚫ 바둑",
   chess: "♞ 체스",
+  gostop: "🎴 고스톱",
   nyrongppong: "🎴 나이롱뽕",
 };
 
@@ -222,7 +224,8 @@ function ArchiveView({
     archive.game === "janggi" ||
     archive.game === "chess" ||
     archive.game === "baduk" ||
-    archive.game === "nyrongppong"
+    archive.game === "nyrongppong" ||
+    archive.game === "gostop"
   )
     return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
@@ -259,6 +262,8 @@ function BoardArchiveView({
           <BadukReplay archive={archive} name={name} />
         ) : archive.game === "chess" ? (
           <ChessReplay archive={archive} name={name} />
+        ) : archive.game === "gostop" ? (
+          <GostopReplay archive={archive} name={name} />
         ) : archive.game === "nyrongppong" ? (
           <NyrongppongReplay archive={archive} name={name} />
         ) : (

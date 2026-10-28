@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T17:58:09Z",
+  "updatedAt": "2026-10-28T18:15:30Z",
   "here": "hwatu-games",
   "regions": [
     {
@@ -314,7 +314,7 @@
       "parent": "cards",
       "status": "building",
       "size": 4,
-      "summary": "48장 데이터·카드 그림·화면 조각을 먼저 만들고, 서브에이전트 셋이 게임을 나눠 만드는 중",
+      "summary": "48장 데이터·카드 그림·화면 조각 위에 고스톱·나이롱뽕은 끝, 민화투를 만드는 중",
       "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
@@ -344,15 +344,29 @@
       "id": "hwatu-gostop",
       "title": "고스톱(맞고·3인)",
       "parent": "hwatu-games",
-      "status": "building",
+      "status": "done",
       "size": 3,
-      "summary": "서브에이전트가 워크트리에서 만드는 중. 합친 뒤 검토",
+      "summary": "맞고·3인, 고·스톱·박·흔들기·폭탄·총통·나가리, 컴퓨터 세 단계, 온라인(방장 시드), 6단원 배우기",
       "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
         {
-          "label": "화투 기초",
-          "path": "docs/27-hwatu.md"
+          "label": "고스톱",
+          "path": "docs/28-gostop.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "gostop-rules",
+          "type": "fork",
+          "title": "고스톱 세부 규칙(피박 5장 미만, 3고 +3에 두 배, 총통 10점 등 모임마다 다르다)",
+          "owner": "me",
+          "options": [
+            "고른 규칙 그대로",
+            "하던 규칙으로 고치기"
+          ],
+          "recommend": "고른 규칙으로 해 보고 고치기",
+          "status": "open"
         }
       ]
     },

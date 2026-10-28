@@ -29,6 +29,8 @@ COPY packages/baduk-engine/package.json packages/baduk-engine/
 COPY packages/baduk-ai/package.json packages/baduk-ai/
 COPY packages/nyrongppong-engine/package.json packages/nyrongppong-engine/
 COPY packages/nyrongppong-ai/package.json packages/nyrongppong-ai/
+COPY packages/gostop-engine/package.json packages/gostop-engine/
+COPY packages/gostop-ai/package.json packages/gostop-ai/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

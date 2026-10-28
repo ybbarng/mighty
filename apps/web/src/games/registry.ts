@@ -10,7 +10,8 @@ export type GameEntry = {
     | "janggi"
     | "chess"
     | "baduk"
-    | "nyrongppong";
+    | "nyrongppong"
+    | "gostop";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -69,6 +70,14 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "하트와 스페이드 Q를 피하는 윈도우 하트",
     players: "4명",
     path: "/hearts",
+  },
+  {
+    id: "gostop",
+    name: "고스톱",
+    englishName: "Go-Stop",
+    tagline: "같은 달끼리 짝 맞춰 먹고, 점수가 나면 고? 스톱? 맞고·셋이서",
+    players: "2~3명",
+    path: "/gostop",
   },
   {
     id: "nyrongppong",

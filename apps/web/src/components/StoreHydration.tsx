@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 
 import { useSettings } from "@/game/settings";
+import { useGostopTutorialProgress } from "@/gostop/progress";
+import { useGostopSettings } from "@/gostop/settings";
 import { useHeartsSettings } from "@/hearts/settings";
 import { useJanggiSettings } from "@/janggi/settings";
 import { useNyrongppongTutorialProgress } from "@/nyrongppong/progress";
@@ -33,6 +35,8 @@ export function StoreHydration() {
     void useJanggiStudyProgress.persist.rehydrate();
     void useNyrongppongSettings.persist.rehydrate();
     void useNyrongppongTutorialProgress.persist.rehydrate();
+    void useGostopSettings.persist.rehydrate();
+    void useGostopTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

@@ -330,12 +330,6 @@ export function GostopApp() {
   const rounds = useGostopSettings((s) => s.rounds);
   const gukjin = useGostopSettings((s) => s.gukjin);
 
-  // 저장한 설정·배우기 진행을 첫 그리기 뒤에 읽는다(합칠 때 StoreHydration으로 옮긴다, docs/28 7절).
-  useEffect(() => {
-    void useGostopSettings.persist.rehydrate();
-    void useGostopTutorialProgress.persist.rehydrate();
-  }, []);
-
   // 다 끝난 게임은 이어하기에 남기지 않는다(튜토리얼 미션은 이어하기 저장과 상관없다).
   useEffect(() => {
     if (view?.phase === "gameOver" && !useGostop.getState().practice)

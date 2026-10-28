@@ -6,6 +6,7 @@ import { ChessStats } from "@/chess/components/ChessStats";
 import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
 import { kirudaName } from "@/game/terms";
+import { GostopStats } from "@/gostop/components/GostopStats";
 import { summarizeHearts } from "@/hearts/stats";
 import { summarizeJanggi } from "@/janggi/kit";
 import { cn } from "@/lib/cn";
@@ -32,13 +33,15 @@ type GameTab =
   | "janggi"
   | "chess"
   | "baduk"
-  | "nyrongppong";
+  | "nyrongppong"
+  | "gostop";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
   janggi: "楚 장기",
   baduk: "⚫ 바둑",
   chess: "♞ 체스",
+  gostop: "🎴 고스톱",
   nyrongppong: "🎴 나이롱뽕",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
@@ -81,7 +84,8 @@ export function ProfilePage() {
       game === "janggi" ||
       game === "chess" ||
       game === "baduk" ||
-      game === "nyrongppong"
+      game === "nyrongppong" ||
+      game === "gostop"
     ) {
       setBack(`/${game}`);
       setTab(game);
@@ -169,6 +173,7 @@ export function ProfilePage() {
                 "chess",
                 "mighty",
                 "hearts",
+                "gostop",
                 "nyrongppong",
               ] as const
             ).map((t) => (
@@ -199,6 +204,8 @@ export function ProfilePage() {
           <BadukStats book={book} />
         ) : tab === "chess" ? (
           <ChessStats book={book} />
+        ) : tab === "gostop" ? (
+          <GostopStats book={book} />
         ) : tab === "nyrongppong" ? (
           <NyrongppongStats book={book} />
         ) : (

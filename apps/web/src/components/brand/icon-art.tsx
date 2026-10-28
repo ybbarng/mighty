@@ -1,4 +1,5 @@
 import { ChessPawnArt } from "@/chess/icon-art";
+import { GostopIconArt } from "@/gostop/components/GostopIcon";
 import { NyrongppongIconArt } from "@/nyrongppong/icon-art";
 
 import { HEART_PATH, SITE, SPADE_PATH } from "./brand";
@@ -424,9 +425,11 @@ export function IconArt({
     | "chess"
     | "baduk"
     | "nyrongppong"
+    | "gostop"
     | "center";
 }) {
   if (game === "nyrongppong") return <NyrongppongIconArt maskable={maskable} />;
+  if (game === "gostop") return <GostopIconArt maskable={maskable} />;
   return (
     <div
       style={{
