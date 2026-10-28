@@ -73,7 +73,12 @@ describe("고스톱 암호화방(멘탈 포커)", () => {
       expect(audits).toEqual([{ ok: true }]);
       await until(() => verified.length === 3, "판마다 검증");
       expect(verified).toEqual([1, 2, 3]);
-      const last = archives.at(-1);
+      // 판 끝 검증과 판마다 검증이 차례 없이 끝나므로 진짜 패가 가장 많은 기록을 본다.
+      const last = [...archives].sort(
+        (a, b) =>
+          Object.keys(b.deals ?? {}).length -
+            Object.keys(a.deals ?? {}).length || b.log.length - a.log.length,
+      )[0];
       if (!last) throw new Error("복기 기록이 없다");
       const replayed = replayArchive(gostopKit, {
         v: 1,

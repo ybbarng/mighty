@@ -253,7 +253,13 @@ export class LocalMatch<
     if (!timing || !turn || this.ended || this.haltedReason) return;
     this.cancelFlag = this.clock.after(turn.left + 1, () => {
       this.cancelFlag = null;
-      const result = this.apply(turn.seat, timing.timeout(turn.left + 1));
+      const timeout = timing.timeout(turn.left + 1);
+      // 멘탈 포커(화투): 시간패로 판이 끝나거나 더미를 쓸 수 있어 카드를 여는 준비를 거친다.
+      if (this.options.prepare) {
+        this.enqueue(turn.seat, timeout, "clock");
+        return;
+      }
+      const result = this.apply(turn.seat, timeout);
       if (result.ok) this.runBots();
     });
   }
@@ -393,7 +399,10 @@ export class LocalMatch<
   }
 
   /** 준비가 필요한 행동을 차례로 처리한다 */
-  private enqueue(seat: number, action: ActionT, bot: boolean): void {
+  private enqueue(seat: number, action: ActionT, who: boolean | "clock"): void {
+    // 시간패(`clock`)는 사람 자리 행동도 컴퓨터 수도 아니다(기록에 bot 표시 없이 남긴다).
+    const bot = who === true;
+    const byClock = who === "clock";
     const prepare = this.options.prepare as NonNullable<
       LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>["prepare"]
     >;
@@ -401,26 +410,28 @@ export class LocalMatch<
       ? (...a: unknown[]) => console.info("[fair]", ...a)
       : () => {};
     debug("줄 섬", seat, JSON.stringify(action));
-    if (!bot) this.preparing.add(seat);
+    if (!bot && !byClock) this.preparing.add(seat);
     this.work = this.work.then(async () => {
       if (this.haltedReason) {
-        this.preparing.delete(seat);
+        if (!byClock) this.preparing.delete(seat);
         return;
       }
       debug("준비 시작", seat);
       const prepared = await prepare(this.state, seat, action);
       debug("준비 끝", seat, JSON.stringify(prepared).slice(0, 200));
       if (this.ended) {
-        this.preparing.delete(seat);
+        if (!byClock) this.preparing.delete(seat);
         return;
       }
       const result = prepared.ok
         ? this.apply(seat, prepared.action, bot)
         : prepared;
       debug("적용", seat, JSON.stringify(result).slice(0, 200));
-      if (!bot) this.preparing.delete(seat);
+      if (!bot && !byClock) this.preparing.delete(seat);
       if (bot) this.botBusy = false;
       if (!result.ok) {
+        // 시간패가 늦게 처리돼 창이 이미 닫혔으면 그냥 버린다(그 자리 사람에게 거절을 보내지 않는다).
+        if (byClock) return;
         this.options.onLateError?.(seat, result.error);
         // 컴퓨터 행동이 거절되면 같은 생각을 되풀이하지 않게 멈춘다(다음 `refresh`에 다시 생각한다).
         if (bot) return;

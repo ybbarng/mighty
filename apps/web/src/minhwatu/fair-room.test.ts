@@ -63,7 +63,12 @@ describe("민화투 암호화방(멘탈 포커)", () => {
     await until(() => verified.length === 2, "판마다 검증");
     expect(verified).toEqual([1, 2]);
     // 참가자 복기: 판마다 진짜 패로 끝까지 다시 돌린다.
-    const last = archives.at(-1);
+    // 판 끝 검증과 판마다 검증이 차례 없이 끝나므로 진짜 패가 가장 많은 기록을 본다.
+    const last = [...archives].sort(
+      (a, b) =>
+        Object.keys(b.deals ?? {}).length - Object.keys(a.deals ?? {}).length ||
+        b.log.length - a.log.length,
+    )[0];
     if (!last) throw new Error("복기 기록이 없다");
     const replayed = replayArchive(minhwatuKit, {
       v: 1,

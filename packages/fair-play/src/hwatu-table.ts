@@ -814,6 +814,7 @@ export class HwatuHostTable<
       const retired = (state as { retired?: boolean }).retired === true;
       if (!retired)
         this.coordinator.roundEnded(round, this.spec.gameOver(state));
+      if (this.awaitingEnd.delete(round)) this.verifyRound(round);
     }
   }
 
@@ -1055,7 +1056,18 @@ export class HwatuHostTable<
     const real = this.coordinator.roundDeal(round);
     if (!real) return;
     this.deals.set(round, real);
-    // 판 끝 확인: 참가자에게 기록을 보내고, 방장 기기도 진짜 카드로 다시 계산해 본다.
+    // 판이 끝나는 걸음 전에 연 판(나이롱뽕)은 그 걸음이 기록에 들어간 뒤에 확인한다.
+    if (!this.ended.has(round)) {
+      this.awaitingEnd.add(round);
+      return;
+    }
+    this.verifyRound(round);
+  }
+
+  private readonly awaitingEnd = new Set<number>();
+
+  /** 판 끝 확인: 참가자에게 기록을 보내고, 방장 기기도 진짜 카드로 다시 계산해 본다 */
+  private verifyRound(round: number): void {
     this.hooks.broadcast({
       t: "fp",
       k: "log",

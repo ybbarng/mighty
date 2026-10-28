@@ -727,7 +727,20 @@ export class GuestRoom<
         ) as never,
       viewOf: (state, seat) =>
         spec.refreshView(spec.viewOf(state as State, seat)),
-      realAction: (action) => realHwatuAction(action),
+      // 방장이 실은 쓴 시간(응답 창)도 떼고 견준다.
+      realAction: (action) => {
+        const bare = realHwatuAction(action) as ActionT;
+        return kit.timing ? (kit.timing.strip(bare) ?? bare) : bare;
+      },
+      // 방장이 실은 쓴 시간(`spent`)만 뗀다(내가 보낸 연 자리는 그대로 둔다).
+      sentForm: (action) => {
+        if (!kit.timing || typeof action !== "object" || action === null)
+          return action;
+        const { spent: _, ...rest } = action as { spent?: unknown };
+        return rest;
+      },
+      byClock: (action) =>
+        kit.timing ? kit.timing.strip(action as ActionT) === null : false,
       annotate: (view, action) =>
         kit.annotateBotAction
           ? kit.annotateBotAction(view as View, action as ActionT)
