@@ -65,7 +65,8 @@ describe("멘탈 포커 온라인 대전: 방장 새로고침", () => {
         current.fair?.coordinator.onBusy((b) => {
           busy = b;
         });
-        await until(() => busy === null, 20_000).catch(() => {
+        // CI는 여러 시험이 함께 돌아 다시 섞기가 느리다(20초로는 모자란 적이 있다). 다른 대기와 같이 기본값을 쓴다.
+        await until(() => busy === null).catch(() => {
           throw new Error(`섞는 중이 꺼지지 않는다: ${String(busy)}`);
         });
       }
