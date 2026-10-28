@@ -69,8 +69,13 @@ describe("메시지로 하는 멘탈 포커", () => {
         // 정직한 기기는 할 수 있는 일(섞기 증명 계산·확인까지)을 모두 마친다.
         await settle();
         // 그 뒤에 기다리는 시간이 다 지나게 한다. 정직한 기기의 증명은 이미 와 있어 늦은 것으로 몰리지 않는다.
-        clock.advance(PROOF_WAIT_MS);
-        await settle();
+        // 미룬 증명(PROOF_DEFER_MS)은 시계를 옮기는 중에 시작돼 계산이 끝난 뒤 새 기다림을 건다.
+        // 메시지·계산 순서에 따라 이 길로 갈 수 있으니, 걸린 기다림이 없어질 때까지 옮기고 정리한다.
+        for (let round = 0; clock.pending() > 0; round++) {
+          if (round > 10) throw new Error("기다림이 끝나지 않는다");
+          clock.advance(PROOF_WAIT_MS);
+          await settle();
+        }
       } finally {
         PartyClass.prototype.lockAndShuffle = real;
       }
