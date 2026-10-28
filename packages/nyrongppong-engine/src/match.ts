@@ -397,6 +397,9 @@ export function step(
       drawCard(next, seat, events);
       return { ok: true, state: next, events };
     }
+    // 멘탈 포커 판은 손패 합과 상관없이 묻는다. 스톱은 정말 할 수 있을 때만 받는다.
+    if (!canStop(state, seat))
+      return fail("스톱할 수 없다(손패 합이 한도보다 크다)");
     const values = handScores(next);
     const mine = values[seat] as number;
     const success = values.every((v, s) => s === seat || v > mine);
