@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { summarizeBaduk } from "@/baduk/kit";
 import { ChessStats } from "@/chess/components/ChessStats";
 import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
@@ -23,11 +24,12 @@ import {
   TrendLine,
 } from "./widgets";
 
-type GameTab = "mighty" | "hearts" | "omok" | "janggi" | "chess";
+type GameTab = "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
   janggi: "楚 장기",
+  baduk: "⚫ 바둑",
   chess: "♞ 체스",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
@@ -68,7 +70,8 @@ export function ProfilePage() {
       game === "hearts" ||
       game === "omok" ||
       game === "janggi" ||
-      game === "chess"
+      game === "chess" ||
+      game === "baduk"
     ) {
       setBack(`/${game}`);
       setTab(game);
@@ -148,23 +151,23 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="flex gap-1.5" role="tablist">
-            {(["omok", "janggi", "chess", "mighty", "hearts"] as const).map(
-              (t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "rounded-full px-4 py-1.5 font-semibold text-sm",
-                    tab === t ? "bg-white text-black" : "bg-white/10",
-                  )}
-                >
-                  {TAB_LABEL[t]}
-                </button>
-              ),
-            )}
+            {(
+              ["omok", "janggi", "baduk", "chess", "mighty", "hearts"] as const
+            ).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 font-semibold text-sm",
+                  tab === t ? "bg-white text-black" : "bg-white/10",
+                )}
+              >
+                {TAB_LABEL[t]}
+              </button>
+            ))}
           </div>
         </header>
 
@@ -174,6 +177,8 @@ export function ProfilePage() {
           <HeartsStats book={book} />
         ) : tab === "janggi" ? (
           <JanggiStats book={book} />
+        ) : tab === "baduk" ? (
+          <BadukStats book={book} />
         ) : tab === "chess" ? (
           <ChessStats book={book} />
         ) : (
@@ -517,6 +522,43 @@ function OmokStats({ book }: { book: StatsBook }) {
         <ResultStrip
           title="최근 판 결과"
           results={s.recent.filter((r) => r !== 0).map((r) => ({ won: r > 0 }))}
+        />
+      </Card>
+    </>
+  );
+}
+
+function BadukStats({ book }: { book: StatsBook }) {
+  const s = summarizeBaduk(book.rounds);
+  if (s.rounds === 0) return <Empty what="바둑" />;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile
+          label="판 승률"
+          value={pct(s.wins, s.rounds)}
+          sub={`${s.wins}승 ${s.losses}패`}
+        />
+        <StatTile
+          label="평균 수"
+          value={s.averageMoves.toFixed(0)}
+          sub="판에 둔 수"
+        />
+        <StatTile
+          label="세어서 이김"
+          value={s.byScore}
+          sub={`평균 ${s.averageMargin.toFixed(1)}점 차`}
+        />
+        <StatTile label="기권승" value={s.byResign} sub="상대가 기권한 판" />
+      </div>
+      <Card title="돌 색별 승률">
+        <RateBar label="흑(먼저)" won={s.black.won} n={s.black.n} />
+        <RateBar label="백" won={s.white.won} n={s.white.n} />
+      </Card>
+      <Card title={`최근 ${s.recent.length}판`}>
+        <ResultStrip
+          title="최근 판 결과"
+          results={s.recent.map((r) => ({ won: r > 0 }))}
         />
       </Card>
     </>

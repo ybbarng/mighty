@@ -25,6 +25,8 @@ COPY packages/janggi-ai/package.json packages/janggi-ai/
 COPY packages/hwatu/package.json packages/hwatu/
 COPY packages/chess-engine/package.json packages/chess-engine/
 COPY packages/chess-ai/package.json packages/chess-ai/
+COPY packages/baduk-engine/package.json packages/baduk-engine/
+COPY packages/baduk-ai/package.json packages/baduk-ai/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

@@ -199,6 +199,12 @@ importers:
       '@mighty/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@mighty/baduk-ai':
+        specifier: workspace:*
+        version: link:../../packages/baduk-ai
+      '@mighty/baduk-engine':
+        specifier: workspace:*
+        version: link:../../packages/baduk-engine
       '@mighty/chess-ai':
         specifier: workspace:*
         version: link:../../packages/chess-ai
@@ -289,6 +295,21 @@ importers:
         version: 4.3.3
 
   packages/ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/baduk-ai:
+    dependencies:
+      '@mighty/baduk-engine':
+        specifier: workspace:*
+        version: link:../baduk-engine
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/baduk-engine:
     dependencies:
       '@mighty/engine':
         specifier: workspace:*

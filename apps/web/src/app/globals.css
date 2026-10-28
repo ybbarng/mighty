@@ -28,13 +28,15 @@ html:has([data-game="hearts"]) body {
   background: var(--color-hearts-dark);
 }
 
-/* 오목·장기 화면 */
+/* 오목·장기·바둑 화면 */
 html:has([data-game="omok"]),
 html:has([data-game="omok"]) body,
 html:has([data-game="janggi"]),
 html:has([data-game="janggi"]) body,
 html:has([data-game="chess"]),
-html:has([data-game="chess"]) body {
+html:has([data-game="chess"]) body,
+html:has([data-game="baduk"]),
+html:has([data-game="baduk"]) body {
   background: #1c1917;
 }
 

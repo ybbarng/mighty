@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T17:25:27Z",
+  "updatedAt": "2026-10-28T17:33:26Z",
   "here": "hwatu-games",
   "regions": [
     {
@@ -423,7 +423,7 @@
       "title": "판 게임",
       "status": "building",
       "size": 5,
-      "summary": "오목·장기·체스는 끝, 바둑을 만드는 중"
+      "summary": "오목·장기·체스·바둑 모두 끝. 남은 것은 수 배우기와 온라인 화면 공통화"
     },
     {
       "id": "board-omok",
@@ -478,15 +478,15 @@
       "id": "board-baduk",
       "title": "바둑",
       "parent": "boards",
-      "status": "building",
+      "status": "done",
       "size": 4,
-      "summary": "서브에이전트가 워크트리에서 만드는 중(9·13·19줄, 영역 셈, 몬테카를로 고수)",
+      "summary": "9·13·19줄, 같은 판 모양 금지, 판 위 그대로 세기, 컴퓨터 세 단계(고수는 몬테카를로 나무 탐색), 온라인, 7단원 배우기, 개인 시간",
       "since": "2026-10-29",
       "found": "2026-10-27",
       "links": [
         {
-          "label": "수 배우기 계획",
-          "path": "docs/23-strategy-learning.md"
+          "label": "바둑",
+          "path": "docs/25-baduk.md"
         }
       ]
     },

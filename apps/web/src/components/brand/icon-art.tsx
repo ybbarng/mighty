@@ -191,6 +191,61 @@ const OMOK_FIVE = [0, 1, 2, 3, 4].map(
   (k) => [10 + k * 16, 90 - k * 16] as const,
 );
 
+/** 바둑 줄(4줄) */
+const BADUK_GRID = [14, 38, 62, 86];
+
+/** 바둑 아이콘. 판 가운데에서 흑백 넷이 엇갈려 끊는 모양(십자 끊기) */
+function BadukCross() {
+  const stone = (x: number, y: number, black: boolean) => (
+    <g key={`${x}-${y}`}>
+      <circle cx={x + 1.6} cy={y + 2.2} r="11" fill="#000000" opacity="0.3" />
+      <circle
+        cx={x}
+        cy={y}
+        r="11"
+        fill={black ? INK : PAPER}
+        stroke={INK}
+        strokeWidth={black ? 0 : 1.8}
+      />
+    </g>
+  );
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "flex" }}
+    >
+      <rect width="100" height="100" fill={SITE.board} />
+      {BADUK_GRID.map((p) => (
+        <g key={p}>
+          <line
+            x1={p}
+            y1="0"
+            x2={p}
+            y2="100"
+            stroke={SITE.ink}
+            strokeWidth="2"
+          />
+          <line
+            x1="0"
+            y1={p}
+            x2="100"
+            y2={p}
+            stroke={SITE.ink}
+            strokeWidth="2"
+          />
+        </g>
+      ))}
+      {stone(38, 38, true)}
+      {stone(62, 38, false)}
+      {stone(38, 62, false)}
+      {stone(62, 62, true)}
+    </svg>
+  );
+}
+
 /** 오목 아이콘. 판 위 대각선으로 이은 흑돌 다섯과 이긴 줄, 막다 만 백돌 둘 */
 function OmokFive() {
   return (
@@ -352,7 +407,7 @@ function JanggiPalace() {
 }
 
 /**
- * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "omok"이면 오목, "janggi"면 장기, "center"면 게임 센터 아이콘을 그린다.
+ * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "omok"이면 오목, "janggi"면 장기, "baduk"이면 바둑, "center"면 게임 센터 아이콘을 그린다.
  * `maskable`이면 안드로이드가 잘라 쓰는 안전 영역(가운데 80%) 안에 들어가게 줄인다.
  */
 export function IconArt({
@@ -360,7 +415,7 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "center";
+  game?: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk" | "center";
 }) {
   return (
     <div
@@ -373,7 +428,7 @@ export function IconArt({
         background:
           game === "center"
             ? SITE.bg
-            : game === "omok" || game === "janggi"
+            : game === "omok" || game === "janggi" || game === "baduk"
               ? SITE.board
               : game === "chess"
                 ? "#b58863"
@@ -393,6 +448,8 @@ export function IconArt({
           <OmokFive />
         ) : game === "janggi" ? (
           <JanggiPalace />
+        ) : game === "baduk" ? (
+          <BadukCross />
         ) : game === "chess" ? (
           <ChessPawnArt />
         ) : game === "center" ? (

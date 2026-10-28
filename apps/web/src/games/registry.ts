@@ -3,7 +3,7 @@
  * 새 게임은 여기에 한 줄 더하고 `app/<id>/page.tsx`를 둔다.
  */
 export type GameEntry = {
-  id: "mighty" | "hearts" | "omok" | "janggi" | "chess";
+  id: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "baduk";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -29,6 +29,14 @@ export const GAMES: readonly GameEntry[] = [
       "차·포·마·상으로 상대 궁을 외통으로 몬다. 상차림부터 한국 장기 그대로",
     players: "2명",
     path: "/janggi",
+  },
+  {
+    id: "baduk",
+    name: "바둑",
+    englishName: "Baduk",
+    tagline: "돌을 번갈아 놓아 더 넓게 차지한다. 9·13·19줄",
+    players: "2명",
+    path: "/baduk",
   },
   {
     id: "chess",
