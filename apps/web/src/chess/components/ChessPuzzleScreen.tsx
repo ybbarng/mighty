@@ -5,18 +5,23 @@ import {
   kingOf,
   legalFor,
   type Move,
-  type Position,
   PROMOTIONS,
   step,
 } from "@mighty/chess-engine";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { type Outcome, RoundOutcome } from "@/components/RoundOutcome";
-import { playUiCue } from "@/game/ui-sound";
-import { cn } from "@/lib/cn";
+import {
+  findInSets,
+  PuzzleScreen,
+  usePuzzleRun,
+} from "@/components/study/PuzzleScreen";
 
 import { useChessStudyProgress } from "../progress";
-import { CHESS_PUZZLE_SETS, type ChessPuzzle } from "../puzzles";
+import {
+  CHESS_PUZZLE_SETS,
+  type ChessPuzzle,
+  type ChessPuzzleSet,
+} from "../puzzles";
 import { useChessSettings } from "../settings";
 import {
   defenseFor,
@@ -25,23 +30,26 @@ import {
   puzzleState,
   solutionMove,
 } from "../study";
+import { explainTactic, TACTIC_NAMES, type Tactic } from "../tactics";
 import { ChessBoard } from "./ChessBoard";
 
-type Status = "play" | "waiting" | "wrong" | "solved";
+/** 전술마다 틀렸을 때 도움말 */
+const TACTIC_HINT: Record<Tactic, string> = {
+  fork: "한 기물로 두 곳을 함께 노리는 칸을 찾아요",
+  pin: "앞 기물 뒤에 더 비싼 기물(또는 킹)이 있는 줄을 노려요",
+  skewer: "킹이나 퀸을 노려 비키게 하고, 뒤의 기물을 잡아요",
+  discovered: "앞을 막고 있는 기물을 비키며 다른 곳도 노려요",
+};
 
-/** 상대가 받는 수를 보이기 전에 잠깐 기다린다 */
-const REPLY_MS = 600;
+/** 전술마다 문제 안내 */
+const TACTIC_PROMPT: Record<Tactic, string> = {
+  fork: "포크로 기물을 얻으세요",
+  pin: "핀으로 기물을 묶어 얻으세요",
+  skewer: "스큐어로 뒤의 기물을 얻으세요",
+  discovered: "발견 공격으로 기물을 얻으세요",
+};
 
-function findPuzzle(id: string) {
-  for (const set of CHESS_PUZZLE_SETS) {
-    const index = set.puzzles.findIndex((p) => p.id === id);
-    if (index >= 0)
-      return { set, index, puzzle: set.puzzles[index] as ChessPuzzle };
-  }
-  return null;
-}
-
-/** 체스 메이트 문제 하나. 백이 둘 차례다 */
+/** 체스 문제 하나. 백이 둘 차례다 */
 export function ChessPuzzleScreen({
   puzzleId,
   onExit,
@@ -51,132 +59,100 @@ export function ChessPuzzleScreen({
   onExit: () => void;
   onOpen: (id: string) => void;
 }) {
-  const found = findPuzzle(puzzleId);
+  const found = findInSets<ChessPuzzle>(CHESS_PUZZLE_SETS, puzzleId);
+  if (!found) return null;
+  return (
+    <ChessPuzzleRun
+      set={found.set as ChessPuzzleSet}
+      index={found.index}
+      puzzle={found.puzzle}
+      onExit={onExit}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function ChessPuzzleRun({
+  set,
+  index,
+  puzzle,
+  onExit,
+  onOpen,
+}: {
+  set: ChessPuzzleSet;
+  index: number;
+  puzzle: ChessPuzzle;
+  onExit: () => void;
+  onOpen: (id: string) => void;
+}) {
   const coordinates = useChessSettings((s) => s.coordinates);
   const solve = useChessStudyProgress((s) => s.solve);
   const miss = useChessStudyProgress((s) => s.miss);
-  const [state, setState] = useState<ChessState | null>(() =>
-    found ? puzzleState(found.puzzle) : null,
-  );
-  const [stepIndex, setStepIndex] = useState(0);
-  const [status, setStatus] = useState<Status>("play");
   const [selected, setSelected] = useState<number | null>(null);
-  const [lastMove, setLastMove] = useState<Move | null>(null);
-  const [explain, setExplain] = useState<string[]>([]);
-  const [shown, setShown] = useState<Move | null>(null);
-  const [missed, setMissed] = useState(false);
-
-  // 상대(흑)가 받는다.
-  useEffect(() => {
-    if (status !== "waiting" || !state) return;
-    const timer = setTimeout(() => {
-      const reply = defenseFor(state);
-      const result = step(state, 1, reply);
-      if (!result.ok) return;
-      setState(result.state);
-      if (reply.type === "move") {
-        setLastMove({ from: reply.from, to: reply.to });
-        playUiCue(state.position.board[reply.to] ? "capture" : "piece");
-      }
-      setStepIndex((i) => i + 1);
-      setStatus("play");
-    }, REPLY_MS);
-    return () => clearTimeout(timer);
-  }, [status, state]);
-
-  if (!found || !state) return null;
-  const { set, index, puzzle } = found;
+  const run = usePuzzleRun<ChessState, Move>({
+    initial: () => puzzleState(puzzle),
+    judge: (state, move, at) => judgeMove(puzzle, state, move, at),
+    apply: (state, move) => {
+      const result = step(state, 0, { type: "move", ...move });
+      if (!result.ok) return null;
+      return {
+        state: result.state,
+        capture: Boolean(state.position.board[move.to]),
+      };
+    },
+    reply: (state) => {
+      const answer = defenseFor(state);
+      const result = step(state, 1, answer);
+      if (!result.ok) return null;
+      const move =
+        answer.type === "move" ? { from: answer.from, to: answer.to } : null;
+      return {
+        state: result.state,
+        move,
+        capture: Boolean(move && state.position.board[move.to]),
+      };
+    },
+    explain: (before, move) =>
+      puzzle.kind === "tactic"
+        ? explainTactic(before.position, move, puzzle.tactic)
+        : explainMate(before.position, move),
+    solve: () => solve(puzzle.id),
+    miss: () => miss(puzzle.id),
+  });
+  const { state, status, shown } = run;
   const nextId = set.puzzles[index + 1]?.id ?? null;
+  const answer = solutionMove(puzzle);
 
-  const restart = () => {
-    setState(puzzleState(puzzle));
-    setStepIndex(0);
-    setStatus("play");
-    setSelected(null);
-    setLastMove(null);
-    setExplain([]);
-    setShown(null);
-  };
-
+  /** 문제에는 승급 수가 없지만, 고르면 퀸으로 둔다 */
   const play = (picked: Move) => {
-    // 문제에는 승급 수가 없지만, 고르면 퀸으로 둔다.
-    const legal = legalFor(state, 0);
     const move =
-      legal.find(
+      legalFor(state, 0).find(
         (m) =>
           m.from === picked.from &&
           m.to === picked.to &&
           (m.promotion === undefined || m.promotion === PROMOTIONS[0]),
       ) ?? picked;
-    const verdict = judgeMove(puzzle, state, move, stepIndex);
-    const before: Position = state.position;
-    const result = step(state, 0, { type: "move", ...move });
-    if (!result.ok) return;
-    setState(result.state);
-    setLastMove(move);
-    playUiCue(before.board[move.to] ? "capture" : "piece");
-    if (verdict === "solved") {
-      setExplain(explainMate(before, move));
-      setStatus("solved");
-      playUiCue("win");
-      // 정답 보기를 누른 뒤 푼 것은 푼 것으로 치지 않는다.
-      if (!shown) solve(puzzle.id);
-    } else if (verdict === "next") setStatus("waiting");
-    else {
-      setStatus("wrong");
-      playUiCue("invalid");
-      if (!missed) {
-        miss(puzzle.id);
-        setMissed(true);
-      }
-    }
-  };
-
-  /** 정답 보기: 첫 정답 수를 판에 보인다(두 수 문제의 둘째 수는 메이트 수 하나) */
-  const reveal = () => {
-    restart();
-    const answer = solutionMove(puzzle);
-    setShown(answer);
-    setSelected(answer.from);
+    run.play(move);
   };
 
   const legal = status === "play" ? legalFor(state, 0) : [];
-  const outcome: Outcome | null =
-    status === "solved" ? "win" : status === "wrong" ? "loss" : null;
-  const prompt =
-    puzzle.mateIn === 1
+  const tactic = puzzle.kind === "tactic" ? puzzle.tactic : null;
+  const prompt = tactic
+    ? TACTIC_PROMPT[tactic]
+    : puzzle.kind === "mate" && puzzle.mateIn === 1
       ? "한 수로 체크메이트하세요"
-      : stepIndex === 0
+      : run.step === 0
         ? "두 수 만에 메이트: 첫 수를 두세요"
         : "이제 체크메이트하세요";
-  const statusText =
-    status === "solved"
-      ? "체크메이트!"
-      : status === "wrong"
-        ? "메이트가 아니에요"
-        : status === "waiting"
-          ? "흑이 받는 중…"
-          : prompt;
 
   return (
-    <main
-      data-game="chess"
-      className="flex min-h-dvh flex-col items-center gap-3 bg-[#1c1917] px-4 py-3 text-white short-landscape:grid short-landscape:grid-cols-[auto_minmax(0,18rem)] short-landscape:grid-rows-[auto_auto_1fr] short-landscape:content-center short-landscape:justify-center short-landscape:gap-x-6"
-    >
-      <header className="flex w-full max-w-xl items-center gap-2 text-sm short-landscape:col-start-2 short-landscape:row-start-1">
-        <button
-          type="button"
-          onClick={onExit}
-          className="text-white/70 hover:text-white"
-        >
-          ← 목록
-        </button>
-        <span className="ml-auto font-semibold">
-          {set.title} {index + 1}/{set.puzzles.length}
-        </span>
-      </header>
-
-      <div className="aspect-square w-[min(100%,calc(100dvh-16rem))] max-w-xl short-landscape:col-start-1 short-landscape:row-span-3 short-landscape:row-start-1 short-landscape:w-[calc(100dvh-1.5rem)]">
+    <PuzzleScreen
+      game="chess"
+      setTitle={set.title}
+      index={index}
+      total={set.puzzles.length}
+      boardClassName="aspect-square w-[min(100%,calc(100dvh-16rem))] short-landscape:w-[calc(100dvh-1.5rem)]"
+      board={
         <ChessBoard
           board={state.position.board}
           flipped={false}
@@ -191,86 +167,39 @@ export function ChessPuzzleScreen({
             setSelected(null);
             play(m);
           }}
-          lastMove={lastMove}
+          lastMove={run.lastMove}
           checkedKing={
-            status === "solved" ? kingOf(state.position.board, "b") : null
+            status === "solved" && !tactic
+              ? kingOf(state.position.board, "b")
+              : null
           }
           coordinates={coordinates}
         />
-      </div>
-
-      <div className="flex w-full max-w-xl flex-col items-center gap-3 short-landscape:col-start-2 short-landscape:row-start-2">
-        <RoundOutcome
-          outcome={outcome}
-          status={statusText}
-          summary={
-            status === "solved"
-              ? shown
-                ? "정답을 본 뒤 풀었어요. 다음에 다시 풀어 보세요"
-                : "맞혔어요!"
-              : status === "wrong"
-                ? "체크를 부르고, 킹이 피할 칸을 모두 막아야 해요"
-                : undefined
-          }
-        />
-        {status === "solved" && (
-          <ul className="w-full list-inside list-disc rounded-xl bg-white/5 p-3 text-sm text-white/85">
-            {explain.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap justify-center gap-2">
-          {status === "play" && !shown && (
-            <button
-              type="button"
-              onClick={() => setSelected(solutionMove(puzzle).from)}
-              className={cn(
-                "rounded-xl bg-white/10 px-4 py-2",
-                stepIndex > 0 && "hidden",
-              )}
-            >
-              힌트
-            </button>
-          )}
-          {(status === "wrong" || status === "play") && (
-            <button
-              type="button"
-              onClick={reveal}
-              className="rounded-xl bg-white/10 px-4 py-2"
-            >
-              정답 보기
-            </button>
-          )}
-          {status === "wrong" && (
-            <button
-              type="button"
-              onClick={restart}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              다시 하기
-            </button>
-          )}
-          {status === "solved" && nextId && (
-            <button
-              type="button"
-              onClick={() => onOpen(nextId)}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              다음 문제
-            </button>
-          )}
-          {status === "solved" && !nextId && (
-            <button
-              type="button"
-              onClick={onExit}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              목록으로
-            </button>
-          )}
-        </div>
-      </div>
-    </main>
+      }
+      status={status}
+      prompt={prompt}
+      waitingText="흑이 받는 중…"
+      solvedText={tactic ? `${TACTIC_NAMES[tactic]}!` : "체크메이트!"}
+      wrongText={tactic ? "그 수로는 기물을 얻지 못해요" : "메이트가 아니에요"}
+      wrongHint={
+        tactic
+          ? TACTIC_HINT[tactic]
+          : "체크를 부르고, 킹이 피할 칸을 모두 막아야 해요"
+      }
+      shown={shown !== null}
+      explain={run.explain}
+      canHint={run.step === 0}
+      onHint={() => setSelected(answer.from)}
+      onReveal={() => {
+        run.reveal(answer);
+        setSelected(answer.from);
+      }}
+      onRestart={() => {
+        run.restart();
+        setSelected(null);
+      }}
+      onNext={nextId ? () => onOpen(nextId) : null}
+      onExit={onExit}
+    />
   );
 }
