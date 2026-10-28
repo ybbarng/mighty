@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import {
   TimePresetPicker,
@@ -12,7 +13,7 @@ import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { useOmokTutorialProgress } from "@/tutorial/progress";
-
+import { omokOnline } from "../online";
 import { endOmokSession } from "../session";
 import {
   OMOK_LEVELS,
@@ -29,7 +30,6 @@ import {
 } from "../store";
 import { OMOK_LESSONS } from "../tutorial";
 import { OmokGame } from "./OmokGame";
-import { OmokOnlineScreen } from "./OmokOnlineScreen";
 import { omokTutorial } from "./omok-tutorial";
 
 /** 오목 화면들의 배경(대국 화면의 짙은 돌색과 이어진다) */
@@ -382,7 +382,8 @@ export function OmokApp() {
 
   if (screen.kind === "online")
     return (
-      <OmokOnlineScreen
+      <BoardOnlineScreen
+        game={omokOnline}
         rules={{ variant, winsToFinish, ...(time !== "none" ? { time } : {}) }}
         roomFromUrl={screen.room}
         {...(screen.resume ? { resume: screen.resume } : {})}

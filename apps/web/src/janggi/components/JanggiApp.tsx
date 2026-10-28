@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import { StudyHome } from "@/components/study/StudyHome";
 import {
@@ -14,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { useJanggiStudyProgress } from "@/study/progress";
 import { useJanggiTutorialProgress } from "@/tutorial/progress";
+import { janggiOnline } from "../online";
 import { JANGGI_PUZZLE_SETS } from "../puzzles";
 import { endJanggiSession } from "../session";
 import {
@@ -27,7 +29,6 @@ import {
 import { clearJanggi, type JanggiSaved, loadJanggi, useJanggi } from "../store";
 import { JANGGI_LESSONS } from "../tutorial";
 import { JanggiGame } from "./JanggiGame";
-import { JanggiOnlineScreen } from "./JanggiOnlineScreen";
 import { JanggiPuzzleScreen } from "./JanggiPuzzleScreen";
 import { janggiTutorial } from "./janggi-tutorial";
 
@@ -392,7 +393,8 @@ export function JanggiApp() {
 
   if (screen.kind === "online")
     return (
-      <JanggiOnlineScreen
+      <BoardOnlineScreen
+        game={janggiOnline}
         rules={{ bikjang, winsToFinish, ...(time !== "none" ? { time } : {}) }}
         roomFromUrl={screen.room}
         {...(screen.resume ? { resume: screen.resume } : {})}

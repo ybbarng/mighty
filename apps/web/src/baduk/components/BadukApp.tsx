@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import {
   TimePresetPicker,
@@ -11,7 +12,7 @@ import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
-
+import { badukOnline } from "../online";
 import { useBadukTutorialProgress } from "../progress";
 import { endBadukSession } from "../session";
 import {
@@ -24,7 +25,6 @@ import {
 import { type BadukSaved, clearBaduk, loadBaduk, useBaduk } from "../store";
 import { BADUK_LESSONS } from "../tutorial";
 import { BadukGame, StoneDot } from "./BadukGame";
-import { BadukOnlineScreen } from "./BadukOnlineScreen";
 import { badukTutorial } from "./baduk-tutorial";
 
 /** 바둑 화면들의 배경(대국 화면의 짙은 색과 이어진다) */
@@ -387,7 +387,8 @@ export function BadukApp() {
 
   if (screen.kind === "online")
     return (
-      <BadukOnlineScreen
+      <BoardOnlineScreen
+        game={badukOnline}
         rules={{
           size,
           komi,
