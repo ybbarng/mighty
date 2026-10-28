@@ -28,7 +28,8 @@ async function choose(
 
 /** 지금 내가 할 수 있는 일이 있나(단추나 버릴 차례) */
 async function actionable(page: Page): Promise<boolean> {
-  for (const name of ["뽕!", "스톱", "다음 판"])
+  // 암호화방은 뽕한 적이 있으면 스톱할 수 없어도 "한 장 가져오기"를 묻는다.
+  for (const name of ["뽕!", "스톱", "다음 판", "한 장 가져오기"])
     if (await page.getByRole("button", { name, exact: true }).isVisible())
       return true;
   if (await page.getByRole("button", { name: /^약 내기/ }).isVisible())
@@ -47,7 +48,7 @@ async function actOnce(page: Page, touch: boolean): Promise<void> {
     await ppong(page).click();
     return;
   }
-  for (const name of ["스톱", "다음 판"]) {
+  for (const name of ["스톱", "다음 판", "한 장 가져오기"]) {
     const b = page.getByRole("button", { name, exact: true });
     if (await b.isVisible()) {
       await b.click();
