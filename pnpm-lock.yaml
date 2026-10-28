@@ -199,6 +199,12 @@ importers:
       '@mighty/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@mighty/chess-ai':
+        specifier: workspace:*
+        version: link:../../packages/chess-ai
+      '@mighty/chess-engine':
+        specifier: workspace:*
+        version: link:../../packages/chess-engine
       '@mighty/engine':
         specifier: workspace:*
         version: link:../../packages/engine
@@ -283,6 +289,21 @@ importers:
         version: 4.3.3
 
   packages/ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/chess-ai:
+    dependencies:
+      '@mighty/chess-engine':
+        specifier: workspace:*
+        version: link:../chess-engine
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/chess-engine:
     dependencies:
       '@mighty/engine':
         specifier: workspace:*

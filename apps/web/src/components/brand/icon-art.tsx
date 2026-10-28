@@ -1,3 +1,5 @@
+import { ChessPawnArt } from "@/chess/icon-art";
+
 import { HEART_PATH, SITE, SPADE_PATH } from "./brand";
 
 const INK = "#111111";
@@ -358,7 +360,7 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts" | "omok" | "janggi" | "center";
+  game?: "mighty" | "hearts" | "omok" | "janggi" | "chess" | "center";
 }) {
   return (
     <div
@@ -373,7 +375,9 @@ export function IconArt({
             ? SITE.bg
             : game === "omok" || game === "janggi"
               ? SITE.board
-              : PAPER,
+              : game === "chess"
+                ? "#b58863"
+                : PAPER,
         borderRadius: maskable ? 0 : "18%",
         overflow: "hidden",
       }}
@@ -389,6 +393,8 @@ export function IconArt({
           <OmokFive />
         ) : game === "janggi" ? (
           <JanggiPalace />
+        ) : game === "chess" ? (
+          <ChessPawnArt />
         ) : game === "center" ? (
           <CenterPad />
         ) : game === "hearts" ? (

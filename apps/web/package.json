@@ -22,6 +22,8 @@
     "@mighty/omok-engine": "workspace:*",
     "@mighty/janggi-ai": "workspace:*",
     "@mighty/janggi-engine": "workspace:*",
+    "@mighty/chess-ai": "workspace:*",
+    "@mighty/chess-engine": "workspace:*",
     "@mighty/hwatu": "workspace:*",
     "@trystero-p2p/core": "0.26.0",
     "clsx": "2.1.1",

@@ -32,7 +32,9 @@ html:has([data-game="hearts"]) body {
 html:has([data-game="omok"]),
 html:has([data-game="omok"]) body,
 html:has([data-game="janggi"]),
-html:has([data-game="janggi"]) body {
+html:has([data-game="janggi"]) body,
+html:has([data-game="chess"]),
+html:has([data-game="chess"]) body {
   background: #1c1917;
 }
 

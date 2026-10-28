@@ -3,7 +3,7 @@
 import type { MatchState } from "@mighty/engine";
 import type { MatchState as HeartsState } from "@mighty/hearts-engine";
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { ChessReplay } from "@/chess/components/ChessReplay";
 import { botName } from "@/game/bot-names";
 import type { GameKit } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
@@ -33,6 +33,7 @@ const GAME_NAME: Record<string, string> = {
   hearts: "♥ 하트",
   omok: "● 오목",
   janggi: "楚 장기",
+  chess: "♞ 체스",
 };
 
 function when(at: number): string {
@@ -212,7 +213,11 @@ function ArchiveView({
   onBack: () => void;
 }) {
   // 판 게임은 카드 게임 화면을 쓰지 않고 판 전용 다시 보기를 쓴다.
-  if (archive.game === "omok" || archive.game === "janggi")
+  if (
+    archive.game === "omok" ||
+    archive.game === "janggi" ||
+    archive.game === "chess"
+  )
     return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
 }
@@ -244,6 +249,8 @@ function BoardArchiveView({
         </h1>
         {archive.game === "janggi" ? (
           <JanggiReplay archive={archive} name={name} />
+        ) : archive.game === "chess" ? (
+          <ChessReplay archive={archive} name={name} />
         ) : (
           <OmokReplay archive={archive} name={name} />
         )}

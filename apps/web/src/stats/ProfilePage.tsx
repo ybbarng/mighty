@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
+import { ChessStats } from "@/chess/components/ChessStats";
 import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
 import { kirudaName } from "@/game/terms";
@@ -23,11 +23,12 @@ import {
   TrendLine,
 } from "./widgets";
 
-type GameTab = "mighty" | "hearts" | "omok" | "janggi";
+type GameTab = "mighty" | "hearts" | "omok" | "janggi" | "chess";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
   janggi: "楚 장기",
+  chess: "♞ 체스",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
 };
@@ -66,7 +67,8 @@ export function ProfilePage() {
       game === "mighty" ||
       game === "hearts" ||
       game === "omok" ||
-      game === "janggi"
+      game === "janggi" ||
+      game === "chess"
     ) {
       setBack(`/${game}`);
       setTab(game);
@@ -146,21 +148,23 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="flex gap-1.5" role="tablist">
-            {(["omok", "janggi", "mighty", "hearts"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={cn(
-                  "rounded-full px-4 py-1.5 font-semibold text-sm",
-                  tab === t ? "bg-white text-black" : "bg-white/10",
-                )}
-              >
-                {TAB_LABEL[t]}
-              </button>
-            ))}
+            {(["omok", "janggi", "chess", "mighty", "hearts"] as const).map(
+              (t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t}
+                  onClick={() => setTab(t)}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 font-semibold text-sm",
+                    tab === t ? "bg-white text-black" : "bg-white/10",
+                  )}
+                >
+                  {TAB_LABEL[t]}
+                </button>
+              ),
+            )}
           </div>
         </header>
 
@@ -170,6 +174,8 @@ export function ProfilePage() {
           <HeartsStats book={book} />
         ) : tab === "janggi" ? (
           <JanggiStats book={book} />
+        ) : tab === "chess" ? (
+          <ChessStats book={book} />
         ) : (
           <OmokStats book={book} />
         )}
