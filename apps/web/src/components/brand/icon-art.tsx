@@ -179,8 +179,78 @@ function CenterBoard() {
   );
 }
 
+/** 오목 아이콘의 격자 줄 자리 */
+const OMOK_GRID = [10, 26, 42, 58, 74, 90];
+/** 오목 아이콘의 흑돌 다섯(왼쪽 아래에서 오른쪽 위로 잇는 대각선) */
+const OMOK_FIVE = [0, 1, 2, 3, 4].map(
+  (k) => [10 + k * 16, 90 - k * 16] as const,
+);
+
+/** 오목 아이콘. 판 위 대각선으로 이은 흑돌 다섯과 이긴 줄, 막다 만 백돌 둘 */
+function OmokFive() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "flex" }}
+    >
+      <rect width="100" height="100" fill={SITE.board} />
+      {OMOK_GRID.map((p) => (
+        <g key={p}>
+          <line
+            x1={p}
+            y1="0"
+            x2={p}
+            y2="100"
+            stroke={SITE.ink}
+            strokeWidth="1.8"
+          />
+          <line
+            x1="0"
+            y1={p}
+            x2="100"
+            y2={p}
+            stroke={SITE.ink}
+            strokeWidth="1.8"
+          />
+        </g>
+      ))}
+      {OMOK_FIVE.map(([x, y]) => (
+        <circle key={x} cx={x} cy={y} r="7.4" fill={INK} />
+      ))}
+      <circle
+        cx="74"
+        cy="58"
+        r="6.6"
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth="1.8"
+      />
+      <circle
+        cx="42"
+        cy="26"
+        r="6.6"
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth="1.8"
+      />
+      <line
+        x1="10"
+        y1="90"
+        x2="74"
+        y2="26"
+        stroke={RED}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /**
- * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "center"면 게임 센터 아이콘을 그린다.
+ * 앱 아이콘 그림(`next/og` ImageResponse용 JSX). `game`이 "hearts"면 하트, "omok"이면 오목, "center"면 게임 센터 아이콘을 그린다.
  * `maskable`이면 안드로이드가 잘라 쓰는 안전 영역(가운데 80%) 안에 들어가게 줄인다.
  */
 export function IconArt({
@@ -188,7 +258,7 @@ export function IconArt({
   game = "mighty",
 }: {
   maskable?: boolean;
-  game?: "mighty" | "hearts" | "center";
+  game?: "mighty" | "hearts" | "omok" | "center";
 }) {
   return (
     <div
@@ -198,7 +268,7 @@ export function IconArt({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: game === "center" ? SITE.board : PAPER,
+        background: game === "center" || game === "omok" ? SITE.board : PAPER,
         borderRadius: maskable ? 0 : "18%",
         overflow: "hidden",
       }}
@@ -210,7 +280,9 @@ export function IconArt({
           height: maskable ? "78%" : "100%",
         }}
       >
-        {game === "center" ? (
+        {game === "omok" ? (
+          <OmokFive />
+        ) : game === "center" ? (
           <CenterBoard />
         ) : game === "hearts" ? (
           <HeartsCorner />

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { useSettings } from "@/game/settings";
 import { useHeartsSettings } from "@/hearts/settings";
+import { useOmokSettings } from "@/omok/settings";
 import {
   useHeartsTutorialProgress,
   useTutorialProgress,
@@ -19,6 +20,7 @@ export function StoreHydration() {
     void useTutorialProgress.persist.rehydrate();
     void useHeartsSettings.persist.rehydrate();
     void useHeartsTutorialProgress.persist.rehydrate();
+    void useOmokSettings.persist.rehydrate();
   }, []);
   return null;
 }

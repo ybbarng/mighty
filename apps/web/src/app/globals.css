@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* 휴대폰 가로처럼 낮고 넓은 화면. 판 게임은 판을 왼쪽에 꽉 채우고 나머지를 옆에 둔다 */
+@custom-variant short-landscape (
+  @media (orientation: landscape) and (max-height: 600px)
+);
+
 @theme {
   --color-felt: #0f5132;
   --color-felt-dark: #0a3622;
@@ -21,6 +26,12 @@ body {
 html:has([data-game="hearts"]),
 html:has([data-game="hearts"]) body {
   background: var(--color-hearts-dark);
+}
+
+/* 오목 대국 화면 */
+html:has([data-game="omok"]),
+html:has([data-game="omok"]) body {
+  background: #1c1917;
 }
 
 /* 게임 목록 첫 화면: 당겨 넘칠 때 비치는 바탕도 첫 화면 색으로 */

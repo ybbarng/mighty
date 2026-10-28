@@ -211,6 +211,12 @@ importers:
       '@mighty/hearts-engine':
         specifier: workspace:*
         version: link:../../packages/hearts-engine
+      '@mighty/omok-ai':
+        specifier: workspace:*
+        version: link:../../packages/omok-ai
+      '@mighty/omok-engine':
+        specifier: workspace:*
+        version: link:../../packages/omok-engine
       '@trystero-p2p/core':
         specifier: 0.26.0
         version: 0.26.0
