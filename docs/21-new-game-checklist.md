@@ -73,7 +73,7 @@
 
 - [ ] `app/<게임>/page.tsx`: viewport themeColor
 - [ ] `icon.tsx`·`apple-icon.tsx`: `IconArt`에 게임 그림을 더한다
-- [ ] `opengraph-image.tsx`: 공유 그림. 영문만 쓴다
+- [ ] `opengraph-image.tsx`: 공유 그림. 공통 `gameShareImage`(게임 아이콘 + 영문 이름)를 쓴다
 - [ ] `globals.css`에 `data-game` 배경을 넣는다(넘쳐 보이는 바탕색)
 - [ ] `games/registry.ts`에 한 줄을 더한다: 이름, 영문 이름, 한 줄 설명, 인원, 주소
 - [ ] 시작 화면
@@ -165,7 +165,7 @@
 | 튜토리얼 | ✅ 10단원 | ✅ | ✅ 5단원 | ✅ 6단원 |
 | 내 기록·복기 | ✅ | ✅ | ✅ | ✅ |
 | 아이콘 | ✅ | ✅ | ✅ | ✅ |
-| 공유 그림 | ✅ | ❌ 남음(사이트 것을 씀) | ❌ 남음 | ❌ 남음 |
+| 공유 그림 | ✅ | ✅ | ✅ | ✅ |
 | 개인 시간 | 해당 없음 | 해당 없음 | ✅ (docs/24) | ✅ (docs/24) |
 
 남은 공통 정리: 오목·장기의 온라인 화면(`OmokOnlineScreen`·`JanggiOnlineScreen`)이 거의 같다. 판 게임 공통 온라인 화면 하나로 묶는다.
