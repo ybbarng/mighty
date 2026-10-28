@@ -247,6 +247,9 @@ test("나이롱뽕: 방장이 방을 만들고 친구가 링크로 들어와 끝
   for (const p of [host, guest])
     p.on("pageerror", (e) => errors.push(e.message));
 
+  // 온라인은 버릴 때마다 모두 3초씩 뽕 창을 기다린다. 대국을 돌리는 방장 화면 시계를 가짜로 두고,
+  // 아무도 할 일이 없을 때만 앞으로 당겨 창 기다림을 건너뛴다(정해진 시간 기다리기 없음).
+  await host.clock.install();
   await host.goto("/nyrongppong?net=local");
   await choose(host, { players: 2, rounds: 1, level: "입문" });
   await host.getByRole("button", { name: /다함께 나이롱뽕/ }).click();
@@ -268,10 +271,16 @@ test("나이롱뽕: 방장이 방을 만들고 친구가 링크로 들어와 끝
     if ((await gameOver(host)()) && (await gameOver(guest)())) break;
     await expect
       .poll(
-        async () =>
-          (await actionable(host)) ||
-          (await actionable(guest)) ||
-          ((await gameOver(host)()) && (await gameOver(guest)())),
+        async () => {
+          if (
+            (await actionable(host)) ||
+            (await actionable(guest)) ||
+            ((await gameOver(host)()) && (await gameOver(guest)()))
+          )
+            return true;
+          await host.clock.runFor(1_000);
+          return false;
+        },
         { timeout: 30_000 },
       )
       .toBe(true);
