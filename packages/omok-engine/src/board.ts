@@ -45,6 +45,15 @@ export function pointName(at: number): string {
   return `${String.fromCharCode(65 + x)}${SIZE - y}`;
 }
 
+/** 자리 이름("H8")을 자리 번호로. `pointName`의 반대 */
+export function pointAt(name: string): number {
+  const match = /^([A-O])(\d{1,2})$/.exec(name);
+  const row = Number(match?.[2]);
+  if (!match || row < 1 || row > SIZE)
+    throw new Error(`자리 이름이 아니다: ${name}`);
+  return indexOf((match[1] as string).charCodeAt(0) - 65, SIZE - row);
+}
+
 /** 이 색이 이기려면 정확히 다섯이어야 하나(아니면 다섯 이상) */
 export function needsExactFive(variant: Variant, stone: Stone): boolean {
   if (variant === "free") return false;
