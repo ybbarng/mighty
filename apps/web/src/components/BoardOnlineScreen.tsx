@@ -1,12 +1,13 @@
 "use client";
 
-import { omokBotFor } from "@mighty/omok-ai";
-import type { OmokRules } from "@mighty/omok-engine";
+import type { TimePreset } from "@mighty/engine";
 import { useEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { ConnectingNotice } from "@/components/ConnectingNotice";
 import { InviteLink } from "@/components/InviteLink";
 import { timePresetLabel } from "@/components/TimePresetPicker";
+import type { MatchHost, Snapshot } from "@/game/host";
+import type { GameKit, KitBot } from "@/game/kit";
 import { useSettings } from "@/game/settings";
 import { cn } from "@/lib/cn";
 import { recordAudit } from "@/net/audit-history";
@@ -27,17 +28,64 @@ import {
   saveSeatToken,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
-import { saveGuestArchive } from "@/review/recorder";
-
-import { omokKit } from "../kit";
-import { type OmokHostRoom, omokSession } from "../session";
-import { VARIANT_INFO } from "../settings";
-import { useOmok } from "../store";
+import { type ArchiveTarget, saveGuestArchive } from "@/review/recorder";
+import type { StatsTarget } from "@/stats/recorder";
 
 type Phase = "name" | "connecting" | "lobby" | "full" | "kicked" | "error";
 
-/** 끊긴 사람 대신 컴퓨터가 두기까지 기다리는 시간. 오목은 한 수가 승패를 가르니 넉넉히 */
+/** 끊긴 사람 대신 컴퓨터가 두기까지 기다리는 시간. 판 게임은 한 수가 승패를 가르고 오래 생각하기도 하니 넉넉히 */
 const STAND_IN_MS = 60_000;
+
+/** 빈자리·끊긴 자리를 맡는 컴퓨터 단계(중수) */
+const BOT_LEVEL = 1;
+
+/** 판 게임 화면이 온라인 대국에 쓰는 저장소 항목(오목·장기·체스·바둑 저장소가 모두 갖췄다) */
+export interface BoardOnlineStore<View, ActionT, Event> {
+  reconnecting: boolean;
+  hostLeft: boolean;
+  offlineSeats: number[];
+  notice: string | null;
+  attachOnline(
+    host: MatchHost<View, ActionT, Event> & {
+      drain(): Snapshot<View, Event>[];
+    },
+    seatNames: string[],
+    stats: StatsTarget,
+    archive?: ArchiveTarget,
+  ): void;
+  setSeatNames(seatNames: string[]): void;
+}
+
+/** zustand 저장소 훅에서 이 화면이 쓰는 부분 */
+interface StoreHook<T> {
+  <U>(selector: (state: T) => U): U;
+  setState(partial: Partial<T>): void;
+}
+
+/** 판 게임마다 다른 것. 나머지(대기실·초대·채팅·검증·재연결·기록)는 이 화면이 같이 맡는다 */
+export interface BoardOnlineGame<
+  Rules extends { time?: TimePreset },
+  State,
+  View extends { decision: unknown; roundNumber: number },
+  ActionT,
+  Event,
+> {
+  kit: GameKit<Rules, State, View, ActionT, Event, undefined>;
+  /** 화면에 보이는 게임 이름. 예: "오목" */
+  name: string;
+  /** 초대 링크를 보낼 때 제목. 예: "오목 한 판 하자" */
+  shareTitle: string;
+  /** 지금 들어가 있는 방. 화면이 바뀌어도(대기실 → 대국) 연결은 이어진다 */
+  session: {
+    host: HostRoom<Rules, State, View, ActionT, Event, undefined> | null;
+    guest: GuestRoom<Rules, State, View, ActionT, Event, undefined> | null;
+  };
+  useStore: StoreHook<BoardOnlineStore<View, ActionT, Event>>;
+  /** 단계별 컴퓨터 */
+  botFor(level: number): KitBot<View, ActionT>;
+  /** 방장이 방을 만들 때 보이는 규칙 요약(시간 규칙은 이 화면이 앞에 붙인다) */
+  rulesSummary(rules: Rules): string;
+}
 
 function seatNamesOf(lobby: LobbyState): string[] {
   return lobby.seats.map((s) => s.name);
@@ -49,27 +97,37 @@ function offlineSeatsOf(lobby: LobbyState): number[] {
     .map((s) => s.seat);
 }
 
-/** 친구와 오목: 방장은 방을 만들어 링크를 보내고, 친구는 링크로 들어온다 */
-export function OmokOnlineScreen({
+/** 친구와 판 게임: 방장은 방을 만들어 링크를 보내고, 친구는 링크로 들어온다 */
+export function BoardOnlineScreen<
+  Rules extends { time?: TimePreset },
+  State,
+  View extends { decision: unknown; roundNumber: number },
+  ActionT,
+  Event,
+>({
+  game,
   rules,
   roomFromUrl,
   resume,
   onBack,
   onPlaying,
 }: {
-  rules: OmokRules;
+  game: BoardOnlineGame<Rules, State, View, ActionT, Event>;
+  rules: Rules;
   roomFromUrl: string | null;
   /** 방장이 새로고침했으면 이 탭이 연 방과 남긴 것 */
   resume?: { room: string; restore: HostRestore };
   onBack: () => void;
   onPlaying: () => void;
 }) {
+  const { kit, session, useStore } = game;
+  const gameId = kit.id;
   const savedName = useSettings((s) => s.playerName);
   const setPlayerName = useSettings((s) => s.setPlayerName);
-  const attachOnline = useOmok((s) => s.attachOnline);
-  const setSeatNames = useOmok((s) => s.setSeatNames);
-  const reconnecting = useOmok((s) => s.reconnecting);
-  const hostLeft = useOmok((s) => s.hostLeft);
+  const attachOnline = useStore((s) => s.attachOnline);
+  const setSeatNames = useStore((s) => s.setSeatNames);
+  const reconnecting = useStore((s) => s.reconnecting);
+  const hostLeft = useStore((s) => s.hostLeft);
   const [name, setName] = useState(savedName);
   const [phase, setPhase] = useState<Phase>("name");
   const [lobby, setLobby] = useState<LobbyState | null>(null);
@@ -77,12 +135,14 @@ export function OmokOnlineScreen({
     () => roomFromUrl ?? resume?.room ?? randomId(16),
   );
   const stats = {
-    game: "omok",
+    game: gameId,
     mode: "online" as const,
     key: `online:${roomCode}`,
   };
   /** 방장: 복기용 기록은 방이 내준다 */
-  const hostArchive = (host: OmokHostRoom) => ({
+  const hostArchive = (
+    host: HostRoom<Rules, State, View, ActionT, Event, undefined>,
+  ) => ({
     ...stats,
     seat: 0,
     seatNames: seatNamesOf(host.lobby()),
@@ -120,7 +180,7 @@ export function OmokOnlineScreen({
           : `${who}의 주장 — 실패 ⚠ ${reason ?? ""} (내 검증과 따로 봅니다)`,
     });
     if (own) {
-      if (!ok) useOmok.setState({ notice: `기록 검증 실패: ${reason ?? ""}` });
+      if (!ok) useStore.setState({ notice: `기록 검증 실패: ${reason ?? ""}` });
       recordAudit(roomCode, ok ? null : `${who}: ${reason ?? ""}`);
     }
   };
@@ -128,7 +188,7 @@ export function OmokOnlineScreen({
   const syncLobby = (l: LobbyState) => {
     setLobby(l);
     setSeatNames(seatNamesOf(l));
-    useOmok.setState({ offlineSeats: offlineSeatsOf(l) });
+    useStore.setState({ offlineSeats: offlineSeatsOf(l) });
   };
 
   const enter = async () => {
@@ -138,31 +198,31 @@ export function OmokOnlineScreen({
     try {
       const transport = await openTransport(roomCode, {
         role: isHost ? "host" : "guest",
-        game: "omok",
+        game: gameId,
       });
       if (isHost) {
         const host = new HostRoom({
-          kit: omokKit,
+          kit,
           transport,
           hostName: resume?.restore.saved.hostName ?? trimmed,
           rules,
           store: sessionHostStore(roomCode),
           ...(resume ? { restore: resume.restore } : {}),
-          bot: omokBotFor(1),
-          botLevel: 1,
+          bot: game.botFor(BOT_LEVEL),
+          botLevel: BOT_LEVEL,
           botNames: useSettings.getState().botNames,
           standInDelayMs: STAND_IN_MS,
           pace: (next) => setTimeout(next, 0),
         });
-        omokSession.host = host;
+        session.host = host;
         setFingerprint(await host.fingerprint());
         useChat.getState().reset();
         useChat.setState({ send: (text) => host.chat(text) });
         host.onChat((m) => useChat.getState().receive(m));
         host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
-        host.onOwnError((e) => useOmok.setState({ notice: e }));
+        host.onOwnError((e) => useStore.setState({ notice: e }));
         host.onLobby(syncLobby);
-        setHostingRoom("omok", roomCode);
+        setHostingRoom(gameId, roomCode);
         setPhase("lobby");
         if (host.match) {
           started.current = true;
@@ -177,7 +237,7 @@ export function OmokOnlineScreen({
       } else {
         const saved = loadSeatToken(roomCode);
         const guest = new GuestRoom({
-          kit: omokKit,
+          kit,
           transport,
           name: trimmed,
           token: saved?.token ?? null,
@@ -186,7 +246,7 @@ export function OmokOnlineScreen({
             ? { hostFingerprint: hostFingerprintFromUrl() as string }
             : {}),
         });
-        omokSession.guest = guest;
+        session.guest = guest;
         useChat.getState().reset();
         useChat.setState({ send: (text) => guest.chat(text) });
         guest.on("chat", (m) => useChat.getState().receive(m));
@@ -200,20 +260,20 @@ export function OmokOnlineScreen({
         guest.on("full", () => setPhase("full"));
         guest.on("kicked", () => setPhase("kicked"));
         guest.on("hostLeft", () =>
-          useOmok.setState({ hostLeft: true, reconnecting: false }),
+          useStore.setState({ hostLeft: true, reconnecting: false }),
         );
         guest.on("connection", (state) =>
-          useOmok.setState({ reconnecting: state === "reconnecting" }),
+          useStore.setState({ reconnecting: state === "reconnecting" }),
         );
         guest.on("rejected", (e) => {
-          useOmok.setState({ notice: e });
+          useStore.setState({ notice: e });
           if (e === "다른 게임의 방입니다") {
             setError(e);
             setPhase("error");
           }
         });
         guest.on("audit", (result) => {
-          useOmok.setState({
+          useStore.setState({
             notice: result.ok
               ? "기록 확인: 진행에 문제가 없습니다"
               : `기록 확인 실패: ${result.reason}`,
@@ -234,7 +294,7 @@ export function OmokOnlineScreen({
             },
             source,
             view?.roundNumber ?? 0,
-            view ? omokKit.isOver(view) : false,
+            view ? kit.isOver(view) : false,
           );
         });
         guest.on("match", (match) => {
@@ -257,7 +317,7 @@ export function OmokOnlineScreen({
   };
 
   const start = async () => {
-    const host = omokSession.host;
+    const host = session.host;
     if (!host || starting) return;
     setStarting(true);
     try {
@@ -275,7 +335,7 @@ export function OmokOnlineScreen({
       ? ""
       : inviteUrl(roomCode, fingerprint);
   const friendIn = lobby?.seats.some((s) => s.kind === "guest") ?? false;
-  const variant = VARIANT_INFO.find((v) => v.value === rules.variant);
+  const timeLabel = timePresetLabel(rules.time);
 
   return (
     <main
@@ -284,7 +344,9 @@ export function OmokOnlineScreen({
     >
       <div className="flex w-full max-w-md flex-col gap-4 rounded-3xl border border-white/10 bg-black/40 p-6 shadow-2xl">
         <h2 className="text-center font-bold text-lg">
-          {isHost ? "오목 방 만들기" : "초대받은 오목 방에 들어가기"}
+          {isHost
+            ? `${game.name} 방 만들기`
+            : `초대받은 ${game.name} 방에 들어가기`}
         </h2>
 
         {phase === "name" && (
@@ -301,11 +363,8 @@ export function OmokOnlineScreen({
             </label>
             {isHost && (
               <p className="text-white/60 text-xs">
-                {timePresetLabel(rules.time)
-                  ? `${timePresetLabel(rules.time)} · `
-                  : ""}
-                {variant?.label} 규칙 · {variant?.description}. 첫 판 흑은
-                무작위, 판마다 흑백을 바꿉니다.
+                {timeLabel ? `${timeLabel} · ` : ""}
+                {game.rulesSummary(rules)}
               </p>
             )}
             <button
@@ -336,7 +395,7 @@ export function OmokOnlineScreen({
               <InviteLink
                 link={link}
                 roomCode={roomCode}
-                shareTitle="오목 한 판 하자"
+                shareTitle={game.shareTitle}
               />
             )}
             <div className="flex flex-col gap-1">
@@ -365,7 +424,7 @@ export function OmokOnlineScreen({
                     {isHost && s.kind === "guest" && (
                       <button
                         type="button"
-                        onClick={() => omokSession.host?.kick(s.seat)}
+                        onClick={() => session.host?.kick(s.seat)}
                         className="rounded bg-white/10 px-1.5 py-0.5"
                       >
                         내보내기
