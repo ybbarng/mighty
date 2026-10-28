@@ -31,13 +31,18 @@ export function parseMove(text: string): Move {
 export const sameMove = (a: Move, b: Move) =>
   a.from === b.from && a.to === b.to;
 
-/** 내 수를 판정한다. 마지막 수는 외통이면 어느 수든 정답, 그 앞 수는 문제의 정답 수만 */
+/**
+ * 내 수를 판정한다. 양수겸장은 정답 수만 맞다.
+ * 외통 문제의 마지막 수는 외통이면 어느 수든 정답, 그 앞 수는 문제의 정답 수만
+ */
 export function judgeMove(
   puzzle: JanggiPuzzle,
   state: JanggiState,
   move: Move,
   step: number,
 ): "solved" | "next" | "wrong" {
+  if (puzzle.kind === "fork")
+    return sameMove(move, parseMove(puzzle.solution)) ? "solved" : "wrong";
   const after = applyMove(state.board, move);
   if (isCheckmate(after, "h")) return "solved";
   const last = step >= puzzle.mateIn - 1;
@@ -59,6 +64,13 @@ function attackers(board: Board, at: number): Kind[] {
   return kinds;
 }
 
+/** 끝 글자에 받침이 있나(을/를, 과/와를 고른다) */
+function hasBatchim(word: string): boolean {
+  const code = (word.at(-1) ?? "").charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0;
+}
+const obj = (word: string) => `${word}${hasBatchim(word) ? "을" : "를"}`;
+
 const names = (kinds: Kind[]) =>
   [...new Set(kinds)].map((k) => KIND_NAMES[k]).join("·");
 
@@ -71,7 +83,7 @@ export function explainMate(board: Board, move: Move): string[] {
   const king = after.indexOf("hK");
   const mover = after[move.to] as string;
   const lines = [
-    `${KIND_NAMES[mover[1] as Kind]}를 ${pointName(move.to)}로: 장군!`,
+    `${obj(KIND_NAMES[mover[1] as Kind])} ${pointName(move.to)}로: 장군!`,
   ];
   const checkers = attackers(after, king);
   if (checkers.length > 1)
@@ -96,3 +108,30 @@ export const choToMove = (state: JanggiState) =>
   state.phase === "play" &&
   sideOfSeat(state, 0) === "c" &&
   state.played.length % 2 === 0;
+
+/** 양수겸장을 말로 풀어 준다: 옮긴 기물이 노리는 상대 기물들 */
+export function explainFork(board: Board, move: Move): string[] {
+  const after = applyMove(board, move);
+  const mover = after[move.to] as string;
+  const targets = pseudoTargets(after, move.to)
+    .filter((t) => after[t]?.startsWith("h"))
+    .map((t) => ({ at: t, kind: (after[t] as string)[1] as Kind }))
+    .sort((a, b) => (b.kind === "K" ? 1 : 0) - (a.kind === "K" ? 1 : 0));
+  const words = targets.map((t) => KIND_NAMES[t.kind]);
+  // "차(26)와 궁(15)을"처럼 앞 낱말 받침에 맞춰 와/과, 끝 낱말에 맞춰 을/를을 붙인다.
+  const list = targets
+    .map((t, i) => {
+      const word = `${KIND_NAMES[t.kind]}(${pointName(t.at)})`;
+      if (i === targets.length - 1)
+        return `${word}${hasBatchim(words[i] ?? "") ? "을" : "를"}`;
+      return `${word}${hasBatchim(words[i] ?? "") ? "과" : "와"}`;
+    })
+    .join(" ");
+  const check = targets.some((t) => t.kind === "K");
+  return [
+    `${obj(KIND_NAMES[mover[1] as Kind])} ${pointName(move.to)}로: ${list} 함께 노린다`,
+    check
+      ? "장군이라 한은 궁부터 피해야 하고, 그사이 다른 기물을 잡는다"
+      : "한이 하나를 지키거나 피하면 다른 하나를 잡는다",
+  ];
+}

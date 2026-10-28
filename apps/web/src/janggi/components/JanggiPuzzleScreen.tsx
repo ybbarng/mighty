@@ -18,6 +18,7 @@ import { JANGGI_PUZZLE_SETS, type JanggiPuzzle } from "../puzzles";
 import { useJanggiSettings } from "../settings";
 import {
   defenseFor,
+  explainFork,
   explainMate,
   judgeMove,
   parseMove,
@@ -84,6 +85,7 @@ export function JanggiPuzzleScreen({
 
   if (!found || !state) return null;
   const { set, index, puzzle } = found;
+  const fork = puzzle.kind === "fork";
   const nextId = set.puzzles[index + 1]?.id ?? null;
 
   const restart = () => {
@@ -105,7 +107,11 @@ export function JanggiPuzzleScreen({
     setLastMove(move);
     playUiCue(before.board[move.to] ? "capture" : "piece");
     if (verdict === "solved") {
-      setExplain(explainMate(before.board, move));
+      setExplain(
+        fork
+          ? explainFork(before.board, move)
+          : explainMate(before.board, move),
+      );
       setStatus("solved");
       playUiCue("win");
       // 정답 보기를 누른 뒤 푼 것은 푼 것으로 치지 않는다.
@@ -133,16 +139,22 @@ export function JanggiPuzzleScreen({
     status === "solved" ? "win" : status === "wrong" ? "loss" : null;
   const statusText =
     status === "solved"
-      ? "외통!"
+      ? fork
+        ? "양수겸장!"
+        : "외통!"
       : status === "wrong"
-        ? "외통이 아니에요"
+        ? fork
+          ? "두 곳을 노리는 수가 아니에요"
+          : "외통이 아니에요"
         : status === "waiting"
           ? "한이 받는 중…"
-          : puzzle.mateIn === 1
-            ? "한 수로 외통을 만드세요"
-            : stepIndex === 0
-              ? "두 수 만에 외통: 첫 수를 두세요"
-              : "이제 외통을 만드세요";
+          : puzzle.kind === "fork"
+            ? "한 수로 두 곳을 함께 노리세요"
+            : puzzle.mateIn === 1
+              ? "한 수로 외통을 만드세요"
+              : stepIndex === 0
+                ? "두 수 만에 외통: 첫 수를 두세요"
+                : "이제 외통을 만드세요";
 
   return (
     <main
@@ -193,7 +205,9 @@ export function JanggiPuzzleScreen({
                 ? "정답을 본 뒤 풀었어요. 다음에 다시 풀어 보세요"
                 : "맞혔어요!"
               : status === "wrong"
-                ? "장군을 부르고, 궁이 피할 곳을 모두 막아야 해요"
+                ? fork
+                  ? "큰 기물 둘(또는 궁과 큰 기물)을 한 번에 노리는 자리를 찾아요"
+                  : "장군을 부르고, 궁이 피할 곳을 모두 막아야 해요"
                 : undefined
           }
         />

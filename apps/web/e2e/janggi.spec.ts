@@ -291,6 +291,21 @@ test("장기 수 배우기: 외통 문제를 틀렸다 다시 풀고, 진행이 
     mate1.getByRole("button", { name: "한 수 외통 1번 (풂)" }),
   ).toBeVisible();
 
+  // 양수겸장: 마 하나로 궁과 차를 함께 노린다.
+  await page
+    .getByRole("region", { name: "양수겸장" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  await expect(page.getByRole("status")).toHaveText(
+    "한 수로 두 곳을 함께 노리세요",
+  );
+  await tapPoint(page, "77", touch);
+  await tapPoint(page, "56", touch);
+  await expect(page.getByRole("status")).toHaveText("양수겸장!");
+  await expect(page.getByText(/함께 노린다/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("janggi-fork.png") });
+  await page.getByRole("button", { name: "← 목록" }).click();
+
   // 두 수 외통: 첫 수 뒤 한이 받고, 다시 내 차례가 온다.
   const mate2 = page.getByRole("region", { name: "두 수 외통" });
   await mate2.getByRole("button", { name: "풀기 시작" }).click();
