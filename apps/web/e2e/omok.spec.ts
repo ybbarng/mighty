@@ -213,3 +213,63 @@ test("오목: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
   await expect(page.getByText(/다음 수: /)).toBeVisible();
   await page.screenshot({ path: info.outputPath("omok-review.png") });
 });
+
+/** 판의 한 자리에 둔다. 휴대폰은 겨누고 다시 눌러 둔다 */
+async function placeAt(page: Page, x: number, y: number, touch: boolean) {
+  const p = await pointXY(page, x, y);
+  if (touch) {
+    await page.touchscreen.tap(p.x, p.y);
+    await page.touchscreen.tap(p.x, p.y);
+  } else await page.mouse.click(p.x, p.y);
+}
+
+test("오목 배우기: 단원을 끝내고, 미션은 틀리면 다시 한다", async ({
+  page,
+}, info) => {
+  const touch = info.project.name.startsWith("phone");
+  await page.goto("/omok");
+  await page.getByRole("button", { name: /오목 배우기/ }).click();
+  await expect(page.getByText("0/5")).toBeVisible();
+
+  // 1단원: 설명(판 그림) → 퀴즈 → 다섯 잇기 미션
+  await page.getByRole("button", { name: /오목은 어떤 게임/ }).click();
+  await expect(board(page)).toBeVisible();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "ㄱ자로 꺾인 줄" }).click();
+  await expect(page.getByText("정답이에요!")).toBeVisible();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "미션 시작" }).click();
+  await expect(stones(page)).toHaveCount(8);
+  await page.screenshot({ path: info.outputPath("omok-mission.png") });
+  await placeAt(page, 11, 7, touch); // L8
+  await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await expect(page.getByText("단원 완료!")).toBeVisible();
+  await page.getByRole("button", { name: "단원 목록으로" }).click();
+  await expect(page.getByText("1/5")).toBeVisible();
+
+  // 2단원: 넷을 막지 않으면 실패, 다시 해서 막으면 성공
+  await page.getByRole("button", { name: /막기/ }).click();
+  for (let i = 0; i < 2; i++)
+    await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: /한쪽만 막을 수 있어/ }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "미션 시작" }).click();
+  await placeAt(page, 0, 14, touch); // A1
+  await expect(page.getByRole("dialog", { name: "미션 실패" })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole("button", { name: "다시 하기" }).click();
+  await expect(stones(page)).toHaveCount(8);
+  await placeAt(page, 7, 7, touch); // H8
+  await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // 튜토리얼 대국은 이어하기에 남지 않는다.
+  await page.goto("/omok");
+  await expect(page.getByText("1/5 단원 마침")).toBeVisible();
+  await expect(page.getByRole("button", { name: "이어하기" })).toHaveCount(0);
+});

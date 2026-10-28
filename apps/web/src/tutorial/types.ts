@@ -1,6 +1,6 @@
 import type { Card } from "@mighty/engine";
 
-/** 두 게임(마이티·하트) 튜토리얼이 함께 쓰는 단원 형식 */
+/** 모든 게임 튜토리얼이 함께 쓰는 단원 형식 */
 
 export type MissionStatus = "success" | "fail" | null;
 
@@ -19,12 +19,15 @@ export type Step<View, Event, Scenario, Action> =
       title: string;
       body: Text[];
       cards?: Card[];
+      /** 판 게임: 이 장면을 그림으로 보인다(TutorialKit.Scene) */
+      scene?: Scenario;
       terms?: string[];
     }
   | {
       kind: "quiz";
       question: Text;
       cards?: Card[];
+      scene?: Scenario;
       options: string[];
       answer: number;
       explain: Text;

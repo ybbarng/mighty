@@ -5,7 +5,7 @@ import type { Lesson } from "@/tutorial/types";
 
 import type { MissionProps } from "./MissionOverlay";
 
-/** 튜토리얼 화면(단원 목록·단원 진행)을 한 게임에 잇는 것. 마이티와 하트가 하나씩 둔다 */
+/** 튜토리얼 화면(단원 목록·단원 진행)을 한 게임에 잇는 것. 게임마다 하나씩 둔다 */
 export interface TutorialKit<View, Event, Scenario, Action> {
   /** 단원 목록 제목 */
   title: string;
@@ -21,6 +21,8 @@ export interface TutorialKit<View, Event, Scenario, Action> {
   subscribe(
     listener: (view: View, events: readonly Event[]) => void,
   ): () => void;
+  /** 설명·퀴즈의 `scene`을 그리는 그림(판 게임). 없으면 장면을 보이지 않는다 */
+  Scene?: ComponentType<{ scenario: Scenario }>;
   /** 미션 띠를 얹은 판 화면 */
   Table: ComponentType<{
     onExit: () => void;

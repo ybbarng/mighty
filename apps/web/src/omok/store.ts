@@ -93,6 +93,8 @@ interface OmokStore {
   queue: Snapshot<OmokView, GameEvent>[];
   level: number;
   notice: string | null;
+  /** 튜토리얼 미션 대국: 저장·기록·무르기를 하지 않는다 */
+  practice: boolean;
   newGame(options: {
     rules: OmokRules;
     level: number;
@@ -100,6 +102,8 @@ interface OmokStore {
     seed?: number;
   }): void;
   resume(saved: OmokSaved): void;
+  /** 튜토리얼 미션: 이 장면에서 입문 컴퓨터와 둔다(나는 0번 자리) */
+  startPractice(initialState: OmokState): void;
   /** 온라인 방의 대국을 붙인다(저장·무르기 없음) */
   attachOnline(
     host: OmokHost,
@@ -169,18 +173,22 @@ export const useOmok = create<OmokStore>((set, get) => {
       local: OmokLocalMatch | null;
       level: number;
       seatNames: string[] | null;
-      stats: StatsTarget;
+      /** 없으면 내 기록에 남기지 않는다(튜토리얼) */
+      stats: StatsTarget | null;
       archive?: ArchiveTarget;
     },
   ) => {
     stop();
     const { local, level } = options;
-    const recorder = new StatsRecorder(omokKit.stats, options.stats);
+    const recorder = options.stats
+      ? new StatsRecorder(omokKit.stats, options.stats)
+      : null;
+    const practice = options.stats === null;
     const archiver = options.archive
       ? new ArchiveRecorder(omokKit.stats, options.archive)
       : null;
     const persist = () => {
-      if (local) saveOmok({ ...local.save(), level });
+      if (local && !practice) saveOmok({ ...local.save(), level });
     };
     const first = host.drain();
     set({
@@ -195,15 +203,16 @@ export const useOmok = create<OmokStore>((set, get) => {
       events: [],
       queue: [],
       notice: null,
+      practice,
     });
     persist();
     for (const snapshot of first) {
-      recorder.observe(snapshot);
+      recorder?.observe(snapshot);
       archiver?.observe(snapshot);
     }
     unsubscribe = host.subscribe((snapshot) => {
       persist();
-      recorder.observe(snapshot);
+      recorder?.observe(snapshot);
       archiver?.observe(snapshot);
       set({ queue: [...get().queue, snapshot] });
       advance();
@@ -261,6 +270,7 @@ export const useOmok = create<OmokStore>((set, get) => {
     queue: [],
     level: 1,
     notice: null,
+    practice: false,
 
     newGame({ rules, level, pick, seed: given }) {
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
@@ -283,6 +293,19 @@ export const useOmok = create<OmokStore>((set, get) => {
         saved.level,
         saved.seed,
       );
+    },
+
+    startPractice(initialState) {
+      const local: OmokLocalMatch = new LocalMatch({
+        kit: omokKit,
+        rules: initialState.rules,
+        seed: Math.floor(Math.random() * 2 ** 31),
+        humanSeat: 0,
+        bot: omokBotFor(0),
+        pace: browserPace,
+        initialState,
+      });
+      attach(local, { local, level: 0, seatNames: null, stats: null });
     },
 
     attachOnline(host, seatNames, stats, archive) {
@@ -314,7 +337,14 @@ export const useOmok = create<OmokStore>((set, get) => {
 
     canUndo() {
       const { local, view, queue } = get();
-      if (!local || !view || queue.length > 0 || view.phase !== "play")
+      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다.
+      if (
+        !local ||
+        !view ||
+        get().practice ||
+        queue.length > 0 ||
+        view.phase !== "play"
+      )
         return false;
       return local
         .actionLog()
@@ -353,6 +383,7 @@ export const useOmok = create<OmokStore>((set, get) => {
         reconnecting: false,
         hostLeft: false,
         offlineSeats: [],
+        practice: false,
       });
     },
 

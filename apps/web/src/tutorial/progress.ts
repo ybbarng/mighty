@@ -58,3 +58,6 @@ export function lessonStates(
     return "locked";
   });
 }
+
+/** 오목 튜토리얼 진행 기록 */
+export const useOmokTutorialProgress = createTutorialProgress("omok-tutorial");

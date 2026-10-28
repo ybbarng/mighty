@@ -36,6 +36,7 @@ export function LessonPlayer<View, Event, Scenario, Action>({
   const events = useRef<Event[]>([]);
 
   const step = lesson?.steps[index];
+  const { Scene } = tutorial;
 
   // 미션 중에는 화면이 재생하는 진행을 따라가며 성공·실패를 판단한다.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt가 바뀌면 다시 건다
@@ -145,6 +146,9 @@ export function LessonPlayer<View, Event, Scenario, Action>({
                 </p>
               ))}
               {step.cards && <CardRow cards={step.cards} />}
+              {step.scene !== undefined && Scene && (
+                <Scene scenario={step.scene} />
+              )}
               {step.terms && step.terms.length > 0 && (
                 <dl className="flex flex-col gap-1.5 rounded-2xl bg-white/5 p-3 text-sm">
                   {step.terms.map((id) => {
@@ -174,6 +178,9 @@ export function LessonPlayer<View, Event, Scenario, Action>({
                 <RichText text={step.question} />
               </h2>
               {step.cards && <CardRow cards={step.cards} />}
+              {step.scene !== undefined && Scene && (
+                <Scene scenario={step.scene} />
+              )}
               <div className="flex flex-col gap-2">
                 {step.options.map((option, i) => {
                   const picked = chosen === i;

@@ -7,6 +7,7 @@ import { useHeartsSettings } from "@/hearts/settings";
 import { useOmokSettings } from "@/omok/settings";
 import {
   useHeartsTutorialProgress,
+  useOmokTutorialProgress,
   useTutorialProgress,
 } from "@/tutorial/progress";
 
@@ -21,6 +22,7 @@ export function StoreHydration() {
     void useHeartsSettings.persist.rehydrate();
     void useHeartsTutorialProgress.persist.rehydrate();
     void useOmokSettings.persist.rehydrate();
+    void useOmokTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

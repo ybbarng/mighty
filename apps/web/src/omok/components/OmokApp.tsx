@@ -1,18 +1,14 @@
 "use client";
 
-import {
-  type OmokView,
-  pointName,
-  seatToMove,
-  stoneOfSeat,
-} from "@mighty/omok-engine";
 import { useEffect, useState } from "react";
 
 import { BackToGames } from "@/components/BackToGames";
 import { MadeWith } from "@/components/brand/MadeWith";
-import { ChatBox } from "@/components/ChatBox";
+import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
+import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
+import { useOmokTutorialProgress } from "@/tutorial/progress";
 
 import { endOmokSession } from "../session";
 import {
@@ -21,6 +17,7 @@ import {
   useOmokSettings,
   VARIANT_INFO,
 } from "../settings";
+
 import {
   clearOmok,
   loadOmok,
@@ -28,8 +25,10 @@ import {
   type StonePick,
   useOmok,
 } from "../store";
-import { OmokBoard } from "./OmokBoard";
+import { OMOK_LESSONS } from "../tutorial";
+import { OmokGame } from "./OmokGame";
 import { OmokOnlineScreen } from "./OmokOnlineScreen";
+import { omokTutorial } from "./omok-tutorial";
 
 const WINS_OPTIONS = [
   { value: 1, label: "한 판" },
@@ -88,11 +87,15 @@ function Section({
 function OmokStart({
   onStart,
   onOnline,
+  onLearn,
 }: {
   onStart: (saved?: OmokSaved) => void;
   onOnline: () => void;
+  onLearn: () => void;
 }) {
   const s = useOmokSettings();
+  const learned = useOmokTutorialProgress((p) => p.completed.length);
+  const total = OMOK_LESSONS.length;
   const [saved, setSaved] = useState<OmokSaved | null>(null);
   useEffect(() => setSaved(loadOmok()), []);
   const variant = VARIANT_INFO.find((v) => v.value === s.variant);
@@ -111,6 +114,21 @@ function OmokStart({
             가로·세로·대각선으로 다섯 개를 먼저 잇는 사람이 이긴다
           </p>
         </header>
+
+        <button
+          type="button"
+          onClick={onLearn}
+          className="flex flex-col items-start gap-0.5 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-left hover:bg-white/10"
+        >
+          <span className="font-bold">오목 배우기</span>
+          <span className="text-white/60 text-xs">
+            {learned >= total
+              ? "모든 단원을 마쳤어요. 언제든 다시 볼 수 있어요"
+              : learned > 0
+                ? `${learned}/${total} 단원 마침`
+                : `처음이라면 여기부터. ${total}단원, 미션 4개`}
+          </span>
+        </button>
 
         {saved && (
           <button
@@ -225,231 +243,6 @@ function OmokStart({
   );
 }
 
-/** 자리 표: 이름, 돌 색, 이긴 판 수, 차례 표시 */
-function PlayerPlate({
-  view,
-  seat,
-  name,
-}: {
-  view: OmokView;
-  seat: number;
-  name: string;
-}) {
-  const black = stoneOfSeat(view, seat) === 1;
-  const turn = seatToMove(view) === seat;
-  return (
-    <div
-      data-turn={turn || undefined}
-      className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2",
-        turn
-          ? "border-amber-300 bg-amber-300/15"
-          : "border-white/10 bg-white/5",
-      )}
-    >
-      {/* 판 위 돌과 같은 빛(왼쪽 위)과 그림자 */}
-      <span
-        className="size-5 shrink-0 rounded-full shadow-[1px_2px_2px_rgba(0,0,0,0.5)]"
-        style={{
-          background: black
-            ? "radial-gradient(circle at 36% 32%, #6b6b6b, #2a2a2a 35%, #050505)"
-            : "radial-gradient(circle at 36% 32%, #ffffff, #f1f0ec 55%, #b9b6ae)",
-        }}
-      />
-      <span className="truncate font-semibold text-sm">{name}</span>
-      <span className="ml-auto text-sm text-white/70">
-        {view.wins[seat] ?? 0}승
-      </span>
-    </div>
-  );
-}
-
-/** 대국 화면 */
-function OmokGame({ onExit }: { onExit: () => void }) {
-  const {
-    view,
-    host,
-    local,
-    notice,
-    level,
-    seatNames,
-    reconnecting,
-    hostLeft,
-  } = useOmok();
-  const submit = useOmok((s) => s.submit);
-  const undo = useOmok((s) => s.undo);
-  const canUndo = useOmok((s) => s.canUndo());
-  const clearNotice = useOmok((s) => s.clearNotice);
-  const showForbidden = useOmokSettings((s) => s.showForbidden);
-  const [aim, setAim] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!notice) return;
-    const id = setTimeout(clearNotice, 1800);
-    return () => clearTimeout(id);
-  }, [notice, clearNotice]);
-
-  if (!view || !host) return null;
-  const me = host.seat;
-  const myStone = stoneOfSeat(view, me);
-  const myTurn = view.phase === "play" && seatToMove(view) === me;
-  const levelName = OMOK_LEVELS.find((l) => l.value === level)?.label ?? "";
-  const online = local === null;
-  const opponent = online
-    ? (seatNames?.[1 - me] ?? "상대")
-    : `컴퓨터(${levelName})`;
-  const result = view.result;
-  const lastMove = view.moves.at(-1) ?? null;
-
-  let status: string;
-  if (view.phase === "play")
-    status = myTurn
-      ? aim !== null
-        ? `${pointName(aim)}: 한 번 더 누르면 둔다`
-        : "내 차례 — 판을 눌러 두세요"
-      : online
-        ? `${opponent}의 차례`
-        : "컴퓨터가 생각하는 중…";
-  else if (result?.kind === "draw") status = "비겼어요";
-  else if (result?.seat === me)
-    status = result.kind === "resign" ? "상대가 기권했어요" : "이겼어요!";
-  else status = result?.kind === "resign" ? "기권했어요" : "졌어요";
-
-  const gameOver = view.phase === "gameOver";
-  const variantLabel = VARIANT_INFO.find(
-    (v) => v.value === view.rules.variant,
-  )?.label;
-
-  return (
-    <main
-      data-game="omok"
-      className="flex min-h-dvh flex-col items-center gap-3 bg-[#1c1917] px-4 py-3 text-white short-landscape:grid short-landscape:grid-cols-[auto_minmax(0,18rem)] short-landscape:grid-rows-[auto_auto_auto_1fr] short-landscape:content-center short-landscape:justify-center short-landscape:gap-x-6"
-    >
-      <header className="flex w-full max-w-xl items-center gap-2 text-sm short-landscape:col-start-2 short-landscape:row-start-1">
-        <button
-          type="button"
-          onClick={onExit}
-          className="text-white/70 hover:text-white"
-        >
-          ← 오목
-        </button>
-        <span className="ml-auto text-white/60">
-          {variantLabel} · {view.roundNumber}판째
-        </span>
-      </header>
-
-      {online && (reconnecting || hostLeft) && (
-        <p
-          role="alert"
-          className="w-full max-w-xl rounded-xl bg-rose-700/80 px-3 py-2 text-center text-sm short-landscape:col-start-2"
-        >
-          {hostLeft
-            ? "방장이 방을 나갔습니다"
-            : "방장과 연결이 끊겼습니다. 다시 연결하는 중…"}
-        </p>
-      )}
-
-      <div className="flex w-full max-w-xl gap-2 short-landscape:col-start-2 short-landscape:row-start-2 short-landscape:flex-col">
-        <PlayerPlate view={view} seat={me} name="나" />
-        <PlayerPlate view={view} seat={1 - me} name={opponent} />
-      </div>
-
-      {/* 휴대폰 가로: 판이 화면 높이를 꽉 채우고 나머지는 오른쪽에 */}
-      <div className="aspect-square w-[min(100%,calc(100dvh-15rem))] max-w-xl short-landscape:col-start-1 short-landscape:row-span-4 short-landscape:row-start-1 short-landscape:w-[calc(100dvh-1.5rem)]">
-        <OmokBoard
-          board={view.board}
-          myStone={myStone}
-          canPlay={myTurn}
-          lastMove={lastMove}
-          winLine={result?.kind === "five" ? result.line : null}
-          forbidden={showForbidden ? view.forbidden : []}
-          aim={aim}
-          onAim={setAim}
-          onPlace={(at) => submit({ type: "place", at })}
-        />
-      </div>
-
-      <p
-        role="status"
-        className="min-h-6 text-center font-semibold short-landscape:col-start-2 short-landscape:row-start-3"
-      >
-        {notice ?? status}
-      </p>
-
-      <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 short-landscape:col-start-2 short-landscape:row-start-4 short-landscape:content-start">
-        {view.phase === "play" && (
-          <>
-            {aim !== null && myTurn && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAim(null);
-                  submit({ type: "place", at: aim });
-                }}
-                className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-              >
-                여기 두기
-              </button>
-            )}
-            {!online && (
-              <button
-                type="button"
-                disabled={!canUndo}
-                onClick={() => {
-                  setAim(null);
-                  undo();
-                }}
-                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
-              >
-                무르기
-              </button>
-            )}
-            {/* 온라인 참가자는 내 차례에만 행동을 보낼 수 있다 */}
-            {(!online || myTurn) && (
-              <button
-                type="button"
-                onClick={() => submit({ type: "resign" })}
-                className="rounded-xl bg-white/10 px-4 py-2"
-              >
-                기권
-              </button>
-            )}
-          </>
-        )}
-        {view.phase === "roundEnd" && !view.continued[me] && (
-          <button
-            type="button"
-            onClick={() => submit({ type: "continue" })}
-            className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-          >
-            다음 판
-          </button>
-        )}
-        {gameOver && (
-          <>
-            <button
-              type="button"
-              onClick={onExit}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              다시 하기
-            </button>
-            <a href="/" className="rounded-xl bg-white/10 px-4 py-2">
-              게임 목록
-            </a>
-          </>
-        )}
-      </div>
-
-      {online && (
-        <div className="w-full max-w-xl short-landscape:col-start-2">
-          <ChatBox mySeat={me} />
-        </div>
-      )}
-    </main>
-  );
-}
-
 type Screen =
   | { kind: "start" }
   | {
@@ -459,7 +252,9 @@ type Screen =
       /** 방장이 새로고침했으면 이 탭이 연 방과 남긴 것 */
       resume?: { room: string; restore: HostRestore };
     }
-  | { kind: "playing" };
+  | { kind: "playing" }
+  | { kind: "tutorial" }
+  | { kind: "lesson"; lessonId: string };
 
 /** 오목(/omok): 시작 화면, 친구와 하기 방, 대국 화면 */
 export function OmokApp() {
@@ -470,7 +265,8 @@ export function OmokApp() {
 
   // 다 끝난 게임은 이어하기에 남기지 않는다.
   useEffect(() => {
-    if (view?.phase === "gameOver") clearOmok();
+    // 튜토리얼 미션은 이어하기 저장과 상관없다.
+    if (view?.phase === "gameOver" && !useOmok.getState().practice) clearOmok();
   }, [view?.phase]);
 
   // 초대 링크로 왔으면 그 방으로, 방장이 새로고침했으면 연 방을 다시 연다.
@@ -506,9 +302,27 @@ export function OmokApp() {
       />
     );
   if (screen.kind === "playing") return <OmokGame onExit={backToStart} />;
+  if (screen.kind === "tutorial")
+    return (
+      <TutorialHome
+        tutorial={omokTutorial}
+        onBack={backToStart}
+        onOpen={(lessonId) => setScreen({ kind: "lesson", lessonId })}
+      />
+    );
+  if (screen.kind === "lesson")
+    return (
+      <LessonPlayer
+        key={screen.lessonId}
+        tutorial={omokTutorial}
+        lessonId={screen.lessonId}
+        onExit={() => setScreen({ kind: "tutorial" })}
+      />
+    );
   return (
     <OmokStart
       onOnline={() => setScreen({ kind: "online", room: null })}
+      onLearn={() => setScreen({ kind: "tutorial" })}
       onStart={(saved) => {
         if (saved) useOmok.getState().resume(saved);
         else {
