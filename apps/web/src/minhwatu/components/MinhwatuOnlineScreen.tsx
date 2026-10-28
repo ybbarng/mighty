@@ -5,8 +5,17 @@ import type { MinhwatuRules } from "@mighty/minhwatu-engine";
 import { useEffect, useRef, useState } from "react";
 import { ChatBox } from "@/components/ChatBox";
 import { ConnectingNotice } from "@/components/ConnectingNotice";
+import {
+  announceRoundVerified,
+  bindFair,
+  endVoteOf,
+  FairLine,
+  RoomKindPicker,
+  reportIncident,
+} from "@/components/FairLine";
 import { InviteLink } from "@/components/InviteLink";
 import { useSettings } from "@/game/settings";
+import { useHwatuFair } from "@/hwatu/fair-bar";
 import { cn } from "@/lib/cn";
 import { recordAudit } from "@/net/audit-history";
 import { useChat } from "@/net/chat";
@@ -19,6 +28,7 @@ import {
 } from "@/net/host-store";
 import type { LobbyState } from "@/net/protocol";
 import {
+  fairStoreFor,
   hostFingerprintFromUrl,
   inviteUrl,
   loadSeatToken,
@@ -129,7 +139,21 @@ export function MinhwatuOnlineScreen({
     setLobby(l);
     setSeatNames(seatNamesOf(l));
     useMinhwatu.setState({ offlineSeats: offlineSeatsOf(l) });
+    useHwatuFair.setState({
+      endVote: endVoteOf(l),
+      names: seatNamesOf(l),
+      offline: offlineSeatsOf(l),
+    });
   };
+
+  /** 방장: 암호화방이면 섞는 중·부정 알림·끝내기를 화면에 잇는다 */
+  const bindHost = (host: MinhwatuHostRoom) =>
+    bindFair(
+      useHwatuFair,
+      host.fair?.coordinator,
+      () => host.abandon(),
+      (end) => host.vote(end),
+    );
 
   const enter = async () => {
     const trimmed = name.trim() || (isHost ? "방장" : "손님");
@@ -153,6 +177,9 @@ export function MinhwatuOnlineScreen({
           botNames: useSettings.getState().botNames,
           standInDelayMs: STAND_IN_MS,
           pace: (next) => setTimeout(next, 0),
+          ...(useSettings.getState().fairPlay
+            ? { fair: { group: "r255" as const } }
+            : {}),
         });
         minhwatuSession.host = host;
         setFingerprint(await host.fingerprint());
@@ -161,6 +188,9 @@ export function MinhwatuOnlineScreen({
         host.onChat((m) => useChat.getState().receive(m));
         host.onReport((r) => onAuditReport(r.name, r.ok, r.reason));
         host.onOwnError((e) => useMinhwatu.setState({ notice: e }));
+        host.onIncident((n) =>
+          reportIncident(n, seatNamesOf(host.lobby()), useHwatuFair),
+        );
         host.onLobby(syncLobby);
         setHostingRoom("minhwatu", roomCode);
         setPhase("lobby");
@@ -172,6 +202,7 @@ export function MinhwatuOnlineScreen({
             stats,
             hostArchive(host),
           );
+          bindHost(host);
           onPlaying();
         }
       } else {
@@ -185,6 +216,7 @@ export function MinhwatuOnlineScreen({
           ...(hostFingerprintFromUrl()
             ? { hostFingerprint: hostFingerprintFromUrl() as string }
             : {}),
+          fairStore: fairStoreFor(roomCode),
         });
         minhwatuSession.guest = guest;
         useChat.getState().reset();
@@ -221,6 +253,16 @@ export function MinhwatuOnlineScreen({
           onAuditReport("나", result.ok, result.ok ? undefined : result.reason);
         });
         guest.on("report", (r) => onAuditReport(r.name, r.ok, r.reason));
+        guest.on("incident", (n) =>
+          reportIncident(
+            n,
+            seatNamesOf(
+              guest.lobby ?? { seats: [], ruleCode: "", started: true },
+            ),
+            useHwatuFair,
+          ),
+        );
+        guest.on("roundVerified", announceRoundVerified);
         // 게임 끝 검증을 통과하면 복기용으로 남긴다.
         guest.on("archive", (source) => {
           const view = guest.match?.current();
@@ -247,6 +289,9 @@ export function MinhwatuOnlineScreen({
             ),
             stats,
           );
+          bindFair(useHwatuFair, guest.fair?.coordinator, null, (end) =>
+            guest.vote(end),
+          );
           onPlaying();
         });
       }
@@ -263,6 +308,7 @@ export function MinhwatuOnlineScreen({
     try {
       const match = await host.start();
       attachOnline(match, seatNamesOf(host.lobby()), stats, hostArchive(host));
+      bindHost(host);
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -304,6 +350,7 @@ export function MinhwatuOnlineScreen({
                 무작위, 그 뒤로는 앞 판 1등이 선입니다.
               </p>
             )}
+            {isHost && <RoomKindPicker />}
             <button
               type="button"
               onClick={() => void enter()}
@@ -335,6 +382,11 @@ export function MinhwatuOnlineScreen({
                 shareTitle="민화투 한 판 치자"
               />
             )}
+            <FairLine
+              lobby={lobby}
+              isHost={isHost}
+              setFair={(fair) => minhwatuSession.host?.setFair(fair)}
+            />
             <div className="flex flex-col gap-1">
               {lobby.seats.map((s) => (
                 <div

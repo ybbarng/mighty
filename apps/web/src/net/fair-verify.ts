@@ -34,6 +34,10 @@ export interface FairReplayGame {
   viewOf(state: unknown, seat: number): unknown;
   realAction(action: unknown, cards: ReadonlyMap<number, unknown>): unknown;
   annotate?(view: unknown, action: unknown): unknown;
+  /** 방장 시계가 남긴 기록(응답 창 시간 끝)인가. 누가 둔 수가 아니라 컴퓨터 자리 확인에서 뺀다 */
+  byClock?(action: unknown): boolean;
+  /** 기록 속 내 행동을 내가 보낸 모양으로(방장이 실은 쓴 시간을 뗀다) */
+  sentForm?(action: unknown): unknown;
 }
 
 /** 마이티 */
@@ -101,6 +105,7 @@ export async function verifyFairLog(
   if (input.bot) {
     const botRng = createRng(seed ^ 0x2545f491);
     for (const [index, entry] of done.entries()) {
+      if (game.byClock?.(entry.action)) continue;
       if (input.botSeats.has(entry.seat) && !entry.bot)
         return {
           ok: false,
@@ -128,8 +133,10 @@ export async function verifyFairLog(
   }
 
   const mine = done
-    .filter((e) => e.seat === seat)
-    .map((e) => JSON.stringify(e.action));
+    .filter((e) => e.seat === seat && !game.byClock?.(e.action))
+    .map((e) =>
+      JSON.stringify(game.sentForm ? game.sentForm(e.action) : e.action),
+    );
   const sent = input.sent;
   const prefix = sent.slice(0, mine.length);
   if (

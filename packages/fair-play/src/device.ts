@@ -357,6 +357,15 @@ export class FairDevice {
     p.then(forget, forget);
   }
 
+  /** 작업 줄(받은 메시지 처리)이 빌 때까지 기다린다. 섞기 증명 계산은 기다리지 않는다 */
+  async settled(): Promise<void> {
+    for (;;) {
+      const work = this.work;
+      await work;
+      if (work === this.work) return;
+    }
+  }
+
   /** 작업 줄과 섞기 증명 계산이 모두 끝날 때까지 기다린다(시험용) */
   async idle(): Promise<void> {
     for (;;) {

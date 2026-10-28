@@ -65,3 +65,16 @@ export function hasAll(
 ): boolean {
   return set.every((id) => ids.includes(id));
 }
+
+/**
+ * 미리 정한 한 판 패(멘탈 포커). 시드로 섞지 않고 이 패로 나눈다.
+ * 방장 엔진은 아직 열리지 않은 카드를 자리 표(`?_12`)로 받고, 판 끝 검증·복기는 진짜 카드로 받는다.
+ * 손패는 자리 번호 순서, 더미는 앞이 맨 위다
+ */
+export interface PresetDeal {
+  hands: string[][];
+  floor: string[];
+  deck: string[];
+  /** 바닥에 같은 달 넉 장이 깔려 다시 섞은 횟수(고스톱이 화면에 보인다) */
+  redeals?: number;
+}

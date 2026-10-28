@@ -1,6 +1,10 @@
 import { heuristicBot } from "@mighty/ai";
 import { type MatchState, type PlayerView, presetRules } from "@mighty/engine";
-import { isToken } from "@mighty/fair-play";
+import {
+  type FairGuestSeat,
+  type FairHostTable,
+  isToken,
+} from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
 import { mightyKit } from "@/game/mighty-kit";
 import type { GameArchive } from "@/review/archive";
@@ -54,7 +58,7 @@ describe("멘탈 포커 온라인 대전", () => {
         30_000,
       ).catch(() => {
         throw new Error(
-          `판 번호: 방장 ${host.match?.current().roundNumber}, 참가자 ${guests.map((g) => `${g.match?.current().roundNumber}(${g.fair?.coordinator.deal}:${g.fair?.device.myCards(g.fair.coordinator.deal).size})`).join(",")} 방장 기기 ${host.fair?.device.myCards(host.fair.coordinator.deal).size} ${host.fair?.device.ledger(host.fair.coordinator.deal)?.deck.length}`,
+          `판 번호: 방장 ${host.match?.current().roundNumber}, 참가자 ${guests.map((g) => `${g.match?.current().roundNumber}(${(g.fair as FairGuestSeat | null)?.coordinator.deal})`).join(",")} 방장 기기 ${(host.fair as FairHostTable | null)?.coordinator.deal}`,
         );
       });
       await until(() => verified.length >= scored * guestCount);

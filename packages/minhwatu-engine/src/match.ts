@@ -1,5 +1,11 @@
 import { createRng, nextInt } from "@mighty/engine";
-import { cardOf, isCardId, shuffledDeck, sortCards } from "@mighty/hwatu";
+import {
+  cardOf,
+  isCardId,
+  type PresetDeal,
+  shuffledDeck,
+  sortCards,
+} from "@mighty/hwatu";
 
 import { DEAL_SIZES, type MinhwatuRules } from "./rules";
 import { scoreRound, yaksOf } from "./score";
@@ -55,10 +61,27 @@ export function dealRound(
   }
 }
 
-/** 첫 판 선은 시드로 정한다(누가 먼저 내나도 공평하게). 그 뒤로는 앞 판 1등이 선이다 */
+/** 미리 정한 패(멘탈 포커)로 나눈다. 손패는 시드로 나눌 때처럼 달 순서로 정리한다 */
+function presetRound(preset: PresetDeal): {
+  hands: string[][];
+  floor: string[];
+  deck: string[];
+} {
+  return {
+    hands: preset.hands.map((h) => sortCards(h)),
+    floor: [...preset.floor],
+    deck: [...preset.deck],
+  };
+}
+
+/**
+ * 첫 판 선은 시드로 정한다(누가 먼저 내나도 공평하게). 그 뒤로는 앞 판 1등이 선이다.
+ * `preset`이 있으면 멘탈 포커 판이다: 판마다 미리 정한 패로 나눈다(다음 판 패는 `state.preset`)
+ */
 export function createMatch(
   rules: MinhwatuRules,
   seed: number,
+  preset?: PresetDeal,
 ): { state: MinhwatuState; events: GameEvent[] } {
   const dealer = nextInt(createRng(seed ^ 0x51ed270b), rules.players);
   const n = rules.players;
@@ -67,7 +90,7 @@ export function createMatch(
     seed,
     roundNumber: 1,
     dealer,
-    ...dealRound(rules, seed, 1),
+    ...(preset ? presetRound(preset) : dealRound(rules, seed, 1)),
     captured: Array.from({ length: n }, () => []),
     turn: dealer,
     phase: "play",
@@ -78,6 +101,7 @@ export function createMatch(
     result: null,
     history: [],
     continued: new Array<boolean>(n).fill(false),
+    ...(preset ? { fair: true as const } : {}),
   };
   return {
     state,
@@ -133,6 +157,7 @@ export function matchOnFloor(
 
 const clone = (state: MinhwatuState): MinhwatuState => ({
   ...state,
+  ...(state.preset ? { preset: state.preset } : {}),
   hands: state.hands.map((h) => [...h]),
   floor: [...state.floor],
   deck: [...state.deck],
@@ -217,7 +242,10 @@ function startNextRound(state: MinhwatuState, events: GameEvent[]): void {
     }
   }
   const round = state.roundNumber + 1;
-  const dealt = dealRound(state.rules, state.seed, round);
+  const dealt = state.fair
+    ? presetRound(requirePreset(state))
+    : dealRound(state.rules, state.seed, round);
+  delete state.preset;
   state.roundNumber = round;
   state.dealer = dealer;
   state.hands = dealt.hands;
@@ -237,6 +265,11 @@ function startNextRound(state: MinhwatuState, events: GameEvent[]): void {
     dealer,
     handSize: DEAL_SIZES[state.rules.players].hand,
   });
+}
+
+function requirePreset(state: MinhwatuState): PresetDeal {
+  if (!state.preset) throw new Error("멘탈 포커 판인데 다음 판 패가 없다");
+  return state.preset;
 }
 
 /** 더미에서 한 장 뒤집어 바닥에 맞춘다. 바닥 두 장과 맞으면 고르기를 기다린다 */
@@ -389,10 +422,11 @@ export function replay(
   rules: MinhwatuRules,
   seed: number,
   log: readonly { seat: number; action: Action }[],
+  preset?: PresetDeal,
 ):
   | { ok: true; state: MinhwatuState }
   | { ok: false; index: number; error: string } {
-  let { state } = createMatch(rules, seed);
+  let { state } = createMatch(rules, seed, preset);
   for (const [index, entry] of log.entries()) {
     const result = step(state, entry.seat, entry.action);
     if (!result.ok) return { ok: false, index, error: result.error };

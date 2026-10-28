@@ -160,11 +160,28 @@ export const HWATU_DECK: readonly HwatuCard[] = [
 
 const BY_ID = new Map(HWATU_DECK.map((c) => [c.id, c]));
 
-/** 카드 번호로 카드를 찾는다. 없는 번호면 오류 */
+/**
+ * 멘탈 포커의 자리 표(`?_12` = 12번 자리의 카드, fair-play `blind.ts`)인가.
+ * 방장 엔진은 아직 열리지 않은 손패·더미를 자리 표로 들고 진행한다
+ */
+export function isHiddenId(id: string): boolean {
+  return /^\?_\d+$/.test(id);
+}
+
+/**
+ * 자리 표의 카드: 어느 달(0)과도 맞지 않고 점수도 없다. 엔진이 남의 손패를 세거나 짝을 찾을 때
+ * 자리 표를 건너뛰게 한다(카드를 내거나 뒤집을 때는 먼저 진짜 카드로 바뀐다)
+ */
+function hiddenCard(id: string): HwatuCard {
+  return { id, month: 0 as Month, kind: "pi", piValue: 1, name: "모르는 카드" };
+}
+
+/** 카드 번호로 카드를 찾는다. 없는 번호면 오류(자리 표는 모르는 카드) */
 export function cardOf(id: string): HwatuCard {
   const card = BY_ID.get(id);
-  if (!card) throw new Error(`없는 화투 카드: ${id}`);
-  return card;
+  if (card) return card;
+  if (isHiddenId(id)) return hiddenCard(id);
+  throw new Error(`없는 화투 카드: ${id}`);
 }
 
 export function isCardId(id: string): boolean {

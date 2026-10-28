@@ -164,6 +164,11 @@ export class LocalMatch<
   private readonly clock: Clock;
   private turnSince = 0;
   private cancelFlag: (() => void) | null = null;
+  /**
+   * 마지막으로 기록에 들어간 수 뒤의 컴퓨터 난수. 새로고침에 대비해 남길 때 쓴다(컴퓨터가 생각만 하고
+   * 아직 두지 못한 수(멘탈 포커 준비 중)의 난수까지 남기면 되살린 뒤 같은 수를 다시 생각하지 못한다)
+   */
+  private appliedRng = 0;
 
   constructor(
     options: LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -193,11 +198,13 @@ export class LocalMatch<
     this.clock = options.clock ?? realClock;
     this.stepper =
       options.step ?? ((st, seat, a) => this.kit.step(st, seat, a));
+    this.appliedRng = this.rng.seed;
 
     if (options.resume) {
       this.state = options.resume.state;
       this.log.push(...options.resume.log);
       this.rng.seed = options.resume.rng;
+      this.appliedRng = options.resume.rng;
       this.hold(this.seat, {
         view: this.kit.viewOf(this.state, this.seat),
         events: [],
@@ -257,7 +264,13 @@ export class LocalMatch<
       Math.max(0, turn.left - used) + 1,
       () => {
         this.cancelFlag = null;
-        const result = this.apply(turn.seat, timing.timeout(turn.left + 1));
+        const timeout = timing.timeout(turn.left + 1);
+        // 멘탈 포커(화투): 시간패로 판이 끝나거나 더미를 쓸 수 있어 카드를 여는 준비를 거친다.
+        if (this.options.prepare) {
+          this.enqueue(turn.seat, timeout, "clock");
+          return;
+        }
+        const result = this.apply(turn.seat, timeout);
         if (result.ok) this.runBots();
       },
     );
@@ -398,7 +411,10 @@ export class LocalMatch<
   }
 
   /** 준비가 필요한 행동을 차례로 처리한다 */
-  private enqueue(seat: number, action: ActionT, bot: boolean): void {
+  private enqueue(seat: number, action: ActionT, who: boolean | "clock"): void {
+    // 시간패(`clock`)는 사람 자리 행동도 컴퓨터 수도 아니다(기록에 bot 표시 없이 남긴다).
+    const bot = who === true;
+    const byClock = who === "clock";
     const prepare = this.options.prepare as NonNullable<
       LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>["prepare"]
     >;
@@ -406,26 +422,28 @@ export class LocalMatch<
       ? (...a: unknown[]) => console.info("[fair]", ...a)
       : () => {};
     debug("줄 섬", seat, JSON.stringify(action));
-    if (!bot) this.preparing.add(seat);
+    if (!bot && !byClock) this.preparing.add(seat);
     this.work = this.work.then(async () => {
       if (this.haltedReason) {
-        this.preparing.delete(seat);
+        if (!byClock) this.preparing.delete(seat);
         return;
       }
       debug("준비 시작", seat);
       const prepared = await prepare(this.state, seat, action);
       debug("준비 끝", seat, JSON.stringify(prepared).slice(0, 200));
       if (this.ended) {
-        this.preparing.delete(seat);
+        if (!byClock) this.preparing.delete(seat);
         return;
       }
       const result = prepared.ok
         ? this.apply(seat, prepared.action, bot)
         : prepared;
       debug("적용", seat, JSON.stringify(result).slice(0, 200));
-      if (!bot) this.preparing.delete(seat);
+      if (!bot && !byClock) this.preparing.delete(seat);
       if (bot) this.botBusy = false;
       if (!result.ok) {
+        // 시간패가 늦게 처리돼 창이 이미 닫혔으면 그냥 버린다(그 자리 사람에게 거절을 보내지 않는다).
+        if (byClock) return;
         this.options.onLateError?.(seat, result.error);
         // 컴퓨터 행동이 거절되면 같은 생각을 되풀이하지 않게 멈춘다(다음 `refresh`에 다시 생각한다).
         if (bot) return;
@@ -469,7 +487,7 @@ export class LocalMatch<
 
   /** 방장 새로고침에 대비해 남길 진행 */
   resumeState(): ResumeState<State, ActionT> {
-    return { state: this.state, log: [...this.log], rng: this.rng.seed };
+    return { state: this.state, log: [...this.log], rng: this.appliedRng };
   }
 
   /** 판 끝 검증용 행동 기록 */
@@ -495,6 +513,7 @@ export class LocalMatch<
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push(bot ? { seat, action, bot: true } : { seat, action });
+    this.appliedRng = this.rng.seed;
     if (timing) {
       // 같은 사람의 시계가 계속 가고 그 차례를 끝내지 않는 행동이면 이어 잰다.
       const after = timing.turn(this.state);

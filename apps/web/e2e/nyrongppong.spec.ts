@@ -28,7 +28,8 @@ async function choose(
 
 /** 지금 내가 할 수 있는 일이 있나(단추나 버릴 차례) */
 async function actionable(page: Page): Promise<boolean> {
-  for (const name of ["뽕!", "스톱", "다음 판"])
+  // 암호화방은 뽕한 적이 있으면 스톱할 수 없어도 "한 장 가져오기"를 묻는다.
+  for (const name of ["뽕!", "스톱", "다음 판", "한 장 가져오기"])
     if (await page.getByRole("button", { name, exact: true }).isVisible())
       return true;
   if (await page.getByRole("button", { name: /^약 내기/ }).isVisible())
@@ -47,7 +48,7 @@ async function actOnce(page: Page, touch: boolean): Promise<void> {
     await ppong(page).click();
     return;
   }
-  for (const name of ["스톱", "다음 판"]) {
+  for (const name of ["스톱", "다음 판", "한 장 가져오기"]) {
     const b = page.getByRole("button", { name, exact: true });
     if (await b.isVisible()) {
       await b.click();
@@ -292,7 +293,7 @@ test("나이롱뽕: 방장이 방을 만들고 친구가 링크로 들어와 끝
 
   // 방장이 나가면 기록과 섞은 값이 공개되고, 참가자가 처음부터 다시 계산해 확인한다.
   await host.getByRole("button", { name: "← 나이롱뽕" }).click();
-  await expect(guest.getByText(/검증.*문제없음/)).toBeVisible({
+  await expect(guest.getByText(/\[검증\] 나 — 문제없음/)).toBeVisible({
     timeout: 10_000,
   });
   expect(errors).toEqual([]);

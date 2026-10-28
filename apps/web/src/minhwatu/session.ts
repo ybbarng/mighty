@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import type {
   Action,
   GameEvent,
@@ -17,7 +18,7 @@ export type MinhwatuHostRoom = HostRoom<
   MinhwatuView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 export type MinhwatuGuestRoom = GuestRoom<
   MinhwatuRules,
@@ -25,7 +26,7 @@ export type MinhwatuGuestRoom = GuestRoom<
   MinhwatuView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 
 /** 지금 들어가 있는 민화투 온라인 방. 화면이 바뀌어도(대기실 → 게임) 연결은 이어진다 */

@@ -1,6 +1,7 @@
 # 13. 멘탈 포커 설계와 시험 구현 (2026-10-21)
 
 방장도 남의 패를 볼 수 없게 하는 방법을 설계하고 구현했다. 마이티(2~7마)와 하트 친구와 하기에 붙였고 기본으로 켜져 있다(8·9절).
+2026-10-29 화투 세 게임(고스톱·민화투·나이롱뽕)으로 넓혔다. 카드 번호표 뒤에 화투 48장을 덧붙이고 바닥·더미가 있는 게임의 공통 진행을 두었다(`hwatu-table.ts`, docs/27 3절).
 
 - 코드: `packages/fair-play` (SRA 암호 `sra.ts`, 섞기·나눠 주기·내기 `protocol.ts`, 무늬 안 따르기 감시 `renege.ts`, 나간 사람 처리 `dropout.ts`)
 - 시험: `pnpm --filter @mighty/fair-play exec vitest run`(21개), 계산 시간 `pnpm --filter @mighty/fair-play bench`

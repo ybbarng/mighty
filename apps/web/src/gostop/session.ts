@@ -5,6 +5,7 @@ import type {
   GostopState,
   GostopView,
 } from "@mighty/gostop-engine";
+import type { PresetDeal } from "@mighty/hwatu";
 
 import { useChat } from "@/net/chat";
 import type { GuestRoom } from "@/net/guest-room";
@@ -17,7 +18,7 @@ export type GostopHostRoom = HostRoom<
   GostopView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 export type GostopGuestRoom = GuestRoom<
   GostopRules,
@@ -25,7 +26,7 @@ export type GostopGuestRoom = GuestRoom<
   GostopView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 
 /** 지금 들어가 있는 고스톱 온라인 방. 화면이 바뀌어도(대기실 → 대국) 연결은 이어진다 */

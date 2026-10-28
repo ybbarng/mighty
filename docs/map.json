@@ -3,8 +3,8 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T19:54:23Z",
-  "here": "fairness-hwatu-poker",
+  "updatedAt": "2026-10-28T20:13:30Z",
+  "here": "fairness-realtime",
   "regions": [
     {
       "id": "platform",
@@ -251,7 +251,7 @@
       "title": "보안·공정성",
       "status": "building",
       "size": 4,
-      "summary": "방장도 남의 패를 모르게(멘탈 포커), 판 끝에 모두가 다시 계산해 확인",
+      "summary": "방장도 남의 패를 모르게(멘탈 포커: 마이티·하트·화투 셋), 판 끝에 모두가 다시 계산해 확인",
       "links": [
         {
           "label": "멘탈 포커",
@@ -304,15 +304,27 @@
       "id": "fairness-hwatu-poker",
       "title": "화투로 멘탈 포커 넓히기",
       "parent": "fairness",
-      "status": "fog",
+      "status": "done",
       "size": 3,
-      "summary": "지금 멘탈 포커는 마이티 53장에 맞춰져 있다. 48장 일반 덱으로 넓혀 고스톱·민화투·나이롱뽕에 쓴다",
-      "next": "화투 게임 셋을 합친 뒤 한 번에",
+      "summary": "고스톱·민화투·나이롱뽕 암호화방: 방장도 더미와 남의 손패를 모른다. 48장 공통 진행(나눠 주기·바닥·뒤집기·가져오기), 방장이 엔진을 한 걸음 미리 돌려 더미 자리만 열고, 판마다 진짜 패로 다시 돌려 확인한다",
+      "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
         {
-          "label": "화투 기초",
+          "label": "화투 기초 3절(멘탈 포커)",
           "path": "docs/27-hwatu.md"
+        },
+        {
+          "label": "고스톱",
+          "path": "docs/28-gostop.md"
+        },
+        {
+          "label": "민화투",
+          "path": "docs/29-minhwatu.md"
+        },
+        {
+          "label": "나이롱뽕",
+          "path": "docs/30-nyrongppong.md"
         }
       ]
     },

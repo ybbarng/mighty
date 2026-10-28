@@ -24,6 +24,7 @@ import type { ResultBanner as Banner } from "@/game/result-banner";
 import { useSettings } from "@/game/settings";
 import { HwatuCardView } from "@/hwatu/components/HwatuCard";
 import { HwatuDeck } from "@/hwatu/components/HwatuLayout";
+import { HwatuFairBar } from "@/hwatu/fair-bar";
 import { cn } from "@/lib/cn";
 
 import { NYRONGPPONG_LEVELS } from "../settings";
@@ -316,7 +317,10 @@ export function NyrongppongGame({
   } else if (d?.kind === "call")
     status = `뽕할 수 있어요! ${Math.ceil(callLeft / 1000)}초`;
   else if (d?.kind === "draw")
-    status = `스톱할 수 있어요(합 ${handValue(view.hand)}). 스톱하거나 한 장 가져오세요`;
+    // 암호화방은 뽕한 적이 있으면 늘 묻는다(방장이 손패 합을 모른다). 스톱할 수 없으면 가져오기만.
+    status = d.canStop
+      ? `스톱할 수 있어요(합 ${handValue(view.hand)}). 스톱하거나 한 장 가져오세요`
+      : `합 ${handValue(view.hand)}라 스톱할 수 없어요. 한 장 가져오세요`;
   else if (myDiscard)
     status = d.yak
       ? `약이 됐어요: ${YAK_NAMES[d.yak.kind]}! 내거나 한 장 버리세요`
@@ -380,6 +384,7 @@ export function NyrongppongGame({
         </span>
       </header>
 
+      {online && <HwatuFairBar me={me} over={view.phase === "gameOver"} />}
       {online && (reconnecting || hostLeft) && (
         <p
           role="alert"
@@ -542,13 +547,15 @@ export function NyrongppongGame({
         <div className="flex flex-wrap justify-center gap-2">
           {d?.kind === "draw" && (
             <>
-              <button
-                type="button"
-                onClick={() => submit({ type: "stop" })}
-                className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-              >
-                스톱
-              </button>
+              {d.canStop && (
+                <button
+                  type="button"
+                  onClick={() => submit({ type: "stop" })}
+                  className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
+                >
+                  스톱
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => submit({ type: "draw" })}

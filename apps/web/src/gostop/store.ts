@@ -6,6 +6,7 @@ import type {
   GostopState,
   GostopView,
 } from "@mighty/gostop-engine";
+import type { PresetDeal } from "@mighty/hwatu";
 import { create } from "zustand";
 
 import { browserPace } from "@/game/bots";
@@ -24,14 +25,14 @@ export type GostopLocalMatch = LocalMatch<
   GostopView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 /** 화면이 아는 대국 창구: 혼자 하기·방장은 LocalMatch, 참가자는 RemoteMatch */
 export type GostopHost = MatchHost<GostopView, Action, GameEvent> & {
   drain(): Snapshot<GostopView, GameEvent>[];
 };
 
-export type GostopSaved = SavedMatch<GostopRules, Action, undefined> & {
+export type GostopSaved = SavedMatch<GostopRules, Action, PresetDeal> & {
   /** 컴퓨터 단계(0 입문, 1 중수, 2 고수) */
   level: number;
 };

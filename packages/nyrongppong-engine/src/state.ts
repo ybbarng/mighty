@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import type { Yak } from "./hand";
 import type { NyrongppongRules } from "./rules";
 
@@ -75,6 +76,15 @@ export interface NyrongppongState {
   continued: boolean[];
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
   retired?: boolean;
+  /**
+   * 멘탈 포커 판(docs/30 4절). 방장 엔진이 남의 손패를 모른 채 진행하도록 손패에 달린 갈림을 없앤다.
+   * - 판마다 시드 대신 함께 섞어 나눈 패(`preset`)로 나눈다
+   * - 버릴 때마다 모두에게 응답 창을 연다. 뽕할 수 있는지는 부를 때 확인하고(두 장을 보인다), 먼저 부른 사람이 가져간다
+   * - 뽕을 한 적이 있으면 차례마다 스톱을 묻는다(손패 합을 몰라도 같은 갈림)
+   */
+  fair?: true;
+  /** 이번에 나눌 판의 패(멘탈 포커). 나누면 지운다 */
+  preset?: PresetDeal;
 }
 
 export type Action =

@@ -1,3 +1,5 @@
+import type { PresetDeal } from "@mighty/hwatu";
+
 import type { MinhwatuRules } from "./rules";
 import type { SeatScore, YakId } from "./score";
 
@@ -58,6 +60,10 @@ export interface MinhwatuState {
   continued: boolean[];
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
   retired?: boolean;
+  /** 멘탈 포커 판: 판마다 시드 대신 미리 정한 패로 나눈다(`preset`) */
+  fair?: true;
+  /** 다음에 나눌 판의 패(멘탈 포커). 나누면 지운다 */
+  preset?: PresetDeal;
 }
 
 export type Action =
