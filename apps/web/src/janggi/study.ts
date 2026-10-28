@@ -3,6 +3,7 @@ import {
   applyMove,
   type Board,
   createJanggiScenario,
+  forcesMateAfter,
   isCheckmate,
   type JanggiState,
   KIND_NAMES,
@@ -48,7 +49,12 @@ export function judgeMove(
   if (isCheckmate(after, "h")) return "solved";
   const last = step >= puzzle.mateIn - 1;
   if (last) return "wrong";
-  return sameMove(move, parseMove(puzzle.solution)) ? "next" : "wrong";
+  if (step === 0)
+    return sameMove(move, parseMove(puzzle.solution)) ? "next" : "wrong";
+  // 세 수 문제의 가운데 수: 남은 수 안에 외통이 되면 어느 수든 맞다.
+  return forcesMateAfter(after, "c", puzzle.mateIn - step - 1)
+    ? "next"
+    : "wrong";
 }
 
 /** 상대(한)의 받는 수: 고수가 가장 오래 버티는 수를 고른다. 같은 문제는 늘 같은 수 */

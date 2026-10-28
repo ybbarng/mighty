@@ -54,6 +54,9 @@ const TEXT: Record<
   },
 };
 
+/** 수 세기 낱말 */
+const COUNT: Record<number, string> = { 1: "한", 2: "두", 3: "세" };
+
 /** 상대가 받는 수를 보이기 전에 잠깐 기다린다 */
 const REPLY_MS = 600;
 
@@ -169,8 +172,10 @@ export function JanggiPuzzleScreen({
     puzzle.kind !== "mate" || puzzle.mateIn === 1
       ? text.prompt
       : stepIndex === 0
-        ? "두 수 만에 외통: 첫 수를 두세요"
-        : "이제 외통을 만드세요";
+        ? `${COUNT[puzzle.mateIn]} 수 만에 외통: 첫 수를 두세요`
+        : stepIndex < puzzle.mateIn - 1
+          ? `외통까지 ${COUNT[puzzle.mateIn - stepIndex]} 수 남았어요`
+          : "이제 외통을 만드세요";
   const statusText =
     status === "solved"
       ? text.solved

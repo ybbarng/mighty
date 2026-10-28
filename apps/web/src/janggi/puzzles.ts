@@ -19,7 +19,7 @@ export type JanggiPuzzle = {
   /** 첫 정답 수 "출발-도착" */
   solution: string;
 } & (
-  | { kind: "mate"; mateIn: 1 | 2 }
+  | { kind: "mate"; mateIn: 1 | 2 | 3 }
   | { kind: "fork" }
   | { kind: "trade"; trap: string }
 );
@@ -465,6 +465,81 @@ const MATE_IN_TWO: readonly Raw[] = [
   },
 ];
 
+/*
+ * 세 수 외통: 한 수·두 수 외통이 없고, 세 수 외통의 첫 수가 하나뿐인 판을 엔진으로 골랐다(`mateInThreeMoves`).
+ * 둘째 수부터는 남은 수 안에 외통이 되는 수면 어느 수든 정답이다.
+ */
+const MATE_IN_THREE: readonly Raw[] = [
+  {
+    pieces: { "19": "cR", "26": "hK", "56": "cP", "95": "cK" },
+    solution: "19-14",
+  },
+  {
+    pieces: { "25": "cP", "34": "hK", "73": "cR", "95": "cK" },
+    solution: "73-75",
+  },
+  {
+    pieces: { "23": "cN", "24": "hK", "42": "cR", "05": "cK" },
+    solution: "42-45",
+  },
+  {
+    pieces: { "15": "hK", "38": "cR", "78": "cN", "96": "cK" },
+    solution: "38-34",
+  },
+  {
+    pieces: { "14": "hK", "52": "cN", "58": "cN", "67": "cR", "95": "cK" },
+    solution: "67-65",
+  },
+  {
+    pieces: {
+      "19": "cN",
+      "34": "hK",
+      "36": "hA",
+      "37": "cR",
+      "43": "cP",
+      "05": "cK",
+    },
+    solution: "37-36",
+  },
+  {
+    pieces: { "16": "hK", "24": "cC", "32": "cC", "37": "cR", "94": "cK" },
+    solution: "37-36",
+  },
+  {
+    pieces: {
+      "15": "hN",
+      "18": "cR",
+      "25": "hK",
+      "63": "cN",
+      "76": "cN",
+      "86": "cK",
+    },
+    solution: "63-44",
+  },
+  {
+    pieces: {
+      "19": "hE",
+      "23": "cN",
+      "36": "hK",
+      "41": "cC",
+      "43": "cR",
+      "95": "cK",
+    },
+    solution: "43-45",
+  },
+  {
+    pieces: {
+      "25": "hK",
+      "26": "hA",
+      "27": "cR",
+      "58": "cR",
+      "72": "cN",
+      "86": "cK",
+    },
+    solution: "58-56",
+  },
+];
+
 export const JANGGI_PUZZLE_SETS: readonly JanggiPuzzleSet[] = [
   {
     id: "mate1",
@@ -506,6 +581,17 @@ export const JANGGI_PUZZLE_SETS: readonly JanggiPuzzleSet[] = [
       id: `mate2-${i + 1}`,
       kind: "mate",
       mateIn: 2,
+      ...p,
+    })),
+  },
+  {
+    id: "mate3",
+    title: "세 수 외통",
+    summary: "상대가 어떻게 받아도 세 수째에 외통이 되는 첫 수를 찾는다",
+    puzzles: MATE_IN_THREE.map((p, i) => ({
+      id: `mate3-${i + 1}`,
+      kind: "mate",
+      mateIn: 3,
       ...p,
     })),
   },
