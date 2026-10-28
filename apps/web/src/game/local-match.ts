@@ -164,6 +164,11 @@ export class LocalMatch<
   private readonly clock: Clock;
   private turnSince = 0;
   private cancelFlag: (() => void) | null = null;
+  /**
+   * 마지막으로 기록에 들어간 수 뒤의 컴퓨터 난수. 새로고침에 대비해 남길 때 쓴다(컴퓨터가 생각만 하고
+   * 아직 두지 못한 수(멘탈 포커 준비 중)의 난수까지 남기면 되살린 뒤 같은 수를 다시 생각하지 못한다)
+   */
+  private appliedRng = 0;
 
   constructor(
     options: LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -193,11 +198,13 @@ export class LocalMatch<
     this.clock = options.clock ?? realClock;
     this.stepper =
       options.step ?? ((st, seat, a) => this.kit.step(st, seat, a));
+    this.appliedRng = this.rng.seed;
 
     if (options.resume) {
       this.state = options.resume.state;
       this.log.push(...options.resume.log);
       this.rng.seed = options.resume.rng;
+      this.appliedRng = options.resume.rng;
       this.hold(this.seat, {
         view: this.kit.viewOf(this.state, this.seat),
         events: [],
@@ -475,7 +482,7 @@ export class LocalMatch<
 
   /** 방장 새로고침에 대비해 남길 진행 */
   resumeState(): ResumeState<State, ActionT> {
-    return { state: this.state, log: [...this.log], rng: this.rng.seed };
+    return { state: this.state, log: [...this.log], rng: this.appliedRng };
   }
 
   /** 판 끝 검증용 행동 기록 */
@@ -499,6 +506,7 @@ export class LocalMatch<
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push(bot ? { seat, action, bot: true } : { seat, action });
+    this.appliedRng = this.rng.seed;
     if (this.kit.timing) this.armClock();
     // 멘탈 포커는 이 걸음의 사건으로 섞기·나눠 주기를 이어 간다(화면을 보내기 전에).
     this.options.afterStep?.(this.state, result.events);

@@ -4,7 +4,7 @@ import { ManualClock, prepareGroup } from "@mighty/fair-play";
 import { isHiddenId } from "@mighty/hwatu";
 import { expect } from "vitest";
 import type { GameKit, KitBot } from "@/game/kit";
-import type { AuditResult, GuestRoom } from "@/net/guest-room";
+import type { AuditResult, FairSaved, GuestRoom } from "@/net/guest-room";
 import type { HostRoom, IncidentNotice } from "@/net/host-room";
 import { memoryHostStore } from "@/net/host-store";
 import { MemoryNetwork } from "@/net/transport";
@@ -31,6 +31,40 @@ export type AnyHost = HostRoom<any, any, any, any, any, any>;
 // biome-ignore lint/suspicious/noExplicitAny: 게임마다 모양이 다르다
 export type AnyGuest = GuestRoom<any, any, any, any, any, any>;
 
+/** 참가자 브라우저 저장소(새로고침해도 남는다) */
+export function memoryFairStore() {
+  let saved: FairSaved | null = null;
+  return {
+    load: () => saved,
+    save: (s: FairSaved) => {
+      saved = JSON.parse(JSON.stringify(s));
+    },
+  };
+}
+
+/** 방장 옵션(새로고침한 방장을 새로 만들 때도 쓴다) */
+export function hwatuHostOptions(options: {
+  kit: AnyKit;
+  rules: unknown;
+  // biome-ignore lint/suspicious/noExplicitAny: 게임마다 모양이 다르다
+  bot: KitBot<any, any>;
+  botLevel: number;
+  clock: ManualClock;
+  store?: ReturnType<typeof memoryHostStore>;
+}) {
+  return {
+    kit: options.kit,
+    hostName: "방장",
+    rules: options.rules,
+    bot: options.bot,
+    botLevel: options.botLevel,
+    revealTimeoutMs: 500,
+    fair: { group: "r255" },
+    clock: options.clock,
+    ...(options.store ? { store: options.store } : {}),
+  };
+}
+
 /** 방장 하나와 참가자 여럿, 빈자리는 컴퓨터. 암호화방(r255) */
 export async function setupHwatu(options: {
   kit: AnyKit;
@@ -47,16 +81,8 @@ export async function setupHwatu(options: {
   const clock = new ManualClock();
   const store = options.hostStore ? memoryHostStore() : undefined;
   const host = new options.HostRoom({
-    kit: options.kit,
     transport: net.join("host"),
-    hostName: "방장",
-    rules: options.rules,
-    bot: options.bot,
-    botLevel: options.botLevel,
-    revealTimeoutMs: 500,
-    fair: { group: "r255" },
-    clock,
-    ...(store ? { store } : {}),
+    ...hwatuHostOptions({ ...options, clock, ...(store ? { store } : {}) }),
   } as never);
   const guests: AnyGuest[] = [];
   for (let i = 0; i < options.guests; i++) {
@@ -65,6 +91,7 @@ export async function setupHwatu(options: {
       transport: net.join(`g${i}`),
       name: `손님${i}`,
       token: null,
+      fairStore: memoryFairStore(),
       clock,
     } as never);
     await until(() => guest.seat !== null, "자리");
