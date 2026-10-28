@@ -3,7 +3,7 @@ import type { GameEvent } from "@mighty/gostop-engine";
 import type { Cue } from "@/game/sound";
 
 /**
- * 고스톱 사건에 맞는 소리(있는 소리를 다시 쓴다, docs/28 4절).
+ * 고스톱 사건에 맞는 소리(화투 소리 + 있는 소리, docs/28 4절).
  * 카드 내기·뒤집기, 먹기, 뻑·쪽 같은 특별한 일, 피 뺏김, 고·스톱, 판 끝
  */
 export function gostopCues(events: readonly GameEvent[], me: number): Cue[] {
@@ -19,10 +19,10 @@ export function gostopCues(events: readonly GameEvent[], me: number): Cue[] {
       case "played":
       case "bombed":
       case "flipOnly":
-        add("card");
+        add("hwatuSlap");
         break;
       case "flipped":
-        add("pickCard");
+        add("hwatuFlip");
         break;
       case "captured":
         add("capture");
@@ -36,7 +36,7 @@ export function gostopCues(events: readonly GameEvent[], me: number): Cue[] {
         if (e.from === me) add("penalty");
         break;
       case "go":
-        add("bid");
+        add("go");
         break;
       case "stopped":
         add("announce");

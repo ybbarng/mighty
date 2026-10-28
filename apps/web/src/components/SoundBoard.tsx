@@ -83,6 +83,16 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "lose", when: "외통당함·내가 기권·점수로 짐" },
     ],
   },
+  {
+    title: "화투(고스톱·민화투·나이롱뽕)",
+    cues: [
+      { cue: "hwatuSlap", when: "패를 내 바닥에 침" },
+      { cue: "hwatuFlip", when: "더미에서 한 장 뒤집음·가져옴" },
+      { cue: "yak", when: "약이 남(초약·홍단 등), 고스톱 점수가 남" },
+      { cue: "go", when: "고스톱: 고를 부름" },
+      { cue: "ppong", when: "나이롱뽕: 뽕을 부름" },
+    ],
+  },
 ];
 
 interface Level {

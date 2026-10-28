@@ -46,7 +46,7 @@ describe("민화투 키트", () => {
 });
 
 describe("민화투 소리", () => {
-  it("먹으면 잡기, 못 먹으면 카드 내기, 뒤집기는 조금 뒤에", () => {
+  it("먹으면 잡기, 못 먹으면 패 치기·뒤집기(조금 뒤에)", () => {
     const events: GameEvent[] = [
       { type: "played", seat: 0, card: "03g", took: ["03g", "03p"] },
       { type: "flipped", seat: 0, card: "05p", took: [] },
@@ -54,7 +54,7 @@ describe("민화투 소리", () => {
     ];
     expect(minhwatuCues(events, 0)).toEqual([
       { cue: "capture", delay: 0 },
-      { cue: "cardSet", delay: 0.35 },
+      { cue: "hwatuFlip", delay: 0.35 },
       { cue: "penalty", delay: expect.closeTo(0.65) },
     ]);
   });

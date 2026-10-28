@@ -131,10 +131,11 @@ interface NyrongppongStore {
 function cuesFor(events: readonly GameEvent[], me: number): void {
   for (const e of events) {
     if (e.type === "roundStarted") playUiCue("deal");
-    if (e.type === "discarded") playUiCue("card");
-    if (e.type === "drew" && e.seat === me) playUiCue("pickCard");
-    if (e.type === "ppong") playUiCue(e.seat === me ? "announce" : "jokerCall");
-    if (e.type === "stopped" || e.type === "declared") playUiCue("cardSet");
+    if (e.type === "discarded") playUiCue("hwatuSlap");
+    if (e.type === "drew" && e.seat === me) playUiCue("hwatuFlip");
+    if (e.type === "ppong") playUiCue("ppong");
+    if (e.type === "stopped") playUiCue("cardSet");
+    if (e.type === "declared") playUiCue("yak");
     if (e.type === "roundEnded") {
       const scores = e.result.scores;
       const best = Math.min(...scores);

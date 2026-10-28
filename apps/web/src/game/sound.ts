@@ -66,7 +66,17 @@ export type Cue =
   /** 장기: 상대 기물을 쳐서 잡는 "탁-딱" */
   | "capture"
   /** 장기: 장군을 부르는 짧은 나팔 */
-  | "check";
+  | "check"
+  /** 화투: 패를 바닥에 치는 "착" */
+  | "hwatuSlap"
+  /** 화투: 더미에서 한 장 뒤집는 "사락" */
+  | "hwatuFlip"
+  /** 화투: 약(초약·홍단 등)이나 점수가 남 */
+  | "yak"
+  /** 고스톱: "고!" */
+  | "go"
+  /** 나이롱뽕: "뽕!" */
+  | "ppong";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -101,6 +111,11 @@ export const CUE_LABELS: Record<Cue, string> = {
   piece: "장기: 기물 놓기",
   capture: "장기: 잡기",
   check: "장기: 장군",
+  hwatuSlap: "화투: 패 치기",
+  hwatuFlip: "화투: 뒤집기",
+  yak: "화투: 약",
+  go: "고스톱: 고",
+  ppong: "나이롱뽕: 뽕",
 };
 
 /**
@@ -136,6 +151,10 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   queenOfSpades: -5.8,
   heartsBroken: 2,
   roundEnd: -1.5,
+  hwatuSlap: 8.7,
+  hwatuFlip: 6,
+  ppong: 6.5,
+  go: -1.5,
 };
 
 function trim(cue: Cue): number {
@@ -160,6 +179,8 @@ const BIG: ReadonlySet<Cue> = new Set<Cue>([
   "lose",
   "queenOfSpades",
   "heartsBroken",
+  "go",
+  "ppong",
 ]);
 
 interface Graph {
@@ -846,6 +867,77 @@ function render(cue: Cue, v: Voice): void {
       // "장군!": 짧게 두 번 부는 나팔
       brass(v, 392, 0, 0.12, { gain: 0.1 });
       brass(v, 523.25, 0.13, 0.32, { gain: 0.11, vibrato: [6, 3] });
+      break;
+    case "hwatuSlap": {
+      // 두꺼운 화투 패가 담요 위 패를 내리치는 "착": 짧고 밝은 마찰음과 낮은 "툭"
+      const vary = 0.94 + random() * 0.12;
+      noise(v, 0, 0.03, {
+        filter: "bandpass",
+        freq: 3200 * vary,
+        q: 1.2,
+        gain: 0.8,
+        attack: 0.001,
+      });
+      noise(v, 0.012, 0.05, {
+        filter: "lowpass",
+        freq: 900,
+        gain: 0.35,
+        attack: 0.002,
+      });
+      thump(v, 0, 170 * vary, 110, 0.07, 0.2);
+      break;
+    }
+    case "hwatuFlip":
+      // 더미에서 한 장 집어 뒤집는 "사락"
+      noise(v, 0, 0.09, {
+        filter: "bandpass",
+        freq: 2200,
+        sweepTo: 3600,
+        q: 0.9,
+        gain: 0.35,
+        attack: 0.02,
+      });
+      noise(v, 0.08, 0.025, {
+        filter: "bandpass",
+        freq: 2800,
+        q: 1.4,
+        gain: 0.5,
+        attack: 0.001,
+      });
+      break;
+    case "yak":
+      // 약이 났다: 맑은 종 셋이 올라간다
+      bell(v, C5, 0, 0.5, 0.07);
+      bell(v, E5, 0.09, 0.5, 0.07);
+      bell(v, G5, 0.18, 0.8, 0.08);
+      break;
+    case "go":
+      // "고!": 힘차게 한 번 올려 부는 나팔
+      brass(v, 392, 0, 0.1, { gain: 0.09 });
+      brass(v, 587.33, 0.09, 0.3, { gain: 0.1, vibrato: [6, 3] });
+      break;
+    case "ppong":
+      // "뽕!": 높은 데서 뚝 떨어지는 통통한 소리와 손바닥으로 패를 내리치는 "탁"
+      tone(v, 900, 0, 0.16, {
+        type: "sine",
+        gain: 0.22,
+        endFreq: 260,
+        attack: 0.004,
+      });
+      tone(v, 1800, 0, 0.06, {
+        type: "triangle",
+        gain: 0.05,
+        endFreq: 700,
+        attack: 0.002,
+      });
+      noise(v, 0.02, 0.03, {
+        filter: "bandpass",
+        freq: 2600,
+        q: 1.3,
+        gain: 0.7,
+        attack: 0.001,
+      });
+      thump(v, 0.02, 150, 90, 0.1, 0.22);
       break;
     case "roundEnd":
       // 점수표를 펼치는 "사락"과 "띵동"

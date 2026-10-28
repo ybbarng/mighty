@@ -161,7 +161,7 @@ describe("고스톱 게임 키트", () => {
         ],
         0,
       ),
-    ).toEqual(["card", "pickCard", "dealMiss", "penalty"]);
+    ).toEqual(["hwatuSlap", "hwatuFlip", "dealMiss", "penalty"]);
     expect(
       gostopCues(
         [

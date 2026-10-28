@@ -28,18 +28,24 @@ export function minhwatuCues(
         out.push({ cue: "shuffle", delay: 0 }, { cue: "deal", delay: 0.3 });
         break;
       case "played":
-        out.push({ cue: e.took.length > 0 ? "capture" : "card", delay: 0 });
+        out.push({
+          cue: e.took.length > 0 ? "capture" : "hwatuSlap",
+          delay: 0,
+        });
         at = FLIP_DELAY;
         break;
       case "flipped":
-        out.push({ cue: e.took.length > 0 ? "capture" : "cardSet", delay: at });
+        out.push({
+          cue: e.took.length > 0 ? "capture" : "hwatuFlip",
+          delay: at,
+        });
         break;
       case "picked":
         out.push({ cue: "capture", delay: 0 });
         break;
       case "yak":
         out.push({
-          cue: e.seat === me ? "announce" : "penalty",
+          cue: e.seat === me ? "yak" : "penalty",
           delay: at + 0.3,
         });
         break;
