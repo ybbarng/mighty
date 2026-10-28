@@ -29,7 +29,7 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   page,
 }, info) => {
   await prepare(page);
-  await page.goto("/");
+  await page.goto("/mighty");
   await page.getByRole("button", { name: /마이티 배우기/ }).click();
   await expect(page.getByText("0/10")).toBeVisible();
 

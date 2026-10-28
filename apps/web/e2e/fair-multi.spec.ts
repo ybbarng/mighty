@@ -156,7 +156,7 @@ async function openTable(
     await host.goto(`/hearts?net=local${query}`);
     await host.getByRole("button", { name: /다함께 하트/ }).click();
   } else {
-    await host.goto(`/?net=local${query}`);
+    await host.goto(`/mighty?net=local${query}`);
     await host.getByRole("button", { name: "옵션", exact: true }).click();
     await host.getByRole("button", { name: preset, exact: true }).click();
     await host.getByRole("button", { name: "처음으로" }).click();

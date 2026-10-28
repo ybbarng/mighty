@@ -42,22 +42,3 @@ export function heartsRules(code: string): HeartsRules {
   const decoded = decodeHeartsRules(code);
   return decoded.ok ? decoded.rules : WINDOWS_RULES;
 }
-
-const UNLOCK_KEY = "hearts-unlocked";
-
-/** 숨은 하트를 한 번 찾았으면 첫 화면에 ♥ 단추를 남긴다 */
-export function heartsUnlocked(): boolean {
-  try {
-    return localStorage.getItem(UNLOCK_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function unlockHearts(): void {
-  try {
-    localStorage.setItem(UNLOCK_KEY, "1");
-  } catch {
-    // 저장하지 못해도 이번에는 들어간다.
-  }
-}

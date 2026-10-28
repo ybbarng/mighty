@@ -54,7 +54,7 @@ for (const variant of VARIANTS) {
       if (m.type() === "error") errors.push(m.text());
     });
     await prepare(page);
-    await page.goto("/");
+    await page.goto("/mighty");
     await startSolo(page, variant.preset);
 
     const shots = new Set<string>();

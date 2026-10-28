@@ -1,5 +1,5 @@
-import { MightyApp } from "@/components/MightyApp";
+import { GameCenterHome } from "@/components/GameCenterHome";
 
 export default function Home() {
-  return <MightyApp />;
+  return <GameCenterHome />;
 }

@@ -1,11 +1,10 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { BOT_LEVELS } from "@/game/bots";
 import { chosenRules, ruleLabel, useSettings } from "@/game/settings";
 import { playUiCue } from "@/game/ui-sound";
-import { heartsUnlocked, unlockHearts } from "@/hearts/settings";
 import { cn } from "@/lib/cn";
 import { useTutorialProgress } from "@/tutorial/progress";
 
@@ -82,30 +81,18 @@ export function StartScreen({
   // 처음 온 사람에게는 배우기를 먼저 권한다.
   const newcomer = learned === 0 && !onResume;
 
-  // 숨은 하트: 로고를 3초 안에 다섯 번 누르면 하트로 간다. 한 번 찾으면 ♥ 단추가 남는다.
-  const [hearts, setHearts] = useState(false);
-  useEffect(() => setHearts(heartsUnlocked()), []);
-  const taps = useRef<number[]>([]);
-  const goHearts = () => {
-    unlockHearts();
-    window.location.href = "/hearts";
-  };
-  const tapLogo = () => {
-    const now = Date.now();
-    taps.current = [...taps.current.filter((t) => now - t < 3000), now];
-    if (taps.current.length >= 5) goHearts();
-  };
-
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
       <div className="flex w-full max-w-sm flex-col gap-3">
+        <a
+          href="/"
+          className="self-start text-sm text-white/70 hover:text-white"
+        >
+          ← 게임 목록
+        </a>
         <div className="mb-2 text-center">
           <h1 className="flex justify-center">
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: 숨은 메뉴라 일부러 단추로 드러내지 않는다 */}
-            {/* biome-ignore lint/a11y/useKeyWithClickEvents: 숨은 메뉴라 키보드 길은 두지 않는다(한 번 찾으면 ♥ 단추가 생긴다) */}
-            <div onClick={tapLogo} className="select-none">
-              <Logo size={240} animated />
-            </div>
+            <Logo size={240} animated />
           </h1>
           <p className="mt-2 font-medium text-sm text-white/85">
             공약을 걸고, 프렌드를 찾고, 마이티로 뒤집어라
@@ -162,22 +149,11 @@ export function StartScreen({
             마이티는?
           </button>
           <a
-            href="/profile"
+            href="/profile?game=mighty"
             className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
           >
             내 기록
           </a>
-          {hearts && (
-            <button
-              type="button"
-              onClick={goHearts}
-              aria-label="하트"
-              title="하트"
-              className="rounded-xl bg-white/10 px-3 py-2 text-red-400 hover:bg-white/15"
-            >
-              ♥
-            </button>
-          )}
         </div>
         <p className="mt-2 text-center text-[11px] opacity-40">
           마이티 네트워크 4.0을 이어받아 만들었습니다

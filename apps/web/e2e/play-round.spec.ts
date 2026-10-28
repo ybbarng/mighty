@@ -57,7 +57,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
     if (m.type() === "error") errors.push(m.text());
   });
   await prepare(page);
-  await page.goto("/");
+  await page.goto("/mighty");
 
   await expect(page.getByRole("img", { name: /마이티/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("1-start.png") });
@@ -117,7 +117,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
 for (const preset of ["표준 5마", "표준 7마"]) {
   test(`${preset}: 공약 단추가 스크롤 없이 다 보인다`, async ({ page }) => {
     await prepare(page);
-    await page.goto("/");
+    await page.goto("/mighty");
     await startSolo(page, preset);
     const bid = page.getByRole("button", { name: /^출마/ });
     await bid.waitFor({ timeout: 20_000 });
@@ -134,7 +134,7 @@ test("움직임 줄이기를 켜면 섞고 나눠 주는 연출 없이 바로 �
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await prepare(page);
-  await page.goto("/");
+  await page.goto("/mighty");
   await startSolo(page);
   // 연출이 있으면 2초 넘게 걸린다.
   await expect(page.getByText("공약을 정하세요")).toBeVisible({

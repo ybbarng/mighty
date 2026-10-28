@@ -78,7 +78,7 @@ function MenuItem({
   );
 }
 
-/** 마이티 안의 숨은 하트(/hearts) */
+/** 하트(/hearts) */
 export function HeartsApp() {
   const [screen, setScreen] = useState<Screen>({ kind: "start" });
   const [saved, setSaved] = useState<HeartsSaved | null>(null);
@@ -244,7 +244,7 @@ export function HeartsApp() {
             href="/"
             className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
           >
-            ♠ 마이티로
+            게임 목록
           </a>
         </div>
       </div>

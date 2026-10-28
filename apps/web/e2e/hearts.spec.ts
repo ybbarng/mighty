@@ -44,11 +44,10 @@ async function stepOnce(page: Page): Promise<boolean> {
   return false;
 }
 
-test("마이티 로고를 다섯 번 누르면 하트로 간다", async ({ page }) => {
+test("게임 목록에서 하트를 고르면 하트로 간다", async ({ page }) => {
   await prepare(page);
   await page.goto("/");
-  const logo = page.locator("h1 div").first();
-  for (let i = 0; i < 5; i++) await logo.click();
+  await page.getByRole("link", { name: /하트/ }).first().click();
   await expect(page).toHaveURL(/\/hearts$/);
   await expect(page.getByRole("button", { name: /나홀로 하트/ })).toBeVisible();
   // 안드로이드 아래 막대에 비치는 색도 하트 색으로 바뀐다.
@@ -62,9 +61,10 @@ test("마이티 로고를 다섯 번 누르면 하트로 간다", async ({ page 
   await expect
     .poll(colors)
     .toEqual({ theme: "#3b0a0a", html: "rgb(59, 10, 10)" });
-  // 한 번 찾으면 마이티 첫 화면에 ♥ 단추가 남는다.
-  await page.goto("/");
-  await expect(page.getByRole("button", { name: "하트" })).toBeVisible();
+  await page.goto("/mighty");
+  await expect(
+    page.getByRole("button", { name: /나홀로 마이티/ }),
+  ).toBeVisible();
   await expect
     .poll(colors)
     .toEqual({ theme: "#0a3622", html: "rgb(10, 54, 34)" });

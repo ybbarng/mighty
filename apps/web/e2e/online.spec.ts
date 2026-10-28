@@ -71,7 +71,7 @@ test("방장이 방을 만들고 친구가 링크로 들어와 한 판을 끝까
     await prepare(p);
   }
 
-  await host.goto("/?net=local");
+  await host.goto("/mighty?net=local");
   await host.getByRole("button", { name: /다함께 마이티/ }).click();
   await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
   // 방 종류: 기본은 암호화방이다.
@@ -136,7 +136,7 @@ test("게임 중에 참가자가 새로고침해도 같은 자리로 돌아온�
   const guest = await context.newPage();
   for (const p of [host, guest]) await prepare(p);
 
-  await host.goto("/?net=local");
+  await host.goto("/mighty?net=local");
   await host.getByRole("button", { name: /다함께 마이티/ }).click();
   await host.getByPlaceholder("친구들에게 보일 이름").fill("방장");
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();

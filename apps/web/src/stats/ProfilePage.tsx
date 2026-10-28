@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
 import { kirudaName } from "@/game/terms";
-import { heartsUnlocked } from "@/hearts/settings";
 import { summarizeHearts } from "@/hearts/stats";
 import { cn } from "@/lib/cn";
 
@@ -41,24 +40,20 @@ export function ProfilePage() {
   const name = useSettings((s) => s.playerName);
   const [book, setBook] = useState<StatsBook | null>(null);
   const [tab, setTab] = useState<"mighty" | "hearts">("mighty");
-  const [hearts, setHearts] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  /** 들어온 게임의 처음 화면 */
+  /** 들어온 게임의 처음 화면. 게임 목록에서 왔으면 목록 */
   const [back, setBack] = useState("/");
   const file = useRef<HTMLInputElement>(null);
 
   // 저장소는 브라우저에만 있으므로 그린 뒤에 읽는다.
   useEffect(() => {
-    const loaded = loadStats();
-    setBook(loaded);
-    const showHearts =
-      heartsUnlocked() || loaded.rounds.some((r) => r.game === "hearts");
-    setHearts(showHearts);
-    // 하트에서 들어왔으면 하트 기록부터 보이고 하트로 돌아간다.
-    if (new URLSearchParams(window.location.search).get("game") === "hearts") {
-      setBack("/hearts");
-      if (showHearts) setTab("hearts");
+    setBook(loadStats());
+    // 게임에서 들어왔으면 그 게임 기록부터 보이고 그 게임으로 돌아간다.
+    const game = new URLSearchParams(window.location.search).get("game");
+    if (game === "mighty" || game === "hearts") {
+      setBack(`/${game}`);
+      setTab(game);
     }
   }, []);
   if (!book) return <main className="min-h-dvh bg-slate-950" />;
@@ -134,25 +129,23 @@ export function ProfilePage() {
               </div>
             </div>
           </div>
-          {hearts && (
-            <div className="flex gap-1.5" role="tablist">
-              {(["mighty", "hearts"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "rounded-full px-4 py-1.5 font-semibold text-sm",
-                    tab === t ? "bg-white text-black" : "bg-white/10",
-                  )}
-                >
-                  {t === "mighty" ? "♠ 마이티" : "♥ 하트"}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex gap-1.5" role="tablist">
+            {(["mighty", "hearts"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 font-semibold text-sm",
+                  tab === t ? "bg-white text-black" : "bg-white/10",
+                )}
+              >
+                {t === "mighty" ? "♠ 마이티" : "♥ 하트"}
+              </button>
+            ))}
+          </div>
         </header>
 
         {tab === "mighty" ? (
