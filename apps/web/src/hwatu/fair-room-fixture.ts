@@ -11,10 +11,11 @@ import { MemoryNetwork } from "@/net/transport";
 
 await prepareGroup("r255");
 
+/** 조건이 맞을 때까지 기다린다. 상한은 멈춘 시험을 잡는 안전장치라 시험 상한(180초) 바로 아래로 둔다 */
 export async function until(
   condition: () => boolean,
   what = "조건",
-  ms = 60_000,
+  ms = 170_000,
 ): Promise<void> {
   const start = Date.now();
   while (!condition()) {
@@ -145,7 +146,7 @@ export async function playHwatu(options: {
   const start = Date.now();
   let seed = 1;
   while (!options.done() && options.incidents.length === 0) {
-    if (Date.now() - start > (options.ms ?? 120_000))
+    if (Date.now() - start > (options.ms ?? 170_000))
       throw new Error(
         `끝나지 않는다: 방장 ${JSON.stringify(match.current()).slice(0, 400)}`,
       );

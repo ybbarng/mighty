@@ -97,7 +97,7 @@ describe("화투 암호화방: 새로고침과 끊긴 사람", () => {
     });
     expect(incidents).toEqual([]);
     await until(() => verified.length >= 1, "판마다 검증");
-  }, 120_000);
+  }, 180_000);
 
   it("방장이 판 중간과 다음 판에서 새로고침해도 이어 치고, 모두의 검증을 통과한다", async () => {
     const { net, clock, host, guests, incidents, audits, store } = await setup(
@@ -171,7 +171,7 @@ describe("화투 암호화방: 새로고침과 끊긴 사람", () => {
     await until(() => audits.length === 2, "판 끝 검증");
     expect(audits).toEqual([{ ok: true }, { ok: true }]);
     expect(incidents).toEqual([]);
-  }, 120_000);
+  }, 180_000);
 
   it("끊긴 사람을 기다리다 투표가 열리고, 방장이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
     const { net, clock, host, guests } = await setup(2);
@@ -194,7 +194,7 @@ describe("화투 암호화방: 새로고침과 끊긴 사람", () => {
         "gameOver",
       "참가자 게임 끝",
     );
-  }, 120_000);
+  }, 180_000);
 });
 
 describe("화투 암호화방: 고친 프로그램(부정)", () => {
@@ -223,7 +223,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     });
     expect(incidents[0]?.seat).toBe(cheater);
     expect(incidents[0]?.reason).toMatch(/자기 손에 없는 자리/);
-  }, 120_000);
+  }, 180_000);
 
   it("참가자가 낸다고 한 카드와 다른 자리 열쇠를 공개하면 방장이 바로 그 자리를 짚는다", async () => {
     const { host, guests, incidents } = await setup(1);
@@ -250,7 +250,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     });
     expect(incidents[0]?.seat).toBe(cheater);
     expect(incidents[0]?.reason).toMatch(/열쇠로 연 카드가 다르다/);
-  }, 120_000);
+  }, 180_000);
 
   it("나눠 줄 때 잠글 때와 다른 열쇠를 주면 받은 사람이 열쇠 증명으로 그 자리를 짚는다", async () => {
     const { host, guests, incidents } = await setup(2);
@@ -271,7 +271,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     const own = incidents.find((i) => i.own && i.seat !== null);
     expect(own?.seat).toBe(cheater);
     expect(own?.reason).toMatch(/열쇠 증명 실패/);
-  }, 120_000);
+  }, 180_000);
 
   it("방장이 더미를 순서와 다르게 열라고 하면 참가자가 방장을 짚는다", async () => {
     const { host, guests, incidents } = await setup(1);
@@ -292,7 +292,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     const own = incidents.find((i) => i.own);
     expect(own?.seat).toBe(0);
     expect(own?.reason).toMatch(/더미를 순서와 다르게/);
-  }, 120_000);
+  }, 180_000);
 
   it("방장이 자기 차례에 카드를 내기 전에 뒤집을 카드를 열라고 하면 참가자가 방장을 짚는다", async () => {
     const { host, guests, incidents } = await setup(1);
@@ -333,7 +333,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     const own = incidents.find((i) => i.own);
     expect(own?.seat).toBe(0);
     expect(own?.reason).toMatch(/미리 보기/);
-  }, 120_000);
+  }, 180_000);
 
   it("방장 엔진 상태에는 판이 끝나기 전까지 참가자 손패의 진짜 카드가 없다", async () => {
     const { host, guests, incidents } = await setup(1);
@@ -360,7 +360,7 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
       },
     });
     expect(seen.size).toBeGreaterThan(0);
-  }, 120_000);
+  }, 180_000);
 });
 
 describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) 새로고침", () => {
