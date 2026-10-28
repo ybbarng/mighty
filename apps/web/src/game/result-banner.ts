@@ -3,6 +3,8 @@ import type { GameEvent, PlayerView } from "@mighty/engine";
 /** 판이 끝났을 때 화면 가운데에 크게 띄우는 승패 문구 */
 export interface ResultBanner {
   won: boolean;
+  /** 비김(판 게임). 그러면 `won`은 보지 않는다 */
+  draw?: boolean;
   /** 아래 줄(런·백런, 돈 변화) */
   detail: string | null;
 }

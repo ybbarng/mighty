@@ -9,10 +9,12 @@ import {
 import { useEffect, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
+import { ResultBanner } from "@/components/ResultBanner";
 import {
   MissionOverlay,
   type MissionProps,
 } from "@/components/tutorial/MissionOverlay";
+import type { ResultBanner as Banner } from "@/game/result-banner";
 import { cn } from "@/lib/cn";
 
 import { OMOK_LEVELS, useOmokSettings, VARIANT_INFO } from "../settings";
@@ -76,6 +78,7 @@ export function OmokGame({
     seatNames,
     reconnecting,
     hostLeft,
+    events,
   } = useOmok();
   const submit = useOmok((s) => s.submit);
   const undo = useOmok((s) => s.undo);
@@ -115,6 +118,32 @@ export function OmokGame({
   else if (result?.seat === me)
     status = result.kind === "resign" ? "상대가 기권했어요" : "이겼어요!";
   else status = result?.kind === "resign" ? "기권했어요" : "졌어요";
+
+  // 판이 막 끝난 장면이면 마이티·하트처럼 가운데에 크게 띄운다(미션은 결과 창이 따로 있다).
+  const ended = events.find((e) => e.type === "roundEnded");
+  const banner: Banner | null =
+    ended?.type === "roundEnded" && !mission
+      ? {
+          won: ended.result.kind !== "draw" && ended.result.seat === me,
+          draw: ended.result.kind === "draw",
+          detail:
+            ended.result.kind === "five"
+              ? "다섯!"
+              : ended.result.kind === "resign"
+                ? ended.result.seat === me
+                  ? "상대 기권"
+                  : "기권"
+                : null,
+        }
+      : null;
+  const outcome =
+    result === null
+      ? null
+      : result.kind === "draw"
+        ? "draw"
+        : result.seat === me
+          ? "win"
+          : "loss";
 
   const gameOver = view.phase === "gameOver";
   const variantLabel = VARIANT_INFO.find(
@@ -163,7 +192,7 @@ export function OmokGame({
       {/* 휴대폰 가로: 판이 화면 높이를 꽉 채우고 나머지는 오른쪽에 */}
       <div
         className={cn(
-          "aspect-square w-[min(100%,calc(100dvh-15rem))] max-w-xl short-landscape:col-start-1 short-landscape:row-span-4 short-landscape:row-start-1 short-landscape:w-[calc(100dvh-1.5rem)]",
+          "relative aspect-square w-[min(100%,calc(100dvh-15rem))] max-w-xl short-landscape:col-start-1 short-landscape:row-span-4 short-landscape:row-start-1 short-landscape:w-[calc(100dvh-1.5rem)]",
           // 미션 띠 자리만큼 줄여 판 아래가 화면 밖으로 밀리지 않게 한다.
           mission &&
             "w-[min(100%,calc(100dvh-19rem))] short-landscape:w-[calc(100dvh-5.5rem)]",
@@ -180,14 +209,39 @@ export function OmokGame({
           onAim={setAim}
           onPlace={(at) => submit({ type: "place", at })}
         />
+        <ResultBanner banner={banner} seq={view.roundNumber} />
       </div>
 
-      <p
-        role="status"
-        className="min-h-6 text-center font-semibold short-landscape:col-start-2 short-landscape:row-start-3"
+      {/* 판이 끝나면 결과를 크게 남긴다(가운데 띠가 사라진 뒤에도 보이게) */}
+      <div
+        data-outcome={outcome ?? undefined}
+        className={cn(
+          "flex flex-col items-center text-center short-landscape:col-start-2 short-landscape:row-start-3",
+          outcome &&
+            "pop-in w-full max-w-xl rounded-2xl border px-6 py-3 shadow-xl",
+          outcome === "win" && "border-amber-300 bg-amber-400/20",
+          outcome === "loss" && "border-white/15 bg-black/40",
+          outcome === "draw" && "border-white/20 bg-white/10",
+        )}
       >
-        {notice ?? status}
-      </p>
+        <p
+          role="status"
+          className={cn(
+            "min-h-6",
+            outcome ? "font-black text-3xl tracking-tight" : "font-semibold",
+            outcome === "win" && "text-amber-300",
+          )}
+        >
+          {notice ?? status}
+        </p>
+        {outcome && (
+          <p className="mt-1 text-sm text-white/80">
+            나 {view.wins[me] ?? 0} : {view.wins[1 - me] ?? 0} {opponent}
+            {view.rules.winsToFinish > 1 &&
+              ` · ${view.rules.winsToFinish}승 먼저`}
+          </p>
+        )}
+      </div>
 
       <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 short-landscape:col-start-2 short-landscape:row-start-4 short-landscape:content-start">
         {view.phase === "play" && (
