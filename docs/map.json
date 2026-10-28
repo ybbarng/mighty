@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-28T18:59:42Z",
+  "updatedAt": "2026-10-28T19:54:23Z",
   "here": "fairness-hwatu-poker",
   "regions": [
     {
@@ -108,8 +108,8 @@
       "parent": "platform",
       "status": "building",
       "size": 2,
-      "summary": "단원(설명·퀴즈·미션) 틀은 끝. 문제 풀기 틀(진행 기록·목록)은 장기에 먼저 붙였고 체스·바둑이 이어 쓴다",
-      "next": "장기 세 수 외통·포 길 문제, 이름 있는 포진은 자료 확인 뒤",
+      "summary": "단원(설명·퀴즈·미션) 틀과 문제 풀기 틀(진행 기록·목록 StudyHome·문제 화면 PuzzleScreen·usePuzzleRun)은 끝. 장기·체스·바둑이 함께 쓴다",
+      "next": "수순 따라 두기 화면(포진·오프닝·정석, 수순은 출처 확인 뒤), 날짜 간격 반복",
       "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
@@ -571,14 +571,48 @@
       "parent": "boards",
       "status": "building",
       "size": 2,
-      "summary": "한 수 외통 13·두 수 외통 8·양수겸장 12·잡을까 말까 11. 엔진이 고르고 시험이 확인",
-      "next": "세 수 외통, 포 길·멱 문제, 포진(자료 확인 뒤)",
+      "summary": "외통(한 수 13·두 수 8·세 수 10)·양수겸장 12·잡을까 말까 11·포 길 열기 10·멱 막기 10. 엔진이 고르고 시험이 정답이 하나뿐인지 확인",
+      "next": "이름 있는 포진 수순(출처 확인 뒤)",
       "since": "2026-10-29",
       "found": "2026-10-29",
       "links": [
         {
           "label": "수 배우기",
           "path": "docs/23-strategy-learning.md"
+        }
+      ]
+    },
+    {
+      "id": "board-chess-study",
+      "title": "체스 수 배우기",
+      "parent": "boards",
+      "status": "building",
+      "size": 2,
+      "summary": "메이트(한 수 12·두 수 7)·전술(포크 8·핀 8·스큐어 7·발견 공격 7). 전술은 모양(tacticsOf)과 엔진 평가로 정답이 하나뿐인지 시험이 확인",
+      "next": "대표 오프닝 수순(출처 확인 뒤), 기본 엔드게임",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "체스 수 배우기",
+          "path": "docs/26-chess.md"
+        }
+      ]
+    },
+    {
+      "id": "board-baduk-study",
+      "title": "바둑 수 배우기",
+      "parent": "boards",
+      "status": "building",
+      "size": 2,
+      "summary": "9줄 판 첫 수 배우기: 단수 방향 8·축 5·장문 8·두 눈 만들기 8·눈 빼앗기 8. 잡기 읽기와 벤슨 방법 사활 읽기로 정답이 하나뿐인지 확인",
+      "next": "환격·패, 긴 축, 이름 있는 사활 모양, 포석·정석(출처 확인 뒤)",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "바둑 수 배우기",
+          "path": "docs/25-baduk.md"
         }
       ]
     },
@@ -604,7 +638,7 @@
       "parent": "boards",
       "status": "done",
       "size": 4,
-      "summary": "FIDE 규칙(perft 검증), 컴퓨터 세 단계, 온라인, 8단원 배우기, 메이트 문제 19개, 개인 시간",
+      "summary": "FIDE 규칙(perft 검증), 컴퓨터 세 단계, 온라인, 8단원 배우기, 수 배우기 49문제, 개인 시간",
       "since": "2026-10-29",
       "found": "2026-10-27",
       "links": [
