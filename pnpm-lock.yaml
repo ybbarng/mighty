@@ -306,6 +306,15 @@ importers:
         specifier: workspace:*
         version: link:../engine
 
+  packages/omok-ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/omok-engine':
+        specifier: workspace:*
+        version: link:../omok-engine
+
   packages/omok-engine:
     dependencies:
       '@mighty/engine':

@@ -19,6 +19,7 @@ COPY packages/hearts-engine/package.json packages/hearts-engine/
 COPY packages/hearts-ai/package.json packages/hearts-ai/
 COPY packages/fair-play/package.json packages/fair-play/
 COPY packages/omok-engine/package.json packages/omok-engine/
+COPY packages/omok-ai/package.json packages/omok-ai/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
