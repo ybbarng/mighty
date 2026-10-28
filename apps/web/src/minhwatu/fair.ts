@@ -52,4 +52,6 @@ export const minhwatuFair: HwatuFairSpec<
   revealsOf: (action) => (action.type === "play" ? [action.card] : []),
   claimedOf: (action) => (action.type === "play" ? [action.card] : []),
   refreshView: (view) => ({ ...view, hand: sortCards(view.hand) }),
+  // 더미는 손패를 낸 차례에만 뒤집는다.
+  deckGuard: (_view, fresh) => fresh.length > 0,
 };

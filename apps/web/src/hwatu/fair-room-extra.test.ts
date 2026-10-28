@@ -264,6 +264,47 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     expect(own?.reason).toMatch(/더미를 순서와 다르게/);
   }, 120_000);
 
+  it("방장이 자기 차례에 카드를 내기 전에 뒤집을 카드를 열라고 하면 참가자가 방장을 짚는다", async () => {
+    const { host, guests, incidents } = await setup(1);
+    await host.start();
+    const match = host.match;
+    if (!match) throw new Error("시작하지 않았다");
+    const mine = () => {
+      const v = match.current() as MinhwatuView;
+      return v.phase === "play" && v.turn === 0 && v.decision !== null;
+    };
+    // 방장 차례가 올 때까지 친다(방장 자리는 두지 않는다).
+    await playHwatu({
+      host,
+      guests,
+      bot: minhwatuBeginnerBot,
+      incidents,
+      done: mine,
+      skipHost: true,
+    });
+    const seat = guests[0]?.fair as Seat;
+    await until(
+      () =>
+        (guests[0]?.match?.current() as MinhwatuView | undefined)?.turn === 0,
+      "참가자 화면에 방장 차례",
+    );
+    const round = (match.current() as MinhwatuView).roundNumber;
+    const ctx = seat.coordinator.ctxOf(round);
+    if (!ctx) throw new Error("판이 없다");
+    // 방장 프로그램: 카드를 내기 전에 더미 맨 위를 모두에게 열라고 한다(순서는 맞다).
+    (host as unknown as { send(m: unknown): void }).send({
+      t: "fp",
+      k: "deck",
+      deal: ctx.dealId,
+      slot: ctx.layout.deck[ctx.deckNext],
+      to: -1,
+    });
+    await until(() => incidents.some((i) => i.own), "참가자 알림");
+    const own = incidents.find((i) => i.own);
+    expect(own?.seat).toBe(0);
+    expect(own?.reason).toMatch(/미리 보기/);
+  }, 120_000);
+
   it("방장 엔진 상태에는 판이 끝나기 전까지 참가자 손패의 진짜 카드가 없다", async () => {
     const { host, guests, incidents } = await setup(1);
     await host.start();

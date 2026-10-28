@@ -68,6 +68,11 @@ export const gostopFair: HwatuFairSpec<
     return [];
   },
   claimedOf: (action) => (action.type === "play" ? [action.card] : []),
+  // 더미는 손패를 냈거나(폭탄 포함), 낸 카드로 먹을 것을 고르거나, 뒤집기만 하는 차례에만 뒤집는다.
+  deckGuard: (view, fresh) =>
+    fresh.length > 0 ||
+    view.stage === "chooseHand" ||
+    (view.stage === "play" && (view.flipOwed[view.turn] ?? 0) > 0),
   refreshView: (view) => {
     const { mySeat, hand, handCounts, deckCount } = view;
     const pseudo = {

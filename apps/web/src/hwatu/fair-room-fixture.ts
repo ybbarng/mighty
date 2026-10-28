@@ -130,6 +130,8 @@ export async function playHwatu(options: {
   done: () => boolean;
   incidents: IncidentNotice[];
   check?: () => void;
+  /** 방장 자리는 두지 않는다(방장 차례에서 멈추는 시험) */
+  skipHost?: boolean;
   /** 걸음마다 시계를 옮긴다(응답 창 같은 제한 시간) */
   tick?: () => void;
   ms?: number;
@@ -159,7 +161,7 @@ export async function playHwatu(options: {
       stamps.set(key, stamp);
       submit(options.bot.decide(view, { seed: seed++ }));
     };
-    act("host", match.current(), (a) => match.submit(a));
+    if (!options.skipHost) act("host", match.current(), (a) => match.submit(a));
     for (const [i, g] of options.guests.entries())
       act(`g${i}`, g.match?.current(), (a) => g.match?.submit(a));
     options.tick?.();

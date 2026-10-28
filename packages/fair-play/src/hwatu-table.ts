@@ -95,6 +95,12 @@ export interface HwatuFairSpec<
   revealsOf(action: Action, view: View): string[];
   /** 행동이 낸다고 한 카드(열쇠로 연 카드와 맞춰 본다) */
   claimedOf(action: Action): string[];
+  /**
+   * 더미를 모두에게 열어도 되는 때인가(참가자 기기가 방장의 요청을 받을 때 본다). `fresh`는 차례인 사람의
+   * 손패 자리 가운데 모두에게 열렸는데 화면 어디에도 아직 없는 카드(이번 차례에 막 낸 카드)다.
+   * 방장이 자기 차례에 카드를 내기 전에 뒤집을 카드를 미리 열어 보지 못하게 한다. 없으면 보지 않는다
+   */
+  deckGuard?(view: View, fresh: readonly string[]): boolean;
   /** 진짜 카드 화면을 다시 계산한다(내 패에 따라 달라지는 결정, 손패 정렬). 이미 진짜 화면이면 그대로 */
   refreshView(view: View): View;
 }
@@ -1285,8 +1291,7 @@ export class HwatuGuestSeat<
         this.device.receive(message, from);
         break;
       case "deck":
-        if (from === 0)
-          this.coordinator.request(message.deal, message.slot, message.to);
+        if (from === 0) this.guardDeck(message.deal, message.slot, message.to);
         break;
       case "all":
         if (from === 0) this.coordinator.revealAll(message.deal);
@@ -1298,6 +1303,47 @@ export class HwatuGuestSeat<
         }
         break;
     }
+  }
+
+  /** 더미 요청은 받은 차례대로, 앞서 온 열쇠를 다 처리한 뒤에 본다 */
+  private deckQueue: Promise<void> = Promise.resolve();
+
+  private guardDeck(deal: number, slot: number, to: number): void {
+    const view = this.last;
+    this.deckQueue = this.deckQueue
+      .then(() => this.device.settled())
+      .then(() => {
+        if (to === -1 && view && !this.mayOpenDeck(view, deal, slot)) {
+          this.coordinator.incident({
+            seat: 0,
+            reason:
+              "방장이 차례인 사람이 카드를 내기 전에 더미를 열라고 했다(미리 보기)",
+          });
+          return;
+        }
+        this.coordinator.request(deal, slot, to);
+      });
+  }
+
+  /** 차례인 사람이 이번 차례에 카드를 냈거나 뒤집기만 하는 때인가(`HwatuFairSpec.deckGuard`) */
+  private mayOpenDeck(view: View, deal: number, slot: number): boolean {
+    const guard = this.spec.deckGuard;
+    if (!guard) return true;
+    const ctx = this.coordinator.ctxOf(view.roundNumber);
+    if (!ctx || ctx.dealId !== deal) return true;
+    // 이미 받은 요청(다시 연결해 다시 받은 것)은 그대로 둔다.
+    if (ctx.requests.some((r) => r.slot === slot)) return true;
+    // 순서가 틀린 요청은 순서 확인(`request`)이 짚는다.
+    if (slot !== ctx.layout.deck[ctx.deckNext]) return true;
+    const turn = (view as { turn?: unknown }).turn;
+    if (typeof turn !== "number") return true;
+    const text = JSON.stringify(view);
+    const fresh: string[] = [];
+    for (const s of ctx.layout.hands[turn] ?? []) {
+      const card = this.device.open(deal, s);
+      if (card !== null && !text.includes(`"${card}"`)) fresh.push(card);
+    }
+    return guard(view, fresh);
   }
 
   private tryVerify(round: number): void {
