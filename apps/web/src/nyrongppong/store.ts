@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import { nyrongppongBotFor } from "@mighty/nyrongppong-ai";
 import type {
   Action,
@@ -22,7 +23,7 @@ export type NyrongppongLocalMatch = LocalMatch<
   NyrongppongView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 /** 화면이 아는 대국 창구: 혼자 하기·방장은 LocalMatch, 참가자는 RemoteMatch */
 export type NyrongppongHost = MatchHost<NyrongppongView, Action, GameEvent> & {
@@ -32,7 +33,7 @@ export type NyrongppongHost = MatchHost<NyrongppongView, Action, GameEvent> & {
 export type NyrongppongSaved = SavedMatch<
   NyrongppongRules,
   Action,
-  undefined
+  PresetDeal
 > & {
   /** 컴퓨터 단계(0 입문, 1 중수, 2 고수) */
   level: number;

@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import type {
   Action,
   GameEvent,
@@ -17,7 +18,7 @@ export type NyrongppongHostRoom = HostRoom<
   NyrongppongView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 export type NyrongppongGuestRoom = GuestRoom<
   NyrongppongRules,
@@ -25,7 +26,7 @@ export type NyrongppongGuestRoom = GuestRoom<
   NyrongppongView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 
 /** 지금 들어가 있는 나이롱뽕 온라인 방. 화면이 바뀌어도(대기실 → 대국) 연결은 이어진다 */

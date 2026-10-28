@@ -1,5 +1,5 @@
 import { createRng, nextInt } from "@mighty/engine";
-import { shuffledDeck, sortCards } from "@mighty/hwatu";
+import { type PresetDeal, shuffledDeck, sortCards } from "@mighty/hwatu";
 
 import { findYak, handValue, sameMonthIn } from "./hand";
 import {
@@ -69,14 +69,23 @@ function fail(error: string): StepResult {
 
 /** 섞어 나눈다. 모두 다섯 장, 선은 한 장 더 받아 첫 차례에 가져오지 않고 버린다 */
 function deal(state: NyrongppongState, events: GameEvent[]): void {
-  const deck = shuffledDeck(roundSeed(state.seed, state.roundNumber));
   const n = state.rules.players;
-  state.hands = Array.from({ length: n }, () => [] as string[]);
-  for (let i = 0; i < HAND_SIZE; i++)
-    for (let k = 0; k < n; k++)
-      state.hands[(state.dealer + k) % n]?.push(deck.shift() as string);
-  state.hands[state.dealer]?.push(deck.shift() as string);
-  state.deck = deck;
+  if (state.fair) {
+    // 멘탈 포커 판: 함께 섞어 나눈 패(자리 번호 순서, 선은 여섯 장)
+    const preset = state.preset;
+    if (!preset) throw new Error("멘탈 포커 판인데 이번 판 패가 없다");
+    state.hands = preset.hands.map((h) => [...h]);
+    state.deck = [...preset.deck];
+    delete state.preset;
+  } else {
+    const deck = shuffledDeck(roundSeed(state.seed, state.roundNumber));
+    state.hands = Array.from({ length: n }, () => [] as string[]);
+    for (let i = 0; i < HAND_SIZE; i++)
+      for (let k = 0; k < n; k++)
+        state.hands[(state.dealer + k) % n]?.push(deck.shift() as string);
+    state.hands[state.dealer]?.push(deck.shift() as string);
+    state.deck = deck;
+  }
   state.pile = [];
   state.melds = Array.from({ length: n }, () => []);
   state.drawn = null;
@@ -91,9 +100,21 @@ function deal(state: NyrongppongState, events: GameEvent[]): void {
   });
 }
 
+/** 판 `round`의 선(첫 판은 시드로, 그 뒤로는 판마다 다음 자리) */
+export function dealerOf(
+  rules: NyrongppongRules,
+  seed: number,
+  round: number,
+): number {
+  const n = rules.players;
+  return (nextInt(createRng(seed ^ 0x51ed270b), n) + round - 1) % n;
+}
+
+/** `preset`이 있으면 멘탈 포커 판: 판마다 미리 정한 패로 나눈다(다음 판 패는 `state.preset`) */
 export function createMatch(
   rules: NyrongppongRules,
   seed: number,
+  preset?: PresetDeal,
 ): { state: NyrongppongState; events: GameEvent[] } {
   if (
     !Number.isInteger(rules.players) ||
@@ -107,7 +128,7 @@ export function createMatch(
     seed,
     roundNumber: 1,
     // 첫 판 선은 시드로 정한다. 그 뒤로는 판마다 다음 자리로 넘어간다.
-    dealer: nextInt(createRng(seed ^ 0x51ed270b), n),
+    dealer: dealerOf(rules, seed, 1),
     turn: 0,
     phase: "discard",
     deck: [],
@@ -119,6 +140,7 @@ export function createMatch(
     totals: new Array<number>(n).fill(0),
     result: null,
     continued: new Array<boolean>(n).fill(false),
+    ...(preset ? { fair: true as const, preset } : {}),
   };
   const events: GameEvent[] = [];
   deal(state, events);
@@ -134,6 +156,15 @@ export function canStop(state: NyrongppongState, seat: number): boolean {
     (state.melds[seat]?.length ?? 0) > 0 &&
     hand.length > 0 &&
     handValue(hand) <= limit
+  );
+}
+
+/** 스톱을 물을 수 있나(손패 합은 보지 않는다): 스톱이 있는 규칙이고, 뽕을 했고, 손패가 남았다 */
+function mayStop(state: NyrongppongState, seat: number): boolean {
+  return (
+    state.rules.stopLimit > 0 &&
+    (state.melds[seat]?.length ?? 0) > 0 &&
+    (state.hands[seat]?.length ?? 0) > 0
   );
 }
 
@@ -181,7 +212,8 @@ function beginTurn(
     endRound(state, { kind: "deckOut" }, handScores(state), events);
     return;
   }
-  if (canStop(state, seat)) {
+  // 멘탈 포커 판: 손패 합을 모르는 방장 엔진도 같은 갈림을 타도록 뽕을 한 적이 있으면 늘 묻는다.
+  if (state.fair ? mayStop(state, seat) : canStop(state, seat)) {
     state.phase = "draw";
     return;
   }
@@ -207,10 +239,13 @@ function afterDiscard(
   card: string,
   events: GameEvent[],
 ): void {
+  // 멘탈 포커 판은 누가 뽕할 수 있는지 모르므로 모두에게 묻는다(뽕할 수 있는지는 부를 때 확인한다).
   const responses = seatsAfter(state, seat)
-    .filter((s) => sameMonthIn(state.hands[s] ?? [], card).length >= 2)
+    .filter(
+      (s) => state.fair || sameMonthIn(state.hands[s] ?? [], card).length >= 2,
+    )
     .map((s) => ({ seat: s, answer: null as CallAnswer | null }));
-  if (responses.length === 0 && !state.rules.everyDiscard) {
+  if (responses.length === 0 && !state.rules.everyDiscard && !state.fair) {
     beginTurn(state, nextSeat(state, seat), events);
     return;
   }
@@ -240,10 +275,21 @@ function resolveCall(
 ): void {
   const call = state.call;
   if (!call) return;
-  const decided = callWinner(call.responses);
+  // 멘탈 포커 판: 한 장에 뽕할 수 있는 사람은 많아야 하나라(docs/30 1-2절) 부르면 바로 가져간다.
+  const caller = state.fair
+    ? call.responses.find((r) => r.answer === "call")
+    : undefined;
+  const decided = caller
+    ? { done: true as const, seat: caller.seat }
+    : callWinner(call.responses);
   if (!decided.done) return;
   // 버릴 때마다 여는 창은 모두 넘겨도 시간이 다 될 때까지 연다(일찍 닫히면 누가 넘겼는지 드러난다).
-  if (decided.seat === null && state.rules.everyDiscard && !timedOut) return;
+  if (
+    decided.seat === null &&
+    (state.rules.everyDiscard || state.fair) &&
+    !timedOut
+  )
+    return;
   if (decided.seat === null) {
     events.push({ type: "callClosed", from: call.from, card: call.card });
     beginTurn(state, nextSeat(state, call.from), events);
@@ -326,6 +372,11 @@ export function step(
       const mine = call.responses.find((r) => r.seat === seat);
       if (!mine) return fail("뽕할 수 있는 패가 없다");
       if (mine.answer !== null) return fail("이미 정했다");
+      if (
+        action.type === "call" &&
+        sameMonthIn(state.hands[seat] ?? [], call.card).length < 2
+      )
+        return fail("뽕할 수 있는 패가 없다");
       mine.answer = action.type;
     }
     call.used += spent;
@@ -409,14 +460,25 @@ export function callClock(
   };
 }
 
-function decisionFor(state: NyrongppongState, seat: number): Decision | null {
+/** 지금 이 자리가 할 일(멘탈 포커 참가자는 자기 손패로 다시 계산한다) */
+export function decisionFor(
+  state: NyrongppongState,
+  seat: number,
+): Decision | null {
   if (state.phase === "draw" && state.turn === seat)
     return { kind: "draw", canStop: canStop(state, seat) };
   if (state.phase === "discard" && state.turn === seat)
     return { kind: "discard", yak: findYak(state.hands[seat] ?? []) };
   if (state.phase === "call") {
     const mine = state.call?.responses.find((r) => r.seat === seat);
-    return mine && mine.answer === null ? { kind: "call" } : null;
+    if (!mine || mine.answer !== null) return null;
+    // 멘탈 포커 판은 모두에게 창이 열리므로 뽕할 패가 있을 때만 단추를 보인다.
+    if (
+      state.fair &&
+      sameMonthIn(state.hands[seat] ?? [], state.call?.card ?? "").length < 2
+    )
+      return null;
+    return { kind: "call" };
   }
   if (state.phase === "roundEnd" && !state.continued[seat])
     return { kind: "continue" };
@@ -465,10 +527,11 @@ export function replay(
   rules: NyrongppongRules,
   seed: number,
   log: readonly LoggedAction[],
+  preset?: PresetDeal,
 ):
   | { ok: true; state: NyrongppongState }
   | { ok: false; index: number; error: string } {
-  let { state } = createMatch(rules, seed);
+  let { state } = createMatch(rules, seed, preset);
   for (const [index, entry] of log.entries()) {
     const result = step(state, entry.seat, entry.action);
     if (!result.ok) return { ok: false, index, error: result.error };

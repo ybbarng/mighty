@@ -1,3 +1,4 @@
+import type { PresetDeal } from "@mighty/hwatu";
 import { cardOf, sortCards } from "@mighty/hwatu";
 import {
   discardFromThree,
@@ -26,7 +27,10 @@ import {
 } from "@mighty/nyrongppong-engine";
 
 import type { Commentary, GameKit, KitStats } from "@/game/kit";
+import { hwatuReviewDeals } from "@/hwatu/fair";
 import type { GameRecord, RoundRecord } from "@/stats/records";
+
+import { nyrongppongFair } from "./fair";
 
 export type NyrongppongKit = GameKit<
   NyrongppongRules,
@@ -34,7 +38,7 @@ export type NyrongppongKit = GameKit<
   NyrongppongView,
   Action,
   GameEvent,
-  undefined
+  PresetDeal
 >;
 
 /** 판 기록(내 자리에서 본 것) */
@@ -216,10 +220,12 @@ export function explainNyrongppong(
 /** 나이롱뽕 엔진을 대국 진행·온라인 방에 잇는다 */
 export const nyrongppongKit: NyrongppongKit = {
   id: "nyrongppong",
-  createMatch: (rules, seed) => createMatch(rules, seed),
+  // 멘탈 포커 판은 판마다 미리 정한 패(`preset`)로 나눈다.
+  createMatch: (rules, seed, preset) => createMatch(rules, seed, preset),
   step,
   viewOf,
-  replay: (rules, seed, log) => replay(rules, seed, log),
+  replay: (rules, seed, log, preset) => replay(rules, seed, log, preset),
+  cardTable: nyrongppongFair,
   pendingSeats,
   playerCount: (rules) => rules.players,
   encodeRules: encodeNyrongppongRules,
@@ -238,12 +244,9 @@ export const nyrongppongKit: NyrongppongKit = {
   retireAction: { type: "retire" },
   stats: nyrongppongStats,
   botCanAct: (view) => view.decision !== null,
-  // 시드로 섞어 판마다 패가 정해진다(멘탈 포커가 아니다).
+  // 멘탈 포커 판은 판마다 진짜 패를 넣어 가며 돌린다(일반방은 시드로 섞어 넣을 패가 없다).
   review: {
-    firstExtra: () => undefined,
-    prepare: (state) => state,
-    cleanup: (state) => state,
-    realAction: (action) => action,
+    ...hwatuReviewDeals<NyrongppongState>(),
     situation: (state) => ({
       voids: state.totals.map(() => []),
       tally: state.totals.map((total, seat) => ({
