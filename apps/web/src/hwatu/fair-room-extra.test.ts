@@ -13,11 +13,18 @@ import {
   type MinhwatuView,
   STANDARD_RULES,
 } from "@mighty/minhwatu-engine";
+import {
+  nyrongppongBeginnerBot,
+  nyrongppongIntermediateBot,
+} from "@mighty/nyrongppong-ai";
+import { STANDARD_RULES as NYRONGPPONG_RULES } from "@mighty/nyrongppong-engine";
 import { describe, expect, it } from "vitest";
 
 import { minhwatuKit } from "@/minhwatu/kit";
 import { GuestRoom } from "@/net/guest-room";
 import { HostRoom } from "@/net/host-room";
+import { nyrongppongKit } from "@/nyrongppong/kit";
+import { ONLINE_CALL_SECONDS, onlineRules } from "@/nyrongppong/settings";
 
 import {
   type AnyGuest,
@@ -354,4 +361,103 @@ describe("화투 암호화방: 고친 프로그램(부정)", () => {
     });
     expect(seen.size).toBeGreaterThan(0);
   }, 120_000);
+});
+
+describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) 새로고침", () => {
+  it("참가자와 방장이 한 번씩 새로고침해도 이어 치고, 모두의 검증을 통과한다", async () => {
+    const rules = onlineRules({
+      ...NYRONGPPONG_RULES,
+      players: 3,
+      rounds: 2,
+    });
+    const options = {
+      kit: nyrongppongKit,
+      rules,
+      bot: nyrongppongIntermediateBot,
+      botLevel: 1,
+    };
+    const { net, clock, host, guests, incidents, audits, store } =
+      await setupHwatu({
+        ...options,
+        guests: 1,
+        HostRoom: HostRoom as never,
+        GuestRoom: GuestRoom as never,
+        hostStore: true,
+      });
+    let current = host;
+    const tick = () => {
+      const raw = current.match?.rawState() as { phase?: string } | undefined;
+      if (raw?.phase !== "call") return;
+      const devices = [
+        current.fair?.device,
+        ...guests.map((g) => g.fair?.device),
+      ];
+      if (devices.some((d) => d?.busy())) return;
+      const views = [
+        current.match?.current(),
+        ...guests.map((g) => g.match?.current()),
+      ];
+      if (views.some((v) => (v as { decision?: unknown })?.decision)) return;
+      clock.advance(ONLINE_CALL_SECONDS * 1000 + 1);
+    };
+    await host.start();
+    const play = (done: () => boolean) =>
+      playHwatu({
+        host: current,
+        guests,
+        bot: nyrongppongBeginnerBot,
+        incidents,
+        tick,
+        done,
+      });
+    // 참가자 새로고침
+    await play(() => (current.match?.actionLog().length ?? 0) >= 6);
+    const old = guests[0] as AnyGuest;
+    net.disconnect("g0");
+    old.leave();
+    const fresh = new GuestRoom({
+      kit: nyrongppongKit,
+      transport: net.join("g0-reloaded"),
+      name: "손님0",
+      token: old.token,
+      secret: old.secret,
+      fairStore: (old as unknown as { fairStore: never }).fairStore,
+      clock,
+    });
+    fresh.on("incident", (n) => incidents.push(n as never));
+    // 새로고침 전 참가자 객체의 알림(방장이 기록 없이 나갔다)은 보지 않는다.
+    const freshAudits: typeof audits = [];
+    fresh.on("audit", (r) => freshAudits.push(r));
+    guests[0] = fresh as never;
+    await until(
+      () => (fresh.match?.current().hand.length ?? 0) > 0,
+      "새로고침한 참가자 화면",
+    );
+    // 방장 새로고침
+    await play(() => (current.match?.actionLog().length ?? 0) >= 16);
+    net.disconnect("host");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const restore = store?.load();
+    current = new HostRoom({
+      transport: net.join("host1"),
+      ...hwatuHostOptions({ ...options, clock, ...(store ? { store } : {}) }),
+      ...(restore ? { restore } : {}),
+    } as never) as AnyHost;
+    current.onIncident((n) => incidents.push(n));
+    await until(
+      () => current.lobby().seats.every((s) => s.connected),
+      "참가자 다시 연결",
+    );
+    await play(
+      () =>
+        (current.match?.current() as { phase?: string } | undefined)?.phase ===
+        "gameOver",
+    );
+    expect(incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`)).toEqual(
+      [],
+    );
+    current.finish();
+    await until(() => freshAudits.length >= 1, "판 끝 검증");
+    expect(freshAudits).toEqual([{ ok: true }]);
+  }, 180_000);
 });
