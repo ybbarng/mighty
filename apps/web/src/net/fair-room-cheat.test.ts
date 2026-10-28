@@ -1,5 +1,5 @@
 import { presetRules, suitOf } from "@mighty/engine";
-import { Party } from "@mighty/fair-play";
+import { Party, PROOF_DEFER_MS } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
 import {
   type Cheat,
@@ -112,6 +112,11 @@ describe("멘탈 포커 온라인 대전", () => {
         await until(() => honest().some((i) => i.pending));
         // 정직한 기기들이 서로의 증명을 다 확인한 뒤 응답을 기다리는 시간이 지나게 한다.
         // 그러면 응답하지 않은 기기는 속인 기기 하나뿐이라 그 자리로 바꿔 알린다.
+        // 시계는 두 번에 나눠 옮긴다. 내 카드가 안 열린 기기는 증명을 미루는데(PROOF_DEFER_MS),
+        // 한 번에 다 옮기면 범인 찾기가 "시간이 다 됐다"고 보고 정직한 기기의 미룬 증명이 오기 전에 판단한다.
+        // 먼저 미룬 증명이 시작되게 해 다 주고받은 뒤, 기다리는 시간을 지나게 한다.
+        await settleDevices(host, guests);
+        clock.advance(PROOF_DEFER_MS + 1);
         await settleDevices(host, guests);
         clock.advance(PROOF_WAIT_MS);
         await until(() => honest().filter((i) => !i.pending).length >= 2);

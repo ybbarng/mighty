@@ -38,7 +38,7 @@ import { GROUP_1024, GROUP_2048, modInverse, type SraGroup } from "./sra";
 declare function setTimeout(callback: () => void, ms: number): unknown;
 
 /** 내 카드가 이만큼 안 열리면 섞기 증명을 그냥 만든다(scheduleShuffleProof). 남이 기다리는 시간(proofTimeoutMs)보다 짧아야 한다 */
-const PROOF_DEFER_MS = 10_000;
+export const PROOF_DEFER_MS = 10_000;
 
 /** 잠그기 군. r255(타원곡선 ristretto255)가 기본이고, 곱셈군은 예전 방과 시험용이다 */
 export type GroupName = "1024" | "2048" | "r255";
