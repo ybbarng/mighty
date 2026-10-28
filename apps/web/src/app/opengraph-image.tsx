@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { SITE } from "@/components/brand/brand";
+import { IconArt } from "@/components/brand/icon-art";
 
 export const dynamic = "force-static";
 const size = { width: 1200, height: 630 };
@@ -17,29 +18,11 @@ export function generateImageMetadata() {
   ];
 }
 
-/** 판 위 격자 줄의 자리(판 안쪽 좌표) */
-const GRID = [43.75, 131.25, 218.75, 306.25];
-
 /**
- * 게임 센터 링크를 공유할 때 보이는 미리보기. 아이콘처럼 나무 판 위 돌 셋.
+ * 게임 센터 링크를 공유할 때 보이는 미리보기. 아이콘과 같은 컨트롤러 그림과 주소.
  * 한글 글꼴을 빌드에 넣지 않으려고 글자는 영문만 쓴다.
  */
 export default function OpenGraphImage() {
-  const stone = (x: number, y: number, black: boolean) => (
-    <div
-      style={{
-        position: "absolute",
-        left: x - 38,
-        top: y - 38,
-        width: 76,
-        height: 76,
-        borderRadius: 38,
-        background: black ? "#111111" : "#ffffff",
-        border: black ? "none" : "5px solid #111111",
-        boxShadow: "0 8px 18px rgba(0,0,0,0.45)",
-      }}
-    />
-  );
   return new ImageResponse(
     <div
       style={{
@@ -55,45 +38,14 @@ export default function OpenGraphImage() {
     >
       <div
         style={{
-          position: "relative",
           display: "flex",
           width: 350,
           height: 350,
-          background: SITE.board,
-          borderRadius: 28,
-          overflow: "hidden",
           boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+          borderRadius: 63,
         }}
       >
-        {GRID.map((p) => (
-          <div
-            key={`v${p}`}
-            style={{
-              position: "absolute",
-              left: p - 3,
-              top: 0,
-              width: 6,
-              height: 350,
-              background: SITE.ink,
-            }}
-          />
-        ))}
-        {GRID.map((p) => (
-          <div
-            key={`h${p}`}
-            style={{
-              position: "absolute",
-              top: p - 3,
-              left: 0,
-              height: 6,
-              width: 350,
-              background: SITE.ink,
-            }}
-          />
-        ))}
-        {stone(131.25, 131.25, true)}
-        {stone(218.75, 131.25, false)}
-        {stone(218.75, 218.75, true)}
+        <IconArt game="center" />
       </div>
       <div
         style={{

@@ -128,14 +128,23 @@ function HeartsCorner() {
   );
 }
 
-/** 판 위 격자 줄의 자리(100×100 상자) */
-const GRID = [12.5, 37.5, 62.5, 87.5];
+/** 컨트롤러 몸통(100×100 상자): 가운데가 넓고 아래로 손잡이 둘이 내려온다 */
+const PAD_BODY =
+  "M30 25 H70 C82 25 88 31 91 43 L95.5 65 C97.5 77 92.5 84 85.5 84 C79.5 84 76.5 80 73 75.5 L70 71.5 H30 L27 75.5 C23.5 80 20.5 84 14.5 84 C7.5 84 2.5 77 4.5 65 L9 43 C12 31 18 25 30 25 Z";
+/** 오른쪽 단추 넷(위·오른쪽·아래·왼쪽)과 색 */
+const PAD_BUTTONS = [
+  [73, 38, "#f59e0b"],
+  [81.5, 46.5, "#ef4444"],
+  [73, 55, "#22c55e"],
+  [64.5, 46.5, "#3b82f6"],
+] as const;
+const PAD_DARK = "#0f172a";
 
 /**
- * 게임 센터 아이콘. 나무 판 격자 위에 흑돌 둘과 백돌 하나: 카드 게임 둘과 겹치지 않고,
- * 첫 공개 게임인 오목과 이어서 만들 바둑을 떠올리게 한다.
+ * 게임 센터 아이콘. 요즘 게임기 컨트롤러: 왼쪽 십자 단추, 오른쪽 색 단추 넷, 아래 막대 둘.
+ * 카드·판 어느 한 게임에 치우치지 않고 "게임 모음"을 떠올리게 한다.
  */
-function CenterBoard() {
+function CenterPad() {
   return (
     <svg
       viewBox="0 0 100 100"
@@ -144,37 +153,31 @@ function CenterBoard() {
       aria-hidden="true"
       style={{ display: "flex" }}
     >
-      <rect width="100" height="100" fill={SITE.board} />
-      {GRID.map((p) => (
-        <g key={p}>
-          <line
-            x1={p}
-            y1="0"
-            x2={p}
-            y2="100"
-            stroke={SITE.ink}
-            strokeWidth="2.4"
-          />
-          <line
-            x1="0"
-            y1={p}
-            x2="100"
-            y2={p}
-            stroke={SITE.ink}
-            strokeWidth="2.4"
-          />
+      <rect width="100" height="100" fill={SITE.bg} />
+      <path
+        d={PAD_BODY}
+        fill="#000000"
+        opacity="0.45"
+        transform="translate(0 3)"
+      />
+      <path d={PAD_BODY} fill="#e2e8f0" />
+      <path
+        d="M30 25 H70 C82 25 88 31 91 43 L91.6 46 H8.4 L9 43 C12 31 18 25 30 25 Z"
+        fill={PAPER}
+      />
+      <rect x="22" y="40" width="7" height="19" rx="1.6" fill={PAD_DARK} />
+      <rect x="16" y="46" width="19" height="7" rx="1.6" fill={PAD_DARK} />
+      {PAD_BUTTONS.map(([x, y, color]) => (
+        <circle key={color} cx={x} cy={y} r="4.6" fill={color} />
+      ))}
+      <rect x="41" y="38" width="6" height="2.6" rx="1.3" fill="#94a3b8" />
+      <rect x="53" y="38" width="6" height="2.6" rx="1.3" fill="#94a3b8" />
+      {[38, 62].map((x) => (
+        <g key={x}>
+          <circle cx={x} cy="60" r="7.6" fill="#94a3b8" />
+          <circle cx={x} cy="60" r="5.4" fill={PAD_DARK} />
         </g>
       ))}
-      <circle cx="37.5" cy="37.5" r="11.5" fill={INK} />
-      <circle
-        cx="62.5"
-        cy="37.5"
-        r="10.3"
-        fill={PAPER}
-        stroke={INK}
-        strokeWidth="2.4"
-      />
-      <circle cx="62.5" cy="62.5" r="11.5" fill={INK} />
     </svg>
   );
 }
@@ -268,7 +271,8 @@ export function IconArt({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: game === "center" || game === "omok" ? SITE.board : PAPER,
+        background:
+          game === "center" ? SITE.bg : game === "omok" ? SITE.board : PAPER,
         borderRadius: maskable ? 0 : "18%",
         overflow: "hidden",
       }}
@@ -283,7 +287,7 @@ export function IconArt({
         {game === "omok" ? (
           <OmokFive />
         ) : game === "center" ? (
-          <CenterBoard />
+          <CenterPad />
         ) : game === "hearts" ? (
           <HeartsCorner />
         ) : (
