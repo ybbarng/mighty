@@ -9,6 +9,7 @@ import type { GameKit } from "@/game/kit";
 import { mightyKit } from "@/game/mighty-kit";
 import { useSettings } from "@/game/settings";
 import { heartsKit } from "@/hearts/kit";
+import { OmokReplay } from "@/omok/components/OmokReplay";
 
 import {
   deleteArchive,
@@ -29,6 +30,7 @@ type AnyKit = GameKit<unknown, unknown, unknown, unknown, unknown, unknown>;
 const GAME_NAME: Record<string, string> = {
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
+  omok: "● 오목",
 };
 
 function when(at: number): string {
@@ -201,6 +203,48 @@ export function ReviewPage() {
 }
 
 function ArchiveView({
+  archive,
+  onBack,
+}: {
+  archive: GameArchive;
+  onBack: () => void;
+}) {
+  // 판 게임은 카드 게임 화면을 쓰지 않고 판 전용 다시 보기를 쓴다.
+  if (archive.game === "omok")
+    return <OmokArchiveView archive={archive} onBack={onBack} />;
+  return <CardArchiveView archive={archive} onBack={onBack} />;
+}
+
+function OmokArchiveView({
+  archive,
+  onBack,
+}: {
+  archive: GameArchive;
+  onBack: () => void;
+}) {
+  const name = (seat: number) =>
+    seat === archive.seat ? "나" : (archive.seatNames?.[seat] ?? "컴퓨터");
+  return (
+    <main className="min-h-dvh bg-[#1c1917] px-4 py-6 text-white">
+      <div className="mx-auto flex max-w-xl flex-col gap-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="self-start rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
+        >
+          ← 목록
+        </button>
+        <h1 className="font-black text-xl">
+          {GAME_NAME.omok} · {archive.mode === "solo" ? "혼자" : "친구와"} ·{" "}
+          {when(archive.startedAt)}
+        </h1>
+        <OmokReplay archive={archive} name={name} />
+      </div>
+    </main>
+  );
+}
+
+function CardArchiveView({
   archive,
   onBack,
 }: {

@@ -211,6 +211,12 @@ function OmokStart({
           방을 만들어 링크를 보내면 친구가 바로 들어옵니다. 위에서 고른 규칙과
           판 수를 씁니다
         </p>
+        <a
+          href="/profile?game=omok"
+          className="self-center rounded-xl bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
+        >
+          내 기록·지난 게임 다시 보기
+        </a>
         <p className="mt-2 text-center text-[11px] opacity-40">
           <MadeWith />
         </p>

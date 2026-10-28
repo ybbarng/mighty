@@ -26,9 +26,10 @@ import {
   saveSeatToken,
 } from "@/net/session";
 import { randomId } from "@/net/transport";
+import { saveGuestArchive } from "@/review/recorder";
 
 import { omokKit } from "../kit";
-import { omokSession } from "../session";
+import { type OmokHostRoom, omokSession } from "../session";
 import { VARIANT_INFO } from "../settings";
 import { useOmok } from "../store";
 
@@ -79,6 +80,13 @@ export function OmokOnlineScreen({
     mode: "online" as const,
     key: `online:${roomCode}`,
   };
+  /** 방장: 복기용 기록은 방이 내준다 */
+  const hostArchive = (host: OmokHostRoom) => ({
+    ...stats,
+    seat: 0,
+    seatNames: seatNamesOf(host.lobby()),
+    source: () => host.archiveSource(),
+  });
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
@@ -157,7 +165,12 @@ export function OmokOnlineScreen({
         setPhase("lobby");
         if (host.match) {
           started.current = true;
-          attachOnline(host.match, seatNamesOf(host.lobby()), stats);
+          attachOnline(
+            host.match,
+            seatNamesOf(host.lobby()),
+            stats,
+            hostArchive(host),
+          );
           onPlaying();
         }
       } else {
@@ -207,6 +220,22 @@ export function OmokOnlineScreen({
           onAuditReport("나", result.ok, result.ok ? undefined : result.reason);
         });
         guest.on("report", (r) => onAuditReport(r.name, r.ok, r.reason));
+        // 게임 끝 검증을 통과하면 복기용으로 남긴다.
+        guest.on("archive", (source) => {
+          const view = guest.match?.current();
+          saveGuestArchive(
+            {
+              ...stats,
+              seat: guest.seat ?? 0,
+              seatNames: seatNamesOf(
+                guest.lobby ?? { seats: [], ruleCode: "", started: true },
+              ),
+            },
+            source,
+            view?.roundNumber ?? 0,
+            view ? omokKit.isOver(view) : false,
+          );
+        });
         guest.on("match", (match) => {
           if (started.current) return;
           started.current = true;
@@ -232,7 +261,7 @@ export function OmokOnlineScreen({
     setStarting(true);
     try {
       const match = await host.start();
-      attachOnline(match, seatNamesOf(host.lobby()), stats);
+      attachOnline(match, seatNamesOf(host.lobby()), stats, hostArchive(host));
       onPlaying();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

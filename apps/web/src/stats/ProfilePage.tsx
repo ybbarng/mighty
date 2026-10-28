@@ -7,6 +7,7 @@ import { useSettings } from "@/game/settings";
 import { kirudaName } from "@/game/terms";
 import { summarizeHearts } from "@/hearts/stats";
 import { cn } from "@/lib/cn";
+import { summarizeOmok } from "@/omok/kit";
 
 import { clearStats, importStats, loadStats, type StatsBook } from "./records";
 import {
@@ -20,6 +21,14 @@ import {
   StatTile,
   TrendLine,
 } from "./widgets";
+
+type GameTab = "mighty" | "hearts" | "omok";
+
+const TAB_LABEL: Record<GameTab, string> = {
+  omok: "● 오목",
+  mighty: "♠ 마이티",
+  hearts: "♥ 하트",
+};
 
 /** 열 판마다 한 단계 오른다 */
 const ROUNDS_PER_LEVEL = 10;
@@ -39,7 +48,7 @@ function signed(n: number): string {
 export function ProfilePage() {
   const name = useSettings((s) => s.playerName);
   const [book, setBook] = useState<StatsBook | null>(null);
-  const [tab, setTab] = useState<"mighty" | "hearts">("mighty");
+  const [tab, setTab] = useState<GameTab>("mighty");
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   /** 들어온 게임의 처음 화면. 게임 목록에서 왔으면 목록 */
@@ -51,7 +60,7 @@ export function ProfilePage() {
     setBook(loadStats());
     // 게임에서 들어왔으면 그 게임 기록부터 보이고 그 게임으로 돌아간다.
     const game = new URLSearchParams(window.location.search).get("game");
-    if (game === "mighty" || game === "hearts") {
+    if (game === "mighty" || game === "hearts" || game === "omok") {
       setBack(`/${game}`);
       setTab(game);
     }
@@ -130,7 +139,7 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="flex gap-1.5" role="tablist">
-            {(["mighty", "hearts"] as const).map((t) => (
+            {(["omok", "mighty", "hearts"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -142,7 +151,7 @@ export function ProfilePage() {
                   tab === t ? "bg-white text-black" : "bg-white/10",
                 )}
               >
-                {t === "mighty" ? "♠ 마이티" : "♥ 하트"}
+                {TAB_LABEL[t]}
               </button>
             ))}
           </div>
@@ -150,8 +159,10 @@ export function ProfilePage() {
 
         {tab === "mighty" ? (
           <MightyStats book={book} />
-        ) : (
+        ) : tab === "hearts" ? (
           <HeartsStats book={book} />
+        ) : (
+          <OmokStats book={book} />
         )}
 
         <Card title="기록 관리">
@@ -217,12 +228,19 @@ export function ProfilePage() {
   );
 }
 
+/** 받침이 있으면 "을", 없으면 "를"(오목을, 마이티를) */
+function objectParticle(word: string): string {
+  const code = (word.at(-1) ?? "").charCodeAt(0) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0 ? "을" : "를";
+}
+
 function Empty({ what }: { what: string }) {
   return (
     <Card title="아직 기록이 없습니다">
       <p className="text-sm text-white/70">
-        {what}를 한 판 끝까지 두면 여기에 쌓입니다. 혼자 하기와 친구와 하기를
-        모두 기록하고, 배우기는 기록하지 않습니다.
+        {what}
+        {objectParticle(what)} 한 판 끝까지 두면 여기에 쌓입니다. 혼자 하기와
+        친구와 하기를 모두 기록하고, 배우기는 기록하지 않습니다.
       </p>
     </Card>
   );
@@ -443,6 +461,47 @@ function HeartsStats({ book }: { book: StatsBook }) {
             { icon: "👸", label: "♠Q 먹은 판", count: s.queen },
             { icon: "🧼", label: "0점 판", count: s.clean },
           ]}
+        />
+      </Card>
+    </>
+  );
+}
+
+function OmokStats({ book }: { book: StatsBook }) {
+  const s = summarizeOmok(book.rounds);
+  if (s.rounds === 0) return <Empty what="오목" />;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile
+          label="판 승률"
+          value={pct(s.wins, s.rounds)}
+          sub={`${s.wins}승 ${s.losses}패 ${s.draws}무`}
+        />
+        <StatTile
+          label="평균 수"
+          value={s.averageMoves.toFixed(0)}
+          sub="판에 놓인 돌"
+        />
+        <StatTile
+          label="가장 빠른 승리"
+          value={s.fastestWin ?? "—"}
+          sub="다섯을 이은 판의 수"
+        />
+        <StatTile
+          label="다섯으로 이김"
+          value={s.byFive}
+          sub={`기권승 ${s.byResign}판`}
+        />
+      </div>
+      <Card title="돌 색별 승률">
+        <RateBar label="● 흑(먼저)" won={s.black.won} n={s.black.n} />
+        <RateBar label="○ 백" won={s.white.won} n={s.white.n} />
+      </Card>
+      <Card title={`최근 ${s.recent.length}판`}>
+        <ResultStrip
+          title="최근 판 결과"
+          results={s.recent.filter((r) => r !== 0).map((r) => ({ won: r > 0 }))}
         />
       </Card>
     </>

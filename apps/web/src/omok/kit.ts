@@ -20,6 +20,7 @@ import {
 } from "@mighty/omok-engine";
 
 import type { Commentary, GameKit, KitStats, Verdict } from "@/game/kit";
+import type { RoundRecord } from "@/stats/records";
 
 export type OmokKit = GameKit<
   OmokRules,
@@ -180,3 +181,57 @@ export const omokKit: OmokKit = {
   },
   botFor: (level) => omokBotFor(level),
 };
+
+/* ---------- 지표(내 기록) ---------- */
+
+export interface OmokSummary {
+  rounds: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  /** 흑·백으로 둔 판과 이긴 판 */
+  black: { n: number; won: number };
+  white: { n: number; won: number };
+  /** 다섯으로 이긴 판, 상대 기권으로 이긴 판 */
+  byFive: number;
+  byResign: number;
+  /** 판 평균 수(놓인 돌 수) */
+  averageMoves: number;
+  /** 가장 짧게 이긴 판의 수 */
+  fastestWin: number | null;
+  /** 최근 판 결과(오래된 것부터, 이김 1·비김 0·짐 −1) */
+  recent: number[];
+}
+
+export function summarizeOmok(rounds: readonly RoundRecord[]): OmokSummary {
+  const all = rounds
+    .filter((r) => r.game === "omok")
+    .map((r) => r.data as OmokRound);
+  const won = all.filter((r) => r.outcome === "win");
+  const side = (stone: OmokRound["stone"]) => {
+    const mine = all.filter((r) => r.stone === stone);
+    return {
+      n: mine.length,
+      won: mine.filter((r) => r.outcome === "win").length,
+    };
+  };
+  return {
+    rounds: all.length,
+    wins: won.length,
+    losses: all.filter((r) => r.outcome === "loss").length,
+    draws: all.filter((r) => r.outcome === "draw").length,
+    black: side("black"),
+    white: side("white"),
+    byFive: won.filter((r) => r.by === "five").length,
+    byResign: won.filter((r) => r.by === "resign").length,
+    averageMoves:
+      all.length === 0 ? 0 : all.reduce((n, r) => n + r.moves, 0) / all.length,
+    fastestWin:
+      won.filter((r) => r.by === "five").length === 0
+        ? null
+        : Math.min(...won.filter((r) => r.by === "five").map((r) => r.moves)),
+    recent: all
+      .slice(-30)
+      .map((r) => (r.outcome === "win" ? 1 : r.outcome === "loss" ? -1 : 0)),
+  };
+}

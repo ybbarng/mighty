@@ -12,6 +12,7 @@ import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
+import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 
 import { omokKit } from "./kit";
@@ -100,7 +101,13 @@ interface OmokStore {
   }): void;
   resume(saved: OmokSaved): void;
   /** 온라인 방의 대국을 붙인다(저장·무르기 없음) */
-  attachOnline(host: OmokHost, seatNames: string[], stats: StatsTarget): void;
+  attachOnline(
+    host: OmokHost,
+    seatNames: string[],
+    stats: StatsTarget,
+    /** 방장: 복기용 기록(참가자는 게임 끝 검증 뒤 방에서 받아 남긴다) */
+    archive?: ArchiveTarget,
+  ): void;
   setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
   /** 혼자 할 때 무르기: 내 마지막 수(와 그 뒤 컴퓨터 수)를 되돌린다 */
@@ -163,11 +170,15 @@ export const useOmok = create<OmokStore>((set, get) => {
       level: number;
       seatNames: string[] | null;
       stats: StatsTarget;
+      archive?: ArchiveTarget;
     },
   ) => {
     stop();
     const { local, level } = options;
     const recorder = new StatsRecorder(omokKit.stats, options.stats);
+    const archiver = options.archive
+      ? new ArchiveRecorder(omokKit.stats, options.archive)
+      : null;
     const persist = () => {
       if (local) saveOmok({ ...local.save(), level });
     };
@@ -186,10 +197,14 @@ export const useOmok = create<OmokStore>((set, get) => {
       notice: null,
     });
     persist();
-    for (const snapshot of first) recorder.observe(snapshot);
+    for (const snapshot of first) {
+      recorder.observe(snapshot);
+      archiver?.observe(snapshot);
+    }
     unsubscribe = host.subscribe((snapshot) => {
       persist();
       recorder.observe(snapshot);
+      archiver?.observe(snapshot);
       set({ queue: [...get().queue, snapshot] });
       advance();
     });
@@ -221,6 +236,17 @@ export const useOmok = create<OmokStore>((set, get) => {
       level,
       seatNames: null,
       stats: { game: "omok", mode: "solo", key: `solo:${seed}` },
+      archive: {
+        game: "omok",
+        mode: "solo",
+        key: `solo:${seed}`,
+        seat: local.seat,
+        seatNames: null,
+        source: () => {
+          const saved = local.save();
+          return { rules: saved.rules, seed: saved.seed, log: saved.log };
+        },
+      },
     });
 
   return {
@@ -259,8 +285,14 @@ export const useOmok = create<OmokStore>((set, get) => {
       );
     },
 
-    attachOnline(host, seatNames, stats) {
-      attach(host, { local: null, level: get().level, seatNames, stats });
+    attachOnline(host, seatNames, stats, archive) {
+      attach(host, {
+        local: null,
+        level: get().level,
+        seatNames,
+        stats,
+        ...(archive ? { archive } : {}),
+      });
     },
 
     setSeatNames(seatNames) {

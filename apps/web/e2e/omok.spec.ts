@@ -180,3 +180,36 @@ test("오목: 방장이 방을 만들고 친구가 링크로 들어와 한 판�
   });
   expect(errors).toEqual([]);
 });
+
+test("오목: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다시 본다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "기록은 화면 크기와 상관없다");
+  await page.goto("/omok");
+  await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
+  await page.getByRole("button", { name: "컴퓨터와 시작" }).click();
+  await placeOne(page, false);
+  await expect(stones(page)).toHaveCount(2);
+  await page.getByRole("button", { name: "기권" }).click();
+  await expect(page.getByRole("status")).toHaveText("기권했어요");
+  // 복기 기록은 IndexedDB에 비동기로 쓴다. 바로 떠나면 쓰기가 끊긴다.
+  await page.waitForTimeout(500);
+
+  await page.goto("/profile?game=omok");
+  await expect(page.getByRole("tab", { name: "● 오목" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText("0승 1패 0무")).toBeVisible();
+
+  await page.goto("/review");
+  await page.getByRole("button", { name: /● 오목 · 혼자/ }).click();
+  // 끝난 장면부터 보인다. 처음으로 가면 빈 판, 한 수 앞으로 가면 돌 하나.
+  await expect(stones(page)).toHaveCount(2);
+  await page.getByRole("button", { name: "처음" }).click();
+  await expect(stones(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "한 수 앞으로" }).click();
+  await expect(stones(page)).toHaveCount(1);
+  await expect(page.getByText(/다음 수: /)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("omok-review.png") });
+});
