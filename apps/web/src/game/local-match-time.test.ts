@@ -1,3 +1,8 @@
+import {
+  type ChessRules,
+  type ChessView,
+  createMatch as createChessMatch,
+} from "@mighty/chess-engine";
 import { ManualClock } from "@mighty/fair-play";
 import { omokBeginnerBot } from "@mighty/omok-ai";
 import {
@@ -10,6 +15,7 @@ import {
 } from "@mighty/omok-engine";
 import { describe, expect, it } from "vitest";
 
+import { chessKit } from "@/chess/kit";
 import { omokKit } from "@/omok/kit";
 
 import { LocalMatch } from "./local-match";
@@ -80,5 +86,69 @@ describe("혼자 하기의 개인 시간", () => {
     clock.advance(270_001);
     const again = replay(FAST, SEED, match.actionLog());
     expect(again.ok && again.state).toEqual(state());
+  });
+});
+
+describe("차례를 끝내지 않는 행동(체스 무승부 제안)", () => {
+  it("상대 차례에 무승부를 제안·거절해도 그 사람의 생각 시간은 처음부터 다시 재지 않는다", () => {
+    const clock = new ManualClock();
+    const rules: ChessRules = { winsToFinish: 1, time: "fast" };
+    const white = createChessMatch(rules, SEED).state.whiteSeat;
+    const black = 1 - white;
+    const match = new LocalMatch({
+      kit: chessKit,
+      rules,
+      seed: SEED,
+      humanSeat: white,
+      humanSeats: [white, black],
+      clock,
+    });
+    const view = () => match.current() as ChessView;
+    const e4 = { type: "move" as const, from: 52, to: 36 };
+    expect(match.submitAs(white, e4)).toEqual({ ok: true });
+    // 흑이 20초 생각하는 사이 백이 무승부를 제안하고, 흑이 30초 뒤 거절한다.
+    clock.advance(20_000);
+    expect(match.submitAs(white, { type: "offerDraw" })).toEqual({ ok: true });
+    clock.advance(30_000);
+    expect(match.submitAs(black, { type: "declineDraw" })).toEqual({
+      ok: true,
+    });
+    clock.advance(10_000);
+    expect(match.submitAs(black, { type: "move", from: 12, to: 28 })).toEqual({
+      ok: true,
+    });
+    // 흑의 수에는 제안·거절과 상관없이 처음부터 쓴 60초가 실린다.
+    expect(match.actionLog().at(-1)?.action).toEqual({
+      type: "move",
+      from: 12,
+      to: 28,
+      spent: 60_000,
+    });
+    expect(view().clocks?.[black]).toEqual({ main: 120_000, periods: 3 });
+  });
+
+  it("제안·거절이 끼어도 시간패는 그 차례에 남은 시간이 다 지나는 순간이다", () => {
+    const clock = new ManualClock();
+    const rules: ChessRules = { winsToFinish: 1, time: "fast" };
+    const white = createChessMatch(rules, SEED).state.whiteSeat;
+    const black = 1 - white;
+    const match = new LocalMatch({
+      kit: chessKit,
+      rules,
+      seed: SEED,
+      humanSeat: white,
+      humanSeats: [white, black],
+      clock,
+    });
+    const view = () => match.current() as ChessView;
+    match.submitAs(white, { type: "move", from: 52, to: 36 });
+    clock.advance(200_000);
+    match.submitAs(white, { type: "offerDraw" });
+    match.submitAs(black, { type: "declineDraw" });
+    // 흑은 기본 3분 + 초읽기 30초×3 = 270초. 거절로 시계가 다시 걸려도 남은 70초 뒤에 끝난다.
+    clock.advance(70_000);
+    expect(view().result).toBeNull();
+    clock.advance(1);
+    expect(view().result).toEqual({ kind: "time", seat: white });
   });
 });

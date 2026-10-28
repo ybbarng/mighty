@@ -84,6 +84,27 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
     ],
   },
   {
+    title: "체스",
+    cues: [
+      { cue: "piece", when: "기물을 옮김(나·상대 모두)" },
+      { cue: "capture", when: "기물을 잡음" },
+      { cue: "check", when: "체크" },
+      { cue: "announce", when: "상대가 무승부를 제안함" },
+      { cue: "win", when: "체크메이트·상대 기권·상대 시간 끝" },
+      { cue: "lose", when: "체크메이트당함·기권·시간패" },
+      { cue: "roundEnd", when: "비김(스테일메이트·합의 등)" },
+    ],
+  },
+  {
+    title: "바둑",
+    cues: [
+      { cue: "stone", when: "돌을 놓음(나·상대 모두)" },
+      { cue: "capture", when: "돌을 따냄" },
+      { cue: "win", when: "세어서 이김·상대 기권" },
+      { cue: "lose", when: "세어서 짐·기권" },
+    ],
+  },
+  {
     title: "화투(고스톱·민화투·나이롱뽕)",
     cues: [
       { cue: "hwatuSlap", when: "패를 내 바닥에 침" },

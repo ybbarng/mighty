@@ -61,6 +61,7 @@ export const DRAW_LABEL: Record<DrawReason, string> = {
   repetition: "같은 판 세 번",
   material: "기물 부족",
   timeout: "시간 끝, 메이트할 기물 없음",
+  agreed: "합의",
 };
 
 export const chessStats: KitStats<ChessView, GameEvent> = {
@@ -169,6 +170,12 @@ function describeAction(action: unknown): string {
       return "기권";
     case "timeout":
       return "시간패";
+    case "offerDraw":
+      return "무승부 제안";
+    case "acceptDraw":
+      return "무승부 받음";
+    case "declineDraw":
+      return "무승부 거절";
     case "continue":
       return "다음 판";
     default:
@@ -198,6 +205,8 @@ export const chessKit: ChessKit = {
   // 시간패는 방장 기기의 시계만 기록한다.
   guestMayAct: (action) =>
     action.type !== "retire" && action.type !== "timeout",
+  // 무승부 제안은 내가 둔 뒤 상대 차례에 한다.
+  offTurn: (view, action) => action.type === "offerDraw" && view.canOfferDraw,
   retireAction: { type: "retire" },
   stats: chessStats,
   // 완전 공개 게임이라 판마다 넣을 패가 없다.
@@ -230,6 +239,9 @@ export const chessKit: ChessKit = {
       const { spent: _spent, ...rest } = action;
       return rest as Action;
     },
+    // 무승부 제안·거절은 두는 사람의 차례를 끝내지 않는다(시계를 처음부터 다시 재지 않는다).
+    keepsTurn: (action) =>
+      action.type === "offerDraw" || action.type === "declineDraw",
   },
 };
 

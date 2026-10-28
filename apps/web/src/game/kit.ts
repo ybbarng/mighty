@@ -130,6 +130,11 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
   botCanAct?(view: View): boolean;
   /** 온라인 참가자가 보낼 수 있는 행동인가(마이티의 그만두기처럼 혼자 할 때만 쓰는 것을 막는다) */
   guestMayAct?(action: Action): boolean;
+  /**
+   * 내 할 일(`decision`)이 없을 때도 보낼 수 있는 행동인가(체스 무승부 제안처럼 상대 차례에 하는 것).
+   * 없으면 참가자는 내 차례에만 보낸다. 받아들일지는 엔진이 다시 정한다
+   */
+  offTurn?(view: View, action: Action): boolean;
   /** 실력 단계의 컴퓨터. 온라인 판 끝 검증에서 컴퓨터 수를 다시 계산한다 */
   botFor?(level: number): KitBot<View, Action>;
   /** 봇 행동 다듬기(손패 위치 같은 연출 정보) */
@@ -153,4 +158,9 @@ export interface KitTiming<State, Action> {
    * 쓴 시간을 빼고, 방장 시계가 남긴 시간패는 null
    */
   strip(action: Action): Action | null;
+  /**
+   * 시계가 가는 사람의 차례를 끝내지 않는 행동인가(체스 무승부 제안·거절 등).
+   * 그런 행동 뒤에는 생각 시간을 처음부터 다시 재지 않고 이어 잰다. 없으면 모든 행동이 새로 잰다
+   */
+  keepsTurn?(action: Action): boolean;
 }

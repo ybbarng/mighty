@@ -67,6 +67,8 @@ export function createMatch(
     continued: [false, false],
     clocks: startClocks(rules),
     positions: [positionKey(position)],
+    drawOffer: null,
+    drawOfferPly: [-1, -1],
   };
   return {
     state,
@@ -159,6 +161,8 @@ function startNextRound(state: ChessState, events: GameEvent[]): void {
   state.result = null;
   state.phase = "play";
   state.continued = [false, false];
+  state.drawOffer = null;
+  state.drawOfferPly = [-1, -1];
   events.push({
     type: "roundStarted",
     roundNumber: state.roundNumber,
@@ -259,8 +263,37 @@ export function step(
     endRound(next, { kind: "resign", seat: 1 - seat }, events);
     return { ok: true, state: next, events };
   }
+  if (action.type === "offerDraw") {
+    if (!canOfferDraw(state, seat))
+      return fail(
+        state.played.length === 0
+          ? "한 수라도 둔 뒤에 제안한다"
+          : "답을 기다리는 제안이 있거나 이번 수에 이미 제안했다",
+      );
+    const next = clone(state);
+    next.drawOffer = seat;
+    const plies = [...(next.drawOfferPly ?? [-1, -1])];
+    plies[seat] = next.played.length;
+    next.drawOfferPly = plies;
+    return { ok: true, state: next, events: [{ type: "drawOffered", seat }] };
+  }
   if (seatToMove(state) !== seat) return fail("차례가 아니다");
   const side = sideOfSeat(state, seat);
+
+  if (action.type === "acceptDraw" || action.type === "declineDraw") {
+    if (state.drawOffer !== 1 - seat) return fail("받은 무승부 제안이 없다");
+    const next = clone(state);
+    next.drawOffer = null;
+    if (action.type === "declineDraw")
+      return {
+        ok: true,
+        state: next,
+        events: [{ type: "drawDeclined", seat }],
+      };
+    const events: GameEvent[] = [];
+    endRound(next, draw("agreed"), events);
+    return { ok: true, state: next, events };
+  }
 
   if (action.type === "timeout") {
     const control = timeControlOf(state.rules);
@@ -321,6 +354,8 @@ export function step(
   const san = moveToSan(pos, move);
   const castle = castleWing(pos.board, move);
   next.position = applyMove(pos, move);
+  // 상대의 무승부 제안을 받고도 수를 두면 거절한 것이다. 내가 내고 둔 제안은 상대 답을 기다린다.
+  if (next.drawOffer === 1 - seat) next.drawOffer = null;
   next.played.push({
     side,
     from,
@@ -357,6 +392,20 @@ function decisionFor(state: ChessState, seat: number): ChessView["decision"] {
   return null;
 }
 
+/**
+ * 무승부를 제안할 수 있나: 두는 중, 한 수라도 뒀고, 답을 기다리는 제안이 없고, 이 수에서 아직 제안하지 않았다.
+ * 내 차례(두기 전)에 내면 둔 뒤 상대가 자기 차례에 답한다(국제 규칙의 "제안하고 둔다").
+ * 내가 둔 뒤 상대 차례에도 낼 수 있다(온라인에서 상대가 생각하는 동안)
+ */
+export function canOfferDraw(state: ChessState, seat: number): boolean {
+  return (
+    state.phase === "play" &&
+    state.played.length > 0 &&
+    (state.drawOffer ?? null) === null &&
+    (state.drawOfferPly?.[seat] ?? -1) !== state.played.length
+  );
+}
+
 /** 지금 체크를 받는 편(두기 중일 때만) */
 export function checkedSide(state: ChessState): Side | null {
   if (state.phase !== "play") return null;
@@ -377,6 +426,7 @@ export function viewOf(state: ChessState, seat: number): ChessView {
     decision: decisionFor(state, seat),
     legal: legalFor(state, seat),
     check: checkedSide(state),
+    canOfferDraw: canOfferDraw(state, seat),
   };
 }
 

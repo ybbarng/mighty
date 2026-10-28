@@ -32,6 +32,9 @@ function repeatsThrice(view: ChessView, next: Position): boolean {
   return view.positions.filter((p) => p === key).length >= 2;
 }
 
+/** 무승부 제안을 받는 기준: 이만큼(폰 100) 넘게 지고 있으면 받는다 */
+const DRAW_ACCEPT_BEHIND = 300;
+
 /** 수를 고르는 방법만 다르고, 다음 판은 같다 */
 function botWith(
   name: string,
@@ -41,6 +44,13 @@ function botWith(
     name,
     decide(view, rng) {
       if (view.decision?.kind === "continue") return { type: "continue" };
+      // 상대가 무승부를 제안하면 기물 값으로 마이너 기물 하나 넘게 지고 있을 때만 받는다.
+      // 아니면 그냥 두어 거절한다(두면 제안이 사라진다).
+      if (
+        view.drawOffer === 1 - view.mySeat &&
+        material(view.position.board, view.position.turn) <= -DRAW_ACCEPT_BEHIND
+      )
+        return { type: "acceptDraw" };
       const move = pick(view, rng);
       if (!move) return { type: "resign" };
       return { type: "move", ...move };

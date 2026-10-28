@@ -12,13 +12,15 @@ export type Phase = "play" | "roundEnd" | "gameOver";
  * - repetition: 같은 판이 세 번 나왔다
  * - material: 어느 편도 체크메이트할 기물이 없다
  * - timeout: 시간을 다 썼지만 상대가 체크메이트할 기물이 없다
+ * - agreed: 한 사람이 무승부를 제안하고 상대가 받아들였다
  */
 export type DrawReason =
   | "stalemate"
   | "fifty"
   | "repetition"
   | "material"
-  | "timeout";
+  | "timeout"
+  | "agreed";
 
 /** 판 결과. `seat`은 이긴 자리 */
 export type RoundResult =
@@ -64,6 +66,10 @@ export interface ChessState {
   positions: string[];
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
   retired?: boolean;
+  /** 무승부를 제안하고 답을 기다리는 자리. 상대가 받거나 거절하거나 수를 두면 사라진다 */
+  drawOffer?: number | null;
+  /** 자리마다 마지막으로 무승부를 제안한 때(그때까지 둔 수의 수). 한 차례에 한 번만 제안한다 */
+  drawOfferPly?: number[];
 }
 
 export type Action =
@@ -78,6 +84,12 @@ export type Action =
   /** 시간을 다 썼다. 대국을 돌리는 기기가 그 자리로 기록에 남긴다 */
   | { type: "timeout"; spent: number }
   | { type: "resign" }
+  /** 무승부 제안: 내 차례(수를 두기 전)나 내가 둔 뒤 상대 차례에. 한 번 내면 상대가 답할 때까지 다시 못 낸다 */
+  | { type: "offerDraw" }
+  /** 상대의 무승부 제안을 받는다(내 차례에. 상대가 제안하고 둔 뒤) */
+  | { type: "acceptDraw" }
+  /** 상대의 무승부 제안을 거절한다(내 차례에). 그냥 수를 두어도 거절이다 */
+  | { type: "declineDraw" }
   | { type: "continue" }
   /** 게임을 중간에 끝낸다(끊긴 사람을 더 기다리지 않을 때) */
   | { type: "retire" };
@@ -99,6 +111,8 @@ export type GameEvent =
     }
   /** 이 수로 `side` 킹이 체크를 받는다 */
   | { type: "check"; side: Side }
+  | { type: "drawOffered"; seat: number }
+  | { type: "drawDeclined"; seat: number }
   | { type: "roundEnded"; result: RoundResult; wins: number[] }
   | { type: "gameEnded"; wins: number[]; retired?: boolean };
 
@@ -111,4 +125,6 @@ export interface ChessView extends ChessState {
   legal: Move[];
   /** 지금 체크를 받는 편 */
   check: Side | null;
+  /** 지금 무승부를 제안할 수 있나(답을 기다리는 제안이 없고, 이 수에서 아직 제안하지 않음) */
+  canOfferDraw: boolean;
 }

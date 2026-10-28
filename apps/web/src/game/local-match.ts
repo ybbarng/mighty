@@ -244,18 +244,23 @@ export class LocalMatch<
    * 개인 시간: 지금 차례의 시계를 건다. 그 사람이 쓸 수 있는 시간이 다 지나면 그 자리로 시간패를 기록에 남긴다.
    * 수가 오갈 때마다(`apply`) 다시 건다
    */
-  private armClock(): void {
+  private armClock(keep = false): void {
     this.cancelFlag?.();
     this.cancelFlag = null;
-    this.turnSince = this.clock.now();
+    // 차례를 끝내지 않는 행동(무승부 제안 등) 뒤에는 이 차례에 이미 쓴 시간을 이어 잰다.
+    const used = keep ? this.clock.now() - this.turnSince : 0;
+    if (!keep) this.turnSince = this.clock.now();
     const timing = this.kit.timing;
     const turn = timing?.turn(this.state);
     if (!timing || !turn || this.ended || this.haltedReason) return;
-    this.cancelFlag = this.clock.after(turn.left + 1, () => {
-      this.cancelFlag = null;
-      const result = this.apply(turn.seat, timing.timeout(turn.left + 1));
-      if (result.ok) this.runBots();
-    });
+    this.cancelFlag = this.clock.after(
+      Math.max(0, turn.left - used) + 1,
+      () => {
+        this.cancelFlag = null;
+        const result = this.apply(turn.seat, timing.timeout(turn.left + 1));
+        if (result.ok) this.runBots();
+      },
+    );
   }
 
   /** 대국을 만들 때 나온 사건(멘탈 포커 첫 섞기를 시작한다) */
@@ -481,14 +486,25 @@ export class LocalMatch<
     // 개인 시간: 이 수에 쓴 시간을 싣는다(대국을 돌리는 이 기기가 잰다. 참가자가 보낸 값은 덮어쓴다).
     // 시간 규칙이 없는 판은 싣지 않아 예전 기록과 같다.
     const timing = this.kit.timing;
-    const action = timing?.turn(this.state)
-      ? timing.stamp(raw, this.clock.now() - this.turnSince)
-      : raw;
+    const before = timing?.turn(this.state);
+    const action =
+      timing && before
+        ? timing.stamp(raw, this.clock.now() - this.turnSince)
+        : raw;
     const result = this.stepper(this.state, seat, action);
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push(bot ? { seat, action, bot: true } : { seat, action });
-    if (this.kit.timing) this.armClock();
+    if (timing) {
+      // 같은 사람의 시계가 계속 가고 그 차례를 끝내지 않는 행동이면 이어 잰다.
+      const after = timing.turn(this.state);
+      const keep =
+        !!before &&
+        !!after &&
+        before.seat === after.seat &&
+        (timing.keepsTurn?.(raw) ?? false);
+      this.armClock(keep);
+    }
     // 멘탈 포커는 이 걸음의 사건으로 섞기·나눠 주기를 이어 간다(화면을 보내기 전에).
     this.options.afterStep?.(this.state, result.events);
     const seats = new Set([...this.listeners.keys(), this.seat]);

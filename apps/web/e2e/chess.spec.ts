@@ -230,6 +230,56 @@ test("체스: 방장이 방을 만들고 친구가 링크로 들어와 두고, �
   expect(errors).toEqual([]);
 });
 
+test("체스: 온라인에서 둔 뒤 무승부를 제안하고 상대가 받으면 합의해 비긴다", async ({
+  context,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  const errors: string[] = [];
+  for (const p of [host, guest])
+    p.on("pageerror", (e) => errors.push(e.message));
+
+  await host.goto("/chess?net=local");
+  await host.getByRole("button", { name: /다함께 체스/ }).click();
+  await host.getByPlaceholder("친구에게 보일 이름").fill("방장");
+  await host.getByRole("button", { name: "방 만들기", exact: true }).click();
+  const link = await host.locator("input[readonly]").inputValue();
+  await guest.goto(link);
+  await guest.getByPlaceholder("친구에게 보일 이름").fill("철수");
+  await guest.getByRole("button", { name: "들어가기" }).click();
+  await expect(host.getByText("철수")).toBeVisible();
+  await host.getByRole("button", { name: "시작하기" }).click();
+  await expect(board(guest)).toBeVisible();
+
+  const white = (await host.getByText("나는 백").count()) > 0 ? host : guest;
+  const black = white === host ? guest : host;
+  await expect(white.getByRole("status")).toContainText("내 차례", {
+    timeout: 15_000,
+  });
+  // 아직 아무도 두지 않았으면 제안 단추가 없다.
+  await expect(white.getByRole("button", { name: "무승부 제안" })).toHaveCount(
+    0,
+  );
+  await playOne(white, false, "w");
+  // 백은 흑이 생각하는 동안(내 차례가 아닐 때) 제안한다.
+  await white.getByRole("button", { name: "무승부 제안" }).click();
+  await expect(white.getByRole("status")).toContainText("답을 기다려요");
+  await expect(black.getByText(/무승부를 제안했어요/)).toBeVisible({
+    timeout: 15_000,
+  });
+  await black.getByRole("button", { name: "받기" }).click();
+  await expect(black.getByRole("status")).toHaveText("합의해 비겼어요");
+  await expect(white.getByRole("status")).toHaveText("합의해 비겼어요");
+  await white.screenshot({ path: info.outputPath("chess-draw.png") });
+
+  await host.getByRole("button", { name: "← 체스" }).click();
+  await expect(guest.getByText(/검증.*문제없음/)).toBeVisible({
+    timeout: 10_000,
+  });
+  expect(errors).toEqual([]);
+});
+
 test("체스: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다시 본다", async ({
   page,
 }, info) => {

@@ -239,7 +239,8 @@ export function ChessGame({
       : online
         ? `${opponent}의 차례`
         : "컴퓨터가 생각하는 중…";
-  else if (result?.kind === "draw") status = "비겼어요";
+  else if (result?.kind === "draw")
+    status = result.reason === "agreed" ? "합의해 비겼어요" : "비겼어요";
   else if (result?.seat === me)
     status =
       result.kind === "checkmate"
@@ -274,6 +275,11 @@ export function ChessGame({
           ? "win"
           : "loss";
   const gameOver = view.phase === "gameOver";
+  // 무승부 제안: 내가 낸 제안은 상대 답을 기다리고, 상대가 낸 제안은 내 차례에 받거나 거절한다.
+  const myOffer = view.phase === "play" && view.drawOffer === me;
+  const theirOffer = view.phase === "play" && view.drawOffer === 1 - me;
+  if (myOffer && !notice)
+    status = `무승부를 제안했어요 — ${opponent}의 답을 기다려요`;
 
   /** 판에서 고른 수: 승급이면 고르는 창을 띄운다 */
   const onMove = (m: Move) => {
@@ -366,6 +372,30 @@ export function ChessGame({
         className="short-landscape:col-start-2 short-landscape:row-start-3"
       />
 
+      {theirOffer && myMove && (
+        <div
+          role="alert"
+          className="flex w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-xl bg-sky-900/70 px-3 py-2 text-sm short-landscape:col-start-2"
+        >
+          <span>{opponent}이(가) 무승부를 제안했어요.</span>
+          <button
+            type="button"
+            onClick={() => submit({ type: "acceptDraw" })}
+            className="rounded-lg bg-amber-300 px-3 py-1 font-semibold text-black"
+          >
+            받기
+          </button>
+          <button
+            type="button"
+            onClick={() => submit({ type: "declineDraw" })}
+            className="rounded-lg bg-white/15 px-3 py-1"
+          >
+            거절
+          </button>
+          <span className="text-white/60 text-xs">그냥 두어도 거절이에요</span>
+        </div>
+      )}
+
       <p
         ref={list}
         title="기보"
@@ -392,7 +422,16 @@ export function ChessGame({
                 무르기
               </button>
             )}
-            {/* 온라인 참가자는 내 차례에만 행동을 보낼 수 있다 */}
+            {view.canOfferDraw && !mission && (
+              <button
+                type="button"
+                onClick={() => submit({ type: "offerDraw" })}
+                className="rounded-xl bg-white/10 px-4 py-2"
+              >
+                무승부 제안
+              </button>
+            )}
+            {/* 온라인 참가자는 내 차례에만 기권을 보낼 수 있다 */}
             {(!online || myMove) && (
               <button
                 type="button"

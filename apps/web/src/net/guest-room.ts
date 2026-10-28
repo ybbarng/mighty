@@ -72,6 +72,8 @@ export class RemoteMatch<
     private readonly sendAction: (action: ActionT) => void,
     /** 보내기 전에 행동을 바꾼다(멘탈 포커: 낼 카드 열쇠 공개, 버릴 카드를 자리 표로). null이면 못 보낸다 */
     private readonly transform?: (action: ActionT) => ActionT | null,
+    /** 내 차례가 아니어도 보낼 수 있는 행동(`GameKit.offTurn`) */
+    private readonly offTurn?: (view: View, action: ActionT) => boolean,
   ) {
     this.last = first.view;
     this.seen.push(JSON.stringify(first.view));
@@ -88,7 +90,7 @@ export class RemoteMatch<
 
   /** 결과는 방장 엔진이 정한다. 거절되면 `rejected` 메시지로 알려 온다 */
   submit(action: ActionT): SubmitResult {
-    if (this.last.decision === null)
+    if (this.last.decision === null && !this.offTurn?.(this.last, action))
       return { ok: false, error: "지금은 차례가 아니다" };
     // 보낸 행동의 결과(다음 화면이나 거절)가 오기 전에는 다음 행동을 보내지 않는다.
     // 멘탈 포커에서는 낼 카드 열쇠를 공개하므로, 두 번 누르면 두 번째 카드까지 드러난다.
@@ -634,6 +636,9 @@ export class GuestRoom<
       this.fair
         ? (action) =>
             (this.fair?.outgoing(action as never) as ActionT | null) ?? null
+        : undefined,
+      this.kit.offTurn
+        ? (view, action) => this.kit.offTurn?.(view, action) ?? false
         : undefined,
     );
     this.match.sent.push(...this.restoredSent);

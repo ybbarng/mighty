@@ -108,4 +108,23 @@ describe("체스 컴퓨터", () => {
     expect(chessBotFor(1)).toBe(chessIntermediateBot);
     expect(chessBotFor(2)).toBe(chessExpertBot);
   });
+
+  it("무승부 제안은 기물로 크게 지고 있을 때만 받고, 아니면 그냥 두어 거절한다", () => {
+    for (const bot of BOTS) {
+      // 흑(컴퓨터) 차례, 킹만 남았는데 백이 무승부를 제안했다.
+      const behind = createChessScenario({
+        fen: "4k3/8/8/8/8/8/8/3QK3 b - - 0 1",
+      });
+      behind.drawOffer = 1;
+      expect(bot.decide(viewOf(behind, 0), createRng(1))).toEqual({
+        type: "acceptDraw",
+      });
+      // 처음 판(기물이 같다)에서는 받지 않고 수를 둔다.
+      const even = createChessScenario({
+        fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      });
+      even.drawOffer = 1;
+      expect(bot.decide(viewOf(even, 0), createRng(1)).type).toBe("move");
+    }
+  });
 });

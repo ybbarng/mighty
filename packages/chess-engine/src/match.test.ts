@@ -213,6 +213,82 @@ describe("판 끝", () => {
   });
 });
 
+describe("무승부 제안", () => {
+  const start = () => createMatch(STANDARD_RULES, 7).state;
+
+  it("수를 둔 뒤 상대 차례에 한 번 제안하고, 상대가 받으면 합의 무승부로 끝난다", () => {
+    let s = start();
+    const white = seatToMove(s) as number;
+    const black = 1 - white;
+    // 아직 아무도 두지 않았으면 제안할 수 없다.
+    expect(step(s, black, { type: "offerDraw" })).toEqual({
+      ok: false,
+      error: "한 수라도 둔 뒤에 제안한다",
+    });
+    expect(viewOf(s, white).canOfferDraw).toBe(false);
+    s = san(s, "e4").state;
+    expect(viewOf(s, white).canOfferDraw).toBe(true);
+    const offered = must(s, white, { type: "offerDraw" });
+    expect(offered.events).toEqual([{ type: "drawOffered", seat: white }]);
+    s = offered.state;
+    expect(s.drawOffer).toBe(white);
+    // 같은 차례에 다시 제안할 수 없다.
+    expect(step(s, white, { type: "offerDraw" }).ok).toBe(false);
+    expect(viewOf(s, white).canOfferDraw).toBe(false);
+    // 제안한 사람은 받을 수 없다.
+    expect(step(s, white, { type: "acceptDraw" }).ok).toBe(false);
+    const end = must(s, black, { type: "acceptDraw" });
+    expect(end.state.result).toEqual({ kind: "draw", reason: "agreed" });
+    expect(end.state.draws).toBe(1);
+  });
+
+  it("거절하거나 그냥 두면 제안이 사라지고, 다음 내 차례가 지나면 다시 제안할 수 있다", () => {
+    const opened = san(start(), "e4").state;
+    const white = 1 - (seatToMove(opened) as number);
+    const black = 1 - white;
+    const offered = must(opened, white, { type: "offerDraw" }).state;
+    const declined = must(offered, black, { type: "declineDraw" });
+    expect(declined.events).toEqual([{ type: "drawDeclined", seat: black }]);
+    expect(declined.state.drawOffer).toBeNull();
+    // 거절 뒤 받을 제안이 없다. 같은 차례라 백은 다시 제안할 수 없다.
+    expect(step(declined.state, black, { type: "acceptDraw" }).ok).toBe(false);
+    expect(step(declined.state, white, { type: "offerDraw" }).ok).toBe(false);
+    // 그냥 두어도 거절이다.
+    let s = san(offered, "e5").state;
+    expect(s.drawOffer).toBeNull();
+    s = san(s, "Nf3").state;
+    expect(viewOf(s, white).canOfferDraw).toBe(true);
+  });
+
+  it("내 차례에 제안하고 두면 제안이 남아 상대가 자기 차례에 답한다(혼자 하기의 컴퓨터도)", () => {
+    let s = san(start(), "e4").state;
+    const black = seatToMove(s) as number;
+    const white = 1 - black;
+    s = must(s, black, { type: "offerDraw" }).state;
+    s = san(s, "e5").state;
+    // 흑이 내고 둔 제안은 그대로다. 백이 답한다.
+    expect(s.drawOffer).toBe(black);
+    expect(viewOf(s, black).canOfferDraw).toBe(false);
+    const end = must(s, white, { type: "acceptDraw" });
+    expect(end.state.result).toEqual({ kind: "draw", reason: "agreed" });
+  });
+
+  it("무승부 제안이 든 기록도 그대로 다시 둔다", () => {
+    const first = start();
+    const white = seatToMove(first) as number;
+    const e4 = sanToMove(first.position as Position, "e4");
+    if (!e4) throw new Error("e4를 둘 수 없다");
+    const log: LoggedAction[] = [
+      { seat: white, action: { type: "move", ...e4 } },
+      { seat: white, action: { type: "offerDraw" } },
+      { seat: 1 - white, action: { type: "acceptDraw" } },
+    ];
+    const again = replay(STANDARD_RULES, 7, log);
+    if (!again.ok) throw new Error(again.error);
+    expect(again.state.result).toEqual({ kind: "draw", reason: "agreed" });
+  });
+});
+
 describe("다시 두기", () => {
   it("기록대로 다시 두면 같은 판이 나오고, 틀린 기록은 몇 번째에서 틀렸는지 알린다", () => {
     let { state } = createMatch(STANDARD_RULES, 5);

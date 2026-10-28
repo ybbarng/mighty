@@ -122,11 +122,13 @@ interface ChessStore {
   clearNotice(): void;
 }
 
-/** 사건에 맞춰 소리를 낸다: 기물 놓기·잡기, 체크, 판 끝(이김·짐·비김). 장기 소리를 함께 쓴다 */
+/** 사건에 맞춰 소리를 낸다: 기물 놓기·잡기, 체크, 무승부 제안, 판 끝(이김·짐·비김). 장기 소리를 함께 쓴다 */
 function cuesFor(events: readonly GameEvent[], me: number): void {
   for (const e of events) {
     if (e.type === "moved") playUiCue(e.captured ? "capture" : "piece");
     if (e.type === "check") playUiCue("check");
+    // 상대가 무승부를 제안하면 알아채게 "짠"(마이티 공지 소리)
+    if (e.type === "drawOffered" && e.seat !== me) playUiCue("announce");
     if (e.type === "roundEnded")
       playUiCue(
         e.result.kind === "draw"
