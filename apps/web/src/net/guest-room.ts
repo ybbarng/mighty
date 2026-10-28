@@ -1011,7 +1011,10 @@ export class GuestRoom<
           const expected = this.kit.annotateBotAction
             ? this.kit.annotateBotAction(view, decided)
             : decided;
-          if (JSON.stringify(expected) !== JSON.stringify(action))
+          // 방장이 컴퓨터 수에도 쓴 시간을 실을 수 있으니 시간 꼬리표를 떼고 견준다.
+          const bare = (a: ActionT) =>
+            JSON.stringify(this.kit.timing ? this.kit.timing.strip(a) : a);
+          if (bare(expected) !== bare(action))
             return {
               ok: false,
               reason: `기록 ${index + 1}번째: 컴퓨터가 둘 수와 다르다(방장이 컴퓨터를 조종했다)`,
