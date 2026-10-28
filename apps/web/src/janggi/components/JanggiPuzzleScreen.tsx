@@ -7,14 +7,20 @@ import {
   type Move,
   step,
 } from "@mighty/janggi-engine";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { type Outcome, RoundOutcome } from "@/components/RoundOutcome";
-import { playUiCue } from "@/game/ui-sound";
-import { cn } from "@/lib/cn";
+import {
+  findInSets,
+  PuzzleScreen,
+  usePuzzleRun,
+} from "@/components/study/PuzzleScreen";
 import { useJanggiStudyProgress } from "@/study/progress";
 
-import { JANGGI_PUZZLE_SETS, type JanggiPuzzle } from "../puzzles";
+import {
+  JANGGI_PUZZLE_SETS,
+  type JanggiPuzzle,
+  type JanggiPuzzleSet,
+} from "../puzzles";
 import { useJanggiSettings } from "../settings";
 import {
   defenseFor,
@@ -24,8 +30,6 @@ import {
   puzzleState,
 } from "../study";
 import { JanggiBoard } from "./JanggiBoard";
-
-type Status = "play" | "waiting" | "wrong" | "solved";
 
 /** 문제 종류마다 보이는 글 */
 const TEXT: Record<
@@ -68,19 +72,7 @@ const TEXT: Record<
 /** 수 세기 낱말 */
 const COUNT: Record<number, string> = { 1: "한", 2: "두", 3: "세" };
 
-/** 상대가 받는 수를 보이기 전에 잠깐 기다린다 */
-const REPLY_MS = 600;
-
-function findPuzzle(id: string) {
-  for (const set of JANGGI_PUZZLE_SETS) {
-    const index = set.puzzles.findIndex((p) => p.id === id);
-    if (index >= 0)
-      return { set, index, puzzle: set.puzzles[index] as JanggiPuzzle };
-  }
-  return null;
-}
-
-/** 장기 외통 문제 하나. 초가 둘 차례다 */
+/** 장기 문제 하나. 초가 둘 차례다 */
 export function JanggiPuzzleScreen({
   puzzleId,
   onExit,
@@ -90,125 +82,83 @@ export function JanggiPuzzleScreen({
   onExit: () => void;
   onOpen: (id: string) => void;
 }) {
-  const found = findPuzzle(puzzleId);
+  const found = findInSets<JanggiPuzzle>(JANGGI_PUZZLE_SETS, puzzleId);
+  if (!found) return null;
+  return (
+    <JanggiPuzzleRun
+      set={found.set as JanggiPuzzleSet}
+      index={found.index}
+      puzzle={found.puzzle}
+      onExit={onExit}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function JanggiPuzzleRun({
+  set,
+  index,
+  puzzle,
+  onExit,
+  onOpen,
+}: {
+  set: JanggiPuzzleSet;
+  index: number;
+  puzzle: JanggiPuzzle;
+  onExit: () => void;
+  onOpen: (id: string) => void;
+}) {
   const labels = useJanggiSettings((s) => s.labels);
   const solve = useJanggiStudyProgress((s) => s.solve);
   const miss = useJanggiStudyProgress((s) => s.miss);
-  const [state, setState] = useState<JanggiState | null>(() =>
-    found ? puzzleState(found.puzzle) : null,
-  );
-  const [stepIndex, setStepIndex] = useState(0);
-  const [status, setStatus] = useState<Status>("play");
   const [selected, setSelected] = useState<number | null>(null);
-  const [lastMove, setLastMove] = useState<Move | null>(null);
-  const [explain, setExplain] = useState<string[]>([]);
-  const [shown, setShown] = useState<Move | null>(null);
-  const [missed, setMissed] = useState(false);
-
-  // 상대(한)가 받는다.
-  useEffect(() => {
-    if (status !== "waiting" || !state) return;
-    const timer = setTimeout(() => {
-      const reply = defenseFor(state);
-      const result = step(state, 1, reply);
-      if (!result.ok) return;
-      setState(result.state);
-      if (reply.type === "move") {
-        setLastMove({ from: reply.from, to: reply.to });
-        playUiCue(state.board[reply.to] ? "capture" : "piece");
-      }
-      setStepIndex((i) => i + 1);
-      setStatus("play");
-    }, REPLY_MS);
-    return () => clearTimeout(timer);
-  }, [status, state]);
-
-  if (!found || !state) return null;
-  const { set, index, puzzle } = found;
+  const run = usePuzzleRun<JanggiState, Move>({
+    initial: () => puzzleState(puzzle),
+    judge: (state, move, at) => judgeMove(puzzle, state, move, at),
+    apply: (state, move) => {
+      const result = step(state, 0, { type: "move", ...move });
+      if (!result.ok) return null;
+      return { state: result.state, capture: Boolean(state.board[move.to]) };
+    },
+    reply: (state) => {
+      const answer = defenseFor(state);
+      const result = step(state, 1, answer);
+      if (!result.ok) return null;
+      const move =
+        answer.type === "move" ? { from: answer.from, to: answer.to } : null;
+      return {
+        state: result.state,
+        move,
+        capture: Boolean(move && state.board[move.to]),
+      };
+    },
+    explain: (before, move) => explainSolved(puzzle, before.board, move),
+    solve: () => solve(puzzle.id),
+    miss: () => miss(puzzle.id),
+  });
+  const { state, status, shown } = run;
   const text = TEXT[puzzle.kind];
   const nextId = set.puzzles[index + 1]?.id ?? null;
-
-  const restart = () => {
-    setState(puzzleState(puzzle));
-    setStepIndex(0);
-    setStatus("play");
-    setSelected(null);
-    setLastMove(null);
-    setExplain([]);
-    setShown(null);
-  };
-
-  const play = (move: Move) => {
-    const verdict = judgeMove(puzzle, state, move, stepIndex);
-    const before = state;
-    const result = step(state, 0, { type: "move", ...move });
-    if (!result.ok) return;
-    setState(result.state);
-    setLastMove(move);
-    playUiCue(before.board[move.to] ? "capture" : "piece");
-    if (verdict === "solved") {
-      setExplain(explainSolved(puzzle, before.board, move));
-      setStatus("solved");
-      playUiCue("win");
-      // 정답 보기를 누른 뒤 푼 것은 푼 것으로 치지 않는다.
-      if (!shown) solve(puzzle.id);
-    } else if (verdict === "next") setStatus("waiting");
-    else {
-      setStatus("wrong");
-      playUiCue("invalid");
-      if (!missed) {
-        miss(puzzle.id);
-        setMissed(true);
-      }
-    }
-  };
-
-  /** 정답 보기: 지금 둘 정답 수를 판에 보인다(두 수 문제의 둘째 수는 외통 수 하나) */
-  const reveal = () => {
-    restart();
-    setShown(parseMove(puzzle.solution));
-    setSelected(parseMove(puzzle.solution).from);
-  };
+  const answer = parseMove(puzzle.solution);
 
   const legal = status === "play" ? legalFor(state, 0) : [];
-  const outcome: Outcome | null =
-    status === "solved" ? "win" : status === "wrong" ? "loss" : null;
   const prompt =
     puzzle.kind !== "mate" || puzzle.mateIn === 1
       ? text.prompt
-      : stepIndex === 0
+      : run.step === 0
         ? `${COUNT[puzzle.mateIn]} 수 만에 외통: 첫 수를 두세요`
-        : stepIndex < puzzle.mateIn - 1
-          ? `외통까지 ${COUNT[puzzle.mateIn - stepIndex]} 수 남았어요`
+        : run.step < puzzle.mateIn - 1
+          ? `외통까지 ${COUNT[puzzle.mateIn - run.step]} 수 남았어요`
           : "이제 외통을 만드세요";
-  const statusText =
-    status === "solved"
-      ? text.solved
-      : status === "wrong"
-        ? text.wrong
-        : status === "waiting"
-          ? "한이 받는 중…"
-          : prompt;
 
   return (
-    <main
-      data-game="janggi"
-      className="flex min-h-dvh flex-col items-center gap-3 bg-[#1c1917] px-4 py-3 text-white short-landscape:grid short-landscape:grid-cols-[auto_minmax(0,18rem)] short-landscape:grid-rows-[auto_auto_1fr] short-landscape:content-center short-landscape:justify-center short-landscape:gap-x-6"
-    >
-      <header className="flex w-full max-w-xl items-center gap-2 text-sm short-landscape:col-start-2 short-landscape:row-start-1">
-        <button
-          type="button"
-          onClick={onExit}
-          className="text-white/70 hover:text-white"
-        >
-          ← 목록
-        </button>
-        <span className="ml-auto font-semibold">
-          {set.title} {index + 1}/{set.puzzles.length}
-        </span>
-      </header>
-
-      <div className="aspect-[924/1024] w-[min(100%,calc((100dvh-17rem)*0.9))] max-w-xl short-landscape:col-start-1 short-landscape:row-span-3 short-landscape:row-start-1 short-landscape:w-[calc((100dvh-1.5rem)*0.9)]">
+    <PuzzleScreen
+      game="janggi"
+      setTitle={set.title}
+      index={index}
+      total={set.puzzles.length}
+      boardClassName="aspect-[924/1024] w-[min(100%,calc((100dvh-17rem)*0.9))] short-landscape:w-[calc((100dvh-1.5rem)*0.9)]"
+      board={
         <JanggiBoard
           board={state.board}
           flipped={false}
@@ -221,86 +171,37 @@ export function JanggiPuzzleScreen({
           onSelect={setSelected}
           onMove={(m) => {
             setSelected(null);
-            play(m);
+            run.play(m);
           }}
-          lastMove={lastMove}
-          checkedKing={status === "solved" ? kingOf(state.board, "h") : null}
+          lastMove={run.lastMove}
+          checkedKing={
+            status === "solved" && puzzle.kind === "mate"
+              ? kingOf(state.board, "h")
+              : null
+          }
           labels={labels}
         />
-      </div>
-
-      <div className="flex w-full max-w-xl flex-col items-center gap-3 short-landscape:col-start-2 short-landscape:row-start-2">
-        <RoundOutcome
-          outcome={outcome}
-          status={statusText}
-          summary={
-            status === "solved"
-              ? shown
-                ? "정답을 본 뒤 풀었어요. 다음에 다시 풀어 보세요"
-                : "맞혔어요!"
-              : status === "wrong"
-                ? text.wrongHint
-                : undefined
-          }
-        />
-        {status === "solved" && (
-          <ul className="w-full list-inside list-disc rounded-xl bg-white/5 p-3 text-sm text-white/85">
-            {explain.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap justify-center gap-2">
-          {status === "play" && !shown && (
-            <button
-              type="button"
-              onClick={() => setSelected(parseMove(puzzle.solution).from)}
-              className={cn(
-                "rounded-xl bg-white/10 px-4 py-2",
-                stepIndex > 0 && "hidden",
-              )}
-            >
-              힌트
-            </button>
-          )}
-          {(status === "wrong" || status === "play") && (
-            <button
-              type="button"
-              onClick={reveal}
-              className="rounded-xl bg-white/10 px-4 py-2"
-            >
-              정답 보기
-            </button>
-          )}
-          {status === "wrong" && (
-            <button
-              type="button"
-              onClick={restart}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              다시 하기
-            </button>
-          )}
-          {status === "solved" && nextId && (
-            <button
-              type="button"
-              onClick={() => onOpen(nextId)}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              다음 문제
-            </button>
-          )}
-          {status === "solved" && !nextId && (
-            <button
-              type="button"
-              onClick={onExit}
-              className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
-            >
-              목록으로
-            </button>
-          )}
-        </div>
-      </div>
-    </main>
+      }
+      status={status}
+      prompt={prompt}
+      waitingText="한이 받는 중…"
+      solvedText={text.solved}
+      wrongText={text.wrong}
+      wrongHint={text.wrongHint}
+      shown={shown !== null}
+      explain={run.explain}
+      canHint={run.step === 0}
+      onHint={() => setSelected(answer.from)}
+      onReveal={() => {
+        run.reveal(answer);
+        setSelected(answer.from);
+      }}
+      onRestart={() => {
+        run.restart();
+        setSelected(null);
+      }}
+      onNext={nextId ? () => onOpen(nextId) : null}
+      onExit={onExit}
+    />
   );
 }
