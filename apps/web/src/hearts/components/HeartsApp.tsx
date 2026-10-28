@@ -7,6 +7,8 @@ import {
 } from "@mighty/hearts-engine";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { BackToGames } from "@/components/BackToGames";
+import { MadeWith } from "@/components/brand/MadeWith";
 import { ActionButton } from "@/components/panels/common";
 import { SuitStylePicker } from "@/components/SuitStylePicker";
 import { SuitText } from "@/components/SuitText";
@@ -159,6 +161,7 @@ export function HeartsApp() {
   return (
     <main className={cn(BG, "items-center")}>
       <div className="flex w-full max-w-sm flex-col gap-3">
+        <BackToGames />
         <div className="mb-3 text-center">
           <div className="text-7xl text-red-500 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
             ♥
@@ -240,13 +243,12 @@ export function HeartsApp() {
           >
             내 기록
           </a>
-          <a
-            href="/"
-            className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/15"
-          >
-            게임 목록
-          </a>
         </div>
+        <p className="mt-2 text-center text-[11px] opacity-40">
+          윈도우에 들어 있던 하트 규칙을 따라 만들었습니다
+          <br />
+          <MadeWith />
+        </p>
       </div>
     </main>
   );

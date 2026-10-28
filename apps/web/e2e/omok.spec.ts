@@ -123,3 +123,60 @@ test("오목: 두던 게임은 새로고침해도 이어 둔다", async ({ page 
   await page.getByRole("button", { name: "이어하기" }).click();
   await expect(stones(page)).toHaveCount(2);
 });
+
+test("오목: 방장이 방을 만들고 친구가 링크로 들어와 한 판을 둔다", async ({
+  context,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  const errors: string[] = [];
+  for (const p of [host, guest])
+    p.on("pageerror", (e) => errors.push(e.message));
+
+  await host.goto("/omok?net=local");
+  await host.getByRole("button", { name: "친구와 하기" }).click();
+  await host.getByPlaceholder("친구에게 보일 이름").fill("방장");
+  await host.getByRole("button", { name: "방 만들기", exact: true }).click();
+  // 친구가 들어오기 전에는 시작할 수 없다.
+  await expect(
+    host.getByRole("button", { name: "친구가 들어오면 시작할 수 있어요" }),
+  ).toBeDisabled();
+  const link = await host.locator("input[readonly]").inputValue();
+  expect(link).toContain("/omok");
+  expect(link).toContain("room=");
+
+  await guest.goto(link);
+  await guest.getByPlaceholder("친구에게 보일 이름").fill("철수");
+  await guest.getByRole("button", { name: "들어가기" }).click();
+  await expect(guest.getByText("방장이 시작하기를 기다리는 중")).toBeVisible();
+  await expect(host.getByText("철수")).toBeVisible();
+  await host.getByRole("button", { name: "시작하기" }).click();
+  await expect(board(guest)).toBeVisible();
+  await expect(guest.getByText("방장", { exact: true })).toBeVisible();
+
+  const over = (p: Page) => p.getByRole("button", { name: "다시 하기" });
+  for (let i = 0; i < 300; i++) {
+    if ((await over(host).isVisible()) && (await over(guest).isVisible()))
+      break;
+    for (const p of [host, guest])
+      if (
+        (await p.getByRole("status").textContent())?.includes("내 차례") &&
+        !(await over(p).isVisible())
+      )
+        await placeOne(p, false);
+    await host.waitForTimeout(50);
+  }
+  await expect(over(host)).toBeVisible();
+  await expect(over(guest)).toBeVisible();
+  // 두 화면의 판이 같다.
+  expect(await stones(guest).count()).toBe(await stones(host).count());
+  await guest.screenshot({ path: info.outputPath("omok-online-guest.png") });
+
+  // 방장이 나가면 기록이 공개되고, 참가자가 처음부터 다시 둬 보며 확인한다.
+  await host.getByRole("button", { name: "← 오목" }).click();
+  await expect(guest.getByText(/검증.*문제없음/)).toBeVisible({
+    timeout: 10_000,
+  });
+  expect(errors).toEqual([]);
+});

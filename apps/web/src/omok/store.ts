@@ -9,10 +9,10 @@ import {
 } from "@mighty/omok-engine";
 import { create } from "zustand";
 import { browserPace } from "@/game/bots";
-import type { Snapshot, SubmitResult } from "@/game/host";
+import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
-import { StatsRecorder } from "@/stats/recorder";
+import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
 
 import { omokKit } from "./kit";
 
@@ -24,6 +24,11 @@ export type OmokLocalMatch = LocalMatch<
   GameEvent,
   undefined
 >;
+/** 화면이 아는 대국 창구: 혼자 하기·방장은 LocalMatch, 참가자는 RemoteMatch */
+export type OmokHost = MatchHost<OmokView, Action, GameEvent> & {
+  drain(): Snapshot<OmokView, GameEvent>[];
+};
+
 export type OmokSaved = SavedMatch<OmokRules, Action, undefined> & {
   /** 컴퓨터 단계(0 입문, 1 중수, 2 고수) */
   level: number;
@@ -73,7 +78,14 @@ function seatFor(rules: OmokRules, seed: number, pick: StonePick): number {
 }
 
 interface OmokStore {
-  host: OmokLocalMatch | null;
+  host: OmokHost | null;
+  /** 혼자 할 때만: 저장·무르기에 쓴다 */
+  local: OmokLocalMatch | null;
+  /** 온라인 대국이면 자리 이름 */
+  seatNames: string[] | null;
+  reconnecting: boolean;
+  hostLeft: boolean;
+  offlineSeats: number[];
   view: OmokView | null;
   /** 마지막으로 보인 걸음의 사건 */
   events: GameEvent[];
@@ -87,6 +99,9 @@ interface OmokStore {
     seed?: number;
   }): void;
   resume(saved: OmokSaved): void;
+  /** 온라인 방의 대국을 붙인다(저장·무르기 없음) */
+  attachOnline(host: OmokHost, seatNames: string[], stats: StatsTarget): void;
+  setSeatNames(seatNames: string[]): void;
   submit(action: Action): SubmitResult;
   /** 혼자 할 때 무르기: 내 마지막 수(와 그 뒤 컴퓨터 수)를 되돌린다 */
   undo(): boolean;
@@ -127,9 +142,10 @@ export const useOmok = create<OmokStore>((set, get) => {
     const [next, ...rest] = get().queue;
     if (next === undefined) return;
     const host = get().host;
-    const byBot = next.events.some(
-      (e) => e.type === "placed" && e.seat !== host?.seat,
-    );
+    // 컴퓨터 상대(혼자 하기)만 기다린다. 온라인 상대 수는 바로 보인다.
+    const byBot =
+      get().local !== null &&
+      next.events.some((e) => e.type === "placed" && e.seat !== host?.seat);
     const show = () => {
       timer = null;
       set({ queue: rest, view: next.view, events: next.events });
@@ -140,18 +156,30 @@ export const useOmok = create<OmokStore>((set, get) => {
     else show();
   };
 
-  const attach = (host: OmokLocalMatch, level: number, seed: number) => {
+  const attach = (
+    host: OmokHost,
+    options: {
+      local: OmokLocalMatch | null;
+      level: number;
+      seatNames: string[] | null;
+      stats: StatsTarget;
+    },
+  ) => {
     stop();
-    const recorder = new StatsRecorder(omokKit.stats, {
-      game: "omok",
-      mode: "solo",
-      key: `solo:${seed}`,
-    });
-    const persist = () => saveOmok({ ...host.save(), level });
+    const { local, level } = options;
+    const recorder = new StatsRecorder(omokKit.stats, options.stats);
+    const persist = () => {
+      if (local) saveOmok({ ...local.save(), level });
+    };
     const first = host.drain();
     set({
       host,
+      local,
       level,
+      seatNames: options.seatNames,
+      reconnecting: false,
+      hostLeft: false,
+      offlineSeats: [],
       view: host.current(),
       events: [],
       queue: [],
@@ -186,8 +214,22 @@ export const useOmok = create<OmokStore>((set, get) => {
       log,
     );
 
+  /** 혼자 하기: 이 기기의 대국으로 붙인다 */
+  const attachLocal = (local: OmokLocalMatch, level: number, seed: number) =>
+    attach(local, {
+      local,
+      level,
+      seatNames: null,
+      stats: { game: "omok", mode: "solo", key: `solo:${seed}` },
+    });
+
   return {
     host: null,
+    local: null,
+    seatNames: null,
+    reconnecting: false,
+    hostLeft: false,
+    offlineSeats: [],
     view: null,
     events: [],
     queue: [],
@@ -196,7 +238,7 @@ export const useOmok = create<OmokStore>((set, get) => {
 
     newGame({ rules, level, pick, seed: given }) {
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
-      attach(
+      attachLocal(
         newLocal(rules, seed, seatFor(rules, seed, pick), level),
         level,
         seed,
@@ -204,7 +246,7 @@ export const useOmok = create<OmokStore>((set, get) => {
     },
 
     resume(saved) {
-      attach(
+      attachLocal(
         newLocal(
           saved.rules,
           saved.seed,
@@ -215,6 +257,14 @@ export const useOmok = create<OmokStore>((set, get) => {
         saved.level,
         saved.seed,
       );
+    },
+
+    attachOnline(host, seatNames, stats) {
+      attach(host, { local: null, level: get().level, seatNames, stats });
+    },
+
+    setSeatNames(seatNames) {
+      set({ seatNames });
     },
 
     submit(action) {
@@ -231,27 +281,27 @@ export const useOmok = create<OmokStore>((set, get) => {
     },
 
     canUndo() {
-      const { host, view, queue } = get();
-      if (!host || !view || queue.length > 0 || view.phase !== "play")
+      const { local, view, queue } = get();
+      if (!local || !view || queue.length > 0 || view.phase !== "play")
         return false;
-      return host
+      return local
         .actionLog()
         .some(
-          (entry) => entry.seat === host.seat && entry.action.type === "place",
+          (entry) => entry.seat === local.seat && entry.action.type === "place",
         );
     },
 
     undo() {
-      const { host, level } = get();
-      if (!host || !get().canUndo()) return false;
-      const saved = host.save();
+      const { local, level } = get();
+      if (!local || !get().canUndo()) return false;
+      const saved = local.save();
       const log = [...saved.log];
       // 내 마지막 두기까지 잘라 낸다(그 뒤 컴퓨터 수도 함께).
       while (log.length > 0) {
         const last = log.pop();
-        if (last?.seat === host.seat && last.action.type === "place") break;
+        if (last?.seat === local.seat && last.action.type === "place") break;
       }
-      attach(
+      attachLocal(
         newLocal(saved.rules, saved.seed, saved.humanSeat, level, log),
         level,
         saved.seed,
@@ -261,7 +311,17 @@ export const useOmok = create<OmokStore>((set, get) => {
 
     leave() {
       stop();
-      set({ host: null, view: null, queue: [], events: [] });
+      set({
+        host: null,
+        local: null,
+        seatNames: null,
+        view: null,
+        queue: [],
+        events: [],
+        reconnecting: false,
+        hostLeft: false,
+        offlineSeats: [],
+      });
     },
 
     clearNotice() {

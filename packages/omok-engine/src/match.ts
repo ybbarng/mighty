@@ -205,10 +205,20 @@ function forbiddenFor(state: OmokState, seat: number): OmokView["forbidden"] {
   return list;
 }
 
+/** 지금 이 자리가 할 일 */
+function decisionFor(state: OmokState, seat: number): OmokView["decision"] {
+  if (state.phase === "play")
+    return seatToMove(state) === seat ? { kind: "place" } : null;
+  if (state.phase === "roundEnd" && !state.continued[seat])
+    return { kind: "continue" };
+  return null;
+}
+
 export function viewOf(state: OmokState, seat: number): OmokView {
   return {
     ...clone(state),
     mySeat: seat,
+    decision: decisionFor(state, seat),
     forbidden: forbiddenFor(state, seat),
   };
 }

@@ -8,6 +8,7 @@ import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
 import { useTutorialProgress } from "@/tutorial/progress";
 
+import { BackToGames } from "./BackToGames";
 import { Logo } from "./brand/Logo";
 import { MadeWith } from "./brand/MadeWith";
 
@@ -84,12 +85,7 @@ export function StartScreen({
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_center,#166534_0%,#0a3622_75%)] p-4">
       <div className="flex w-full max-w-sm flex-col gap-3">
-        <a
-          href="/"
-          className="self-start text-sm text-white/70 hover:text-white"
-        >
-          ← 게임 목록
-        </a>
+        <BackToGames />
         <div className="mb-2 text-center">
           <h1 className="flex justify-center">
             <Logo size={240} animated />

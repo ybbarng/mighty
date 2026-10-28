@@ -8,8 +8,13 @@ import {
 } from "@mighty/omok-engine";
 import { useEffect, useState } from "react";
 
+import { BackToGames } from "@/components/BackToGames";
+import { MadeWith } from "@/components/brand/MadeWith";
+import { ChatBox } from "@/components/ChatBox";
 import { cn } from "@/lib/cn";
+import { type HostRestore, hostedRoom } from "@/net/host-store";
 
+import { endOmokSession } from "../session";
 import {
   OMOK_LEVELS,
   type OmokLevel,
@@ -24,6 +29,7 @@ import {
   useOmok,
 } from "../store";
 import { OmokBoard } from "./OmokBoard";
+import { OmokOnlineScreen } from "./OmokOnlineScreen";
 
 const WINS_OPTIONS = [
   { value: 1, label: "한 판" },
@@ -79,7 +85,13 @@ function Section({
 }
 
 /** 시작 화면: 규칙·판 수·컴퓨터·내 돌을 고른다 */
-function OmokStart({ onStart }: { onStart: (saved?: OmokSaved) => void }) {
+function OmokStart({
+  onStart,
+  onOnline,
+}: {
+  onStart: (saved?: OmokSaved) => void;
+  onOnline: () => void;
+}) {
   const s = useOmokSettings();
   const [saved, setSaved] = useState<OmokSaved | null>(null);
   useEffect(() => setSaved(loadOmok()), []);
@@ -92,9 +104,7 @@ function OmokStart({ onStart }: { onStart: (saved?: OmokSaved) => void }) {
       className="min-h-dvh bg-[radial-gradient(ellipse_at_top,#1e293b_0%,#020617_70%)] px-4 py-6 text-white"
     >
       <div className="mx-auto flex max-w-md flex-col gap-6">
-        <a href="/" className="text-sm text-white/70 hover:text-white">
-          ← 게임 목록
-        </a>
+        <BackToGames />
         <header className="text-center">
           <h1 className="font-black text-4xl tracking-tight">오목</h1>
           <p className="mt-1 text-sm text-white/70">
@@ -190,6 +200,20 @@ function OmokStart({ onStart }: { onStart: (saved?: OmokSaved) => void }) {
         >
           컴퓨터와 시작
         </button>
+        <button
+          type="button"
+          onClick={onOnline}
+          className="rounded-2xl border border-amber-300/60 py-3 font-bold text-amber-200 text-lg hover:bg-amber-300/10"
+        >
+          친구와 하기
+        </button>
+        <p className="-mt-3 text-center text-white/50 text-xs">
+          방을 만들어 링크를 보내면 친구가 바로 들어옵니다. 위에서 고른 규칙과
+          판 수를 씁니다
+        </p>
+        <p className="mt-2 text-center text-[11px] opacity-40">
+          <MadeWith />
+        </p>
       </div>
     </main>
   );
@@ -236,7 +260,16 @@ function PlayerPlate({
 
 /** 대국 화면 */
 function OmokGame({ onExit }: { onExit: () => void }) {
-  const { view, host, notice, level } = useOmok();
+  const {
+    view,
+    host,
+    local,
+    notice,
+    level,
+    seatNames,
+    reconnecting,
+    hostLeft,
+  } = useOmok();
   const submit = useOmok((s) => s.submit);
   const undo = useOmok((s) => s.undo);
   const canUndo = useOmok((s) => s.canUndo());
@@ -255,6 +288,10 @@ function OmokGame({ onExit }: { onExit: () => void }) {
   const myStone = stoneOfSeat(view, me);
   const myTurn = view.phase === "play" && seatToMove(view) === me;
   const levelName = OMOK_LEVELS.find((l) => l.value === level)?.label ?? "";
+  const online = local === null;
+  const opponent = online
+    ? (seatNames?.[1 - me] ?? "상대")
+    : `컴퓨터(${levelName})`;
   const result = view.result;
   const lastMove = view.moves.at(-1) ?? null;
 
@@ -264,7 +301,9 @@ function OmokGame({ onExit }: { onExit: () => void }) {
       ? aim !== null
         ? `${pointName(aim)}: 한 번 더 누르면 둔다`
         : "내 차례 — 판을 눌러 두세요"
-      : "컴퓨터가 생각하는 중…";
+      : online
+        ? `${opponent}의 차례`
+        : "컴퓨터가 생각하는 중…";
   else if (result?.kind === "draw") status = "비겼어요";
   else if (result?.seat === me)
     status = result.kind === "resign" ? "상대가 기권했어요" : "이겼어요!";
@@ -293,9 +332,20 @@ function OmokGame({ onExit }: { onExit: () => void }) {
         </span>
       </header>
 
+      {online && (reconnecting || hostLeft) && (
+        <p
+          role="alert"
+          className="w-full max-w-xl rounded-xl bg-rose-700/80 px-3 py-2 text-center text-sm short-landscape:col-start-2"
+        >
+          {hostLeft
+            ? "방장이 방을 나갔습니다"
+            : "방장과 연결이 끊겼습니다. 다시 연결하는 중…"}
+        </p>
+      )}
+
       <div className="flex w-full max-w-xl gap-2 short-landscape:col-start-2 short-landscape:row-start-2 short-landscape:flex-col">
         <PlayerPlate view={view} seat={me} name="나" />
-        <PlayerPlate view={view} seat={1 - me} name={`컴퓨터(${levelName})`} />
+        <PlayerPlate view={view} seat={1 - me} name={opponent} />
       </div>
 
       {/* 휴대폰 가로: 판이 화면 높이를 꽉 채우고 나머지는 오른쪽에 */}
@@ -335,24 +385,29 @@ function OmokGame({ onExit }: { onExit: () => void }) {
                 여기 두기
               </button>
             )}
-            <button
-              type="button"
-              disabled={!canUndo}
-              onClick={() => {
-                setAim(null);
-                undo();
-              }}
-              className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
-            >
-              무르기
-            </button>
-            <button
-              type="button"
-              onClick={() => submit({ type: "resign" })}
-              className="rounded-xl bg-white/10 px-4 py-2"
-            >
-              기권
-            </button>
+            {!online && (
+              <button
+                type="button"
+                disabled={!canUndo}
+                onClick={() => {
+                  setAim(null);
+                  undo();
+                }}
+                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
+              >
+                무르기
+              </button>
+            )}
+            {/* 온라인 참가자는 내 차례에만 행동을 보낼 수 있다 */}
+            {(!online || myTurn) && (
+              <button
+                type="button"
+                onClick={() => submit({ type: "resign" })}
+                className="rounded-xl bg-white/10 px-4 py-2"
+              >
+                기권
+              </button>
+            )}
           </>
         )}
         {view.phase === "roundEnd" && !view.continued[me] && (
@@ -379,41 +434,86 @@ function OmokGame({ onExit }: { onExit: () => void }) {
           </>
         )}
       </div>
+
+      {online && (
+        <div className="w-full max-w-xl short-landscape:col-start-2">
+          <ChatBox mySeat={me} />
+        </div>
+      )}
     </main>
   );
 }
 
-/** 오목(/omok): 시작 화면과 대국 화면 */
+type Screen =
+  | { kind: "start" }
+  | {
+      kind: "online";
+      /** 초대 링크로 들어왔으면 방 코드, 방장이면 null */
+      room: string | null;
+      /** 방장이 새로고침했으면 이 탭이 연 방과 남긴 것 */
+      resume?: { room: string; restore: HostRestore };
+    }
+  | { kind: "playing" };
+
+/** 오목(/omok): 시작 화면, 친구와 하기 방, 대국 화면 */
 export function OmokApp() {
-  const host = useOmok((s) => s.host);
+  const [screen, setScreen] = useState<Screen>({ kind: "start" });
   const view = useOmok((s) => s.view);
+  const variant = useOmokSettings((s) => s.variant);
+  const winsToFinish = useOmokSettings((s) => s.winsToFinish);
 
   // 다 끝난 게임은 이어하기에 남기지 않는다.
   useEffect(() => {
     if (view?.phase === "gameOver") clearOmok();
   }, [view?.phase]);
 
-  if (host)
+  // 초대 링크로 왔으면 그 방으로, 방장이 새로고침했으면 연 방을 다시 연다.
+  useEffect(() => {
+    const room = new URLSearchParams(window.location.search).get("room");
+    if (room) {
+      setScreen({ kind: "online", room });
+      return;
+    }
+    const hosted = hostedRoom("omok");
+    if (hosted) setScreen({ kind: "online", room: null, resume: hosted });
+  }, []);
+
+  const backToStart = () => {
+    endOmokSession();
+    useOmok.getState().leave();
+    if (window.location.search.includes("room=")) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      window.history.replaceState(null, "", url);
+    }
+    setScreen({ kind: "start" });
+  };
+
+  if (screen.kind === "online")
     return (
-      <OmokGame
-        onExit={() => {
-          useOmok.getState().leave();
-        }}
+      <OmokOnlineScreen
+        rules={{ variant, winsToFinish }}
+        roomFromUrl={screen.room}
+        {...(screen.resume ? { resume: screen.resume } : {})}
+        onBack={backToStart}
+        onPlaying={() => setScreen({ kind: "playing" })}
       />
     );
+  if (screen.kind === "playing") return <OmokGame onExit={backToStart} />;
   return (
     <OmokStart
+      onOnline={() => setScreen({ kind: "online", room: null })}
       onStart={(saved) => {
-        if (saved) {
-          useOmok.getState().resume(saved);
-          return;
+        if (saved) useOmok.getState().resume(saved);
+        else {
+          const s = useOmokSettings.getState();
+          useOmok.getState().newGame({
+            rules: { variant: s.variant, winsToFinish: s.winsToFinish },
+            level: s.level,
+            pick: s.pick,
+          });
         }
-        const s = useOmokSettings.getState();
-        useOmok.getState().newGame({
-          rules: { variant: s.variant, winsToFinish: s.winsToFinish },
-          level: s.level,
-          pick: s.pick,
-        });
+        setScreen({ kind: "playing" });
       }}
     />
   );

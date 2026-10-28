@@ -44,6 +44,8 @@ export type GameEvent =
 /** 한 자리에서 본 화면. 감출 것이 없어 상태 그대로에 내 자리를 더한다 */
 export interface OmokView extends OmokState {
   mySeat: number;
+  /** 지금 내가 할 일: 돌 두기·다음 판 누르기. 없으면 null(온라인 참가자가 차례 아닐 때 보내지 않는다) */
+  decision: { kind: "place" } | { kind: "continue" } | null;
   /** 내 차례면 금지 자리와 그 이름(판에 ×로 보인다) */
   forbidden: { at: number; reason: Forbidden }[];
 }
