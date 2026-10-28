@@ -177,6 +177,7 @@ export function ChessBoard({
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       role="img"
       aria-label={legal.length > 0 ? "체스판, 내 차례" : "체스판"}
+      data-flipped={flipped || undefined}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: 판은 키보드로 고르고 옮긴다
       tabIndex={0}
       className="block h-full w-full touch-none select-none rounded-md shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-amber-300"

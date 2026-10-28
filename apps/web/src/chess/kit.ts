@@ -137,7 +137,7 @@ export function explainChess(
   });
   const mine = moveToSan(state.position, played);
   if (suggested.type !== "move")
-    return { situation, verdict: null, reasons: [`${mine}를 뒀다`] };
+    return { situation, verdict: null, reasons: [`둔 수: ${mine}`] };
   const best: Move = {
     from: suggested.from,
     to: suggested.to,
@@ -155,7 +155,7 @@ export function explainChess(
   return {
     situation,
     verdict: verdictOf(bestValue - mineValue),
-    reasons: [`${mine}를 뒀다`, `고수라면 ${bestSan}`],
+    reasons: [`둔 수: ${mine}`, `고수라면 ${bestSan}`],
   };
 }
 

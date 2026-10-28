@@ -1,13 +1,12 @@
 "use client";
 
 import {
-  type Board,
   type ChessView,
   KIND_NAMES,
   type Kind,
   kingOf,
   type Move,
-  materialPoints,
+  PIECE_POINTS,
   type Played,
   PROMOTIONS,
   type Promotion,
@@ -35,24 +34,14 @@ import { CHESS_LEVELS, useChessSettings } from "../settings";
 import { useChess } from "../store";
 import { ChessBoard, PieceIcon } from "./ChessBoard";
 
-/** 처음 판에 있는 기물 수(킹 빼고) */
-const START_COUNT: Record<Exclude<Kind, "K">, number> = {
-  Q: 1,
-  R: 2,
-  B: 2,
-  N: 2,
-  P: 8,
-};
+const ORDER: readonly Kind[] = ["Q", "R", "B", "N", "P"];
 
-/** `side`가 잡은 상대 기물(큰 것부터). 처음 수에서 남은 수를 빼 센다 */
-export function capturedPieces(board: Board, side: Side): Kind[] {
-  const enemy = side === "w" ? "b" : "w";
-  const out: Kind[] = [];
-  for (const kind of ["Q", "R", "B", "N", "P"] as const) {
-    const left = board.filter((c) => c === `${enemy}${kind}`).length;
-    for (let i = left; i < START_COUNT[kind]; i++) out.push(kind);
-  }
-  return out;
+/** `side`가 이번 판에 잡은 상대 기물(큰 것부터). 둔 수의 잡기로 세어 튜토리얼 장면에서도 맞다 */
+export function capturedPieces(played: readonly Played[], side: Side): Kind[] {
+  return played
+    .filter((p) => p.side === side && p.captured)
+    .map((p) => (p.captured as string)[1] as Kind)
+    .sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
 }
 
 /** 기보 줄: "1. e4 e5 2. Nf3" */
@@ -80,10 +69,11 @@ function PlayerPlate({
   const side = sideOfSeat(view, seat);
   const turn = seatToMove(view) === seat;
   const control = timeControlOf(view.rules);
-  const captured = capturedPieces(view.position.board, side);
-  const lead =
-    materialPoints(view.position.board, side) -
-    materialPoints(view.position.board, side === "w" ? "b" : "w");
+  const captured = capturedPieces(view.played, side);
+  // 잡은 기물 점수 차이(승급으로 생긴 기물은 셈하지 않는다)
+  const points = (s: Side) =>
+    capturedPieces(view.played, s).reduce((n, k) => n + PIECE_POINTS[k], 0);
+  const lead = points(side) - points(side === "w" ? "b" : "w");
   return (
     <div
       data-turn={turn || undefined}
