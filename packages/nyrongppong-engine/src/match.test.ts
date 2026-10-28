@@ -415,3 +415,21 @@ describe("다시 하기와 등수", () => {
     ).toBe(0);
   });
 });
+
+describe("튜토리얼 장면", () => {
+  it("뽕 응답 창이 열린 장면에서 시작할 수 있다", () => {
+    const s = createNyrongppongScenario({
+      hands: [
+        ["03r", "03p", "06a", "08g", "11g"],
+        ["02a", "04a", "05a", "07a", "10a"],
+      ],
+      openCall: { from: 1, card: "03g" },
+    });
+    expect(s.phase).toBe("call");
+    expect(s.pile).toEqual(["03g"]);
+    expect(pendingSeats(s)).toEqual([0]);
+    expect(s.deck).not.toContain("03g");
+    const t = ok(step(s, 0, { type: "call" }));
+    expect(t.melds[0]).toEqual([["03g", "03r", "03p"]]);
+  });
+});
