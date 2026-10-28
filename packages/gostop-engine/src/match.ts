@@ -1,4 +1,10 @@
-import { cardOf, type Month, monthOf, shuffledDeck } from "@mighty/hwatu";
+import {
+  cardOf,
+  type Month,
+  monthOf,
+  type PresetDeal,
+  shuffledDeck,
+} from "@mighty/hwatu";
 
 import {
   CHONGTONG_POINTS,
@@ -98,7 +104,17 @@ const zeros = (n: number) => Array.from({ length: n }, () => 0);
 function dealRound(s: GostopState, events: GameEvent[]): void {
   const n = s.rules.players;
   const size = dealSizes(s.rules);
-  for (let attempt = 0; ; attempt++) {
+  if (s.fair) {
+    // 멘탈 포커 판: 함께 섞어 나눈 패(바닥 넉 장이면 이미 다시 섞었다)
+    const preset = s.preset;
+    if (!preset) throw new Error("멘탈 포커 판인데 이번 판 패가 없다");
+    s.hands = preset.hands.map((h) => [...h]);
+    s.floor = [...preset.floor];
+    s.deck = [...preset.deck];
+    s.redeals = preset.redeals ?? 0;
+    delete s.preset;
+  }
+  for (let attempt = 0; !s.fair; attempt++) {
     const deck = shuffledDeck(dealSeed(s.seed, s.roundNumber, attempt));
     const floor = deck.slice(n * size.hand, n * size.hand + size.floor);
     const four = [...countMonths(floor).values()].some((c) => c === 4);
@@ -149,9 +165,11 @@ function dealRound(s: GostopState, events: GameEvent[]): void {
   }
 }
 
+/** `preset`이 있으면 멘탈 포커 판: 판마다 미리 정한 패로 나눈다(다음 판 패는 `state.preset`) */
 export function createMatch(
   rules: GostopRules,
   seed: number,
+  preset?: PresetDeal,
 ): { state: GostopState; events: GameEvent[] } {
   const n = rules.players;
   const state: GostopState = {
@@ -182,6 +200,7 @@ export function createMatch(
     result: null,
     continued: [],
     redeals: 0,
+    ...(preset ? { fair: true as const, preset } : {}),
   };
   const events: GameEvent[] = [];
   dealRound(state, events);
@@ -709,7 +728,7 @@ export function pendingSeats(s: GostopState): number[] {
 
 /** 한 자리에서 보이는 것. 남의 손패·더미 순서·시드는 장수만 남긴다 */
 export function viewOf(s: GostopState, seat: number): GostopView {
-  const { hands, deck, seed: _seed, ...open } = s;
+  const { hands, deck, seed: _seed, preset: _preset, ...open } = s;
   return {
     ...open,
     floor: [...s.floor],
@@ -740,10 +759,11 @@ export function replay(
   rules: GostopRules,
   seed: number,
   log: readonly LoggedAction[],
+  preset?: PresetDeal,
 ):
   | { ok: true; state: GostopState }
   | { ok: false; index: number; error: string } {
-  let { state } = createMatch(rules, seed);
+  let { state } = createMatch(rules, seed, preset);
   for (const [index, { seat, action }] of log.entries()) {
     const result = step(state, seat, action);
     if (!result.ok) return { ok: false, index, error: result.error };

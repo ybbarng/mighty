@@ -1,4 +1,4 @@
-import type { Month } from "@mighty/hwatu";
+import type { Month, PresetDeal } from "@mighty/hwatu";
 
 import type { GostopRules } from "./rules";
 import type { ScoreBreakdown } from "./score";
@@ -122,6 +122,10 @@ export interface GostopState {
   redeals: number;
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
   retired?: boolean;
+  /** 멘탈 포커 판: 판마다 시드 대신 함께 섞어 나눈 패(`preset`)로 나눈다 */
+  fair?: true;
+  /** 이번에 나눌 판의 패(멘탈 포커). 나누면 지운다 */
+  preset?: PresetDeal;
 }
 
 export type Action =
@@ -190,7 +194,7 @@ export type Decision =
 
 /** 한 자리에서 본 화면. 남의 손패와 더미 순서, 시드는 없다(장수만) */
 export interface GostopView
-  extends Omit<GostopState, "hands" | "deck" | "seed"> {
+  extends Omit<GostopState, "hands" | "deck" | "seed" | "preset"> {
   mySeat: number;
   hand: string[];
   handCounts: number[];
