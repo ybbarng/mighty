@@ -146,14 +146,18 @@ export function JanggiGame({
         ? "외통으로 이겼어요!"
         : result.kind === "resign"
           ? "상대가 기권했어요"
-          : "점수로 이겼어요!";
+          : result.kind === "time"
+            ? "상대 시간이 다 돼 이겼어요!"
+            : "점수로 이겼어요!";
   else
     status =
       result?.kind === "checkmate"
         ? "외통당해 졌어요"
         : result?.kind === "resign"
           ? "기권했어요"
-          : "점수로 졌어요";
+          : result?.kind === "time"
+            ? "시간이 다 돼 졌어요"
+            : "점수로 졌어요";
 
   // 판이 막 끝난 장면이면 모든 게임처럼 가운데에 크게 띄운다(미션은 결과 창이 따로 있다).
   const ended = events.find((e) => e.type === "roundEnded");
@@ -164,7 +168,11 @@ export function JanggiGame({
         ? r.seat === me
           ? "상대 기권"
           : "기권"
-        : `${REASON_LABEL[r.reason]} · 초 ${r.scores.c} : 한 ${r.scores.h}`;
+        : r.kind === "time"
+          ? r.seat === me
+            ? "상대 시간 끝"
+            : "시간패"
+          : `${REASON_LABEL[r.reason]} · 초 ${r.scores.c} : 한 ${r.scores.h}`;
   const banner: Banner | null =
     ended?.type === "roundEnded" && !mission
       ? { won: ended.result.seat === me, detail: detailOf(ended.result) }

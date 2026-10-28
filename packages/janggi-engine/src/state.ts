@@ -1,3 +1,4 @@
+import type { PlayerClock } from "@mighty/engine";
 import type { Cell, Kind, Move, Piece, Setup, Side } from "./board";
 import type { JanggiRules } from "./rules";
 
@@ -11,6 +12,8 @@ export type ScoreReason = "bikjang" | "repetition" | "limit" | "passes";
 export type RoundResult =
   | { kind: "checkmate"; seat: number }
   | { kind: "resign"; seat: number }
+  /** 상대가 시간을 다 썼다 */
+  | { kind: "time"; seat: number }
   | {
       kind: "score";
       seat: number;
@@ -41,6 +44,8 @@ export interface JanggiState {
   result: RoundResult | null;
   /** 판 끝에 "다음 판"을 누른 자리 */
   continued: boolean[];
+  /** 개인 시간(자리마다 남은 기본 시간·초읽기). 시간 규칙이 없으면 null */
+  clocks: PlayerClock[] | null;
   /** 지금까지 나온 판 모양(둘 차례 포함). 같은 모양이 세 번 나오면 점수로 가린다 */
   positions: string[];
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
@@ -49,9 +54,12 @@ export interface JanggiState {
 
 export type Action =
   | { type: "setup"; setup: Setup }
-  | { type: "move"; from: number; to: number }
+  /** `spent`: 이 수에 쓴 시간(ms). 대국을 돌리는 기기(혼자 하기·방장)가 싣는다 */
+  | { type: "move"; from: number; to: number; spent?: number }
   /** 한 수 쉬기. 장군을 받는 중에는 못 한다 */
-  | { type: "pass" }
+  | { type: "pass"; spent?: number }
+  /** 시간을 다 썼다. 대국을 돌리는 기기가 그 자리로 기록에 남긴다 */
+  | { type: "timeout"; spent: number }
   | { type: "resign" }
   | { type: "continue" }
   /** 게임을 중간에 끝낸다(끊긴 사람을 더 기다리지 않을 때) */

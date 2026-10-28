@@ -11,6 +11,8 @@ import {
   type RuleSet,
 } from "@mighty/engine";
 
+import { type Clock, realClock } from "@mighty/fair-play";
+
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
 import type { GameKit, KitBot, KitLoggedAction, StepOutcome } from "./kit";
 import { mightyKit } from "./mighty-kit";
@@ -71,6 +73,8 @@ export interface LocalMatchOptions<
    * (멘탈 포커 진행을 되살린 뒤에)
    */
   resume?: ResumeState<State, ActionT>;
+  /** 개인 시간을 재는 시계(`kit.timing`이 있는 게임). 시험은 ManualClock을 넣는다 */
+  clock?: Clock;
 }
 
 /** 방장 새로고침에 대비해 남기는 진행. 멘탈 포커는 증명으로 고친 상태라 기록만으로 되살릴 수 없어 상태째 남긴다 */
@@ -156,6 +160,10 @@ export class LocalMatch<
   private haltedReason: string | null = null;
   /** `end()`로 끝냈다. 준비 중이던 행동은 버리고, 못 연 카드는 가린 채 끝난 화면을 보낸다 */
   private ended = false;
+  /** 개인 시간: 시계, 지금 차례가 시작된 시각, 시간패를 거는 타이머 */
+  private readonly clock: Clock;
+  private turnSince = 0;
+  private cancelFlag: (() => void) | null = null;
 
   constructor(
     options: LocalMatchOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -182,6 +190,7 @@ export class LocalMatch<
     this.pace = options.pace ?? null;
     this.rng = createRng(options.seed ^ 0x2545f491);
     this.options = options;
+    this.clock = options.clock ?? realClock;
     this.stepper =
       options.step ?? ((st, seat, a) => this.kit.step(st, seat, a));
 
@@ -193,6 +202,7 @@ export class LocalMatch<
         view: this.kit.viewOf(this.state, this.seat),
         events: [],
       });
+      this.armClock();
       return;
     }
     if (savedLog && savedLog.length > 0) {
@@ -225,7 +235,27 @@ export class LocalMatch<
         events: created.events,
       });
     }
+    // 저장한 대국을 이어 둘 때도 시계는 지금부터 다시 잰다(닫아 둔 동안은 세지 않는다).
+    this.armClock();
     this.runBots();
+  }
+
+  /**
+   * 개인 시간: 지금 차례의 시계를 건다. 그 사람이 쓸 수 있는 시간이 다 지나면 그 자리로 시간패를 기록에 남긴다.
+   * 수가 오갈 때마다(`apply`) 다시 건다
+   */
+  private armClock(): void {
+    this.cancelFlag?.();
+    this.cancelFlag = null;
+    this.turnSince = this.clock.now();
+    const timing = this.kit.timing;
+    const turn = timing?.turn(this.state);
+    if (!timing || !turn || this.ended || this.haltedReason) return;
+    this.cancelFlag = this.clock.after(turn.left + 1, () => {
+      this.cancelFlag = null;
+      const result = this.apply(turn.seat, timing.timeout(turn.left + 1));
+      if (result.ok) this.runBots();
+    });
   }
 
   /** 대국을 만들 때 나온 사건(멘탈 포커 첫 섞기를 시작한다) */
@@ -447,11 +477,16 @@ export class LocalMatch<
     return JSON.stringify(this.state);
   }
 
-  private apply(seat: number, action: ActionT, bot = false): SubmitResult {
+  private apply(seat: number, raw: ActionT, bot = false): SubmitResult {
+    // 개인 시간: 이 수에 쓴 시간을 싣는다(대국을 돌리는 이 기기가 잰다. 참가자가 보낸 값은 덮어쓴다).
+    const action = this.kit.timing
+      ? this.kit.timing.stamp(raw, this.clock.now() - this.turnSince)
+      : raw;
     const result = this.stepper(this.state, seat, action);
     if (!result.ok) return result;
     this.state = result.state;
     this.log.push(bot ? { seat, action, bot: true } : { seat, action });
+    if (this.kit.timing) this.armClock();
     // 멘탈 포커는 이 걸음의 사건으로 섞기·나눠 주기를 이어 간다(화면을 보내기 전에).
     this.options.afterStep?.(this.state, result.events);
     const seats = new Set([...this.listeners.keys(), this.seat]);

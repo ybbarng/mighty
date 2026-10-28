@@ -1,3 +1,9 @@
+import {
+  decodeTimePreset,
+  encodeTimePreset,
+  type TimePreset,
+} from "@mighty/engine";
+
 /** 판 한 변의 줄 수 */
 export const SIZE = 15;
 export const CELLS = SIZE * SIZE;
@@ -15,6 +21,8 @@ export interface OmokRules {
   variant: Variant;
   /** 먼저 이 판 수만큼 이기면 게임이 끝난다(1~5) */
   winsToFinish: number;
+  /** 개인 시간(기본 시간 + 초읽기, docs/24). 없으면 시간 없음 */
+  time?: TimePreset;
 }
 
 export const STANDARD_RULES: OmokRules = {
@@ -30,7 +38,8 @@ export const VARIANT_NAMES: Record<Variant, string> = {
 
 /*
  * 오목 규칙 문자열. 온라인 방에서 규칙을 나눌 때 쓴다.
- * 형식: `o1-` + 규칙 글자(s 일반 / f 자유 / r 렌주) + 이길 판 수. 예: 일반 한 판 `o1-s1`
+ * 형식: `o1-` + 규칙 글자(s 일반 / f 자유 / r 렌주) + 이길 판 수 + 시간(없으면 생략, `-t1` 빠른·`-t2` 보통).
+ * 예: 일반 한 판 `o1-s1`, 빠른 시간이면 `o1-s1-t1`
  */
 const VARIANT_CODES: Record<Variant, string> = {
   standard: "s",
@@ -39,17 +48,26 @@ const VARIANT_CODES: Record<Variant, string> = {
 };
 
 export function encodeOmokRules(rules: OmokRules): string {
-  return `o1-${VARIANT_CODES[rules.variant]}${rules.winsToFinish}`;
+  return `o1-${VARIANT_CODES[rules.variant]}${rules.winsToFinish}${encodeTimePreset(rules.time ?? "none")}`;
 }
 
 export function decodeOmokRules(
   text: string,
 ): { ok: true; rules: OmokRules } | { ok: false; reason: string } {
-  const match = /^o1-([sfr])([1-5])$/.exec(text.trim());
+  const match = /^o1-([sfr])([1-5])(-t\d)?$/.exec(text.trim());
   if (!match) return { ok: false, reason: "오목 규칙 문자열 형식이 아니다" };
-  const [, code, wins] = match;
+  const [, code, wins, tail] = match;
+  const time = decodeTimePreset(tail);
+  if (time === null) return { ok: false, reason: "모르는 시간 규칙이다" };
   const variant = (Object.keys(VARIANT_CODES) as Variant[]).find(
     (v) => VARIANT_CODES[v] === code,
   ) as Variant;
-  return { ok: true, rules: { variant, winsToFinish: Number(wins) } };
+  return {
+    ok: true,
+    rules: {
+      variant,
+      winsToFinish: Number(wins),
+      ...(time === "none" ? {} : { time }),
+    },
+  };
 }

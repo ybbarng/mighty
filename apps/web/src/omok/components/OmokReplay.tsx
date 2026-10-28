@@ -87,7 +87,7 @@ export function OmokReplay({
       ? null
       : result.kind === "draw"
         ? "비김"
-        : `${name(result.seat)} 승리(${result.kind === "resign" ? "기권" : "다섯"})`;
+        : `${name(result.seat)} 승리(${result.kind === "resign" ? "기권" : result.kind === "time" ? "시간" : "다섯"})`;
 
   return (
     <section className="flex flex-col items-center gap-3">

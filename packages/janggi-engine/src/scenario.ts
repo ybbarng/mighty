@@ -31,6 +31,8 @@ export function createJanggiScenario(
     phase: "play",
     result: null,
     continued: [false, false],
+    // 튜토리얼·문제 장면은 시간을 재지 않는다.
+    clocks: null,
     positions: [],
   };
   state.positions = [positionKey(state)];

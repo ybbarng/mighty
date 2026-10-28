@@ -1,3 +1,9 @@
+import {
+  decodeTimePreset,
+  encodeTimePreset,
+  type TimePreset,
+} from "@mighty/engine";
+
 /** 판: 가로 9줄 × 세로 10줄의 교차점 */
 export const WIDTH = 9;
 export const HEIGHT = 10;
@@ -18,6 +24,8 @@ export interface JanggiRules {
   bikjang: Bikjang;
   /** 먼저 이 판 수만큼 이기면 게임이 끝난다(1~5) */
   winsToFinish: number;
+  /** 개인 시간(기본 시간 + 초읽기, docs/24). 없으면 시간 없음 */
+  time?: TimePreset;
 }
 
 export const STANDARD_RULES: JanggiRules = {
@@ -32,22 +40,32 @@ export const BIKJANG_NAMES: Record<Bikjang, string> = {
 
 /*
  * 장기 규칙 문자열. 온라인 방에서 규칙을 나눌 때 쓴다.
- * 형식: `j1-` + 빅장 글자(s 점수 / f 금지) + 이길 판 수. 예: 기본 한 판 `j1-s1`
+ * 형식: `j1-` + 빅장 글자(s 점수 / f 금지) + 이길 판 수 + 시간(없으면 생략, `-t1` 빠른·`-t2` 보통).
+ * 예: 기본 한 판 `j1-s1`, 빠른 시간이면 `j1-s1-t1`
  */
 const BIKJANG_CODES: Record<Bikjang, string> = { score: "s", forbidden: "f" };
 
 export function encodeJanggiRules(rules: JanggiRules): string {
-  return `j1-${BIKJANG_CODES[rules.bikjang]}${rules.winsToFinish}`;
+  return `j1-${BIKJANG_CODES[rules.bikjang]}${rules.winsToFinish}${encodeTimePreset(rules.time ?? "none")}`;
 }
 
 export function decodeJanggiRules(
   text: string,
 ): { ok: true; rules: JanggiRules } | { ok: false; reason: string } {
-  const match = /^j1-([sf])([1-5])$/.exec(text.trim());
+  const match = /^j1-([sf])([1-5])(-t\d)?$/.exec(text.trim());
   if (!match) return { ok: false, reason: "장기 규칙 문자열 형식이 아니다" };
-  const [, code, wins] = match;
+  const [, code, wins, tail] = match;
+  const time = decodeTimePreset(tail);
+  if (time === null) return { ok: false, reason: "모르는 시간 규칙이다" };
   const bikjang = (Object.keys(BIKJANG_CODES) as Bikjang[]).find(
     (b) => BIKJANG_CODES[b] === code,
   ) as Bikjang;
-  return { ok: true, rules: { bikjang, winsToFinish: Number(wins) } };
+  return {
+    ok: true,
+    rules: {
+      bikjang,
+      winsToFinish: Number(wins),
+      ...(time === "none" ? {} : { time }),
+    },
+  };
 }

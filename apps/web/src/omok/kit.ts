@@ -1,6 +1,7 @@
 import { omokBotFor, placeGain } from "@mighty/omok-ai";
 import {
   type Action,
+  clockTurn,
   createMatch,
   decodeOmokRules,
   encodeOmokRules,
@@ -37,7 +38,7 @@ export interface OmokRound {
   stone: "black" | "white";
   outcome: "win" | "loss" | "draw";
   /** 어떻게 끝났나 */
-  by: "five" | "resign" | "draw";
+  by: "five" | "resign" | "draw" | "time";
   /** 판에 놓인 돌 수 */
   moves: number;
 }
@@ -146,7 +147,9 @@ export const omokKit: OmokKit = {
     },
   ],
   isOver: (view) => view.phase === "gameOver",
-  guestMayAct: (action) => action.type !== "retire",
+  // 시간패는 방장 기기의 시계만 기록한다.
+  guestMayAct: (action) =>
+    action.type !== "retire" && action.type !== "timeout",
   retireAction: { type: "retire" },
   stats: omokStats,
   // 완전 공개 게임이라 판마다 넣을 패가 없다.
@@ -170,6 +173,8 @@ export const omokKit: OmokKit = {
           return pointName(a.at);
         case "resign":
           return "기권";
+        case "timeout":
+          return "시간패";
         case "continue":
           return "다음 판";
         default:
@@ -180,6 +185,12 @@ export const omokKit: OmokKit = {
     explain: explainOmok,
   },
   botFor: (level) => omokBotFor(level),
+  timing: {
+    turn: clockTurn,
+    stamp: (action, spent) =>
+      action.type === "place" ? { ...action, spent } : action,
+    timeout: (spent) => ({ type: "timeout", spent }),
+  },
 };
 
 /* ---------- 지표(내 기록) ---------- */

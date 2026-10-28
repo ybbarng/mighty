@@ -42,5 +42,7 @@ export function createOmokScenario(options: OmokScenarioOptions): OmokState {
     phase: "play",
     result: null,
     continued: [false, false],
+    // 튜토리얼 장면은 시간을 재지 않는다.
+    clocks: null,
   };
 }

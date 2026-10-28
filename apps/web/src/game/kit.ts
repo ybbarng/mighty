@@ -134,4 +134,18 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
   botFor?(level: number): KitBot<View, Action>;
   /** 봇 행동 다듬기(손패 위치 같은 연출 정보) */
   annotateBotAction?(view: View, action: Action): Action;
+  /**
+   * 개인 시간(판 게임, docs/24). 대국을 돌리는 기기(LocalMatch)가 수마다 쓴 시간을 행동에 싣고,
+   * 시간이 다 되면 `timeout` 행동을 기록에 남긴다. 시계 자체는 엔진 상태에 있다
+   */
+  timing?: KitTiming<State, Action>;
+}
+
+export interface KitTiming<State, Action> {
+  /** 지금 시계가 가는 자리와 그 사람이 쓸 수 있는 남은 시간(ms). 시간 규칙이 없거나 둘 때가 아니면 null */
+  turn(state: State): { seat: number; left: number } | null;
+  /** 이 행동에 쓴 시간(ms)을 싣는다. 시간과 상관없는 행동(다음 판·기권 등)은 그대로 */
+  stamp(action: Action, spent: number): Action;
+  /** 시간을 다 썼을 때 그 자리로 기록에 남기는 행동 */
+  timeout(spent: number): Action;
 }

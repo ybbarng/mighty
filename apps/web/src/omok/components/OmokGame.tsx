@@ -117,8 +117,19 @@ export function OmokGame({
         : "컴퓨터가 생각하는 중…";
   else if (result?.kind === "draw") status = "비겼어요";
   else if (result?.seat === me)
-    status = result.kind === "resign" ? "상대가 기권했어요" : "이겼어요!";
-  else status = result?.kind === "resign" ? "기권했어요" : "졌어요";
+    status =
+      result.kind === "resign"
+        ? "상대가 기권했어요"
+        : result.kind === "time"
+          ? "상대 시간이 다 돼 이겼어요!"
+          : "이겼어요!";
+  else
+    status =
+      result?.kind === "resign"
+        ? "기권했어요"
+        : result?.kind === "time"
+          ? "시간이 다 돼 졌어요"
+          : "졌어요";
 
   // 판이 막 끝난 장면이면 마이티·하트처럼 가운데에 크게 띄운다(미션은 결과 창이 따로 있다).
   const ended = events.find((e) => e.type === "roundEnded");
@@ -130,11 +141,15 @@ export function OmokGame({
           detail:
             ended.result.kind === "five"
               ? "다섯!"
-              : ended.result.kind === "resign"
+              : ended.result.kind === "time"
                 ? ended.result.seat === me
-                  ? "상대 기권"
-                  : "기권"
-                : null,
+                  ? "상대 시간 끝"
+                  : "시간패"
+                : ended.result.kind === "resign"
+                  ? ended.result.seat === me
+                    ? "상대 기권"
+                    : "기권"
+                  : null,
         }
       : null;
   const outcome =

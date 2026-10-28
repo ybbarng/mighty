@@ -1,4 +1,12 @@
-import { createRng, nextInt } from "@mighty/engine";
+import {
+  createRng,
+  nextInt,
+  type PlayerClock,
+  spendTime,
+  startClock,
+  TIME_PRESETS,
+  type TimeControl,
+} from "@mighty/engine";
 
 import {
   applyMove,
@@ -47,12 +55,46 @@ export function createMatch(
     phase: "setup",
     result: null,
     continued: [false, false],
+    clocks: startClocks(rules),
     positions: [],
   };
   return {
     state,
     events: [{ type: "roundStarted", roundNumber: 1, choSeat }],
   };
+}
+
+/** 이 규칙의 개인 시간(없으면 null) */
+export function timeControlOf(rules: JanggiRules): TimeControl | null {
+  return rules.time && rules.time !== "none" ? TIME_PRESETS[rules.time] : null;
+}
+
+/** 판을 시작할 때 두 사람의 시계. 판마다 새로 준다 */
+function startClocks(rules: JanggiRules): PlayerClock[] | null {
+  const control = timeControlOf(rules);
+  return control ? [startClock(control), startClock(control)] : null;
+}
+
+/**
+ * 이 수에 쓴 시간을 깎는다. 시간을 넘겼으면 그 판을 시간패로 끝내고 true.
+ * 상차림에는 시간을 재지 않는다
+ */
+function spendClock(
+  state: JanggiState,
+  seat: number,
+  spent: number | undefined,
+  events: GameEvent[],
+): boolean {
+  const control = timeControlOf(state.rules);
+  const clock = state.clocks?.[seat];
+  if (!control || !clock) return false;
+  const result = spendTime(clock, spent ?? 0, control);
+  if (result.flagged) {
+    endRound(state, { kind: "time", seat: 1 - seat }, events);
+    return true;
+  }
+  (state.clocks as PlayerClock[])[seat] = result.clock;
+  return false;
 }
 
 export function seatOfSide(state: JanggiState, side: Side): number {
@@ -100,6 +142,7 @@ function clone(state: JanggiState): JanggiState {
     setups: { ...state.setups },
     wins: [...state.wins],
     continued: [...state.continued],
+    clocks: state.clocks ? state.clocks.map((c) => ({ ...c })) : null,
     positions: [...state.positions],
   };
 }
@@ -150,6 +193,7 @@ function startNextRound(state: JanggiState, events: GameEvent[]): void {
   state.played = [];
   state.setups = { c: null, h: null };
   state.positions = [];
+  state.clocks = startClocks(state.rules);
   state.result = null;
   state.phase = "setup";
   state.continued = [false, false];
@@ -243,9 +287,24 @@ export function step(
 
   if (state.phase !== "play") return fail("판이 진행 중이 아니다");
 
+  if (action.type === "timeout") {
+    const control = timeControlOf(state.rules);
+    const clock = state.clocks?.[seat];
+    if (!control || !clock) return fail("시간 규칙이 없다");
+    if (!spendTime(clock, action.spent, control).flagged)
+      return fail("아직 시간이 남았다");
+    const next = clone(state);
+    const events: GameEvent[] = [];
+    endRound(next, { kind: "time", seat: 1 - seat }, events);
+    return { ok: true, state: next, events };
+  }
+
   if (action.type === "pass") {
     if (inCheck(state.board, side)) return fail("장군을 받을 때는 쉴 수 없다");
     const next = clone(state);
+    const timeEvents: GameEvent[] = [];
+    if (spendClock(next, seat, action.spent, timeEvents))
+      return { ok: true, state: next, events: timeEvents };
     next.played.push({ side, pass: true });
     const events: GameEvent[] = [{ type: "passed", seat, side }];
     // 두 사람이 이어 쉬면 더 둘 뜻이 없는 것으로 보고 점수로 가린다.
@@ -275,6 +334,10 @@ export function step(
   }
 
   const next = clone(state);
+  // 이 수에 쓴 시간을 깎는다. 시간을 넘겨 둔 수는 두지 않고 시간패로 끝낸다.
+  const timeEvents: GameEvent[] = [];
+  if (spendClock(next, seat, action.spent, timeEvents))
+    return { ok: true, state: next, events: timeEvents };
   const piece = state.board[from] as Piece;
   const target = state.board[to] ?? "";
   next.board = applyMove(state.board, { from, to });
@@ -352,4 +415,16 @@ export function replay(
     state = result.state;
   }
   return { ok: true, state };
+}
+
+/** 지금 시계가 가는 자리와 그 사람이 쓸 수 있는 남은 시간(ms). 시간 규칙이 없거나 두기 때가 아니면 null */
+export function clockTurn(
+  state: JanggiState,
+): { seat: number; left: number } | null {
+  const control = timeControlOf(state.rules);
+  if (state.phase !== "play" || !control) return null;
+  const seat = seatToMove(state);
+  const clock = seat === null ? undefined : state.clocks?.[seat];
+  if (seat === null || !clock) return null;
+  return { seat, left: clock.main + clock.periods * control.byoyomi };
 }

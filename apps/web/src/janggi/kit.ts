@@ -2,6 +2,7 @@ import { janggiBotFor, negamax } from "@mighty/janggi-ai";
 import {
   type Action,
   applyMove,
+  clockTurn,
   createMatch,
   decodeJanggiRules,
   encodeJanggiRules,
@@ -41,7 +42,7 @@ export interface JanggiRound {
   side: "cho" | "han";
   outcome: "win" | "loss";
   /** 어떻게 끝났나 */
-  by: "checkmate" | "resign" | "score";
+  by: "checkmate" | "resign" | "score" | "time";
   /** 이번 판에 둔 수(쉬기 포함) */
   moves: number;
 }
@@ -168,7 +169,9 @@ export const janggiKit: JanggiKit = {
     },
   ],
   isOver: (view) => view.phase === "gameOver",
-  guestMayAct: (action) => action.type !== "retire",
+  // 시간패는 방장 기기의 시계만 기록한다.
+  guestMayAct: (action) =>
+    action.type !== "retire" && action.type !== "timeout",
   retireAction: { type: "retire" },
   stats: janggiStats,
   // 완전 공개 게임이라 판마다 넣을 패가 없다.
@@ -196,6 +199,8 @@ export const janggiKit: JanggiKit = {
           return "한 수 쉬기";
         case "resign":
           return "기권";
+        case "timeout":
+          return "시간패";
         case "continue":
           return "다음 판";
         default:
@@ -206,6 +211,14 @@ export const janggiKit: JanggiKit = {
     explain: explainJanggi,
   },
   botFor: (level) => janggiBotFor(level),
+  timing: {
+    turn: clockTurn,
+    stamp: (action, spent) =>
+      action.type === "move" || action.type === "pass"
+        ? { ...action, spent }
+        : action,
+    timeout: (spent) => ({ type: "timeout", spent }),
+  },
 };
 
 /* ---------- 지표(내 기록) ---------- */

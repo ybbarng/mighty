@@ -1,4 +1,12 @@
-import { createRng, nextInt } from "@mighty/engine";
+import {
+  createRng,
+  nextInt,
+  type PlayerClock,
+  spendTime,
+  startClock,
+  TIME_PRESETS,
+  type TimeControl,
+} from "@mighty/engine";
 
 import {
   emptyBoard,
@@ -36,11 +44,23 @@ export function createMatch(
     phase: "play",
     result: null,
     continued: [false, false],
+    clocks: startClocks(rules),
   };
   return {
     state,
     events: [{ type: "roundStarted", roundNumber: 1, blackSeat }],
   };
+}
+
+/** 이 규칙의 개인 시간(없으면 null) */
+export function timeControlOf(rules: OmokRules): TimeControl | null {
+  return rules.time && rules.time !== "none" ? TIME_PRESETS[rules.time] : null;
+}
+
+/** 판을 시작할 때 두 사람의 시계. 판마다 새로 준다 */
+function startClocks(rules: OmokRules): PlayerClock[] | null {
+  const control = timeControlOf(rules);
+  return control ? [startClock(control), startClock(control)] : null;
 }
 
 /** 지금 둘 색. 흑이 먼저라 둔 수가 짝수면 흑 */
@@ -80,6 +100,7 @@ function clone(state: OmokState): OmokState {
     wins: [...state.wins],
     continued: [...state.continued],
     result: state.result,
+    clocks: state.clocks ? state.clocks.map((c) => ({ ...c })) : null,
   };
 }
 
@@ -113,6 +134,7 @@ function startNextRound(state: OmokState, events: GameEvent[]): void {
   state.result = null;
   state.phase = "play";
   state.continued = [false, false];
+  state.clocks = startClocks(state.rules);
   events.push({
     type: "roundStarted",
     roundNumber: state.roundNumber,
@@ -153,6 +175,18 @@ export function step(
     endRound(next, { kind: "resign", seat: 1 - seat }, events);
     return { ok: true, state: next, events };
   }
+  if (action.type === "timeout") {
+    if (seatToMove(state) !== seat) return fail("차례가 아니다");
+    const control = timeControlOf(state.rules);
+    const clock = state.clocks?.[seat];
+    if (!control || !clock) return fail("시간 규칙이 없다");
+    if (!spendTime(clock, action.spent, control).flagged)
+      return fail("아직 시간이 남았다");
+    const next = clone(state);
+    const events: GameEvent[] = [];
+    endRound(next, { kind: "time", seat: 1 - seat }, events);
+    return { ok: true, state: next, events };
+  }
   if (action.type !== "place") return fail("모르는 행동이다");
   if (seatToMove(state) !== seat) return fail("차례가 아니다");
   const { at } = action;
@@ -168,6 +202,18 @@ export function step(
   if (forbidden !== null) return fail(`${forbidden} 금지`);
 
   const next = clone(state);
+  // 이 수에 쓴 시간을 깎는다. 시간을 넘겨 둔 수는 두지 않고 시간패로 끝낸다.
+  const control = timeControlOf(state.rules);
+  const clock = next.clocks?.[seat];
+  if (control && clock) {
+    const spent = spendTime(clock, action.spent ?? 0, control);
+    if (spent.flagged) {
+      const events: GameEvent[] = [];
+      endRound(next, { kind: "time", seat: 1 - seat }, events);
+      return { ok: true, state: next, events };
+    }
+    (next.clocks as PlayerClock[])[seat] = spent.clock;
+  }
   next.board[at] = stone;
   next.moves.push(at);
   const events: GameEvent[] = [{ type: "placed", seat, at, stone }];
@@ -243,4 +289,15 @@ export function replay(
     state = result.state;
   }
   return { ok: true, state };
+}
+
+/** 지금 시계가 가는 자리와 그 사람이 쓸 수 있는 남은 시간(ms). 시간 규칙이 없거나 둘 때가 아니면 null */
+export function clockTurn(
+  state: OmokState,
+): { seat: number; left: number } | null {
+  const control = timeControlOf(state.rules);
+  const seat = seatToMove(state);
+  const clock = seat === null ? undefined : state.clocks?.[seat];
+  if (!control || seat === null || !clock) return null;
+  return { seat, left: clock.main + clock.periods * control.byoyomi };
 }

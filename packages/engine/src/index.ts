@@ -11,5 +11,6 @@ export * from "./rules";
 export * from "./scenario";
 export * from "./scoring";
 export * from "./state";
+export * from "./time-control";
 export * from "./trick";
 export * from "./view";

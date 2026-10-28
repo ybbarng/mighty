@@ -93,7 +93,7 @@ export function JanggiReplay({
   const resultText =
     result === null
       ? null
-      : `${name(result.seat)} 승리(${result.kind === "checkmate" ? "외통" : result.kind === "resign" ? "기권" : "점수"})`;
+      : `${name(result.seat)} 승리(${result.kind === "checkmate" ? "외통" : result.kind === "resign" ? "기권" : result.kind === "time" ? "시간" : "점수"})`;
 
   return (
     <section className="flex flex-col items-center gap-3">
