@@ -77,7 +77,7 @@
   - `scenario.ts`: 튜토리얼·문제 장면(`createChessScenario({ fen })`)
   - `puzzle.ts`: `isCheckmate`, `mateInOneMoves`, `mateInTwoMoves`
 - `packages/chess-ai`: 세 단계 봇(`chessBotFor`), 탐색(`search.ts`), 봇끼리 두기(`simulate.ts`), 세기 비교(`bots.strength.ts`)
-- `apps/web/src/chess/`: `chessKit`, 설정, 저장소, 세션, 튜토리얼, 문제·풀이, 화면(`ChessApp`·`ChessGame`·`ChessBoard`·`ChessOnlineScreen`·`ChessReplay`·`ChessPuzzleScreen`·`ChessStats`), 아이콘 그림(`icon-art.tsx`)
+- `apps/web/src/chess/`: `chessKit`, 설정, 저장소, 세션, 튜토리얼, 문제·풀이, 화면(`ChessApp`·`ChessGame`·`ChessBoard`·공통 `BoardOnlineScreen`(설정은 `chess/online.ts`)·`ChessReplay`·`ChessPuzzleScreen`·`ChessStats`), 아이콘 그림(`icon-art.tsx`)
 - 진행 기록(`chess-tutorial`·`chess-study`)과 설정(`chess-settings`)은 `chess/progress.ts`·`settings.ts`에 두고 `ChessApp`이 첫 그리기 뒤에 불러온다(`useChessHydration`). 다른 게임처럼 공통 `StoreHydration`·`tutorial/progress.ts`로 옮겨도 된다.
 - 첫 화면은 공통 `GameHome`. 고를 것(판 수·시간·컴퓨터·내 색·칸 이름)은 옵션 화면에 둔다.
 - 온라인은 `HostRoom`·`GuestRoom`을 그대로 쓴다. 완전 공개 게임이라 멘탈 포커는 없다. 끊긴 사람 대신 컴퓨터(중수)가 두기까지 60초.

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import { StudyHome } from "@/components/study/StudyHome";
 import {
@@ -12,7 +13,7 @@ import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
-
+import { chessOnline } from "../online";
 import { useChessStudyProgress, useChessTutorialProgress } from "../progress";
 import { CHESS_PUZZLE_SETS } from "../puzzles";
 import { endChessSession } from "../session";
@@ -26,7 +27,6 @@ import { type ChessSaved, clearChess, loadChess, useChess } from "../store";
 import { CHESS_LESSONS } from "../tutorial";
 import { PieceIcon } from "./ChessBoard";
 import { ChessGame } from "./ChessGame";
-import { ChessOnlineScreen } from "./ChessOnlineScreen";
 import { ChessPuzzleScreen } from "./ChessPuzzleScreen";
 import { chessTutorial } from "./chess-tutorial";
 
@@ -385,7 +385,8 @@ export function ChessApp() {
 
   if (screen.kind === "online")
     return (
-      <ChessOnlineScreen
+      <BoardOnlineScreen
+        game={chessOnline}
         rules={{ winsToFinish, ...(time !== "none" ? { time } : {}) }}
         roomFromUrl={screen.room}
         {...(screen.resume ? { resume: screen.resume } : {})}
