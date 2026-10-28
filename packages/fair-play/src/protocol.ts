@@ -1,4 +1,5 @@
 import { type Card, fullDeck } from "@mighty/engine";
+import { HWATU_DECK } from "@mighty/hwatu";
 
 import type { KeyProof } from "./proof";
 import {
@@ -29,6 +30,15 @@ import {
 
 /** 카드 번호(0~52) ↔ 카드. 마이티 덱 순서 */
 export const DECK: readonly Card[] = fullDeck();
+
+/**
+ * 잠그는 카드 번호표: 마이티 53장(0~52) 뒤에 화투 48장(53~100). 하트는 마이티 번호를 그대로 쓴다.
+ * 마이티·하트 번호가 바뀌지 않게 뒤에만 덧붙인다(새 카드 묶음도 뒤에 붙인다)
+ */
+export const CARD_CODES: readonly Card[] = [
+  ...DECK,
+  ...HWATU_DECK.map((c) => c.id as Card),
+];
 
 /** 열쇠를 공개하는 까닭. 정해진 때가 아니면 자기 자리 열쇠를 내주지 않는다 */
 export type RevealReason =
@@ -237,7 +247,7 @@ const decodeCache = new WeakMap<SraGroup, Map<bigint, Card>>();
 export function decode(g: SraGroup, value: bigint): Card | null {
   let table = decodeCache.get(g);
   if (!table) {
-    table = new Map(DECK.map((card, i) => [encodeIndex(g, i), card]));
+    table = new Map(CARD_CODES.map((card, i) => [encodeIndex(g, i), card]));
     decodeCache.set(g, table);
   }
   return table.get(value) ?? null;
@@ -245,7 +255,11 @@ export function decode(g: SraGroup, value: bigint): Card | null {
 
 /** 처음 덱: 카드 번호를 이차잉여로 */
 export function encodedDeck(g: SraGroup, cards: readonly Card[]): bigint[] {
-  return cards.map((card) => encodeIndex(g, DECK.indexOf(card)));
+  return cards.map((card) => {
+    const index = CARD_CODES.indexOf(card);
+    if (index < 0) throw new Error(`번호표에 없는 카드: ${card}`);
+    return encodeIndex(g, index);
+  });
 }
 
 /** 모두가 보는 공개 기록: 자리별 암호문과 지금까지 공개된 자리 열쇠 */

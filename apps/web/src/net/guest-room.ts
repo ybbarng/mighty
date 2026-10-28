@@ -11,13 +11,16 @@ import {
 import {
   type Clock,
   checkHeartsReplay,
+  checkHwatuReplay,
   FairGuestSeat,
   type FairLogged,
   HeartsGuestSeat,
+  HwatuGuestSeat,
   type Incident,
   type PartySnapshot,
   realClock,
   realHeartsAction,
+  realHwatuAction,
 } from "@mighty/fair-play";
 import {
   type HeartsRules,
@@ -290,7 +293,17 @@ export class GuestRoom<
     archive: new Set(),
   };
   /** 멘탈 포커 진행(이 방이 멘탈 포커일 때, 첫 화면을 받으면 만든다) */
-  fair: FairGuestSeat | HeartsGuestSeat | null = null;
+  fair:
+    | FairGuestSeat
+    | HeartsGuestSeat
+    // biome-ignore lint/suspicious/noExplicitAny: 화투 게임마다 상태 모양이 다르다
+    | HwatuGuestSeat<any, any, any, any, any>
+    | null = null;
+  /** 화투: 시드를 확인하기 전에 온 화면·걸음별 사건(멘탈 포커 진행은 시드가 있어야 만든다) */
+  private readonly cardEarly: {
+    snapshots: { view: View; events: Event[]; resync: boolean }[];
+    history: unknown[] | null;
+  } = { snapshots: [], history: null };
   /** 멘탈 포커 판: 시작하자마자 공개된 시드 */
   private fairSeed: number | null = null;
   /** 진행 중인 판에 내가 보낸 섞기 증명 약속 */
@@ -501,13 +514,15 @@ export class GuestRoom<
     );
   }
 
-  private ensureFair(): FairGuestSeat | HeartsGuestSeat | null {
+  private ensureFair(): typeof this.fair {
     if (this.fair) return this.fair;
     const lobby = this.lobby;
     if (!lobby?.fair || this.seat === null) return null;
     const rules = this.kit.decodeRules(lobby.ruleCode);
     if (!rules.ok) return null;
     const seat = this.seat;
+    // 화투는 시드로 판마다의 선(나이롱뽕 손패 장수)을 계산하므로 시드를 확인한 뒤에 만든다.
+    if (this.kit.cardTable && this.fairSeed === null) return null;
     const saved = this.fairStore?.load() ?? null;
     const common = {
       seat,
@@ -523,8 +538,22 @@ export class GuestRoom<
       clock: this.clock,
       ...(saved ? { restore: saved.snapshots } : {}),
     };
-    const fair =
-      this.kit.id === "hearts"
+    const spec = this.kit.cardTable;
+    const fair = spec
+      ? new HwatuGuestSeat({
+          ...common,
+          spec,
+          rules: rules.rules,
+          seed: this.fairSeed as number,
+          onSnapshot: (view, events) =>
+            this.deliver({
+              view: view as unknown as View,
+              events: events as unknown as Event[],
+            }),
+          onVerify: (round, log) =>
+            void this.verifyRound(round, log as unknown as FairLogged[]),
+        })
+      : this.kit.id === "hearts"
         ? new HeartsGuestSeat({
             ...common,
             rules: rules.rules as unknown as HeartsRules,
@@ -557,7 +586,15 @@ export class GuestRoom<
     fair.device.on("persist", () => this.persistFair());
     watchFairDevice(fair.device);
     for (const { message, from } of this.fairEarly.splice(0))
-      fair.receive(message, from);
+      fair.receive(message as never, from);
+    if (fair instanceof HwatuGuestSeat) {
+      fair.start();
+      const history = this.cardEarly.history;
+      this.cardEarly.history = null;
+      if (history) fair.history(history as never);
+      for (const s of this.cardEarly.snapshots.splice(0))
+        fair.snapshot(s.view as never, s.events as never, s.resync);
+    }
     return fair;
   }
 
@@ -650,7 +687,11 @@ export class GuestRoom<
     const bot =
       level !== undefined && this.kit.botFor ? this.kit.botFor(level) : null;
     return {
-      ...(this.kit.id === "hearts" ? { game: this.heartsReplay() } : {}),
+      ...(this.kit.cardTable
+        ? { game: this.cardReplay() }
+        : this.kit.id === "hearts"
+          ? { game: this.heartsReplay() }
+          : {}),
       rules: rules.rules as unknown as RuleSet,
       seed: this.fairSeed,
       seat: this.seat,
@@ -662,6 +703,35 @@ export class GuestRoom<
       bot: bot as never,
       sent: this.match.sent,
       seen: this.match.seen,
+    };
+  }
+
+  /** 화투 판 다시 계산하기: 진짜 패로 돌리며 방장이 더미를 엔진대로만 열었는지도 본다 */
+  private cardReplay(): FairReplayGame {
+    const kit = this.kit;
+    const spec = kit.cardTable as NonNullable<typeof kit.cardTable>;
+    // biome-ignore lint/suspicious/noExplicitAny: 화면 모양은 게임마다 다르다
+    const fair = this.fair as HwatuGuestSeat<Rules, State, any, ActionT, Event>;
+    return {
+      check: (rules, seed, log, deals) =>
+        checkHwatuReplay(
+          spec,
+          rules as Rules,
+          seed,
+          log as never,
+          deals as never,
+          {
+            of: (round) => fair.coordinator.requestsOf(round),
+            deviceOf: (seat) => fair.deviceOf(seat),
+          },
+        ) as never,
+      viewOf: (state, seat) =>
+        spec.refreshView(spec.viewOf(state as State, seat)),
+      realAction: (action) => realHwatuAction(action),
+      annotate: (view, action) =>
+        kit.annotateBotAction
+          ? kit.annotateBotAction(view as View, action as ActionT)
+          : action,
     };
   }
 
@@ -747,11 +817,15 @@ export class GuestRoom<
           return;
         }
         this.fairSeed = checked.seed;
+        // 화투: 시드가 정해지면 첫 판 섞기에 낀다(방장은 모두가 나눠 받은 뒤에 대국을 만든다).
+        if (this.kit.cardTable) this.ensureFair();
         break;
       }
       case "fpHistory": {
         if (from !== this.hostId || !Array.isArray(message.items)) return;
-        this.ensureFair()?.history(message.items as never);
+        const fair = this.ensureFair();
+        if (fair) fair.history(message.items as never);
+        else if (this.kit.cardTable) this.cardEarly.history = message.items;
         break;
       }
       case "fpRelay": {
@@ -847,6 +921,14 @@ export class GuestRoom<
         }
         const snapshot = { view: message.view, events: message.events };
         const fair = this.ensureFair();
+        if (!fair && this.kit.cardTable && this.lobby?.fair) {
+          this.cardEarly.snapshots.push({
+            view: message.view,
+            events: message.events,
+            resync: message.resync === true,
+          });
+          break;
+        }
         // 멘탈 포커: 자리 표를 내가 연 카드로 바꿔 넘긴다(못 열었으면 열 때까지 미룬다).
         if (fair)
           fair.snapshot(

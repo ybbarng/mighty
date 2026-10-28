@@ -1,4 +1,5 @@
 import type { RngState } from "@mighty/engine";
+import type { HwatuFairSpec } from "@mighty/fair-play";
 
 /** 컴퓨터 플레이어. 자기 자리에서 보이는 정보만 받는다(마이티·하트 공통 모양) */
 export interface KitBot<View, Action> {
@@ -139,6 +140,12 @@ export interface GameKit<Rules, State, View, Action, Event, Extra = undefined> {
    * 시간이 다 되면 `timeout` 행동을 기록에 남긴다. 시계 자체는 엔진 상태에 있다
    */
   timing?: KitTiming<State, Action>;
+  /**
+   * 화투처럼 바닥·더미가 있는 카드 게임의 멘탈 포커(fair-play `HwatuFairSpec`). 있으면 암호화방에서
+   * 방장도 더미와 남의 손패를 모르게 진행한다(HostRoom·GuestRoom)
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: 화면 모양은 게임마다 다르다(손패·결정·판 번호만 쓴다)
+  cardTable?: HwatuFairSpec<Rules, State, any, Action, Event>;
 }
 
 export interface KitTiming<State, Action> {

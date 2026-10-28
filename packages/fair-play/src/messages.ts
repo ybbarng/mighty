@@ -21,4 +21,13 @@ export type FairControl =
       slot?: number;
     }
   /** 마지막 턴: 판 전체를 다시 계산하도록 행동 기록을 보낸다 */
-  | { t: "fp"; k: "log"; deal: number; log: FairLogged[] };
+  | { t: "fp"; k: "log"; deal: number; log: FairLogged[] }
+  /**
+   * 화투: 더미 다음 자리를 연다(방장이 엔진을 한 걸음 미리 돌려 본 결과). `to`가 −1이면 모두에게(뒤집기),
+   * 기기 번호면 그 기기에게만(나이롱뽕 가져오기). 판 끝에 진짜 카드로 다시 계산해 맞았는지 본다
+   */
+  | { t: "fp"; k: "deck"; deal: number; slot: number; to: number }
+  /** 화투: 판이 끝나기 전에 모든 열쇠를 공개한다(나이롱뽕: 손패 합이 점수다) */
+  | { t: "fp"; k: "all"; deal: number }
+  /** 화투: 내 패를 다 열었다(고스톱 총통이면 그 넉 장을 먼저 공개했다). 방장은 모두 준비되면 판을 시작한다 */
+  | { t: "fp"; k: "ready"; deal: number; from: number };

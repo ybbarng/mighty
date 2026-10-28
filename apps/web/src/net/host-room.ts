@@ -12,6 +12,7 @@ import {
   FairHostTable,
   type GroupName,
   HeartsHostTable,
+  HwatuHostTable,
   type Incident,
   realClock,
 } from "@mighty/fair-play";
@@ -163,7 +164,12 @@ export class HostRoom<
   private errorListeners = new Set<(error: string) => void>();
   private fairOption: { group: GroupName } | null;
   /** 멘탈 포커 진행(이 판이 멘탈 포커일 때) */
-  fair: FairHostTable | HeartsHostTable | null = null;
+  fair:
+    | FairHostTable
+    | HeartsHostTable
+    // biome-ignore lint/suspicious/noExplicitAny: 화투 게임마다 상태 모양이 다르다
+    | HwatuHostTable<any, any, any, any, any>
+    | null = null;
   /** 오간 멘탈 포커 메시지. 다시 연결된 참가자에게 다시 보낸다 */
   private readonly fpLog: { from: number; message: FairMessage }[] = [];
   /** 자리별 마지막 채팅 시각. 도배를 막는다 */
@@ -684,6 +690,33 @@ export class HostRoom<
 
     this.seed = derived.seed;
     const group = this.fairGroup();
+    if (group && this.kit.cardTable) {
+      // 화투: 첫 판을 함께 섞고 나눈 뒤(바닥이 열리고 모두 준비되면) 그 패로 대국을 만든다.
+      this.send({
+        t: "seed",
+        reveals: this.reveals(),
+        commitments: this.commitments,
+      });
+      const table = this.createCardTable(derived.seed, group);
+      const preset = await table.firstDeal();
+      if (!preset) throw new Error("첫 판을 나누다 멈췄다");
+      const match = this.cardTableMatch(table, derived.seed, { preset });
+      this.match = match;
+      this.subscribeGuests(match);
+      for (const [seat, guest] of this.guests)
+        if (guest.peerId)
+          this.send(
+            {
+              t: "snapshot",
+              view: match.viewFor(seat),
+              events: this.kit.startEvents(match.viewFor(0)),
+            },
+            guest.peerId,
+          );
+      this.broadcastLobby();
+      this.persist();
+      return match;
+    }
     const match = group
       ? this.startFair(derived.seed, group)
       : new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
@@ -705,7 +738,9 @@ export class HostRoom<
         reveals: this.reveals(),
         commitments: this.commitments,
       });
-      this.fair.begin(match.created as never);
+      (this.fair as FairHostTable | HeartsHostTable).begin(
+        match.created as never,
+      );
     }
     const startEvents = this.kit.startEvents(match.viewFor(0));
     this.subscribeGuests(match);
@@ -721,12 +756,89 @@ export class HostRoom<
     return match;
   }
 
+  /** 화투 멘탈 포커 진행(바닥·더미가 있는 카드 게임, `kit.cardTable`) */
+  private createCardTable(
+    seed: number,
+    group: GroupName,
+    restore?: FairResume,
+  ): CardTable<Rules, State, ActionT, Event> {
+    const spec = this.kit.cardTable as NonNullable<typeof this.kit.cardTable>;
+    const get = () =>
+      this.match as LocalMatch<Rules, State, View, ActionT, Event, Extra>;
+    const table: CardTable<Rules, State, ActionT, Event> = new HwatuHostTable({
+      spec,
+      rules: this.rules,
+      seed,
+      guestSeats: [...this.guests.keys()],
+      group,
+      clock: this.clock,
+      ...(restore ? { restore: restore.device } : {}),
+      hooks: {
+        patch: (fn) => {
+          get().patchState(fn);
+          this.persist();
+        },
+        state: () => get().rawState(),
+        log: () => get().actionLog(),
+        refresh: () => this.match?.refresh(),
+        broadcast: (message) => {
+          this.logFair(0, message);
+          this.send(message as never);
+        },
+        onIncident: (incident) => this.raiseIncident(incident),
+      },
+    });
+    this.fair = table;
+    table.device.on("persist", () => this.persist());
+    watchFairDevice(table.device);
+    return table;
+  }
+
+  /** 화투 멘탈 포커 대국: 엔진은 자리 표를 든 채 진행하고, 카드는 HwatuHostTable이 연다 */
+  private cardTableMatch(
+    table: CardTable<Rules, State, ActionT, Event>,
+    seed: number,
+    start: { preset: unknown } | { resume: unknown },
+  ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
+    return new LocalMatch<Rules, State, View, ActionT, Event, Extra>({
+      kit: this.kit,
+      rules: this.rules,
+      seed,
+      humanSeat: 0,
+      humanSeats: [0, ...this.guests.keys()],
+      ...("preset" in start ? { presetDeal: start.preset as Extra } : {}),
+      ...(this.bot ? { bot: this.bot } : {}),
+      clock: this.clock,
+      ...(this.pace ? { pace: this.pace } : {}),
+      step: (state, seat, action) => table.step(state, seat, action),
+      prepare: (state, seat, action) => table.prepare(state, seat, action),
+      revealView: (seat, view) => table.viewFor(seat, view as never) as View,
+      // 카드를 아직 못 열었으면 손패와 결정을 숨긴다(자리 표로 결정하지 않게).
+      maskView: (_seat, view) => ({ ...view, hand: [], decision: null }),
+      pendingSeats: (state) => table.pendingSeats(state),
+      afterStep: (state, events) => {
+        table.after(state, events);
+        this.persist();
+      },
+      onLateError: (seat, error) => {
+        if (seat === 0) for (const l of this.errorListeners) l(error);
+        const peerId = this.guests.get(seat)?.peerId;
+        if (peerId) this.send({ t: "rejected", error }, peerId);
+      },
+      ...("resume" in start ? { resume: start.resume as never } : {}),
+    });
+  }
+
   /** 멘탈 포커 판: 엔진은 자리 표를 든 채 진행하고, 증명은 FairHostTable이 모은다 */
   private startFair(
     seed: number,
     group: GroupName,
     restore?: FairResume,
   ): LocalMatch<Rules, State, View, ActionT, Event, Extra> {
+    if (this.kit.cardTable) {
+      const table = this.createCardTable(seed, group, restore);
+      return this.cardTableMatch(table, seed, { resume: restore?.resume });
+    }
     if (this.kit.id === "hearts")
       return this.startFairHearts(seed, group, restore);
     type Mighty = LocalMatch;
@@ -986,6 +1098,9 @@ export class HostRoom<
       case "cproof":
         table.receive(message, seat);
         break;
+      case "ready":
+        if (table instanceof HwatuHostTable) table.receive(message, seat);
+        break;
       case "answer":
         if (message.from === seat && table instanceof FairHostTable)
           table.answer(seat, message.id, message.have === true, message.slot);
@@ -1233,6 +1348,10 @@ export class HostRoom<
     this.broadcastLobby();
   }
 }
+
+/** 화투 멘탈 포커 진행(화면 모양은 게임마다 다르다) */
+// biome-ignore lint/suspicious/noExplicitAny: 화면 모양은 게임마다 다르다
+type CardTable<R, S, A, E> = HwatuHostTable<R, S, any, A, E>;
 
 /** 새로고침한 방장이 멘탈 포커 판을 이어 갈 때 */
 interface FairResume {

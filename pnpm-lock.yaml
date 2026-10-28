@@ -358,6 +358,9 @@ importers:
       '@mighty/hearts-engine':
         specifier: workspace:*
         version: link:../hearts-engine
+      '@mighty/hwatu':
+        specifier: workspace:*
+        version: link:../hwatu
       libsodium-wrappers-sumo:
         specifier: 0.8.4
         version: 0.8.4
