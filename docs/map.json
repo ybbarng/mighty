@@ -1,0 +1,450 @@
+{
+  "map": "starship-map/1",
+  "title": "게임 센터 (game.byb.kr)",
+  "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
+  "baselineAt": "2026-10-20",
+  "updatedAt": "2026-10-29T12:00:00+09:00",
+  "here": "hwatu-games",
+  "regions": [
+    {
+      "id": "platform",
+      "title": "공통 기반",
+      "status": "building",
+      "size": 5,
+      "summary": "모든 게임이 같이 쓰는 엔진 틀·온라인 방·기록·배우기·시간·화면",
+      "links": [
+        { "label": "새 게임 체크리스트", "path": "docs/21-new-game-checklist.md" },
+        { "label": "게임 센터 기획", "path": "docs/18-game-center-plan.md" }
+      ]
+    },
+    {
+      "id": "platform-online",
+      "title": "서버 없는 온라인 대전",
+      "parent": "platform",
+      "status": "done",
+      "size": 4,
+      "summary": "WebRTC로 방장 기기가 엔진을 돌린다. 신호 서버·TURN, 초대 링크, 재연결, 채팅",
+      "since": "2026-10-28",
+      "links": [
+        { "label": "보안", "path": "docs/07-security.md" },
+        { "label": "인계", "path": "docs/00-handoff.md" }
+      ]
+    },
+    {
+      "id": "platform-center",
+      "title": "게임 센터 첫 화면·주소 옮기기",
+      "parent": "platform",
+      "status": "done",
+      "size": 2,
+      "summary": "mighty.byb.kr → game.byb.kr, 게임 목록 첫 화면, 컨트롤러 아이콘·공유 그림",
+      "since": "2026-10-28",
+      "found": "2026-10-27",
+      "links": [{ "label": "주소 옮기기", "path": "docs/19-game-center-move.md" }],
+      "signs": [
+        {
+          "id": "site-name",
+          "type": "fork",
+          "title": "사이트 이름(지금은 임시로 '게임')",
+          "owner": "me",
+          "options": ["'게임' 그대로", "새 이름 정하기"],
+          "recommend": "새 이름 정하기(brand.ts의 SITE 한 곳만 바꾸면 된다)",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "platform-kit",
+      "title": "공통 게임 틀(GameKit·LocalMatch·첫 화면·결과 표시)",
+      "parent": "platform",
+      "status": "done",
+      "size": 3,
+      "summary": "게임마다 다른 것은 GameKit 필수 항목으로. GameHome, ResultBanner·RoundOutcome을 모든 게임이 같이 쓴다",
+      "since": "2026-10-29",
+      "links": [{ "label": "체크리스트", "path": "docs/21-new-game-checklist.md" }]
+    },
+    {
+      "id": "platform-records",
+      "title": "내 기록·복기",
+      "parent": "platform",
+      "status": "done",
+      "size": 2,
+      "summary": "이 기기에 판 기록과 다시 보기를 남기고, 고수 해설을 붙인다",
+      "since": "2026-10-28",
+      "links": [{ "label": "복기", "path": "docs/14-review-replay.md" }]
+    },
+    {
+      "id": "platform-tutorial",
+      "title": "배우기·수 배우기 틀",
+      "parent": "platform",
+      "status": "building",
+      "size": 2,
+      "summary": "단원(설명·퀴즈·미션) 틀은 끝. 문제 풀기 틀(진행 기록·목록)은 장기에 먼저 붙였고 체스·바둑이 이어 쓴다",
+      "next": "장기 세 수 외통·포 길 문제, 이름 있는 포진은 자료 확인 뒤",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "수 배우기 계획", "path": "docs/23-strategy-learning.md" }],
+      "signs": [
+        {
+          "id": "janggi-openings-source",
+          "type": "fork",
+          "title": "장기 이름 있는 포진 수순을 어디서 확인할지",
+          "owner": "me",
+          "options": ["공개 자료를 찾아 확인", "아는 사람에게 감수", "포진은 빼고 원칙만"],
+          "recommend": "공개 자료를 찾아 확인",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "platform-time",
+      "title": "판 게임 개인 시간(기본 시간 + 초읽기)",
+      "parent": "platform",
+      "status": "done",
+      "size": 2,
+      "summary": "시계는 엔진 상태에, 수마다 쓴 시간을 기록에. 판 끝 검증이 시간패까지 확인한다",
+      "since": "2026-10-29",
+      "found": "2026-10-28",
+      "links": [{ "label": "개인 시간", "path": "docs/24-time-control.md" }]
+    },
+    {
+      "id": "platform-tests",
+      "title": "시험 믿음성(flaky 없애기)",
+      "parent": "platform",
+      "status": "done",
+      "size": 2,
+      "summary": "제한 시간을 Clock 주입으로 재고 시험은 ManualClock으로 정확한 순간을 만든다. 부하를 걸어도 늘 같은 결과",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "작업 규칙", "path": "CLAUDE.md" }]
+    },
+    {
+      "id": "fairness",
+      "title": "보안·공정성",
+      "status": "building",
+      "size": 4,
+      "summary": "방장도 남의 패를 모르게(멘탈 포커), 판 끝에 모두가 다시 계산해 확인",
+      "links": [
+        { "label": "멘탈 포커", "path": "docs/13-mental-poker.md" },
+        { "label": "보안", "path": "docs/07-security.md" }
+      ]
+    },
+    {
+      "id": "fairness-mental-poker",
+      "title": "멘탈 포커·섞기 증명",
+      "parent": "fairness",
+      "status": "done",
+      "size": 4,
+      "summary": "SRA 섞기, 열쇠 증명, 섞기 증명(cut-and-choose), 타원곡선(r255)",
+      "since": "2026-10-27",
+      "links": [
+        { "label": "멘탈 포커", "path": "docs/13-mental-poker.md" },
+        { "label": "섞기 증명", "path": "docs/15-shuffle-proof.md" }
+      ]
+    },
+    {
+      "id": "fairness-redteam-2",
+      "title": "2차 방어 점검",
+      "parent": "fairness",
+      "status": "fog",
+      "size": 2,
+      "summary": "1차(2026-10-21) 뒤 들어간 기능(열쇠·섞기 증명, 끝내기 투표, 재전송 등)을 다시 점검",
+      "links": [
+        { "label": "1차 점검", "path": "docs/12-redteam-2026-10-21.md" },
+        { "label": "인계", "path": "docs/00-handoff.md" }
+      ]
+    },
+    {
+      "id": "fairness-hwatu-poker",
+      "title": "화투로 멘탈 포커 넓히기",
+      "parent": "fairness",
+      "status": "fog",
+      "size": 3,
+      "summary": "지금 멘탈 포커는 마이티 53장에 맞춰져 있다. 48장 일반 덱으로 넓혀 고스톱·민화투·나이롱뽕에 쓴다",
+      "next": "화투 게임 셋을 합친 뒤 한 번에",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }]
+    },
+    {
+      "id": "fairness-realtime",
+      "title": "실시간 판정(먼저 외치기)",
+      "parent": "fairness",
+      "status": "building",
+      "size": 3,
+      "summary": "원카드·뽕 같은 먼저 외치기를 공정하게 가리는 방법 조사 중",
+      "next": "조사 결과로 방법을 고르고 측정 계획을 세운다",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "게임 센터 기획 3-1·부류 C", "path": "docs/18-game-center-plan.md" }],
+      "signs": [
+        {
+          "id": "realtime-trust",
+          "type": "risk",
+          "title": "방장은 지연이 0이라 먼저 외치기에서 유리하다. 방장이 순서를 바꿀 수도 있다"
+        }
+      ]
+    },
+    {
+      "id": "cards",
+      "title": "카드 게임",
+      "status": "building",
+      "size": 5,
+      "summary": "마이티·하트는 끝, 화투 게임 셋을 만드는 중"
+    },
+    {
+      "id": "card-mighty",
+      "title": "마이티",
+      "parent": "cards",
+      "status": "done",
+      "size": 5,
+      "summary": "원작 Mighty Network 4.0을 되살렸다. 멘탈 포커 온라인, 컴퓨터 세 단계, 10단원 배우기",
+      "since": "2026-10-27",
+      "links": [{ "label": "인계", "path": "docs/00-handoff.md" }]
+    },
+    {
+      "id": "card-hearts",
+      "title": "하트",
+      "parent": "cards",
+      "status": "done",
+      "size": 3,
+      "summary": "윈도우 하트 규칙, 멘탈 포커 온라인, 배우기",
+      "since": "2026-10-28",
+      "found": "2026-10-22"
+    },
+    {
+      "id": "hwatu-games",
+      "title": "화투 게임",
+      "parent": "cards",
+      "status": "building",
+      "size": 4,
+      "summary": "48장 데이터·카드 그림·화면 조각을 먼저 만들고, 서브에이전트 셋이 게임을 나눠 만드는 중",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }]
+    },
+    {
+      "id": "hwatu-base",
+      "title": "화투 기초(데이터·그림·화면 조각)",
+      "parent": "hwatu-games",
+      "status": "done",
+      "size": 2,
+      "summary": "@mighty/hwatu, 직접 그린 카드, 손패·바닥·먹은 패·더미 조각, /hwatu-cards",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }]
+    },
+    {
+      "id": "hwatu-gostop",
+      "title": "고스톱(맞고·3인)",
+      "parent": "hwatu-games",
+      "status": "building",
+      "size": 3,
+      "summary": "서브에이전트가 워크트리에서 만드는 중. 합친 뒤 검토",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }]
+    },
+    {
+      "id": "hwatu-minhwatu",
+      "title": "민화투",
+      "parent": "hwatu-games",
+      "status": "building",
+      "size": 2,
+      "summary": "서브에이전트가 만드는 중. 규칙은 자료를 조사해 고른다",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }]
+    },
+    {
+      "id": "hwatu-nyrongppong",
+      "title": "나이롱뽕",
+      "parent": "hwatu-games",
+      "status": "building",
+      "size": 2,
+      "summary": "서브에이전트가 만드는 중. '뽕'은 1차로 차례로 묻는 응답 창, 실시간 판정은 조사 뒤",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "화투 기초", "path": "docs/27-hwatu.md" }],
+      "signs": [
+        {
+          "id": "nyrongppong-rules",
+          "type": "fork",
+          "title": "나이롱뽕 규칙(지역마다 다르다)",
+          "owner": "me",
+          "options": ["조사해 고른 규칙 그대로", "내가 하던 규칙으로 고치기"],
+          "recommend": "조사해 고른 규칙으로 먼저 해 보고 고치기",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "card-onecard",
+      "title": "원카드",
+      "parent": "cards",
+      "status": "blocked",
+      "size": 2,
+      "summary": "먼저 외치기가 핵심이라 실시간 판정이 정해진 뒤에만 한다",
+      "since": "2026-10-28",
+      "found": "2026-10-28",
+      "links": [{ "label": "게임 센터 기획", "path": "docs/18-game-center-plan.md" }]
+    },
+    {
+      "id": "boards",
+      "title": "판 게임",
+      "status": "building",
+      "size": 5,
+      "summary": "오목·장기는 끝, 바둑·체스를 만드는 중"
+    },
+    {
+      "id": "board-omok",
+      "title": "오목",
+      "parent": "boards",
+      "status": "done",
+      "size": 3,
+      "summary": "일반·자유·렌주, 컴퓨터 세 단계, 온라인, 배우기, 개인 시간",
+      "since": "2026-10-29",
+      "found": "2026-10-27",
+      "links": [{ "label": "오목", "path": "docs/20-omok.md" }]
+    },
+    {
+      "id": "board-janggi",
+      "title": "장기",
+      "parent": "boards",
+      "status": "done",
+      "size": 3,
+      "summary": "상차림·빅장 규칙, 컴퓨터 세 단계, 온라인, 7단원 배우기, 개인 시간",
+      "since": "2026-10-29",
+      "found": "2026-10-27",
+      "links": [{ "label": "장기", "path": "docs/22-janggi.md" }]
+    },
+    {
+      "id": "board-janggi-study",
+      "title": "장기 수 배우기",
+      "parent": "boards",
+      "status": "building",
+      "size": 2,
+      "summary": "한 수 외통 13·두 수 외통 8·양수겸장 12·잡을까 말까 11. 엔진이 고르고 시험이 확인",
+      "next": "세 수 외통, 포 길·멱 문제, 포진(자료 확인 뒤)",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "수 배우기", "path": "docs/23-strategy-learning.md" }]
+    },
+    {
+      "id": "board-baduk",
+      "title": "바둑",
+      "parent": "boards",
+      "status": "building",
+      "size": 4,
+      "summary": "서브에이전트가 워크트리에서 만드는 중(9·13·19줄, 영역 셈, 몬테카를로 고수)",
+      "since": "2026-10-29",
+      "found": "2026-10-27",
+      "links": [{ "label": "수 배우기 계획", "path": "docs/23-strategy-learning.md" }]
+    },
+    {
+      "id": "board-chess",
+      "title": "체스",
+      "parent": "boards",
+      "status": "building",
+      "size": 4,
+      "summary": "서브에이전트가 만드는 중(정식 규칙·perft 검증, 메이트 문제)",
+      "since": "2026-10-29",
+      "found": "2026-10-27",
+      "links": [{ "label": "수 배우기 계획", "path": "docs/23-strategy-learning.md" }]
+    },
+    {
+      "id": "board-shared-online",
+      "title": "판 게임 온라인 화면 공통화",
+      "parent": "boards",
+      "status": "fog",
+      "size": 1,
+      "summary": "오목·장기(와 바둑·체스)의 온라인 화면이 거의 같은 코드다. 하나로 묶는다",
+      "next": "바둑·체스를 합친 뒤",
+      "found": "2026-10-29",
+      "links": [{ "label": "체크리스트 상태 표", "path": "docs/21-new-game-checklist.md" }]
+    },
+    {
+      "id": "ops",
+      "title": "운영·배포",
+      "status": "building",
+      "size": 2,
+      "summary": "main에 올리면 이미지가 배포되고 CI가 돈다",
+      "links": [{ "label": "배포", "path": "deploy/README.md" }]
+    },
+    {
+      "id": "ops-deploy",
+      "title": "배포·CI",
+      "parent": "ops",
+      "status": "done",
+      "size": 2,
+      "summary": "Image 워크플로가 서버에 배포, CI는 단위 시험·화면 시험 3조각",
+      "since": "2026-10-28",
+      "links": [{ "label": "배포", "path": "deploy/README.md" }],
+      "signs": [
+        {
+          "id": "old-dns",
+          "type": "fork",
+          "title": "옛 주소 mighty.byb.kr의 DNS 레코드와 nginx 설정 파일 정리",
+          "owner": "me",
+          "options": ["지운다", "남겨 둔다"],
+          "recommend": "지운다(이미 404, 쓰는 사람 없음)",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "ops-real-phones",
+      "title": "실제 휴대폰 여러 대로 해 보기",
+      "parent": "ops",
+      "status": "fog",
+      "size": 1,
+      "summary": "노치·터치·섞기 시간·다른 앱 갔다 오기, 연결 진단 /diag로 잰다. 회사 와이파이 실측 포함",
+      "links": [{ "label": "인계", "path": "docs/00-handoff.md" }]
+    },
+    {
+      "id": "next-games",
+      "title": "앞으로의 게임",
+      "status": "fog",
+      "size": 3,
+      "summary": "우리 기술(약속 후 공개·함께 정하는 난수·멘탈 포커)을 살릴 게임 후보",
+      "found": "2026-10-29",
+      "links": [{ "label": "게임 센터 기획 후보", "path": "docs/18-game-center-plan.md" }],
+      "signs": [
+        {
+          "id": "next-game-order",
+          "type": "fork",
+          "title": "다음 게임 순서",
+          "owner": "me",
+          "options": ["숫자야구·배틀십(약속 후 공개)", "윷놀이(함께 정하는 난수)", "마피아·라이어(역할 숨기기)"],
+          "recommend": "숫자야구·배틀십(작고 약속 후 공개를 판 게임 틀에 붙여 보는 첫 사례)",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "next-commit-reveal",
+      "title": "숫자야구·배틀십",
+      "parent": "next-games",
+      "status": "fog",
+      "size": 2,
+      "summary": "내 숫자·배 배치를 잠가 두고 답이 정직했는지 판 끝에 확인",
+      "found": "2026-10-29"
+    },
+    {
+      "id": "next-yut",
+      "title": "윷놀이",
+      "parent": "next-games",
+      "status": "fog",
+      "size": 2,
+      "summary": "윷 결과를 함께 정하는 난수로 만들어 방장이 고르지 못하게",
+      "found": "2026-10-29"
+    },
+    {
+      "id": "next-mafia",
+      "title": "마피아·라이어 게임",
+      "parent": "next-games",
+      "status": "fog",
+      "size": 2,
+      "summary": "멘탈 포커로 역할을 나눠 사회자 없이도, 방장도 모르게",
+      "found": "2026-10-29"
+    }
+  ]
+}
