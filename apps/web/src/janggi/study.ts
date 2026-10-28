@@ -15,6 +15,7 @@ import {
   pseudoTargets,
   sideOfSeat,
   viewOf,
+  xyOf,
 } from "@mighty/janggi-engine";
 
 import type { JanggiPuzzle } from "./puzzles";
@@ -168,4 +169,143 @@ export function explainTrade(board: Board, move: Move, trap: Move): string[] {
       : `${pointName(trap.to)}의 ${obj(KIND_NAMES[trapKind])} 잡으면 그사이 더 큰 기물을 잃는다`,
   );
   return lines;
+}
+
+/** 푼 문제의 해설: 문제 종류에 맞는 풀이를 장면에서 만든다 */
+export function explainSolved(
+  puzzle: JanggiPuzzle,
+  board: Board,
+  move: Move,
+): string[] {
+  switch (puzzle.kind) {
+    case "trade":
+      return explainTrade(board, move, parseMove(puzzle.trap));
+    case "fork":
+      return explainFork(board, move);
+    case "cannon":
+      return explainCannon(board, move);
+    case "block":
+      return explainBlock(board, move);
+    case "mate":
+      return explainMate(board, move);
+  }
+}
+
+/** 큰 기물(차·포·마)이나 궁인가: 포 길·멱 문제에서 노리거나 지킬 만한 기물 */
+const isBig = (cell: string | undefined) => {
+  const kind = cell?.[1] as Kind | undefined;
+  return kind !== undefined && (kind === "K" || PIECE_VALUE[kind] >= 5);
+};
+
+/** `at`이 `a`와 `b` 사이 곧은 줄 위에 있나(끝은 빼고) */
+function between(a: number, b: number, at: number): boolean {
+  const [ax, ay] = xyOf(a);
+  const [bx, by] = xyOf(b);
+  const [x, y] = xyOf(at);
+  if (ax === bx && x === ax)
+    return y > Math.min(ay, by) && y < Math.max(ay, by);
+  if (ay === by && y === ay)
+    return x > Math.min(ax, bx) && x < Math.max(ax, bx);
+  return false;
+}
+
+/**
+ * 포 길 열기: 이 수로 내 포가 새로 상대 큰 기물(또는 궁)을 노리게 되나.
+ * 옮긴 기물이 포가 넘을 다리가 되면 `bridge`, 비켜서 다리가 하나만 남으면 `bridge: false`.
+ * 옮긴 기물이 포 자신이면 길 열기가 아니다
+ */
+export function cannonOpening(
+  board: Board,
+  move: Move,
+): { cannon: number; target: number; bridge: boolean } | null {
+  if (board[move.from] === "cC") return null;
+  const after = applyMove(board, move);
+  for (let at = 0; at < after.length; at++) {
+    if (after[at] !== "cC") continue;
+    const before = pseudoTargets(board, at);
+    const target = pseudoTargets(after, at).find(
+      (t) =>
+        after[t]?.startsWith("h") && isBig(after[t]) && !before.includes(t),
+    );
+    if (target !== undefined)
+      return { cannon: at, target, bridge: between(at, target, move.to) };
+  }
+  return null;
+}
+
+/**
+ * 멱 막기: 이 수가 상대 마·상의 멱(지나는 칸)을 막아, 그 기물이 노리던 내 큰 기물을 지키나.
+ * 막은 기물을 치우면 다시 노리는지까지 본다(정말 멱을 막아 지킨 것인지)
+ */
+export function legBlock(
+  board: Board,
+  move: Move,
+): { attacker: number; saved: number[] } | null {
+  const after = applyMove(board, move);
+  const lifted = [...after];
+  lifted[move.to] = "";
+  for (let at = 0; at < after.length; at++) {
+    const cell = after[at];
+    if (cell !== "hN" && cell !== "hE") continue;
+    const before = pseudoTargets(board, at).filter(
+      (t) => t !== move.from && board[t]?.startsWith("c") && isBig(board[t]),
+    );
+    const now = pseudoTargets(after, at);
+    const again = pseudoTargets(lifted, at);
+    const saved = before.filter((t) => !now.includes(t) && again.includes(t));
+    if (saved.length > 0) return { attacker: at, saved };
+  }
+  return null;
+}
+
+/** "차(14)"처럼 기물과 자리. 조사는 기물 이름 받침에 맞춘다 */
+function pieceAt(board: Board, at: number, josa: "을" | "이" | "의" | "") {
+  const word = KIND_NAMES[(board[at] as string)[1] as Kind];
+  const tail =
+    josa === "을"
+      ? hasBatchim(word)
+        ? "을"
+        : "를"
+      : josa === "이"
+        ? hasBatchim(word)
+          ? "이"
+          : "가"
+        : josa;
+  return `${word}(${pointName(at)})${tail}`;
+}
+
+/** 포 길 열기를 말로 풀어 준다. 장면에서 엔진으로 만든다 */
+export function explainCannon(board: Board, move: Move): string[] {
+  const open = cannonOpening(board, move);
+  if (!open) return [];
+  const after = applyMove(board, move);
+  const mover = KIND_NAMES[(after[move.to] as string)[1] as Kind];
+  const target = pieceAt(after, open.target, "을");
+  const cannon = pieceAt(after, open.cannon, "이");
+  return [
+    open.bridge
+      ? `${obj(mover)} ${pointName(move.to)}로: ${mover}${hasBatchim(mover) ? "이" : "가"} 다리가 되어 ${cannon} ${target} 노린다`
+      : `${obj(mover)} ${pointName(move.to)}로 비키면 다리가 하나만 남아 ${cannon} ${target} 노린다`,
+    after[open.target] === "hK"
+      ? "포 장군이다. 한은 궁부터 지켜야 해서 그사이 다른 기물을 얻는다"
+      : "포는 꼭 하나를 넘어야 움직인다. 다리를 놓거나 치우면 길이 열린다",
+  ];
+}
+
+/** 멱 막기를 말로 풀어 준다. 장면에서 엔진으로 만든다 */
+export function explainBlock(board: Board, move: Move): string[] {
+  const block = legBlock(board, move);
+  if (!block) return [];
+  const after = applyMove(board, move);
+  const mover = KIND_NAMES[(after[move.to] as string)[1] as Kind];
+  const attackerKind = (after[block.attacker] as string)[1] as Kind;
+  const saved = block.saved.map((t, i) =>
+    pieceAt(after, t, i === block.saved.length - 1 ? "을" : ""),
+  );
+  return [
+    `${obj(mover)} ${pointName(move.to)}로: 한 ${pieceAt(after, block.attacker, "의")} 멱을 막아 ${saved.join("·")} 지킨다`,
+    attackerKind === "N"
+      ? "마는 곧게 한 칸 간 뒤 비스듬히 간다. 곧게 가는 첫 칸(멱)이 막히면 못 간다"
+      : "상은 곧게 한 칸, 비스듬히 두 칸 간다. 지나는 칸 하나라도 막히면 못 간다",
+  ];
 }

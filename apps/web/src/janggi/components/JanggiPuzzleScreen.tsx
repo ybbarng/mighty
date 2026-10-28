@@ -18,9 +18,7 @@ import { JANGGI_PUZZLE_SETS, type JanggiPuzzle } from "../puzzles";
 import { useJanggiSettings } from "../settings";
 import {
   defenseFor,
-  explainFork,
-  explainMate,
-  explainTrade,
+  explainSolved,
   judgeMove,
   parseMove,
   puzzleState,
@@ -51,6 +49,19 @@ const TEXT: Record<
     solved: "이득!",
     wrong: "그 수로는 이득이 없어요",
     wrongHint: "잡은 뒤 상대가 다시 잡는지, 무엇을 잃는지 따져 봐요",
+  },
+  cannon: {
+    prompt: "포 길을 열어 큰 기물을 노리세요",
+    solved: "포 길이 열렸어요!",
+    wrong: "그 수로는 포 길이 열리지 않아요",
+    wrongHint:
+      "포는 꼭 하나를 넘어야 가요. 포와 상대 기물 사이에 다리를 놓아 봐요",
+  },
+  block: {
+    prompt: "멱을 막아 기물을 지키세요",
+    solved: "멱을 막았어요!",
+    wrong: "그 수로는 기물을 잃어요",
+    wrongHint: "상대 마·상이 곧게 처음 가는 칸(멱)에 기물을 놓으면 못 와요",
   },
 };
 
@@ -136,13 +147,7 @@ export function JanggiPuzzleScreen({
     setLastMove(move);
     playUiCue(before.board[move.to] ? "capture" : "piece");
     if (verdict === "solved") {
-      setExplain(
-        puzzle.kind === "trade"
-          ? explainTrade(before.board, move, parseMove(puzzle.trap))
-          : puzzle.kind === "fork"
-            ? explainFork(before.board, move)
-            : explainMate(before.board, move),
-      );
+      setExplain(explainSolved(puzzle, before.board, move));
       setStatus("solved");
       playUiCue("win");
       // 정답 보기를 누른 뒤 푼 것은 푼 것으로 치지 않는다.
