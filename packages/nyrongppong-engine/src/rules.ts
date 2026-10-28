@@ -52,7 +52,7 @@ export function encodeNyrongppongRules(rules: NyrongppongRules): string {
 export function decodeNyrongppongRules(
   text: string,
 ): { ok: true; rules: NyrongppongRules } | { ok: false; reason: string } {
-  const match = /^n1-p([2-5])r(1|3|5|10)s(0|5|10)b(20|30)c([358])$/.exec(
+  const match = /^n1-p([2-5])r(10|[1-9])s(0|5|10)b(20|30)c([358])$/.exec(
     text.trim(),
   );
   if (!match)
