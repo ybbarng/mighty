@@ -85,6 +85,8 @@ export function DealAnimation({
   const split = stage === "split" || stage === "split2";
   return (
     <>
+      {/* 나눠 주는 연출이 도는 동안의 표시(화면 시험이 연출이 있는 길을 확인할 때 쓴다) */}
+      <span data-dealing hidden />
       {Array.from({ length: count }, (_, i) => {
         // 아래부터 쌓는다. 바닥 카드는 맨 아래에 남고, 나눠 줄 카드는 맨 위부터 나간다.
         const isKitty = i < kittyCount;

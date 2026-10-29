@@ -1,17 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { prepareFast } from "./fast";
 import { startSolo } from "./start";
-
-/** 스플래시를 건너뛰고 진행을 빠르게 해 둔다 */
-async function prepare(page: Page) {
-  await page.addInitScript(() => {
-    sessionStorage.setItem("mighty-splash-seen", "1");
-    localStorage.setItem(
-      "mighty-settings",
-      JSON.stringify({ state: { speed: 1.6, sound: false }, version: 0 }),
-    );
-  });
-}
 
 /** 낼 수 있는 첫 카드나 지금 필요한 단추를 누른다. 판이 끝나면 true */
 async function stepOnce(page: Page): Promise<boolean> {
@@ -47,17 +37,20 @@ async function stepOnce(page: Page): Promise<boolean> {
       return false;
     }
   }
-  await page.waitForTimeout(250);
+  // 컴퓨터 차례: 화면이 바뀔 때까지 잠깐 둔다(폴링 간격)
+  await page.waitForTimeout(50);
   return false;
 }
 
-test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo) => {
+test("컴퓨터 4명과 한 판을 끝까지 하고, 내 기록과 복기에 남는다", async ({
+  page,
+}, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
-  await prepare(page);
+  await prepareFast(page);
   await page.goto("/mighty");
 
   await expect(page.getByRole("img", { name: /마이티/ })).toBeVisible();
@@ -70,7 +63,7 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
   await page.screenshot({ path: testInfo.outputPath("2-election.png") });
 
   let tookTrickShot = false;
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 800; i++) {
     if (await stepOnce(page)) break;
     if (
       !tookTrickShot &&
@@ -79,11 +72,9 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
         .first()
         .isVisible())
     ) {
-      await page.waitForTimeout(600);
       await page.screenshot({ path: testInfo.outputPath("3-trick.png") });
       tookTrickShot = true;
     }
-    await page.waitForTimeout(150);
   }
 
   // 판이 끝나면 가운데에 크게 승패 문구가 떴다가 사라진다.
@@ -112,12 +103,61 @@ test("컴퓨터 4명과 한 판을 끝까지 한다", async ({ page }, testInfo)
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
   }
 
+  // 끝낸 판은 내 기록에 쌓인다.
+  await page.goto("/profile");
+  await expect(page.getByText(/1판 · 게임 0번/)).toBeVisible();
+  await expect(page.getByText("역할별 승률")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("7-profile.png"),
+    fullPage: true,
+  });
+  // 복기: 남긴 게임을 열어 판 한눈에 보기와 다시 보기를 확인한다.
+  await page.getByRole("link", { name: /지난 게임 복기/ }).click();
+  await page.getByRole("button", { name: /마이티 · 혼자/ }).click();
+  await expect(page.getByText("1판").first()).toBeVisible();
+  await expect(page.getByText("턴 표").first()).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("8-review.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "▶ 이 판 다시 보기" }).first().click();
+  await expect(page.getByRole("toolbar", { name: "다시 보기" })).toBeVisible();
+  const forward = page.getByRole("button", { name: "한 걸음 앞으로" });
+  for (let k = 0; k < 12; k++) await forward.click();
+  // 상황판 없이 모든 패만 펼친 화면
+  await page.getByRole("button", { name: "모든 패 보기" }).click();
+  await expect(
+    page.getByRole("button", { name: "모든 패 숨기기" }),
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("9-replay-open.png") });
+  await page.getByRole("button", { name: "모든 패 숨기기" }).click();
+  await page.getByRole("button", { name: "상황판" }).click();
+  await expect(
+    page.getByRole("complementary", { name: "상황판" }),
+  ).toBeVisible();
+  // 다음 수를 고수의 수와 견준다(고수는 생각하는 데 조금 걸린다).
+  await expect(page.getByText(/실제:/)).toBeVisible();
+  await expect(page.getByText("생각하는 중…")).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  // 걸음 해설(고수의 계산)
+  await expect(page.getByText("해설을 계산하는 중…")).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  await page.screenshot({ path: testInfo.outputPath("10-replay.png") });
+  // 복기 기록을 파일로 내보낸다.
+  await page.getByRole("button", { name: "다시 보기 나가기" }).click();
+  await page.getByRole("button", { name: "← 목록" }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "내보내기" }).click();
+  expect((await download).suggestedFilename()).toMatch(/^mighty-review-/);
+
   expect(errors).toEqual([]);
 });
 
 for (const preset of ["표준 5마", "표준 7마"]) {
   test(`${preset}: 공약 단추가 스크롤 없이 다 보인다`, async ({ page }) => {
-    await prepare(page);
+    await prepareFast(page);
     await page.goto("/mighty");
     await startSolo(page, preset);
     const bid = page.getByRole("button", { name: /^출마/ });
@@ -133,12 +173,34 @@ for (const preset of ["표준 5마", "표준 7마"]) {
 test("움직임 줄이기를 켜면 섞고 나눠 주는 연출 없이 바로 공약을 정한다", async ({
   page,
 }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await prepare(page);
+  await prepareFast(page);
   await page.goto("/mighty");
   await startSolo(page);
   // 연출이 있으면 2초 넘게 걸린다.
   await expect(page.getByText("공약을 정하세요")).toBeVisible({
     timeout: 1500,
   });
+});
+
+test("연출을 켜면 섞고 나눠 주는 장면을 지나 공약을 정한다", async ({
+  page,
+}, testInfo) => {
+  // 다른 시험은 움직임 줄이기로 연출을 건너뛴다. 연출이 있는 길은 여기서 한 번 본다.
+  test.skip(testInfo.project.name !== "desktop", "데스크톱에서만 돌린다");
+  await page.addInitScript(() => {
+    sessionStorage.setItem("mighty-splash-seen", "1");
+    localStorage.setItem(
+      "mighty-settings",
+      JSON.stringify({ state: { speed: 1.6, sound: false }, version: 0 }),
+    );
+  });
+  await page.goto("/mighty");
+  await startSolo(page);
+  // 나눠 주는 연출이 돌고, 끝나면 사라지고 공약을 정한다.
+  await expect(page.locator("[data-dealing]")).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("dealing.png") });
+  await expect(page.getByText("공약을 정하세요")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.locator("[data-dealing]")).toHaveCount(0);
 });
