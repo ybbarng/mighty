@@ -13,6 +13,7 @@ import {
   badukBotFor,
   badukExpertBot,
   badukIntermediateBot,
+  createBadukIntermediateBot,
   createBadukSearchBot,
 } from "./bots";
 import { FastBoard } from "./fast-board";
@@ -57,10 +58,14 @@ describe("빠른 판", () => {
 });
 
 describe("바둑 컴퓨터", () => {
+  // 끝까지 두는 시험은 중수·고수와 같은 길(뻔한 수 → 몬테카를로 / 나무 탐색)을 둬 보는 판 수만 줄여 돈다.
+  // 규칙에 맞는 수만 두는지는 판 수와 상관없다. 실제 단계의 수 판단은 아래 장면 시험이 본다.
   it.each(
-    [badukBeginnerBot, badukIntermediateBot, createBadukSearchBot(400)].map(
-      (b) => [b.name, b] as const,
-    ),
+    [
+      badukBeginnerBot,
+      createBadukIntermediateBot(200),
+      createBadukSearchBot(200),
+    ].map((b) => [b.name, b] as const),
   )(
     "%s: 판 끝까지 규칙에 맞는 수만 둔다",
     (_name, bot) => {
@@ -68,7 +73,7 @@ describe("바둑 컴퓨터", () => {
       expect(end.phase).toBe("gameOver");
       expect(end.result?.kind).toBe("score");
     },
-    // 한 판을 끝까지 두는 계산이라 다른 시험과 함께 돌면 몇 초 걸린다. 상한은 멈춘 시험을 잡는 안전장치다.
+    // 상한은 멈춘 시험을 잡는 안전장치다
     60_000,
   );
 
@@ -123,9 +128,11 @@ describe("바둑 컴퓨터", () => {
   );
 
   it("같은 시드면 같은 수를 둔다", () => {
+    // 고수와 같은 탐색이다. 같은 시드면 같은 수라는 성질은 둬 보는 횟수와 상관없어 400번으로 본다
+    const bot = createBadukSearchBot(400);
     const state = createBadukScenario({ black: ["E5"], white: ["D4"] });
-    const a = badukExpertBot.decide(viewOf(state, 0), createRng(7));
-    const b = badukExpertBot.decide(viewOf(state, 0), createRng(7));
+    const a = bot.decide(viewOf(state, 0), createRng(7));
+    const b = bot.decide(viewOf(state, 0), createRng(7));
     expect(a).toEqual(b);
   });
 

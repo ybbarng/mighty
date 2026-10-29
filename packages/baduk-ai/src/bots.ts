@@ -131,24 +131,32 @@ export const EXPERT_PLAYOUTS = 6000;
 
 /**
  * 중수: 따내기·달아나기가 보이면 그 수를 두고, 아니면 둘 만한 수마다 끝까지 무작위로 둬 보고
- * 승률이 가장 높은 수(나무 없는 몬테카를로)
+ * 승률이 가장 높은 수(나무 없는 몬테카를로). 둬 보는 판 수만 다르게 만들 수 있다(시험은 적게)
  */
-export const badukIntermediateBot = botWith(
-  "baduk-intermediate",
-  (view, board, rng) => {
-    const allowed = new Set(view.legal);
-    const moves = candidateMoves(board).filter((m) => allowed.has(m));
-    const obvious = obviousMove(moves, allowed, board, rng);
-    if (obvious !== PASS) return obvious;
-    return search(
-      board,
-      view.rules.komi,
-      budget(view.rules.size, INTERMEDIATE_PLAYOUTS),
-      rng,
-      { allowed: view.legal, rave: false, depth1: true },
-    ).move;
-  },
-);
+export function createBadukIntermediateBot(
+  playouts = INTERMEDIATE_PLAYOUTS,
+): BadukBot {
+  return botWith(
+    playouts === INTERMEDIATE_PLAYOUTS
+      ? "baduk-intermediate"
+      : `baduk-intermediate-${playouts}`,
+    (view, board, rng) => {
+      const allowed = new Set(view.legal);
+      const moves = candidateMoves(board).filter((m) => allowed.has(m));
+      const obvious = obviousMove(moves, allowed, board, rng);
+      if (obvious !== PASS) return obvious;
+      return search(
+        board,
+        view.rules.komi,
+        budget(view.rules.size, playouts),
+        rng,
+        { allowed: view.legal, rave: false, depth1: true },
+      ).move;
+    },
+  );
+}
+
+export const badukIntermediateBot = createBadukIntermediateBot();
 
 /** 고수: 몬테카를로 나무 탐색(UCT + RAVE) */
 export function createBadukSearchBot(playouts = EXPERT_PLAYOUTS): BadukBot {
