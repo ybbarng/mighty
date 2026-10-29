@@ -116,16 +116,16 @@ export function isBonusThrow(value: ThrowValue): boolean {
 export function throwOdds(
   rules: Pick<YutRules, "flatPercent" | "backDo">,
 ): { value: ThrowValue; p: number }[] {
+  // 곱셈만 쓴다: 컴퓨터 수를 참가자 기기가 다시 계산할 때 기기마다 끝자리가 같아야 한다(Math.pow는 다를 수 있다).
   const p = rules.flatPercent / 100;
   const q = 1 - p;
-  const one = 4 * p * q ** 3;
-  const back = rules.backDo ? p * q ** 3 : 0;
+  const back = rules.backDo ? p * q * q * q : 0;
   return [
-    { value: 1, p: one - back },
-    { value: 2, p: 6 * p ** 2 * q ** 2 },
-    { value: 3, p: 4 * p ** 3 * q },
-    { value: 4, p: p ** 4 },
-    { value: 5, p: q ** 4 },
+    { value: 1, p: 4 * p * q * q * q - back },
+    { value: 2, p: 6 * p * p * q * q },
+    { value: 3, p: 4 * p * p * p * q },
+    { value: 4, p: p * p * p * p },
+    { value: 5, p: q * q * q * q },
     ...(rules.backDo ? [{ value: -1 as ThrowValue, p: back }] : []),
   ];
 }

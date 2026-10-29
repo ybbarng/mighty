@@ -519,6 +519,15 @@ importers:
         specifier: 4.12.0
         version: 4.12.0
 
+  packages/yut-ai:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@mighty/yut-engine':
+        specifier: workspace:*
+        version: link:../yut-engine
+
   packages/yut-engine:
     dependencies:
       '@mighty/engine':
