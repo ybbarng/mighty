@@ -24,11 +24,16 @@ async function until(condition: () => boolean, ms = 60_000): Promise<void> {
   }
 }
 
-function hostOptions(clock: ManualClock, store?: HostStore) {
+/**
+ * 끝 점수 기본 10점(규칙 문자열이 받는 가장 작은 값): 한 판에 26점이 나뉘어 대개 한 판, 드물게 두 판에 끝난다
+ * (새로고침·끊김·부정·복기는 한 판이면 된다). 판이 바뀌어도 이어 가는지는 첫 시험이 27점으로 본다
+ * (한 판에 나눠지는 점수가 26점이라 적어도 두 판)
+ */
+function hostOptions(clock: ManualClock, store?: HostStore, endScore = 10) {
   return {
     kit: heartsKit,
     hostName: "방장",
-    rules: { ...WINDOWS_RULES, endScore: 40 },
+    rules: { ...WINDOWS_RULES, endScore },
     bot: heartsIntermediateBot,
     botLevel: 1,
     revealTimeoutMs: 500,
@@ -42,13 +47,14 @@ async function setup(
   guestCount: number,
   store?: HostStore,
   voteDelayMs?: number,
+  endScore?: number,
 ) {
   const net = new MemoryNetwork();
   // 제한 시간(투표 열기 등)은 시험이 이 시계를 옮길 때만 지난다.
   const clock = new ManualClock();
   const host = new HostRoom({
     transport: net.join("host"),
-    ...hostOptions(clock, store),
+    ...hostOptions(clock, store, endScore),
     ...(voteDelayMs !== undefined ? { voteDelayMs } : {}),
   });
   const guests: GuestRoom<
@@ -146,8 +152,13 @@ async function playUntil(
 }
 
 describe("하트 멘탈 포커 온라인 대전", () => {
-  it("방장도 남의 패를 모른 채 카드를 넘기고 게임을 끝까지 두며, 판마다 모두가 다시 계산해 확인한다", async () => {
-    const { host, guests, incidents } = await setup(2);
+  it("방장도 남의 패를 모른 채 카드를 넘기고 게임을 끝까지 두며(적어도 두 판), 판마다 모두가 다시 계산해 확인한다", async () => {
+    const { host, guests, incidents } = await setup(
+      2,
+      undefined,
+      undefined,
+      27,
+    );
     const verified: number[] = [];
     for (const g of guests) g.on("roundVerified", (d) => verified.push(d));
     const audits: AuditResult[] = [];
@@ -294,12 +305,13 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     await host.start();
     await until(() => guests.every((g) => g.match !== null));
     const match = host.match as unknown as {
-      rawState(): { roundNumber: number };
+      current(): { phase: string };
     };
+    // 끝 점수 10점이라 대개 한 판, 드물게 두 판에 끝난다
     await playUntil(
       host as never,
       guests as never,
-      () => match.rawState().roundNumber >= 2,
+      () => match.current().phase === "gameOver",
       incidents,
     );
     const source = (

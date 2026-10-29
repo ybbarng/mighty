@@ -24,10 +24,10 @@ import { replayArchive } from "@/review/replay";
 import { nyrongppongKit } from "./kit";
 import { ONLINE_CALL_SECONDS, onlineRules } from "./settings";
 
-const setup = (players: number, guests: number) =>
+const setup = (players: number, guests: number, rounds: number) =>
   setupHwatu({
     kit: nyrongppongKit,
-    rules: onlineRules({ ...STANDARD_RULES, players, rounds: 2 }),
+    rules: onlineRules({ ...STANDARD_RULES, players, rounds }),
     guests,
     bot: nyrongppongIntermediateBot,
     botLevel: 1,
@@ -55,15 +55,17 @@ function windowTicker(
 }
 
 describe("나이롱뽕 암호화방(멘탈 포커)", () => {
+  // 판이 바뀌어도 이어 가는지(두 판)는 3명으로 보고, 4명(참가자 둘)은 한 판으로 본다
   it.each([
-    ["3명(참가자 하나, 컴퓨터 하나)", 3, 1],
-    ["4명(참가자 둘, 컴퓨터 하나)", 4, 2],
+    ["3명(참가자 하나, 컴퓨터 하나), 두 판", 3, 1, 2],
+    ["4명(참가자 둘, 컴퓨터 하나), 한 판", 4, 2, 1],
   ])(
     "%s: 끝까지 치고, 방장 엔진에는 남의 손패·더미가 자리 표뿐이며 판마다 검증을 통과한다",
-    async (_name, players, guestCount) => {
+    async (_name, players, guestCount, rounds) => {
       const { host, guests, incidents, audits, verified, clock } = await setup(
         players,
         guestCount,
+        rounds,
       );
       const archives: ArchiveSource[] = [];
       guests[0]?.on("archive", (s) => archives.push(s));
@@ -99,7 +101,7 @@ describe("나이롱뽕 암호화방(멘탈 포커)", () => {
       expect(match.current().phase).toBe("gameOver");
       await until(() => audits.length === guestCount, "판 끝 검증");
       expect(audits.every((a) => a.ok)).toBe(true);
-      await until(() => verified.length === 2 * guestCount, "판마다 검증");
+      await until(() => verified.length === rounds * guestCount, "판마다 검증");
       // 판 끝 검증과 판마다 검증이 차례 없이 끝나므로 진짜 패가 가장 많은 기록을 본다.
       const last = [...archives].sort(
         (a, b) =>
