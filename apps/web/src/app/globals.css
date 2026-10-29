@@ -319,3 +319,15 @@ button {
   /* biome-ignore lint/complexity/noImportantStyles: 카드마다 붙은 전환 class보다 앞서야 한다 */
   transition: none !important;
 }
+
+/* 장기 알 글자(docs/22): 초는 초서(劉建毛草), 한은 해서(霞鶩文楷 TC Bold). 알에 쓰는 일곱 글자만 잘라 넣었다(OFL, public/fonts) */
+@font-face {
+  font-family: "JanggiCho";
+  src: url("/fonts/janggi-cho.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "JanggiHan";
+  src: url("/fonts/janggi-han.woff2") format("woff2");
+  font-display: swap;
+}

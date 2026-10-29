@@ -53,6 +53,19 @@ const HANGUL: Record<Kind, Record<Side, string>> = {
   P: { c: "졸", h: "병" },
 };
 
+/**
+ * 한자 글꼴: 한국 장기처럼 초는 흘려 쓴 초서, 한은 반듯한 해서로 쓴다.
+ * 글꼴이 늦게 오면 잠깐 명조로 보인다(`font-display: swap`)
+ */
+const HANJA_FONT: Record<Side, string> = {
+  c: '"JanggiCho", serif',
+  h: '"JanggiHan", serif',
+};
+/** 초서는 획이 가늘고 흘러 조금 크게 쓴다 */
+const HANJA_SCALE: Record<Side, number> = { c: 1.6, h: 1.15 };
+/** 초서 획을 같은 색 테두리로 조금 굵혀 작은 판에서도 또렷하게 한다(글자 크기에 대한 비율) */
+const HANJA_STROKE: Record<Side, number> = { c: 0.045, h: 0 };
+
 /** 편 글자색: 초는 초록, 한은 빨강 */
 export const SIDE_COLOR: Record<Side, string> = { c: "#0f6b3a", h: "#b91c1c" };
 
@@ -285,10 +298,20 @@ export function JanggiBoard({
               y={cy - (chosen ? 0.06 : 0)}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={r * (labels === "hanja" ? 1.15 : 1.05)}
-              fontWeight={700}
+              fontSize={r * (labels === "hanja" ? HANJA_SCALE[side] : 1.05)}
+              fontWeight={labels === "hanja" ? 400 : 700}
               fill={SIDE_COLOR[side]}
-              style={{ fontFamily: "serif" }}
+              {...(labels === "hanja" && HANJA_STROKE[side] > 0
+                ? {
+                    stroke: SIDE_COLOR[side],
+                    strokeWidth: r * HANJA_SCALE[side] * HANJA_STROKE[side],
+                    strokeLinejoin: "round" as const,
+                    paintOrder: "stroke",
+                  }
+                : {})}
+              style={{
+                fontFamily: labels === "hanja" ? HANJA_FONT[side] : "serif",
+              }}
             >
               {pieceLabel(kind, side, labels)}
             </text>
