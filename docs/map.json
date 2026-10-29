@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-29T08:31:16Z",
+  "updatedAt": "2026-10-29T08:56:41Z",
   "here": "fairness-realtime",
   "regions": [
     {
@@ -827,11 +827,15 @@
       "parent": "next-games",
       "status": "fog",
       "size": 2,
-      "summary": "매시 1인 1장, 터미널 도구(자동 응모 가능)와 화면으로 참여. 표 목록 머클 루트 + drand로 운영자도 결과를 모르게, 서명 열쇠로 당첨 증명. 커피는 앱 밖 약속",
+      "summary": "설계안(docs/36): 매시 응모권(서명·작업 증명) → 마감 때 머클 루트 공개 → drand로 번호 → 해시 체인 장부 + GitHub 앵커. 누구든 독립 검사, 운영자도 결과를 모름",
       "found": "2026-10-29",
       "links": [
         {
-          "label": "로또 게임 설계",
+          "label": "정시 로또 설계안",
+          "path": "docs/36-hourly-lotto-design.md"
+        },
+        {
+          "label": "로또 게임 조사",
           "path": "docs/35-lotto-game.md"
         }
       ],
@@ -839,7 +843,7 @@
         {
           "id": "lotto-forks",
           "type": "fork",
-          "title": "정시 로또 갈림길(판 크기 6/45·6/30, 추첨 간격, 열쇠 대량 생성 막기, 참여 범위 친구·회사·공개. docs/35)",
+          "title": "정시 로또 갈림길 7개(범위, 판 크기, 간격, 작업 증명 세기, 열쇠, 터미널 도구 언어, 앵커. docs/36 9절)",
           "owner": "me",
           "options": [
             "작게 시작(친구 범위, 6/45, 매시)",
