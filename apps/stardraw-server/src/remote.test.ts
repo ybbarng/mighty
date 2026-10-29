@@ -22,6 +22,7 @@ import {
   makeRig,
   player,
   type Rig,
+  SCHEDULE,
   TEST_POW,
 } from "./testing";
 
@@ -39,8 +40,10 @@ afterEach(async () => {
 
 const POLICY = { rpId: "game.byb.kr", origins: ["https://game.byb.kr"] };
 
-async function serve(): Promise<string> {
-  rig = await makeRig();
+async function serve(
+  options: Parameters<typeof makeRig>[0] = {},
+): Promise<string> {
+  rig = await makeRig(options);
   const server = createHttpServer(rig.engine, rig.relay, {
     basePath: "/stardraw-api",
     ledgerDir: join(rig.dir, "ledger"),
@@ -173,5 +176,19 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     });
     await until(() => outcome !== null);
     expect(outcome).toEqual({ ok: true });
+  });
+
+  it("시험 운영 서버면 화면의 장부가 시험 모드를 안다(화면이 띠를 띄운다)", async () => {
+    const base = await serve({ schedule: { ...SCHEDULE, ledger: "trial" } });
+    await rig.at(EPOCH + 10);
+    const ledger = new RemoteLedger({
+      base,
+      clock: rig.clock,
+      policy: POLICY,
+      powParams: TEST_POW,
+    });
+    await ledger.settle();
+    expect(ledger.mode).toBe("trial");
+    expect(ledger.schedule.ledger).toBe("trial");
   });
 });

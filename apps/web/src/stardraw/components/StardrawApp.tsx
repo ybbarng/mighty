@@ -75,6 +75,15 @@ export function StardrawApp() {
       className="sd-night min-h-dvh px-4 pt-6 pb-12 text-white"
     >
       <div className="mx-auto flex max-w-xl flex-col gap-5">
+        {services?.ledger.mode === "trial" && (
+          <p
+            role="note"
+            data-trial-banner
+            className="rounded-xl border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-center text-amber-50 text-sm"
+          >
+            시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다
+          </p>
+        )}
         {!services || !status ? (
           <p className="py-20 text-center text-white/60">
             하늘을 펴고 있습니다

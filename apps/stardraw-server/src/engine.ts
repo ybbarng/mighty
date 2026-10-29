@@ -104,6 +104,8 @@ export interface ServerState {
   /** 이번 회차에 들어온 응모 수 */
   entries: number;
   serverKey: string;
+  /** 시험 운영(trial)인지 정식(live)인지. 화면이 시험 띠를 띄운다 */
+  mode: "trial" | "live";
 }
 
 export class StardrawServer {
@@ -127,8 +129,14 @@ export class StardrawServer {
       options.limits.argonConcurrency,
       options.limits.argonQueue,
     );
-    options.publisher.genesis(this.genesis);
+    // 시험 장부에서 옮겨 온 등록(0회차로 저장)은 genesis 파일에 함께 공개한다
+    options.publisher.genesis(this.genesis, options.store.registrations(0));
     this.publishHead();
+  }
+
+  /** 장부 종류: 처음 일정표의 시험 표시로 정해진다(설정이 아니라 장부가 기준) */
+  get mode(): "trial" | "live" {
+    return this.genesis.ledger === "trial" ? "trial" : "live";
   }
 
   private applyChanges(record: RoundRecord | null): void {
@@ -163,6 +171,7 @@ export class StardrawServer {
       head: toHex(this.head()),
       entries: round > 0 ? this.o.store.entryCount(round) : 0,
       serverKey: toBase64Url(this.o.serverKey.publicKey),
+      mode: this.mode,
     };
   }
 

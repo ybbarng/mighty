@@ -18,6 +18,8 @@ export interface Ledger {
   readonly schedule: Schedule;
   /** 응모·등록 작업 증명 세기(연습은 가볍게, 서버는 규칙의 16MB) */
   readonly powParams: PowParams;
+  /** 기기 안 연습 장부(practice), 서버 시험 운영(trial), 정식(live) */
+  readonly mode: "practice" | "trial" | "live";
   /** 지금 시각(초, 장부 기준) */
   now(): number;
   /** 다음 회차 문제 값 */

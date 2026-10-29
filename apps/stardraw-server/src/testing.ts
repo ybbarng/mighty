@@ -38,7 +38,13 @@ import {
   noAnchor,
   type RootLog,
 } from "./outside";
-import { type HeadFile, Publisher, pad, type RoundFile } from "./publish";
+import {
+  type GenesisFile,
+  type HeadFile,
+  Publisher,
+  pad,
+  type RoundFile,
+} from "./publish";
 import { Relay } from "./relay";
 import {
   newServerKeyPkcs8,
@@ -122,12 +128,18 @@ export async function makeRig(
   limits: {
     entriesPerPrefixPerRound?: number;
     registrationsPerPrefixPerDay?: number;
+    /** 처음 일정표(기본 SCHEDULE). 데이터 폴더에 장부가 있으면 그것이 우선이다 */
+    schedule?: Schedule;
+    /** 이미 있는 데이터 폴더(start-live로 만든 정식 장부 등). 없으면 새 임시 폴더 */
+    dir?: string;
+    /** 시계를 놓을 시각(초, 기본 EPOCH) */
+    at?: number;
   } = {},
 ): Promise<Rig> {
-  const dir = mkdtempSync(join(tmpdir(), "stardraw-"));
+  const dir = limits.dir ?? mkdtempSync(join(tmpdir(), "stardraw-"));
   const clock = new ManualClock();
-  clock.advance(EPOCH * 1000);
-  const store = new Store(join(dir, "db.sqlite"));
+  clock.advance((limits.at ?? EPOCH) * 1000);
+  const store = new Store(join(dir, "stardraw.sqlite"));
   const drand = new FakeDrand();
   const log = new SwitchLog(
     new LocalRootLog(() => Math.floor(clock.now() / 1000)),
@@ -138,7 +150,7 @@ export async function makeRig(
     store,
     publisher: new Publisher(join(dir, "ledger")),
     clock,
-    schedule: SCHEDULE,
+    schedule: limits.schedule ?? SCHEDULE,
     pow: TEST_POW,
     policy: { rpId: "game.byb.kr", origins: ["https://game.byb.kr"] },
     serverKey,
@@ -175,8 +187,9 @@ export async function makeRig(
     logs,
     at,
     async finish(round) {
-      await at(roundTimes(SCHEDULE, round).closesAt);
-      await at(drawTimeOf(round));
+      const { closesAt } = roundTimes(engine.schedule(), round);
+      await at(closesAt);
+      await at(drandTime(drandRoundForClose(closesAt)));
     },
     close() {
       store.close();
@@ -249,8 +262,13 @@ export async function enter(
 /** 서버가 쓴 공개 장부 파일만 읽는다(검사기가 내려받는 것과 같다) */
 export function readLedger(dir: string) {
   const ledger = join(dir, "ledger");
-  const genesis = JSON.parse(readFileSync(join(ledger, "genesis.json"), "utf8"))
-    .schedule as Schedule;
+  const genesisFile = JSON.parse(
+    readFileSync(join(ledger, "genesis.json"), "utf8"),
+  ) as GenesisFile;
+  const genesis = genesisFile.schedule;
+  const carried = genesisFile.carried.map((x) =>
+    decodeRegistration(fromBase64Url(x)),
+  );
   const head = JSON.parse(
     readFileSync(join(ledger, "head.json"), "utf8"),
   ) as HeadFile;
@@ -268,5 +286,5 @@ export function readLedger(dir: string) {
     );
   }
   const seals = readdirSync(join(ledger, "seals")).length;
-  return { genesis, head, records, tickets, registrations, seals };
+  return { genesis, carried, head, records, tickets, registrations, seals };
 }

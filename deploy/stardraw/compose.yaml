@@ -17,8 +17,10 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp
-    env_file: .env # STARDRAW_EPOCH(1회차 시작, 유닉스 초), 앵커·Rekor 설정(README)
+    env_file: .env # STARDRAW_MODE(trial|live), 시험 회차 길이, 정식의 앵커·Rekor 설정(README)
     environment:
+      # 시험 운영(trial)이 기본. 정식은 start-live로 장부를 만든 뒤 .env에서 live로 바꾼다
+      STARDRAW_MODE: ${STARDRAW_MODE:-trial}
       STARDRAW_BASE_PATH: /stardraw-api
       STARDRAW_RP_ID: game.byb.kr
       # 개발 서버(3456)와 화면 시험(4173)에서도 이 서버를 시험할 수 있게 localhost를 둔다
@@ -26,8 +28,9 @@ services:
       STARDRAW_DEV_ORIGINS: http://localhost:3456,http://localhost:4173
       STARDRAW_TRUST_PROXY: "1"
     volumes:
-      # SQLite(stardraw.sqlite)와 공개 장부 파일(ledger/). 백업 대상
-      - ./data:/data
+      # SQLite(stardraw.sqlite)와 공개 장부 파일(ledger/). 백업 대상.
+      # 시험(data-trial)과 정식(data-live)은 폴더를 나눈다. 서버는 폴더의 장부 종류와 STARDRAW_MODE가 다르면 뜨지 않는다
+      - ./${STARDRAW_DATA:-data-trial}:/data
     secrets:
       - stardraw-server-key
     networks:

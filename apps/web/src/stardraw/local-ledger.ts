@@ -139,6 +139,7 @@ const dec = (s: string) => fromBase64Url(s);
 export class LocalLedger implements Ledger {
   readonly schedule: Schedule;
   readonly powParams = PRACTICE_POW;
+  readonly mode = "practice" as const;
   private skipped: number;
   /** 연습 drand 값의 씨앗. 회차마다 정해진 값이라 데모는 당첨 번호를 미리 볼 수 있다 */
   private readonly secret: Uint8Array;

@@ -1,4 +1,4 @@
-import { ByteWriter, compareBytes, taggedHash } from "./bytes";
+import { ByteWriter, compareBytes, taggedHash, toHex } from "./bytes";
 import {
   type DrandBeacon,
   drandRandomness,
@@ -40,6 +40,24 @@ export function registrationRoot(
   registrations: readonly KeyRegistration[],
 ): Uint8Array {
   return merkleRoot(sortRegistrations(registrations).map(registrationId));
+}
+
+/**
+ * 시험 장부에서 정식 장부로 등록을 옮길 때(docs/36 11-6): id 순으로 정렬한 목록과,
+ * 처음 일정표의 `carried`에 넣을 수·루트
+ */
+export function carryRegistrations(registrations: readonly KeyRegistration[]): {
+  registrations: KeyRegistration[];
+  carried: { count: number; root: string };
+} {
+  const sorted = sortRegistrations(registrations);
+  return {
+    registrations: sorted,
+    carried: {
+      count: sorted.length,
+      root: toHex(merkleRoot(sorted.map(registrationId))),
+    },
+  };
 }
 
 /**

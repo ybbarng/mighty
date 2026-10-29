@@ -71,6 +71,11 @@ export interface VerifyOptions {
   rootLogVerifier?: (record: RoundRecord) => Promise<boolean>;
   /** 패스키 서명을 받을 사이트·주소. 기본은 game.byb.kr */
   webauthnPolicy?: WebAuthnPolicy;
+  /**
+   * 시험 장부에서 옮겨 온 등록(genesis 파일에 공개된 목록, docs/36 11-6).
+   * 처음 일정표의 `carried`(수·루트)와 맞아야 하고, 작업 증명은 보지 않는다(시험 장부에서 치렀다)
+   */
+  carried?: readonly KeyRegistration[];
 }
 
 export interface Problem {
@@ -126,6 +131,46 @@ export async function verifyLedger(
   /** 당첨 응모권 id → 그 회차와 공개 열쇠(별명 확인용) */
   const winnerKeys = new Map<string, { round: number; pub: Uint8Array }>();
   const accepted: Nickname[] = [];
+
+  // 옮겨 온 등록: genesis의 수·루트와 맞는지, 정렬·형식·겹침. 작업 증명은 면제
+  const carried = options.carried ?? [];
+  if (genesis.carried || carried.length > 0) {
+    const failCarried = (message: string) =>
+      problems.push({ round: 0, message: `옮긴 등록: ${message}` });
+    const ids = carried.map(registrationId);
+    if (!genesis.carried) failCarried("처음 일정표에 옮긴 등록이 없다");
+    else {
+      if (genesis.carried.count !== carried.length)
+        failCarried(
+          `수가 ${carried.length}인데 처음 일정표는 ${genesis.carried.count}`,
+        );
+      if (toHex(merkleRoot(ids)) !== genesis.carried.root)
+        failCarried("목록으로 만든 머클 루트가 처음 일정표와 다르다");
+    }
+    for (let k = 0; k < carried.length; k++) {
+      const reg = carried[k] as KeyRegistration;
+      const id = ids[k] as Uint8Array;
+      if (k > 0 && compareBytes(ids[k - 1] as Uint8Array, id) >= 0)
+        failCarried("목록이 id 순서가 아니거나 같은 등록이 두 번 있다");
+      const problem = checkRegistration(reg);
+      if (problem) {
+        failCarried(`${short(id)}: ${problem}`);
+        continue;
+      }
+      const who = toHex(entrantId(reg.pub));
+      const credential = toHex(reg.credentialId);
+      if (
+        keyByEntrant.has(who) ||
+        (reg.kind === "passkey" && keyByCredential.has(credential))
+      ) {
+        failCarried(`${short(id)}: 같은 열쇠·패스키 번호가 두 번 있다`);
+        continue;
+      }
+      keyByEntrant.add(who);
+      if (reg.kind === "passkey") keyByCredential.add(credential);
+      keys.push(reg);
+    }
+  }
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i] as RoundRecord;

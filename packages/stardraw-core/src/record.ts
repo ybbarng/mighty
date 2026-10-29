@@ -1,4 +1,4 @@
-import { ByteReader, ByteWriter, taggedHash } from "./bytes";
+import { ByteReader, ByteWriter, fromHex, taggedHash } from "./bytes";
 import { RANKS, type Rank } from "./draw";
 import { type Nickname, readNickname, writeNickname } from "./nickname";
 import type { Schedule, ScheduleEntry } from "./schedule";
@@ -52,10 +52,22 @@ export function emptyWinners(): Record<Rank, Uint8Array[]> {
   return { 1: [], 2: [], 3: [], 4: [], 5: [] };
 }
 
+/**
+ * 처음 일정표 해시(1회차의 prev이자 문제 값).
+ * - 시험 장부는 꼬리표가 "stardraw/genesis-trial/v1"이라 정식 장부와 해시 사슬이 처음부터 갈린다
+ * - 옮긴 등록이 있으면 뒤에 count(u32) ‖ root(32)를 붙인다(없으면 예전과 같은 해시)
+ */
 export function genesisHash(schedule: Schedule): Uint8Array {
   const w = new ByteWriter().u64(schedule.epoch).u16(schedule.entries.length);
   for (const e of schedule.entries) writeEntry(w, e);
-  return taggedHash("stardraw/genesis/v1", w.done());
+  if (schedule.carried)
+    w.u32(schedule.carried.count).fixed(fromHex(schedule.carried.root), 32);
+  return taggedHash(
+    schedule.ledger === "trial"
+      ? "stardraw/genesis-trial/v1"
+      : "stardraw/genesis/v1",
+    w.done(),
+  );
 }
 
 function writeEntry(w: ByteWriter, e: ScheduleEntry): void {

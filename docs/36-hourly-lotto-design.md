@@ -119,7 +119,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 머클 루트(응모권)와 등록 루트는 둘 다 RFC 6962 방식, id 사전 순이다.
 - **봉인 값** = `taggedHash("stardraw/seal/v1", round ‖ count ‖ merkleRoot ‖ registrationCount ‖ registrationRoot)`. 마감 직후 Rekor에 올리는 값이다. 등록도 drand 전에 고정돼, 결과를 본 뒤 당첨 응모권의 등록을 빼서 무효로 만들 수 없다.
 - 기록 해시 = `taggedHash("stardraw/record/v1", 기록)`. 다음 회차의 `prev`이자 문제 값이 된다.
-- 1회차의 prev는 `taggedHash("stardraw/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다.
+- 1회차의 prev는 `taggedHash("stardraw/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다. 시험 장부는 꼬리표가 `stardraw/genesis-trial/v1`이고, 옮겨 온 등록이 있으면 `count ‖ root`가 붙는다(11-6).
 - 무효 회차는 번호 0 여섯 개, 보너스 0, 당첨 없음, drandSig 빈 값이다.
 
 **별명**(선택): 지난 회차 당첨 응모권의 열쇠로 `"stardraw/nickname/v1" ‖ 0x00 ‖ round ‖ 응모권 id ‖ 별명`에 서명한다. NFC로 맞춘 1~20자, 보이지 않는 글자 없음, 응모권마다 한 번. 그 회차가 닫힌 뒤에 내므로 다음 회차 기록에 들어가고, 기록 안에서는 응모권 id 순이다.
@@ -389,3 +389,18 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 4. 배포: 개인 서버(사용자 확인 뒤). 앵커 저장소 만들기도 사용자 확인 뒤.
 5. 터미널 도구.
 6. 보안 배우기 페이지(다음 차례).
+
+### 11-6. 시험 운영과 정식 시작(2026-10-29 사용자: 먼저 시험 배포 → 잘 되면 장부를 지우고 정식 시작)
+
+**시험 장부**
+- 서버 설정 `STARDRAW_MODE=trial`(기본). 처음 일정표에 `ledger: "trial"` 표시가 붙고, genesis 해시 꼬리표가 `stardraw/genesis-trial/v1`이다(정식은 `stardraw/genesis/v1`). 1회차 문제 값부터 달라 시험 응모권·등록·확인 증명은 정식 장부에서 쓸 수 없다.
+- Rekor·GitHub 앵커는 설정이 있어도 늘 꺼진다. 시험 회차 길이는 `STARDRAW_ROUND_SECONDS`(기본 10분, 최소 10분 규칙 그대로).
+- `/api/state`의 `mode`로 화면이 "시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다" 띠를 띄운다.
+- 서버는 데이터 폴더의 장부 종류(처음 일정표의 시험 표시)와 설정의 모드가 다르면 뜨지 않는다. 정식 모드는 `start-live`로 만든 장부가 있어야 뜬다.
+
+**정식 시작: 시험 장부의 패스키 등록만 옮긴다**
+- `node server.mjs start-live --epoch <ISO> --carry-registrations <시험 장부 백업>`: 빈 데이터 폴더에 정식 장부를 만든다. 시험 장부 백업(처음 일정표에 시험 표시가 있어야 한다)에서 **패스키 등록**(공개 열쇠·패스키 번호·등록 값)만 꺼내고, 응모권·회차·확인 요청은 버린다. 원시 열쇠(터미널) 등록은 옮기지 않는다. 1회차 시작은 지금보다 뒤여야 한다.
+- 옮긴 등록은 **처음 일정표에 묶는다**: 일정표에 `carried: { count, root }`(등록 id를 id 순으로 정렬한 RFC 6962 머클 루트, hex)를 넣고, genesis 해시 끝에 `count(u32) ‖ root(32)`를 붙인다(옮긴 등록이 없으면 예전과 같은 해시). 그래서 옮긴 목록은 1회차 문제 값에 묶여, 어느 drand 값보다도 먼저 고정된다. 운영자가 나중에 등록을 끼워 넣거나 뺄 수 없다.
+- 목록은 장부의 `genesis.json`에 `carried`(encodeRegistration base64url, id 순)로 공개한다. 서버는 0회차 등록으로 저장해, 옮긴 열쇠는 정식 1회차부터 등록 없이 응모한다.
+- **검사 규칙**(`verifyLedger`의 `carried` 옵션): 목록의 수·머클 루트가 처음 일정표의 `carried`와 같아야 하고, 정렬·형식(`checkRegistration`)·같은 열쇠/패스키 번호 겹침을 본다. **작업 증명은 면제**한다(시험 장부에서 그 회차 문제 값으로 치렀고, 시험 문제 값은 정식 장부에 없다). 받아들인 등록은 1회차 전에 등록된 열쇠로 친다. 처음 일정표에 `carried`가 없는데 목록을 주거나, 있는데 목록이 다르면 문제로 남긴다. 시험 장부에는 `carried`를 둘 수 없다.
+- 절차와 명령은 `deploy/stardraw/README.md`. 서버 이미지는 `image.yml`의 `server-image`(변수 `STARDRAW_SERVER_IMAGE=true`일 때만, 배포는 손으로).

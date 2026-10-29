@@ -22,6 +22,16 @@ export interface Schedule {
   epoch: number;
   /** fromRound 오름차순, 첫 줄은 fromRound 1 */
   entries: ScheduleEntry[];
+  /**
+   * 시험 운영 장부. genesis 꼬리표가 달라(record.ts) 정식 장부와 응모권·등록·증명이 섞일 수 없다.
+   * 정식 장부는 이 칸이 없다
+   */
+  ledger?: "trial";
+  /**
+   * 시험 장부에서 옮겨 온 패스키 등록(docs/36 11-6). 목록은 장부의 genesis 파일에 공개하고,
+   * 여기에는 수와 등록 id 머클 루트(hex)만 둔다. genesis 해시에 들어가 1회차 전에 고정된다
+   */
+  carried?: { count: number; root: string };
 }
 
 /** 회차 k가 정해지려면 앞 회차 기록(drand 뒤)이 있어야 해서 회차는 10분보다 짧을 수 없다 */
@@ -69,6 +79,16 @@ export function checkScheduleEntry(entry: ScheduleEntry): string | null {
 export function checkSchedule(schedule: Schedule): string | null {
   if (!Number.isInteger(schedule.epoch) || schedule.epoch < 0)
     return "epoch는 0 이상 정수";
+  if (schedule.ledger !== undefined && schedule.ledger !== "trial")
+    return "장부 종류는 시험(trial)이거나 없어야 한다";
+  if (schedule.carried !== undefined) {
+    const { count, root } = schedule.carried;
+    if (!Number.isInteger(count) || count < 1 || count > 0xffffffff)
+      return "옮긴 등록 수는 1 이상 정수";
+    if (!/^[0-9a-f]{64}$/.test(root)) return "옮긴 등록 루트는 32바이트 hex";
+    if (schedule.ledger === "trial")
+      return "시험 장부에는 등록을 옮겨 오지 않는다";
+  }
   const first = schedule.entries[0];
   if (first?.fromRound !== 1) return "첫 줄은 1회차부터";
   let prev = 0;

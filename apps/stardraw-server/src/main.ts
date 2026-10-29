@@ -6,6 +6,7 @@ import { realClock } from "@mighty/fair-play";
 import { loadConfig } from "./config";
 import { StardrawServer } from "./engine";
 import { createHttpServer } from "./http";
+import { parseStartLiveArgs, startLive } from "./live";
 import {
   type Anchor,
   GitHubAnchor,
@@ -26,6 +27,16 @@ async function main(): Promise<void> {
   mkdirSync(config.dataDir, { recursive: true });
   const clock = realClock;
   const store = new Store(join(config.dataDir, "stardraw.sqlite"));
+  // 설정의 모드와 데이터 폴더의 장부 종류가 같아야 띄운다(시험 데이터로 정식을, 정식 데이터로 시험을 띄우지 않게)
+  const stored = store.storedGenesis();
+  if (config.mode === "live" && !stored)
+    throw new Error(
+      "정식 장부가 없다. 먼저 `start-live`로 만든다(deploy/stardraw/README.md)",
+    );
+  if (stored && (stored.ledger === "trial") !== (config.mode === "trial"))
+    throw new Error(
+      `데이터 폴더는 ${stored.ledger === "trial" ? "시험" : "정식"} 장부인데 STARDRAW_MODE=${config.mode}다`,
+    );
   const serverKey = await loadServerKey(
     config.serverKeyFile,
     config.generateServerKey,
@@ -43,9 +54,15 @@ async function main(): Promise<void> {
         config.github.token,
       )
     : noAnchor;
-  if (!config.rekor)
-    log("투명성 로그 설정이 없어 서버 시계로 봉인 시각을 적는다(개발용)");
-  if (!config.github) log("앵커 저장소 설정이 없어 앵커를 남기지 않는다");
+  if (config.mode === "trial")
+    log(
+      "시험 운영: 투명성 로그·앵커를 남기지 않고, 장부는 정식 시작 때 버린다",
+    );
+  else {
+    if (!config.rekor)
+      log("투명성 로그 설정이 없어 서버 시계로 봉인 시각을 적는다");
+    if (!config.github) log("앵커 저장소 설정이 없어 앵커를 남기지 않는다");
+  }
 
   const engine = new StardrawServer({
     store,
@@ -111,8 +128,32 @@ async function backupTo(target: string): Promise<void> {
   console.log(`[stardraw] ${target}에 ${pages}쪽을 떠 두었다`);
 }
 
-const [command, arg] = process.argv.slice(2);
-void (command === "backup" && arg ? backupTo(arg) : main()).catch((err) => {
-  console.error(err);
+/** `node server.mjs start-live --epoch <ISO> --carry-registrations <시험 장부 백업>`: 정식 장부를 만든다 */
+async function startLiveCommand(args: readonly string[]): Promise<void> {
+  const config = loadConfig();
+  const parsed = parseStartLiveArgs(args);
+  const result = startLive({
+    dataDir: config.dataDir,
+    ledgerDir: config.ledgerDir,
+    epoch: parsed.epoch,
+    ...(parsed.roundSeconds ? { roundSeconds: parsed.roundSeconds } : {}),
+    trialExport: parsed.trialExport,
+    now: Math.floor(Date.now() / 1000),
+  });
+  console.log(
+    `[stardraw] 정식 장부를 만들었다: 1회차 ${new Date(result.schedule.epoch * 1000).toISOString()}, ` +
+      `패스키 등록 ${result.carried}개를 옮김(원시 열쇠 ${result.skipped}개는 옮기지 않음), genesis ${result.genesis}`,
+  );
+}
+
+const [command, ...rest] = process.argv.slice(2);
+void (
+  command === "backup" && rest[0]
+    ? backupTo(rest[0])
+    : command === "start-live"
+      ? startLiveCommand(rest)
+      : main()
+).catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

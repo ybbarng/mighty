@@ -90,12 +90,61 @@ export class Store {
 
   /** 처음 일정표(장부가 처음 만들어질 때 한 번 정해지고 바뀌지 않는다) */
   genesis(fallback: Schedule): Schedule {
-    const row = this.db.prepare("SELECT v FROM meta WHERE k = 'genesis'").get();
-    if (row) return JSON.parse(String(row.v)) as Schedule;
+    const stored = this.storedGenesis();
+    if (stored) return stored;
     this.db
       .prepare("INSERT INTO meta (k, v) VALUES ('genesis', ?)")
       .run(JSON.stringify(fallback));
     return fallback;
+  }
+
+  /** 이미 정해진 처음 일정표(없으면 null) */
+  storedGenesis(): Schedule | null {
+    const row = this.db.prepare("SELECT v FROM meta WHERE k = 'genesis'").get();
+    return row ? (JSON.parse(String(row.v)) as Schedule) : null;
+  }
+
+  /**
+   * 정식 장부를 처음 만든다(start-live): 처음 일정표와, 시험 장부에서 옮겨 온 등록(0회차)을 한 거래로.
+   * 이미 장부가 있으면 거절한다
+   */
+  initLedger(
+    schedule: Schedule,
+    carried: readonly {
+      entrantHex: string;
+      credentialHex: string | null;
+      reg: KeyRegistration;
+    }[],
+  ): void {
+    this.transaction(() => {
+      if (this.storedGenesis())
+        throw new Error("이미 장부가 있는 데이터 폴더다");
+      this.db
+        .prepare("INSERT INTO meta (k, v) VALUES ('genesis', ?)")
+        .run(JSON.stringify(schedule));
+      for (const c of carried)
+        this.addRegistration(0, c.entrantHex, c.credentialHex, c.reg);
+    });
+  }
+
+  /** 다른 SQLite 파일(시험 장부 백업)을 읽기 전용으로 열어 처음 일정표와 모든 등록을 꺼낸다 */
+  static readExport(path: string): {
+    genesis: Schedule | null;
+    registrations: KeyRegistration[];
+  } {
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      const row = db.prepare("SELECT v FROM meta WHERE k = 'genesis'").get();
+      return {
+        genesis: row ? (JSON.parse(String(row.v)) as Schedule) : null,
+        registrations: db
+          .prepare("SELECT reg FROM registrations ORDER BY round, entrant")
+          .all()
+          .map((r) => decodeRegistration(bytes(r.reg))),
+      };
+    } finally {
+      db.close();
+    }
   }
 
   // ── 응모권 ──

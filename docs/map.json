@@ -901,7 +901,7 @@
         {
           "id": "stardraw-deploy",
           "type": "fork",
-          "title": "하늘의 별 따기 서버 배포: 1회차 시작 시각, Rekor 공용 로그 사용, 앵커 저장소 이름·토큰, 서명 열쇠 보관, 이미지 빌드를 image.yml에 넣을지(deploy/stardraw/README.md)",
+          "title": "하늘의 별 따기 서버 배포: 시험 운영 먼저 → 잘 되면 start-live로 정식(사용자 결정, docs/36 11-6). 남은 것: 시험 시작 시점, 정식 1회차 시작 시각, Rekor 공용 로그 사용, 앵커 저장소 이름·토큰, 서명 열쇠 보관, 변수 STARDRAW_SERVER_IMAGE 켜기, 화면 빌드에 서버 주소 넣기(deploy/stardraw/README.md)",
           "owner": "me",
           "options": [
             "추천대로(다음 정시, Rekor 사용, ybbarng/stardraw-ledger 공개, 열쇠는 서버 파일+비밀번호 관리 앱, image.yml에 더함)",

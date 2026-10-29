@@ -43,6 +43,7 @@ interface StateJson {
   head: string;
   entries: number;
   serverKey: string;
+  mode?: "trial" | "live";
 }
 
 export interface RemoteLedgerOptions {
@@ -63,6 +64,7 @@ const STATE_EVERY_NEAR_DRAW = 3;
 export class RemoteLedger implements Ledger {
   readonly powParams: PowParams;
   private genesis: Schedule | null = null;
+  private carried: KeyRegistration[] = [];
   private state: StateJson | null = null;
   /** 서버 시각 - 기기 시각(초) */
   private offset = 0;
@@ -82,6 +84,13 @@ export class RemoteLedger implements Ledger {
   get schedule(): Schedule {
     if (!this.genesis) throw new Error("장부를 아직 받지 못했습니다");
     return this.genesis;
+  }
+
+  /** 서버가 알려 준 운영 모드(시험이면 화면이 띠를 띄운다) */
+  get mode(): "trial" | "live" {
+    return (
+      this.state?.mode ?? (this.genesis?.ledger === "trial" ? "trial" : "live")
+    );
   }
 
   now(): number {
@@ -107,8 +116,15 @@ export class RemoteLedger implements Ledger {
 
   private async settleNow(force: boolean): Promise<void> {
     if (!this.genesis) {
-      const g = await this.get<{ schedule: Schedule }>("/ledger/genesis.json");
+      const g = await this.get<{ schedule: Schedule; carried?: string[] }>(
+        "/ledger/genesis.json",
+      );
       this.genesis = g.schedule;
+      // 시험 장부에서 옮겨 온 등록(정식 장부의 genesis에 묶여 있다)
+      this.carried = (g.carried ?? []).map((r) =>
+        decodeRegistration(fromBase64Url(r)),
+      );
+      for (const r of this.carried) this.registered.add(toBase64Url(r.pub));
     }
     const local = Math.floor(this.o.clock.now() / 1000);
     const nearDraw = this.state && this.now() >= this.status().nextDrawAt;
@@ -234,6 +250,7 @@ export class RemoteLedger implements Ledger {
         powParams: this.powParams,
         mine,
         webauthnPolicy: this.o.policy,
+        carried: this.carried,
         ...this.o.verifyOptions,
       },
     );

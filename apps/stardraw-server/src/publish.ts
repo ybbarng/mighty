@@ -15,7 +15,7 @@ import {
 
 /**
  * 공개 장부 파일(누구나 내려받아 처음부터 검사한다, docs/36 7절).
- *   genesis.json         처음 일정표
+ *   genesis.json         처음 일정표(시험 표시·옮긴 등록의 수와 루트 포함)와 옮겨 온 등록 목록
  *   head.json            닫힌 회차 수, 마지막 기록 해시, 봉인한 회차 수, 서버 공개 열쇠
  *   seals/000001.json    마감 직후 봉인 값과 투명성 로그 증거(drand 값보다 먼저 나온다)
  *   rounds/000001.json   회차 기록(고정 바이너리 base64url)과 응모권·열쇠 등록 목록(id 순)
@@ -43,6 +43,13 @@ export interface RoundFile {
   registrations: string[];
 }
 
+export interface GenesisFile {
+  v: 1;
+  schedule: Schedule;
+  /** 시험 장부에서 옮겨 온 등록(encodeRegistration base64url, id 순). 처음 일정표의 carried와 맞는다 */
+  carried: string[];
+}
+
 export interface HeadFile {
   v: 1;
   rounds: number;
@@ -64,8 +71,15 @@ export class Publisher {
     renameSync(tmp, full);
   }
 
-  genesis(schedule: Schedule): void {
-    this.write("genesis.json", { v: 1, schedule });
+  /** 처음 일정표와, 시험 장부에서 옮겨 온 등록 목록(id 순, 없으면 빈 목록) */
+  genesis(schedule: Schedule, carried: readonly KeyRegistration[] = []): void {
+    this.write("genesis.json", {
+      v: 1,
+      schedule,
+      carried: sortRegistrations(carried).map((r) =>
+        toBase64Url(encodeRegistration(r)),
+      ),
+    } satisfies GenesisFile);
   }
 
   head(h: Omit<HeadFile, "v">): void {
