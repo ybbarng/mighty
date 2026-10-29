@@ -3,14 +3,24 @@
 import {
   type Cell,
   indexOf,
+  KIND_NAMES,
   type Kind,
   type Move,
+  SIDE_NAMES,
   SIZE,
   type Side,
   squareName,
   xyOf,
 } from "@mighty/chess-engine";
 import { type KeyboardEvent, useRef, useState } from "react";
+
+import { useChessSettings } from "../settings";
+import {
+  Piece3dIcon,
+  PieceSprite,
+  PieceUse,
+  usePiecePrefix,
+} from "./piece-art";
 
 const LIGHT = "#f0d9b5";
 const DARK = "#b58863";
@@ -45,7 +55,16 @@ export const PIECE_STYLE: Record<
   b: { fill: "#1c1917", stroke: "#f5f5f4", width: 0.02 },
 };
 
-/** 판 밖(자리 표·잡은 기물)에서 쓰는 작은 기물 */
+/** 화면 읽기용 기물 이름(예: "백 킹 e1") */
+export function pieceLabel(piece: `${Side}${Kind}`, square?: string): string {
+  const name = `${SIDE_NAMES[piece[0] as Side]} ${KIND_NAMES[piece[1] as Kind]}`;
+  return square ? `${name} ${square}` : name;
+}
+
+/**
+ * 판 밖(자리 표·잡은 기물·승급 고르기)에서 쓰는 작은 기물.
+ * 옵션 "기물 모양"을 따라 입체 그림이나 기호 글자로 그린다
+ */
 export function PieceIcon({
   piece,
   className,
@@ -53,10 +72,17 @@ export function PieceIcon({
   piece: `${Side}${Kind}`;
   className?: string;
 }) {
+  const set = useChessSettings((s) => s.pieces);
+  if (set === "3d") return <Piece3dIcon piece={piece} className={className} />;
   const side = piece[0] as Side;
   const style = PIECE_STYLE[side];
   return (
-    <svg viewBox="0 0 1 1" className={className} aria-hidden="true">
+    <svg
+      viewBox="0 0 1 1"
+      className={className}
+      aria-hidden="true"
+      data-piece-art="glyph"
+    >
       <text
         x={0.5}
         y={0.56}
@@ -107,6 +133,8 @@ export function ChessBoard({
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const [cursor, setCursor] = useState<number | null>(null);
+  const set = useChessSettings((s) => s.pieces);
+  const prefix = usePiecePrefix();
 
   /** 판 칸 → 그림 좌표(왼쪽 위 모서리) */
   const at = (i: number) => {
@@ -178,12 +206,14 @@ export function ChessBoard({
       role="img"
       aria-label={legal.length > 0 ? "체스판, 내 차례" : "체스판"}
       data-flipped={flipped || undefined}
+      data-piece-art={set}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: 판은 키보드로 고르고 옮긴다
       tabIndex={0}
       className="block h-full w-full touch-none select-none rounded-md shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
       onPointerUp={onPointerUp}
       onKeyDown={onKeyDown}
     >
+      {set === "3d" && <PieceSprite prefix={prefix} />}
       {board.map((_, i) => {
         const [x, y] = at(i);
         const light = (xyOf(i)[0] + xyOf(i)[1]) % 2 === 0;
@@ -265,6 +295,20 @@ export function ChessBoard({
         const side = cell[0] as Side;
         const kind = cell[1] as Kind;
         const [x, y] = at(i);
+        const piece = cell as `${Side}${Kind}`;
+        if (set === "3d")
+          return (
+            <g
+              // biome-ignore lint/suspicious/noArrayIndexKey: 칸 번호가 곧 정체다
+              key={i}
+              data-piece={cell}
+              data-square={squareName(i)}
+              aria-label={pieceLabel(piece, squareName(i))}
+              className={movable.has(i) ? "cursor-pointer" : undefined}
+            >
+              <PieceUse prefix={prefix} piece={piece} x={x} y={y} />
+            </g>
+          );
         const style = PIECE_STYLE[side];
         return (
           <text
@@ -272,6 +316,7 @@ export function ChessBoard({
             key={i}
             data-piece={cell}
             data-square={squareName(i)}
+            aria-label={pieceLabel(piece, squareName(i))}
             x={x + 0.5}
             y={y + 0.56}
             textAnchor="middle"

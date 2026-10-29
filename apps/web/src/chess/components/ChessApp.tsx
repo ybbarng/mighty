@@ -21,6 +21,7 @@ import {
   CHESS_LEVELS,
   type ChessLevel,
   type ColorPick,
+  type PieceSet,
   useChessSettings,
 } from "../settings";
 import { type ChessSaved, clearChess, loadChess, useChess } from "../store";
@@ -43,6 +44,11 @@ const PICK_OPTIONS: readonly { value: ColorPick; label: string }[] = [
   { value: "white", label: "백(먼저)" },
   { value: "black", label: "흑" },
   { value: "random", label: "무작위" },
+];
+
+const PIECE_SET_OPTIONS: readonly { value: PieceSet; label: string }[] = [
+  { value: "3d", label: "입체" },
+  { value: "glyph", label: "기호" },
 ];
 
 /**
@@ -200,6 +206,29 @@ function ChessOptions({ onBack }: { onBack: () => void }) {
             숨기기
           </Chip>
         </div>
+      </Section>
+      <Section title="기물 모양">
+        <div className="flex flex-wrap gap-1.5">
+          {PIECE_SET_OPTIONS.map((p) => (
+            <Chip
+              key={p.value}
+              active={s.pieces === p.value}
+              onClick={() => s.set({ pieces: p.value })}
+            >
+              {p.label}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex gap-1 self-start rounded-lg bg-[#f0d9b5] p-1">
+          {(["wK", "wQ", "wN", "bB", "bR", "bP"] as const).map((p) => (
+            <PieceIcon key={p} piece={p} className="size-9" />
+          ))}
+        </div>
+        <p className="text-xs opacity-60">
+          {s.pieces === "3d"
+            ? "빛과 그림자가 있는 나무 기물"
+            : "글꼴의 체스 기호. 기호가 없는 기기에서는 네모로 보일 수 있다"}
+        </p>
       </Section>
       <p className="text-xs opacity-60">
         다함께 체스도 여기서 고른 판 수와 시간으로 방을 엽니다.
