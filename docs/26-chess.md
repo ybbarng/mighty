@@ -47,7 +47,13 @@
 ## 2. 화면(PC·휴대폰)
 
 - 판은 정사각형. 휴대폰 세로는 폭을 채우고, 가로·PC는 판을 왼쪽에 두고 자리 표·기보·단추를 오른쪽에 둔다(장기와 같은 `short-landscape` 배치).
-- 기물은 유니코드 체스 기호(♚♛♜♝♞♟, 끝에 U+FE0E를 붙여 휴대폰이 그림 글자로 바꾸지 않게)로 그린다. 두 편 모두 속이 찬 모양이고, 백은 흰 바탕 + 짙은 테, 흑은 검은 바탕 + 옅은 테라 어느 칸에서도 보인다. 글꼴은 체스 기호가 있는 것을 먼저 찾는다(Apple Symbols, Segoe UI Symbol, Noto Sans Symbols2, DejaVu Sans).
+- **기물 모양**(옵션, 2026-10-29): "입체"(기본)와 "기호" 가운데 고른다. 대국·문제 풀기·배우기 장면·다시 보기·승급 고르기 창·자리 표의 작은 기물에 모두 같이 쓴다.
+  - **입체**(`chess/components/piece-art.tsx`): 고전 스턴턴 모양을 바탕으로 SVG 도형으로 새로 그렸다(외부 그림·글꼴 없음). 백은 상아·나무색, 흑은 흑단색이다. 받침은 타원 두 겹, 그 위에 몸통·목 고리·머리를 쌓는다. 입체감은 부분마다 왼쪽이 밝은 그러데이션, 기물 전체에 왼쪽 위에서 비추는 빛 얼룩, 오른쪽 아래 바닥 그림자로 낸다. 작은 판에서도 갈리게 나이트 머리(귀·눈·갈기), 비숍 모자의 홈, 킹 십자가, 퀸 다섯 갈래 왕관, 룩 톱니를 또렷하게 그렸다.
+    - 판은 그러데이션과 기물 12개(`<symbol>`)를 판마다 한 번만 두고 칸마다 `<use>`로 다시 쓴다. 판 밖 작은 기물(`PieceIcon`)은 자기 편 그러데이션만 담는다. 이름은 `useId`로 판·아이콘마다 따로 둔다.
+    - 기본값을 입체로 둔 까닭: 도형이라 체스 기호 글꼴이 없는 기기(리눅스 등)에서도 빈 네모 없이 보인다.
+  - **기호**: 유니코드 체스 기호(♚♛♜♝♞♟, 끝에 U+FE0E를 붙여 휴대폰이 그림 글자로 바꾸지 않게). 두 편 모두 속이 찬 모양이고, 백은 흰 바탕 + 짙은 테, 흑은 검은 바탕 + 옅은 테라 어느 칸에서도 보인다. 글꼴은 체스 기호가 있는 것을 먼저 찾는다(Apple Symbols, Segoe UI Symbol, Noto Sans Symbols2, DejaVu Sans). 기호가 없는 글꼴에서는 네모로 보일 수 있다.
+  - 화면 읽기: 판 위 기물마다 `aria-label`("백 킹 e1")을 단다. 시험은 기물을 글자가 아니라 `data-piece`·`data-square`로 찾고, 판의 `data-piece-art`(`3d`·`glyph`)로 모양을 확인한다.
+  - 설정은 `useChessSettings.pieces`. 내 기록에서 여는 다시 보기는 체스 화면을 거치지 않으므로 `ChessReplay`가 설정을 직접 읽는다.
 - 내 색이 늘 아래에 오게 판을 돌린다. 판 가장자리에 a~h·1~8을 쓴다(옵션에서 숨길 수 있다).
 - **고르기**: 내 기물을 누르면 갈 칸에 점, 잡을 칸에 고리가 생긴다. 그 칸을 누르면 옮긴다. 키보드는 화살표로 옮기고 Enter로 고른다.
 - 승급 수를 고르면 판 위에 퀸·룩·비숍·나이트 고르기 창이 뜬다(그만두기 가능).
@@ -85,7 +91,7 @@
 - `packages/chess-ai`: 세 단계 봇(`chessBotFor`), 탐색(`search.ts`), 봇끼리 두기(`simulate.ts`), 세기 비교(`bots.strength.ts`)
 - `apps/web/src/chess/`: `chessKit`, 설정, 저장소, 세션, 튜토리얼, 문제·풀이, 화면(`ChessApp`·`ChessGame`·`ChessBoard`·공통 `BoardOnlineScreen`(설정은 `chess/online.ts`)·`ChessReplay`·`ChessPuzzleScreen`·`ChessStats`), 아이콘 그림(`icon-art.tsx`)
 - 진행 기록(`chess-tutorial`·`chess-study`)과 설정(`chess-settings`)은 `chess/progress.ts`·`settings.ts`에 두고 `ChessApp`이 첫 그리기 뒤에 불러온다(`useChessHydration`). 다른 게임처럼 공통 `StoreHydration`·`tutorial/progress.ts`로 옮겨도 된다.
-- 첫 화면은 공통 `GameHome`. 고를 것(판 수·시간·컴퓨터·내 색·칸 이름)은 옵션 화면에 둔다.
+- 첫 화면은 공통 `GameHome`. 고를 것(판 수·시간·컴퓨터·내 색·칸 이름·기물 모양)은 옵션 화면에 둔다.
 - 온라인은 `HostRoom`·`GuestRoom`을 그대로 쓴다. 완전 공개 게임이라 멘탈 포커는 없다. 끊긴 사람 대신 컴퓨터(중수)가 두기까지 60초.
 - 새 패키지 둘은 `Dockerfile` COPY 줄에 넣는다.
 

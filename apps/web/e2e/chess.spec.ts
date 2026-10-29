@@ -53,10 +53,21 @@ async function playOne(page: Page, touch: boolean, side: "w" | "b" = "w") {
   throw new Error("둘 수가 없다");
 }
 
+/** 첫 화면에서 옵션을 연다. 미리 그린 HTML이 살아나기 전에 누르면 아무 일도 없어서, 열릴 때까지 다시 누른다 */
+async function openOptions(page: Page) {
+  await expect(async () => {
+    await page.getByRole("button", { name: "옵션" }).click();
+    await expect(page.getByRole("button", { name: "처음으로" })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
+}
+
 /** 첫 화면 → 옵션에서 컴퓨터(고르면)와 백을 고르고 → 나홀로 체스 */
 async function startSolo(page: Page, level?: string) {
-  await page.getByRole("button", { name: "옵션" }).click();
-  if (level) await page.getByRole("button", { name: level }).click();
+  await openOptions(page);
+  if (level)
+    await page.getByRole("button", { name: level, exact: true }).click();
   await page.getByRole("button", { name: "백(먼저)" }).click();
   await page.getByRole("button", { name: "처음으로" }).click();
   await page.getByRole("button", { name: /나홀로 체스/ }).click();
@@ -146,6 +157,47 @@ test("체스 배우기: 첫 단원 미션을 틀렸다가 다시 해 룩으로 �
   });
   await page.getByRole("button", { name: "다음", exact: true }).click();
   await expect(page.getByText("단원 완료!")).toBeVisible();
+});
+
+test("체스 옵션: 기물 모양을 기호로 바꾸면 판의 기물이 기호 글자가 되고, 다시 입체로 돌아온다", async ({
+  page,
+}) => {
+  await page.goto("/chess");
+  await openOptions(page);
+  // 기본은 입체 그림이다.
+  await expect(page.getByRole("button", { name: "입체" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: "기호", exact: true }).click();
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await page.getByRole("button", { name: /나홀로 체스/ }).click();
+  await expect(board(page)).toHaveAttribute("data-piece-art", "glyph");
+  const king = page.locator('[data-square="e1"][data-piece="wK"]');
+  await expect(king).toHaveAttribute("aria-label", "백 킹 e1");
+  await expect(king).toHaveText("♚︎");
+
+  // 다시 들어와도 고른 모양이 남는다. 입체로 돌리면 미리 보기와 문제 풀기 판이 그림(<use>)이 된다.
+  await page.goto("/chess");
+  await openOptions(page);
+  const preview = page.locator("section", { hasText: "기물 모양" });
+  await expect(
+    page.getByRole("button", { name: "기호", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(preview.locator('[data-piece-art="glyph"]')).toHaveCount(6);
+  await page.getByRole("button", { name: "입체" }).click();
+  await expect(preview.locator('[data-piece-art="3d"]')).toHaveCount(6);
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await page.getByRole("button", { name: /체스 배우기/ }).click();
+  await page.getByRole("button", { name: /수 배우기/ }).click();
+  await page
+    .getByRole("region", { name: "한 수 메이트" })
+    .getByRole("button", { name: "풀기 시작" })
+    .click();
+  await expect(board(page)).toHaveAttribute("data-piece-art", "3d");
+  const rook = page.locator('[data-square="b5"][data-piece="wR"]');
+  await expect(rook.locator("use")).toHaveCount(1);
+  await expect(rook).toHaveAttribute("aria-label", "백 룩 b5");
 });
 
 test("체스 배우기: 폰이 끝줄에 닿으면 고르기 창에서 퀸을 고른다", async ({
@@ -417,7 +469,7 @@ test("체스 개인 시간: 내 시계가 가고, 다 쓰면 시간패다", asyn
   test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
   await page.clock.install();
   await page.goto("/chess");
-  await page.getByRole("button", { name: "옵션" }).click();
+  await openOptions(page);
   await page.getByRole("button", { name: "빠른 3분" }).click();
   await page.getByRole("button", { name: "백(먼저)" }).click();
   await page.getByRole("button", { name: "처음으로" }).click();
