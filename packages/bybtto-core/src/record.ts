@@ -11,9 +11,7 @@ import { PICK_COUNT } from "./ticket";
  *   v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLoggedAt(u64)
  *   ‖ void(u8) ‖ drandRound(u64) ‖ drandSig(bytes) ‖ numbers(6) ‖ bonus(u8)
  *   ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
- *   ‖ 일정 변경 [개수(u16) ‖ (fromRound u32, length u32, closeMargin u32, powTarget u32) × 개수]
- *   ‖ 상품 받음 [개수(u32) ‖ 응모권 id(32) × 개수]
- * 무효 회차는 numbers 0 6개, bonus 0, 당첨 없음, drandSig 빈 바이트다.
+ *   ‖ 일정 변경 [개수(u16) ‖ (fromRound u32, length u32, closeMargin u32, powTarget u32) × 개수] * 무효 회차는 numbers 0 6개, bonus 0, 당첨 없음, drandSig 빈 바이트다.
  */
 
 export const RECORD_VERSION = 1;
@@ -39,8 +37,6 @@ export interface RoundRecord {
   winners: Record<Rank, Uint8Array[]>;
   /** 이 회차에 정한 일정 변경(24시간 뒤 효력) */
   scheduleChanges: ScheduleEntry[];
-  /** 이 회차까지 사이에 상품을 준 응모권 id */
-  paid: Uint8Array[];
 }
 
 export function emptyWinners(): Record<Rank, Uint8Array[]> {
@@ -78,7 +74,6 @@ export function encodeRecord(r: RoundRecord): Uint8Array {
   for (const rank of RANKS) writeIds(w, r.winners[rank]);
   w.u16(r.scheduleChanges.length);
   for (const e of r.scheduleChanges) writeEntry(w, e);
-  writeIds(w, r.paid);
   return w.done();
 }
 
@@ -115,7 +110,6 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
       powTarget: r.u32(),
     });
   }
-  const paid = readIds(r);
   r.end();
   return {
     v,
@@ -131,7 +125,6 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
     bonus,
     winners,
     scheduleChanges: changes,
-    paid,
   };
 }
 

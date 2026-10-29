@@ -96,8 +96,6 @@ export async function verifyLedger(
   }
   const beaconVerifier = options.beaconVerifier ?? verifyQuicknetBeacon;
   const mine = new Set((options.mine ?? []).map(toHex));
-  const winnersSoFar = new Set<string>();
-  const paidSoFar = new Set<string>();
   let schedule = genesis;
   let head = genesisHash(genesis);
   let powChecked = 0;
@@ -222,17 +220,6 @@ export async function verifyLedger(
       const problem = checkScheduleChange(schedule, change, round);
       if (problem) fail(`일정 변경: ${problem}`);
       else schedule = withChange(schedule, change);
-    }
-
-    // 6. 상품 받음: 당첨된 응모권이고 처음 받는 것
-    for (const rank of RANKS)
-      for (const id of record.winners[rank]) winnersSoFar.add(toHex(id));
-    for (const id of record.paid) {
-      const key = toHex(id);
-      if (!winnersSoFar.has(key))
-        fail(`응모권 ${short(id)}: 당첨되지 않았는데 상품을 받았다`);
-      if (paidSoFar.has(key)) fail(`응모권 ${short(id)}: 상품을 두 번 받았다`);
-      paidSoFar.add(key);
     }
 
     head = recordHash(record);

@@ -96,7 +96,6 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLogg
 ‖ void(u8) ‖ drandRound(u64) ‖ drandSig(가변) ‖ numbers(6) ‖ bonus(u8)
 ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
 ‖ 일정 변경 [개수(u16) ‖ (fromRound, length, closeMargin, powTarget 각 u32) × 개수]
-‖ 상품 받음 [개수(u32) ‖ 응모권 id(32) × 개수]
 ```
 - 기록 해시 = `taggedHash("bybtto/record/v1", 기록)`. 다음 회차의 `prev`이자 문제 값이 된다.
 - 1회차의 prev는 `taggedHash("bybtto/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다.

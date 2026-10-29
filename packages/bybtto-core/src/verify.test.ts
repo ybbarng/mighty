@@ -436,7 +436,7 @@ describe("장부 검사", () => {
   });
 });
 
-describe("일정 변경과 상품 받음", () => {
+describe("일정 변경", () => {
   const twoHours = (fromRound: number): ScheduleEntry => ({
     fromRound,
     length: 7200,
@@ -463,47 +463,6 @@ describe("일정 변경과 상품 받음", () => {
     );
     expect(messages(early)).toContain(
       "1: 일정 변경: 일정 변경은 24시간 뒤에 시작하는 회차부터",
-    );
-  });
-
-  it("당첨 응모권에 한 번 준 상품은 통과, 낙첨이나 두 번째는 드러난다", async () => {
-    const ledger = await buildLedger(2);
-    const [r1, r2] = ledger.records as [RoundRecord, RoundRecord];
-    const winner = r1.winners[1][0] as Uint8Array;
-    const loser = (ledger.tickets[0] as Ticket[])
-      .map(ticketId)
-      .find(
-        (id) =>
-          ![1, 2, 3, 4, 5].some((rank) =>
-            r1.winners[rank as 1].some((w) => toHex(w) === toHex(id)),
-          ),
-      );
-    // r2의 paid를 바꾸면 r2 해시만 바뀌므로 뒤 회차가 없는 장부로 본다
-    const paidOnce = await verifyLedger(
-      ledger.schedule,
-      [r1, { ...r2, paid: [winner] }],
-      ledger.tickets,
-      OPTIONS,
-    );
-    expect(messages(paidOnce)).toEqual([]);
-    const paidLoser = await verifyLedger(
-      ledger.schedule,
-      [r1, { ...r2, paid: [loser as Uint8Array] }],
-      ledger.tickets,
-      OPTIONS,
-    );
-    expect(messages(paidLoser)[0]).toMatch(/당첨되지 않았는데 상품을 받았다/);
-    const paidTwice = await verifyLedger(
-      ledger.schedule,
-      [
-        { ...r1, paid: [winner] },
-        { ...r2, prev: recordHash({ ...r1, paid: [winner] }), paid: [winner] },
-      ],
-      ledger.tickets,
-      OPTIONS,
-    );
-    expect(messages(paidTwice)).toEqual(
-      expect.arrayContaining([expect.stringMatching(/상품을 두 번 받았다/)]),
     );
   });
 });

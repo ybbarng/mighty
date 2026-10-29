@@ -47,7 +47,6 @@ export interface CloseRoundInput {
   /** 정해진 drand 회차의 값. 무효 회차면 없어도 된다 */
   beacon: DrandBeacon | null;
   scheduleChanges?: ScheduleEntry[];
-  paid?: Uint8Array[];
 }
 
 export function closeRound(input: CloseRoundInput): RoundRecord {
@@ -64,7 +63,6 @@ export function closeRound(input: CloseRoundInput): RoundRecord {
     rootLoggedAt: input.rootLoggedAt,
     drandRound,
     scheduleChanges: input.scheduleChanges ?? [],
-    paid: [...(input.paid ?? [])].sort(compareBytes),
   };
   if (isVoidRound(closesAt, input.rootLoggedAt)) {
     return {
