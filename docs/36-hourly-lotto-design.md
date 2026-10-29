@@ -66,11 +66,28 @@ docs/35의 둘째 안(정시 추첨)을 사용자와 나눈 이야기(응모 비
 - 해시·서명 대상은 모두 **고정 바이너리 형식**이다(8-1 S1). 정수는 빅엔디언, 가변 길이 값(글자, drand 서명)은 앞에 u16 길이를 붙인다. 글자는 UTF-8.
 - 해시는 SHA-256. 용도마다 이름을 앞에 붙인다: `taggedHash(이름, …) = SHA-256(이름 ‖ 0x00 ‖ …)`. 이름은 `bybtto/ticket/v1`, `bybtto/record/v1`처럼 판을 담는다.
 
-**열쇠**: ECDSA P-256(WebCrypto). 서명은 r‖s 64바이트, 공개 열쇠는 압축하지 않은 65바이트. 브라우저는 내보낼 수 없는 열쇠(IndexedDB), 터미널은 설정 폴더의 열쇠 파일이다. 공개 열쇠 SHA-256의 앞 16바이트가 **응모자 id**다.
+**열쇠**: ECDSA P-256. 공개 열쇠는 압축하지 않은 65바이트, 공개 열쇠 SHA-256의 앞 16바이트가 **응모자 id**다. 브라우저는 패스키(11-2), 패스키를 못 쓰는 브라우저는 내보낼 수 없는 기기 안 열쇠(IndexedDB), 터미널은 설정 폴더의 열쇠 파일이다.
 
-**응모권**(144바이트)
+**응모자 서명**(응모권·당첨 증명·별명): 두 모양 중 하나다.
 ```
-v(u8 = 1) ‖ round(u32, 회차 차례 번호) ‖ numbers(6바이트) ‖ pub(65) ‖ nonce(u32) ‖ sig(64)
+1 ‖ r‖s(64)                                           원시 P-256 서명
+2 ‖ authenticatorData ‖ clientDataJSON ‖ DER 서명(각 u16 길이 + 바이트)   패스키(WebAuthn ES256)
+```
+- 패스키 서명은 `authenticatorData ‖ SHA-256(clientDataJSON)`에 대한 서명이다. 검사기는 clientDataJSON의 `type = "webauthn.get"`, `challenge = base64url(SHA-256(서명할 내용))`, `origin`이 허용 목록(`https://game.byb.kr`)에 있는지, `crossOrigin`이 true가 아닌지, authenticatorData의 rpIdHash = `SHA-256("game.byb.kr")`인지, 사용자가 눌렀는지(UP 비트)를 본 뒤 서명을 확인한다.
+- 서버 영수증은 서버 열쇠의 원시 서명(64바이트)이다.
+
+**열쇠 등록**: 응모하려면 공개 열쇠를 먼저 장부에 등록한다(그 회차 기록에 들어간다).
+```
+v(u8 = 1) ‖ kind(u8: 1 원시, 2 패스키) ‖ credentialId(u16 길이 + 바이트) ‖ pub(65) ‖ nonce(u32)
+```
+- 원시 열쇠는 패스키 번호가 비고, 패스키는 1~1023바이트. 같은 열쇠·같은 패스키 번호는 장부에 한 번만 들어간다(먼저 들어간 것이 이긴다).
+- 작업 증명 대상은 `"bybtto/register/v1" ‖ 0x00 ‖ nonce를 뺀 앞부분`, 목표값은 일정표의 `registerPowTarget`(응모권보다 훨씬 무겁게). 문제 값은 응모권과 같다.
+- 등록에는 서명이 없다. 남의 공개 열쇠를 먼저 등록해 봐야 서명할 수 없어 쓸모가 없고, 열쇠를 가졌다는 것은 응모권 서명이 증명한다.
+- 등록 id = `taggedHash("bybtto/registration/v1", 등록)`. 응모권의 열쇠는 그 회차까지 등록돼 있어야 한다.
+
+**응모권**(앞부분 80바이트 + 응모자 서명)
+```
+v(u8 = 1) ‖ round(u32, 회차 차례 번호) ‖ numbers(6바이트) ‖ pub(65) ‖ nonce(u32) ‖ 응모자 서명
 ```
 - 번호는 1~45에서 서로 다른 6개, 오름차순.
 - 작업 증명 대상(응모권 내용)은 `v ‖ round ‖ numbers ‖ pub`.
@@ -92,14 +109,22 @@ v(u8 = 1) ‖ round(u32, 회차 차례 번호) ‖ numbers(6바이트) ‖ pub(6
 
 **회차 기록**
 ```
-v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLoggedAt(u64)
+v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
+‖ registrationCount(u32) ‖ registrationRoot(32) ‖ rootLoggedAt(u64)
 ‖ void(u8) ‖ drandRound(u64) ‖ drandSig(가변) ‖ numbers(6) ‖ bonus(u8)
 ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
-‖ 일정 변경 [개수(u16) ‖ (fromRound, length, closeMargin, powTarget 각 u32) × 개수]
+‖ 일정 변경 [개수(u16) ‖ (fromRound, length, closeMargin, powTarget, registerPowTarget 각 u32) × 개수]
+‖ 별명 [개수(u16) ‖ (round u32 ‖ 응모권 id(32) ‖ 별명(u16 길이 + UTF-8) ‖ 응모자 서명) × 개수]
 ```
+- 머클 루트(응모권)와 등록 루트는 둘 다 RFC 6962 방식, id 사전 순이다.
+- **봉인 값** = `taggedHash("bybtto/seal/v1", round ‖ count ‖ merkleRoot ‖ registrationCount ‖ registrationRoot)`. 마감 직후 Rekor에 올리는 값이다. 등록도 drand 전에 고정돼, 결과를 본 뒤 당첨 응모권의 등록을 빼서 무효로 만들 수 없다.
 - 기록 해시 = `taggedHash("bybtto/record/v1", 기록)`. 다음 회차의 `prev`이자 문제 값이 된다.
 - 1회차의 prev는 `taggedHash("bybtto/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다.
 - 무효 회차는 번호 0 여섯 개, 보너스 0, 당첨 없음, drandSig 빈 값이다.
+
+**별명**(선택): 지난 회차 당첨 응모권의 열쇠로 `"bybtto/nickname/v1" ‖ 0x00 ‖ round ‖ 응모권 id ‖ 별명`에 서명한다. NFC로 맞춘 1~20자, 보이지 않는 글자 없음, 응모권마다 한 번. 그 회차가 닫힌 뒤에 내므로 다음 회차 기록에 들어가고, 기록 안에서는 응모권 id 순이다.
+
+**별자리 지문**: `h = SHA-256("bybtto-star" ‖ 공개 열쇠)`, `b = h ‖ SHA-256(h)`. 그림(16가지)·앞말과 색(8가지)·뒤집기·기울기를 b[0], b[1]로, 꼭짓점 흔들림·밝은 별 7개·번호 7개를 b[2]부터 정한다. 자세한 규칙과 시험 값은 `constellation.ts`.
 
 **검사 표본**: 작업 증명은 내 응모권과 당첨 응모권은 전부, 나머지는 회차마다 `taggedHash("bybtto/sample/v1", drand 난수)`로 고른 몇 장만 본다(무효 회차는 머클 루트와 prev로 고른다).
 
@@ -267,7 +292,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLogg
 - **시계 오차 흡수**
   - 응모 마감은 서버가 **받은 시각**으로 정하고 영수증에 적는다.
   - 화면과 터미널은 `closesAt - closeMargin`(기본 60초)부터 응모를 막는다. 사용자 기기 시계가 틀려도 서버 시각(응답 헤더)과 차이를 재서 보정한다.
-  - 마감 뒤 **처리 기한**(기본 3분) 안에 머클 루트를 Rekor에 올린다.
+  - 마감 뒤 **처리 기한**(기본 3분) 안에 봉인 값(응모권 루트 + 등록 루트, 4절)을 Rekor에 올린다.
   - drand 회차는 `closesAt + 5분` 이후 첫 회차다. drand 시각은 drand 체인의 시작 시각과 주기로 계산되므로 우리 서버 시계와 상관없다.
   - Rekor 시각이 drand 시각보다 늦으면 그 회차는 **무효**(당첨 없음, 기록은 남김)다. 운영자가 일부러 늦춰도 그때는 결과를 모르므로 결과를 고를 수 없다.
 
@@ -322,7 +347,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLogg
 ### 11-5. 만드는 순서(10절 갱신)
 
 1. `packages/bybtto-core`: 규칙(일정표, 응모권, 작업 증명, 머클, 당첨 번호, 등수, 기록 체인, 증명, 검사)과 시험 값. **2026-10-29 만듦.** drand 서명 확인까지 넣었고, Rekor 포함 증명 확인은 서버 때 넣는다(`rootLogVerifier` 자리만 있다).
-1-1. 규칙 패키지 손보기: `paid` 빼기(상품 없음), 패스키(WebAuthn) 서명 형식, 패스키 등록 기록, 별명 남기기.
+1-1. 규칙 패키지 손보기: `paid` 빼기(상품 없음), 패스키(WebAuthn) 서명 형식, 패스키 등록 기록, 별명 남기기, 별자리 지문, 확인 요청 링크. **2026-10-29 만듦.**
 2. 화면: 로컬 장부(`?net=local`처럼 기기 안 가짜 서버)로 응모 → 추첨 → 결과 → 이력 → 증명까지 돌게 한다.
 3. `apps/bybtto-server`: 회차 진행, 응모 받기, 장부, drand, Rekor·GitHub 앵커.
 4. 배포: 개인 서버(사용자 확인 뒤). 앵커 저장소 만들기도 사용자 확인 뒤.
