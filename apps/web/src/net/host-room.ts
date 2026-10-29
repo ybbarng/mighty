@@ -383,14 +383,20 @@ export class HostRoom<
     this.updateVote();
   }
 
-  /** 참가자 자리마다 화면을 보낸다 */
+  /**
+   * 참가자 자리마다 화면을 보낸다. 화면마다 그 자리 행동이 기록에 몇 개인지(`mine`)를 싣는다.
+   * 참가자는 이 수가 늘어야 보낸 행동이 들어갔다고 본다(다른 사람 차례로 온 화면을 내 행동의 결과로 착각하지 않게)
+   */
   private subscribeGuests(
     match: LocalMatch<Rules, State, View, ActionT, Event, Extra>,
   ): void {
     for (const [seat, guest] of this.guests)
       match.subscribeSeat(seat, (snapshot) => {
         if (guest.peerId)
-          this.send({ t: "snapshot", ...snapshot }, guest.peerId);
+          this.send(
+            { t: "snapshot", ...snapshot, mine: mineOf(match, seat) },
+            guest.peerId,
+          );
         if (this.kit.isOver(snapshot.view)) this.sendAudit();
       });
   }
@@ -712,6 +718,7 @@ export class HostRoom<
               t: "snapshot",
               view: match.viewFor(seat),
               events: this.kit.startEvents(match.viewFor(0)),
+              mine: mineOf(match, seat),
             },
             guest.peerId,
           );
@@ -749,7 +756,12 @@ export class HostRoom<
     for (const [seat, guest] of this.guests) {
       if (guest.peerId)
         this.send(
-          { t: "snapshot", view: match.viewFor(seat), events: startEvents },
+          {
+            t: "snapshot",
+            view: match.viewFor(seat),
+            events: startEvents,
+            mine: mineOf(match, seat),
+          },
           guest.peerId,
         );
     }
@@ -1161,7 +1173,16 @@ export class HostRoom<
       }
       case "action": {
         const seat = this.seatOf(from);
-        if (seat === null || !this.match) return;
+        if (seat === null) return;
+        // 새로고침한 방장이 판을 아직 이어 가지 못했다. 말없이 버리면 참가자 화면이 결과를 영영 기다리니
+        // 거절로 알려 기다림을 푼다(참가자 화면에 다시 내 차례가 보인다)
+        if (!this.match) {
+          this.send(
+            { t: "rejected", error: "방장이 판을 이어 가는 중입니다" },
+            from,
+          );
+          return;
+        }
         if (this.kit.guestMayAct && !this.kit.guestMayAct(message.action)) {
           this.send({ t: "rejected", error: "할 수 없는 행동" }, from);
           return;
@@ -1294,8 +1315,7 @@ export class HostRoom<
               view: this.match.viewFor(seat),
               events: [],
               resync: true,
-              mine: this.match.actionLog().filter((e) => e.seat === seat)
-                .length,
+              mine: mineOf(this.match, seat),
             },
             peerId,
           );
@@ -1359,6 +1379,14 @@ type CardTable<R, S, A, E> = HwatuHostTable<R, S, any, A, E>;
 interface FairResume {
   resume: unknown;
   device: Record<number, import("@mighty/fair-play").PartySnapshot>;
+}
+
+/** 그 자리 행동이 기록에 몇 개인가(참가자가 보낸 행동이 들어갔는지 알려 주는 수) */
+function mineOf(
+  match: { actionLog(): readonly { seat: number }[] },
+  seat: number,
+): number {
+  return match.actionLog().filter((e) => e.seat === seat).length;
 }
 
 /** 멘탈 포커 메시지가 속한 판 */

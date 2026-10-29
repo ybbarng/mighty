@@ -68,6 +68,10 @@ export class RemoteMatch<
   readonly seen: string[] = [];
   /** 내가 보낸 행동. 판 끝 기록 속 내 자리 행동과 맞춰 본다(방장의 바꿔치기) */
   readonly sent: string[] = [];
+  /** 방장 기록 속 내 자리 행동 수(방장이 화면마다 알려 준다). 모르면 null */
+  private mine: number | null;
+  /** 결과를 기다리는 행동이 기록에 들어가면 될 `mine`. 모르면 null(화면이 오면 결과로 본다) */
+  private expectMine: number | null = null;
 
   constructor(
     readonly seat: number,
@@ -78,8 +82,11 @@ export class RemoteMatch<
     private readonly transform?: (action: ActionT) => ActionT | null,
     /** 내 차례가 아니어도 보낼 수 있는 행동(`GameKit.offTurn`) */
     private readonly offTurn?: (view: View, action: ActionT) => boolean,
+    /** 첫 화면과 함께 온 기록 속 내 행동 수 */
+    firstMine?: number,
   ) {
     this.last = first.view;
+    this.mine = firstMine ?? null;
     this.seen.push(JSON.stringify(first.view));
     this.pending.push(first);
   }
@@ -105,6 +112,7 @@ export class RemoteMatch<
       return { ok: false, error: "지금은 할 수 없습니다(섞고 나누는 중)" };
     this.sent.push(JSON.stringify(outgoing));
     this.inFlight = true;
+    this.expectMine = this.mine === null ? null : this.mine + 1;
     this.undelivered = !this.sendAction(outgoing);
     return { ok: true };
   }
@@ -127,6 +135,7 @@ export class RemoteMatch<
   /** 보낸 행동이 거절됐다 */
   rejected(): void {
     this.inFlight = false;
+    this.expectMine = null;
     this.sent.pop();
   }
 
@@ -135,15 +144,24 @@ export class RemoteMatch<
    * 그 행동을 그대로 다시 보낸다(카드 열쇠는 이미 공개했다)
    */
   resendLost(mine: number): void {
+    this.mine = mine;
     // 방장 연결이 없을 때 누른 행동은 어디에도 가지 않았다. 기록 수와 상관없이 다시 보낸다.
-    // (보낸 행동 목록은 내가 새로고침한 뒤 것만 있을 수 있어 `mine`과 견줄 수 없다)
     if (this.inFlight && this.undelivered) {
       this.undelivered = false;
       this.resent = true;
       this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
       return;
     }
-    if (!this.inFlight || this.sent.length !== mine + 1) return;
+    if (!this.inFlight) return;
+    // 보낼 때의 기록 수를 알면 그것으로 본다: 방장이 받아 준비하던 중에 새로고침하면 그 행동은 기록에 없다.
+    // (보낸 행동 목록은 내가 새로고침한 뒤 것만 있을 수 있어 목록 길이로는 알 수 없다)
+    if (this.expectMine !== null) {
+      if (mine >= this.expectMine) return;
+      this.resent = true;
+      this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
+      return;
+    }
+    if (this.sent.length !== mine + 1) return;
     this.resent = true;
     this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
   }
@@ -151,7 +169,9 @@ export class RemoteMatch<
   /** 다시 보낸 행동의 결과가 아직이다(바로 뒤에 오는 지금 화면은 그 결과가 아니다) */
   private resent = false;
 
-  receive(snapshot: Snapshot<View, Event>): void {
+  /** 화면을 받는다. `mine`은 이 화면과 함께 온 기록 속 내 행동 수(방장이 알려 주지 않으면 없다) */
+  receive(snapshot: Snapshot<View, Event>, mine?: number): void {
+    if (typeof mine === "number") this.mine = mine;
     if (this.resent) this.resent = false;
     else if (this.undelivered) {
       // 방장 연결이 없을 때 누른 행동은 방장에게 간 적이 없어 이 화면은 그 결과가 아니다.
@@ -159,7 +179,18 @@ export class RemoteMatch<
       // 방장이 아직 이어 가기를 마치지 않아 거절하면 `rejected`가 기다림을 풀어 다시 누를 수 있다.
       this.undelivered = false;
       this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
-    } else this.inFlight = false;
+    } else if (
+      this.inFlight &&
+      this.expectMine !== null &&
+      typeof mine === "number" &&
+      mine < this.expectMine
+    ) {
+      // 내 행동이 아직 기록에 없다: 방장이 준비하는 동안 다른 사람 차례로 온 화면이다. 결과를 계속 기다린다
+      // (이 화면을 결과로 보면 지난 화면을 보고 한 번 더 누르게 된다).
+    } else {
+      this.inFlight = false;
+      this.expectMine = null;
+    }
     this.last = snapshot.view;
     this.seen.push(JSON.stringify(snapshot.view));
     if (this.listeners.size === 0) this.pending.push(snapshot);
@@ -548,6 +579,7 @@ export class GuestRoom<
     // 화투는 시드로 판마다의 선(나이롱뽕 손패 장수)을 계산하므로 시드를 확인한 뒤에 만든다.
     if (this.kit.cardTable && this.fairSeed === null) return null;
     const saved = this.fairStore?.load() ?? null;
+    this.resumedFair = saved !== null;
     const common = {
       seat,
       guestSeats: lobby.seats
@@ -678,11 +710,15 @@ export class GuestRoom<
       });
   }
 
+  /** 방장 화면과 함께 온 기록 속 내 행동 수(받은 차례). 화면을 넘길 때 하나씩 꺼낸다 */
+  private readonly mineQueue: (number | undefined)[] = [];
+
   /** 화면을 대국에 넘긴다(첫 화면이면 대국을 만든다) */
   private deliver(snapshot: Snapshot<View, Event>): void {
     if (this.seat === null) return;
+    const mine = this.mineQueue.shift();
     if (this.match) {
-      this.match.receive(snapshot);
+      this.match.receive(snapshot, mine);
       return;
     }
     this.match = new RemoteMatch<View, ActionT, Event>(
@@ -701,10 +737,18 @@ export class GuestRoom<
       this.kit.offTurn
         ? (view, action) => this.kit.offTurn?.(view, action) ?? false
         : undefined,
+      mine,
     );
     this.match.sent.push(...this.restoredSent);
+    const round = (snapshot.view as { roundNumber?: unknown }).roundNumber;
+    this.firstRound = typeof round === "number" ? round : null;
     for (const l of this.listeners.match) l(this.match);
   }
+
+  /** 이 기기가 받은 첫 화면의 판 번호(화투). 그보다 앞 판은 이 기기에서 검증할 수 없다 */
+  private firstRound: number | null = null;
+  /** 새로고침 전에 남긴 멘탈 포커 진행에서 되살렸다(판 중간에 다시 들어왔다) */
+  private resumedFair = false;
 
   private fairInput(log: readonly FairLogged[]) {
     const lobby = this.lobby;
@@ -800,6 +844,17 @@ export class GuestRoom<
 
   /** 마지막 턴에 판 전체를 진짜 카드로 다시 계산한다 */
   private async verifyRound(deal: number, log: FairLogged[]): Promise<void> {
+    // 새로고침한 참가자는 손패 카드를 다 알기 전까지 화면 전달을 미룬다. 그 사이 끝난 판, 첫 화면보다 앞 판,
+    // 그리고 되살아난 판(새로고침 전 더미 요청은 방장이 다시 보내 주는데, 판 끝 기록이 그보다 먼저 닿을 수 있다)은
+    // 이 기기에서 지금 검증할 수 없으니 건너뛴다(시드가 없다거나 화면·더미가 다르다고 거짓으로 알리지 않는다).
+    // 게임 끝 검증이 그때까지 받은 것으로 기록 전체를 다시 본다
+    if (!this.match) return;
+    if (
+      this.kit.cardTable &&
+      this.firstRound !== null &&
+      (deal < this.firstRound || (this.resumedFair && deal === this.firstRound))
+    )
+      return;
     const input = this.fairInput(log);
     if (!input) {
       this.raiseIncident({
@@ -962,6 +1017,10 @@ export class GuestRoom<
             this.match?.resendLost(message.mine);
         }
         const snapshot = { view: message.view, events: message.events };
+        // 화면마다 온 기록 속 내 행동 수. 멘탈 포커 자리는 화면을 받은 차례대로 하나씩 넘기므로 같은 차례로 짝짓는다
+        this.mineQueue.push(
+          typeof message.mine === "number" ? message.mine : undefined,
+        );
         const fair = this.ensureFair();
         if (!fair && this.kit.cardTable && this.lobby?.fair) {
           this.cardEarly.snapshots.push({
@@ -993,8 +1052,10 @@ export class GuestRoom<
         break;
       case "rejected":
         if (!this.fromHost(from)) return;
-        // 거절된 행동은 기록에 없으므로 보낸 목록에서 뺀다.
+        // 거절된 행동은 기록에 없으므로 보낸 목록에서 뺀다. 보낼 때 남긴 목록에도 그 행동이 들어 있으니 다시 남긴다
+        // (그대로 두면 새로고침 뒤 되살린 목록에 거절된 행동이 남아 판 끝 검증이 "내가 보낸 것과 다르다"고 한다).
         this.match?.rejected();
+        this.persistFair();
         for (const l of this.listeners.rejected) l(message.error);
         break;
       case "audit": {
