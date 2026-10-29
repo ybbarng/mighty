@@ -31,6 +31,7 @@ import {
   HwatuHand,
 } from "@/hwatu/components/HwatuLayout";
 import { HwatuFairBar } from "@/hwatu/fair-bar";
+import { useSentLock } from "@/hwatu/sent-lock";
 import { cn } from "@/lib/cn";
 
 import { GOSTOP_LEVELS } from "../settings";
@@ -260,6 +261,8 @@ export function GostopTable({
   const [selected, setSelected] = useState<string | null>(null);
   /** 흔들기·폭탄을 물을 카드 */
   const [asking, setAsking] = useState<string | null>(null);
+  /** 보낸 행동의 결과(다음 장면이나 거절)를 기다리는 동안은 결정을 다시 보이지 않는다 */
+  const sent = useSentLock(seq, notice);
 
   useEffect(() => {
     if (!notice) return;
@@ -280,16 +283,25 @@ export function GostopTable({
   const n = view.rules.players;
   const others = Array.from({ length: n - 1 }, (_, i) => (me + 1 + i) % n);
   const online = local === null;
-  const d = view.decision;
+  // 행동을 보낸 뒤 다음 장면이 오기 전에는 손패·물음 창·단추를 닫는다(두 번 내기 방지)
+  const d = sent.waiting ? null : view.decision;
   const myPlay = d?.kind === "play" ? d : null;
   const levelName = GOSTOP_LEVELS.find((l) => l.value === level)?.label ?? "";
   const result = view.result;
   const ended = view.phase !== "play" && result !== null;
 
+  /** 행동을 보낸다. 받아들여지면 다음 장면이 올 때까지 화면을 잠그고, 고른 카드와 물음 창을 닫는다 */
+  const send = (action: Parameters<typeof submit>[0]) => {
+    const result = submit(action);
+    if (result.ok) {
+      sent.mark();
+      setSelected(null);
+      setAsking(null);
+    }
+  };
   const play = (card: string, extra?: { shake?: true; bomb?: boolean }) => {
-    if (extra?.bomb) submit({ type: "bomb", month: monthOf(card) });
-    else
-      submit({ type: "play", card, ...(extra?.shake ? { shake: true } : {}) });
+    if (extra?.bomb) send({ type: "bomb", month: monthOf(card) });
+    else send({ type: "play", card, ...(extra?.shake ? { shake: true } : {}) });
   };
   /** 손패를 누른다: 처음엔 고르고(짝 맞는 바닥 강조), 다시 누르면 낸다 */
   const pick = (card: string) => {
@@ -307,7 +319,8 @@ export function GostopTable({
 
   let status: string;
   if (view.phase === "play") {
-    if (d?.kind === "play")
+    if (sent.waiting) status = "보내는 중…";
+    else if (d?.kind === "play")
       status = selected
         ? "한 번 더 누르면 냅니다"
         : d.cards.length === 0
@@ -437,8 +450,7 @@ export function GostopTable({
               }
               {...(chooseOptions.length > 0
                 ? {
-                    onPick: (id: string) =>
-                      submit({ type: "choose", card: id }),
+                    onPick: (id: string) => send({ type: "choose", card: id }),
                   }
                 : {})}
             />
@@ -519,7 +531,7 @@ export function GostopTable({
           {myPlay?.flip && (
             <button
               type="button"
-              onClick={() => submit({ type: "flip" })}
+              onClick={() => send({ type: "flip" })}
               className="rounded-xl bg-white/10 px-4 py-2"
             >
               뒤집기만
@@ -541,7 +553,7 @@ export function GostopTable({
           {view.phase === "roundEnd" && !view.continued[me] && (
             <button
               type="button"
-              onClick={() => submit({ type: "continue" })}
+              onClick={() => send({ type: "continue" })}
               className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
             >
               다음 판
@@ -581,14 +593,14 @@ export function GostopTable({
           <div className="flex w-full gap-2">
             <button
               type="button"
-              onClick={() => submit({ type: "go" })}
+              onClick={() => send({ type: "go" })}
               className="flex-1 rounded-xl bg-rose-600 py-3 font-black text-xl"
             >
               고
             </button>
             <button
               type="button"
-              onClick={() => submit({ type: "stop" })}
+              onClick={() => send({ type: "stop" })}
               className="flex-1 rounded-xl bg-amber-300 py-3 font-black text-black text-xl"
             >
               스톱
@@ -609,7 +621,7 @@ export function GostopTable({
                 id={id}
                 width={64}
                 highlight
-                onClick={() => submit({ type: "choose", card: id })}
+                onClick={() => send({ type: "choose", card: id })}
               />
             ))}
           </div>
