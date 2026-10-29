@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-29T01:52:30Z",
+  "updatedAt": "2026-10-29T02:33:48Z",
   "here": "fairness-realtime",
   "regions": [
     {
@@ -172,13 +172,27 @@
       "parent": "platform",
       "status": "fog",
       "size": 2,
-      "summary": "지금 몇 명이 어느 게임을 하는지, 최근 인기 게임. 1분마다 모은 숫자만, 사람을 가리키는 값은 남기지 않는다",
+      "summary": "지금 몇 명이 어느 게임을 하는지. 혼자 하기도 세고(끄기·GPC), 캐시 파일 + 떠날 때 한마디로 10~20초 안에 바뀐다. 0명이면 감춘다. 인기 게임(사람 수)은 보류",
       "next": "신호 서버가 열린 방 수를 내놓는 것부터",
       "found": "2026-10-29",
       "links": [
         {
           "label": "랭킹·현황 설계",
           "path": "docs/32-ranking-presence.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "popularity",
+          "type": "fork",
+          "title": "인기 게임을 사람 수로 셀 때 같은 사람을 어떻게 알아볼지(보류, docs/32 맨 앞 절)",
+          "owner": "me",
+          "options": [
+            "날마다 바뀌는 번호로 하루 평균 사람 수",
+            "오래 가는 번호로 7일 사람 수"
+          ],
+          "recommend": "날마다 바뀌는 번호",
+          "status": "open"
         }
       ]
     },
