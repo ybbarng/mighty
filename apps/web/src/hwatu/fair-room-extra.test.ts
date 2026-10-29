@@ -472,21 +472,15 @@ describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) �
       "참가자 다시 연결",
     );
     // 다시 이어지면 참가자 기기가 못 보낸 행동을 다시 보낸다. 방장이 이어 가기를 마치기 전에 닿아 거절되면
-    // 화면에 다시 내 차례가 보이니 사람처럼 한 번 더 낸다(결과를 기다리는 중이 아닐 때만).
-    let retry = 100;
+    // 화면에 다시 내 차례가 보이니 사람처럼 한 번 더 낸다. 그동안 방장과 컴퓨터도 평소처럼 둔다(판 끝 "계속"은
+    // 모두가 눌러야 다음 판으로 넘어가므로, 참가자 것만 기다리면 방장 차례에서 멈춘다).
     if (offline)
-      await until(() => {
-        const done =
+      await play(
+        () =>
           (current.match?.actionLog() ?? []).filter(
             (e) => e.seat === fresh.seat,
-          ).length > mineBefore;
-        const view = guestView();
-        if (!done && view?.decision && !fresh.match?.awaiting())
-          fresh.match?.submit(
-            nyrongppongBeginnerBot.decide(view as never, { seed: retry++ }),
-          );
-        return done;
-      }, "못 보낸 행동을 다시 보냄");
+          ).length > mineBefore,
+      );
     await play(
       () =>
         (current.match?.current() as { phase?: string } | undefined)?.phase ===
