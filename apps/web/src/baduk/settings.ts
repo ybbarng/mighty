@@ -24,7 +24,8 @@ interface BadukSettings {
 export const useBadukSettings = create<BadukSettings>()(
   persist(
     (set) => ({
-      size: 9,
+      // 일반 바둑처럼 19줄이 기본이다. 작은 판은 배우기·문제 풀기에서 쓴다(2026-10-29 사용자)
+      size: 19,
       komi: 7.5,
       winsToFinish: 1,
       level: 0,
@@ -36,6 +37,13 @@ export const useBadukSettings = create<BadukSettings>()(
       name: "baduk-settings",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
+      // 1: 기본 판을 9줄에서 19줄로. 예전 기본값(9줄)으로 남은 기기는 한 번 19줄로 옮긴다
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<BadukSettings>;
+        if (version < 1 && state.size === 9) state.size = 19;
+        return state as BadukSettings;
+      },
     },
   ),
 );

@@ -40,9 +40,11 @@ async function playOne(page: Page, touch: boolean, stone = "black") {
   throw new Error("둘 곳이 없다");
 }
 
-/** 첫 화면 → 옵션에서 컴퓨터(고르면)와 흑을 고르고 → 나홀로 바둑 */
+/** 첫 화면 → 옵션에서 9줄·컴퓨터(고르면)·흑을 고르고 → 나홀로 바둑 */
 async function startSolo(page: Page, level?: string) {
   await page.getByRole("button", { name: "옵션" }).click();
+  // 기본은 19줄이다. 시험은 짧게 9줄로 둔다.
+  await page.getByRole("button", { name: "9줄", exact: true }).click();
   if (level) await page.getByRole("button", { name: level }).click();
   await page.getByRole("button", { name: "흑(먼저)" }).click();
   await page.getByRole("button", { name: "처음으로" }).click();
@@ -184,6 +186,9 @@ test("바둑: 방장이 방을 만들고 친구가 링크로 들어와 두고, �
     p.on("pageerror", (e) => errors.push(e.message));
 
   await host.goto("/baduk?net=local");
+  await host.getByRole("button", { name: "옵션" }).click();
+  await host.getByRole("button", { name: "9줄", exact: true }).click();
+  await host.getByRole("button", { name: "처음으로" }).click();
   await host.getByRole("button", { name: /다함께 바둑/ }).click();
   await host.getByPlaceholder("친구에게 보일 이름").fill("방장");
   await host.getByRole("button", { name: "방 만들기", exact: true }).click();

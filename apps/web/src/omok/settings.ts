@@ -24,7 +24,8 @@ interface OmokSettings {
 export const useOmokSettings = create<OmokSettings>()(
   persist(
     (set) => ({
-      variant: "standard",
+      // 국제 공식 규칙인 렌주가 기본이다(흑만 3·3·4·4·장목 금지, 2026-10-29 사용자)
+      variant: "renju",
       winsToFinish: 1,
       level: 0,
       pick: "black",
@@ -36,6 +37,14 @@ export const useOmokSettings = create<OmokSettings>()(
       name: "omok-settings",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
+      // 1: 기본 규칙을 일반에서 렌주로. 예전 기본값(일반)으로 남은 기기는 한 번 렌주로 옮긴다
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<OmokSettings>;
+        if (version < 1 && state.variant === "standard")
+          state.variant = "renju";
+        return state as OmokSettings;
+      },
     },
   ),
 );
