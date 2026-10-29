@@ -118,7 +118,8 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
     title: "숫자야구",
     cues: [
       { cue: "strike", when: "스트라이크가 하나라도 나온 답(나·상대 모두)" },
-      { cue: "beep", when: "볼만 나온 답" },
+      { cue: "ball", when: "볼만 나온 답" },
+      { cue: "homerun", when: "다 맞힌 답(홈런). 이어서 승리·패배 소리" },
       { cue: "pass", when: "아웃(하나도 없음)" },
       { cue: "click", when: "숫자 패드 누르기" },
       { cue: "invalid", when: "물을 수 없는 수(이미 물음 등)" },

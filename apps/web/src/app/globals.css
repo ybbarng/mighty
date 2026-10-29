@@ -5,6 +5,16 @@
   @media (orientation: landscape) and (max-height: 600px)
 );
 
+/* 숫자야구처럼 두 칸으로 나누는 화면: 눕힌 휴대폰이나 넓은 PC */
+@custom-variant split {
+  @media (orientation: landscape) and (max-height: 600px) {
+    @slot;
+  }
+  @media (min-width: 1024px) {
+    @slot;
+  }
+}
+
 @theme {
   --color-felt: #0f5132;
   --color-felt-dark: #0a3622;
@@ -330,4 +340,134 @@ button {
   font-family: "JanggiHan";
   src: url("/fonts/janggi-han.woff2") format("woff2");
   font-display: swap;
+}
+
+/*
+ * 숫자야구 야구장: 조명이 비치는 밤 잔디와 잔디 깎은 줄무늬.
+ * 첫 화면·옵션·배우기·대국이 함께 쓴다
+ */
+.ballpark {
+  background:
+    radial-gradient(
+      ellipse 70% 40% at 50% -8%,
+      rgba(254, 249, 195, 0.22),
+      transparent 70%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0 56px,
+      rgba(0, 0, 0, 0.04) 56px 112px
+    ),
+    radial-gradient(
+      ellipse at top,
+      #15803d 0%,
+      #14532d 38%,
+      #052e16 72%,
+      #020617 100%
+    );
+}
+
+/* 전광판 판: 검은 판에 미세한 점 무늬 */
+.scoreboard {
+  background-color: #050806;
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.05) 0.6px,
+    transparent 0.8px
+  );
+  background-size: 5px 5px;
+}
+
+/* 판정: 공이 날아와 미트에 꽂힌다(0.22초) */
+.pitch-ball {
+  animation: pitch-ball 0.24s cubic-bezier(0.4, 0, 0.9, 0.6) both;
+}
+
+@keyframes pitch-ball {
+  from {
+    opacity: 0.4;
+    transform: translate(-46px, -34px) scale(0.35);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.15);
+  }
+  to {
+    opacity: 0;
+    transform: translate(0, 0) scale(1.5);
+  }
+}
+
+/* 판정: 심판 콜 글자가 탁 튀어나와 머물다 사라진다 */
+.umpire-call {
+  animation: umpire-call 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both;
+}
+
+@keyframes umpire-call {
+  0% {
+    opacity: 0;
+    transform: scale(1.8) rotate(-4deg);
+  }
+  16% {
+    opacity: 1;
+    transform: scale(0.95) rotate(-4deg);
+  }
+  24% {
+    transform: scale(1) rotate(-4deg);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) rotate(-4deg);
+  }
+}
+
+/* 홈런: 뒤에서 빛살이 돈다 */
+.homerun-rays {
+  background: repeating-conic-gradient(
+    rgba(253, 224, 71, 0.35) 0deg 10deg,
+    transparent 10deg 24deg
+  );
+  mask-image: radial-gradient(circle, black 20%, transparent 68%);
+  animation: homerun-rays 1.3s linear both;
+}
+
+@keyframes homerun-rays {
+  from {
+    opacity: 0;
+    transform: rotate(0deg) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: rotate(50deg) scale(1.2);
+  }
+}
+
+/* 방금 들어온 기록 줄이 잠깐 밝아진다 */
+.fresh-row {
+  animation: fresh-row 1.2s ease-out both;
+}
+
+@keyframes fresh-row {
+  from {
+    background-color: rgba(252, 211, 77, 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch-ball,
+  .homerun-rays {
+    display: none;
+  }
+  .umpire-call {
+    animation: none;
+    transform: rotate(-4deg);
+  }
+  .fresh-row {
+    animation: none;
+  }
 }
