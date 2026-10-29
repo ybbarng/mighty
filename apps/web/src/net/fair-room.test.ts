@@ -5,7 +5,7 @@ import {
   isToken,
 } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
-import { playRounds, setup, until } from "./fair-room-fixture";
+import { hostBidsTop, playRounds, setup, until } from "./fair-room-fixture";
 import type { AuditResult } from "./guest-room";
 
 describe("멘탈 포커 온라인 대전", () => {
@@ -35,7 +35,13 @@ describe("멘탈 포커 온라인 대전", () => {
           state?.round.hands[g.seat as number]?.every((c) => isToken(c)),
         ).toBe(true);
 
-      const scored = await playRounds(host, guests, rounds, incidents);
+      const scored = await playRounds(
+        host,
+        guests,
+        rounds,
+        incidents,
+        hostBidsTop,
+      );
       expect(
         incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`),
       ).toEqual([]);

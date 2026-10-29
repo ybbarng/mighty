@@ -7,6 +7,7 @@ import type { GameArchive } from "@/review/archive";
 import type { ArchiveSource } from "@/review/recorder";
 import { replayArchive } from "@/review/replay";
 import {
+  hostBidsTop,
   type memoryStore,
   playRounds,
   setup,
@@ -67,7 +68,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
     guests[0] = fresh;
     const verified: number[] = [];
     fresh.on("roundVerified", (d) => verified.push(d));
-    const scored = await playRounds(host, guests, 1, incidents);
+    const scored = await playRounds(host, guests, 1, incidents, hostBidsTop);
     expect(incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`)).toEqual(
       [],
     );
@@ -134,7 +135,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
     (guests[0] as GuestRoom).on("archive", (s) => guestSources.push(s));
     await host.start();
     await until(() => guests.every((g) => g.match !== null));
-    const scored = await playRounds(host, guests, 1, incidents);
+    const scored = await playRounds(host, guests, 1, incidents, hostBidsTop);
     expect(scored).toBe(1);
     await until(() => guestSources.length > 0);
     const archive = (source: ArchiveSource, seat: number): GameArchive => ({
@@ -214,7 +215,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
     await until(() => states.filter((s) => s === "reconnecting").length === 1);
     net.reconnect("host");
     await until(() => states.filter((s) => s === "connected").length === 1);
-    const scored = await playRounds(host, guests, 1, incidents);
+    const scored = await playRounds(host, guests, 1, incidents, hostBidsTop);
     expect(incidents.map((i) => i.reason)).toEqual([]);
     expect(scored).toBe(1);
   }, 180_000);

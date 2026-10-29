@@ -114,6 +114,16 @@ export async function setup(
 
 export type Cheat = (view: PlayerView, key: string) => Action | null;
 
+/**
+ * 방장(사람 자리)이 공약을 가장 높게 건다. 모두 포기·딜미스로 다시 나누는 판은 멘탈 포커로 다시 섞어
+ * 비싸고 몇 번 나올지 운에 달렸다. 공약 자체를 보는 시험이 아니면 이것으로 첫 공약에서 판이 이어지게 한다
+ */
+export const hostBidsTop: Cheat = (view, key) => {
+  if (key !== "host" || view.decision?.kind !== "election") return null;
+  const top = view.decision.bids.at(-1);
+  return top ? { type: "bid", goal: top } : null;
+};
+
 /** 사람 자리(방장과 참가자)도 봇처럼 둔다. `cheat`가 행동을 돌려주면 0번 참가자는 그것을 낸다 */
 export async function playRounds(
   host: HostRoom,
