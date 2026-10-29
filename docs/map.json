@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-29T02:33:48Z",
+  "updatedAt": "2026-10-29T04:48:12Z",
   "here": "fairness-realtime",
   "regions": [
     {
@@ -237,8 +237,8 @@
       "parent": "platform",
       "status": "fog",
       "size": 2,
-      "summary": "star.byb.kr과 같은 umami에 game.byb.kr을 붙여 페이지 보기와 게임 이벤트를 센다. 주소의 방 코드·시드는 네 겹으로 막는다",
-      "next": "수집 끝점 요청 한도 확인(서버) → 페이지 보기 + /security 설명·끄기 → 게임 이벤트",
+      "summary": "갈림길을 모두 정했다(docs/33 맨 앞): star와 같은 umami, 페이지 보기 + 게임 이벤트, DNT·GPC + 끄기 스위치, 인기 표시 없음, ID는 빌드 인자",
+      "next": "사용자가 umami에 game.byb.kr 사이트를 추가해 ID를 주면 만든다",
       "found": "2026-10-29",
       "links": [
         {
@@ -246,20 +246,7 @@
           "path": "docs/33-site-analytics.md"
         }
       ],
-      "signs": [
-        {
-          "id": "analytics-forks",
-          "type": "fork",
-          "title": "사이트 통계 갈림길 7개(어느 umami, 무엇까지 세나, 끄는 방법, 인기 표시 등. docs/33)",
-          "owner": "me",
-          "options": [
-            "추천대로",
-            "하나씩 정하기"
-          ],
-          "recommend": "추천대로(같은 umami, 게임 이벤트까지, 설정 끄기 스위치)",
-          "status": "open"
-        }
-      ]
+      "signs": []
     },
     {
       "id": "fairness",
