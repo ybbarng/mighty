@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { type GameId, track } from "@/stats/track";
 
 export interface TutorialProgress {
   /** 끝낸 단원 id */
@@ -10,16 +11,20 @@ export interface TutorialProgress {
 
 /** 튜토리얼 진행 기록. 이 브라우저에만 남는다. 게임마다 저장 이름을 달리 한다 */
 export function createTutorialProgress(name: string) {
-  return create<TutorialProgress>()(
+  // 저장 이름이 `<게임>-tutorial`이다. 통계에 게임 이름으로 쓴다.
+  const game = name.replace(/-tutorial$/, "") as GameId;
+  const store = create<TutorialProgress>()(
     persist(
       (set) => ({
         completed: [],
         complete: (id) =>
-          set((s) => ({
-            completed: s.completed.includes(id)
-              ? s.completed
-              : [...s.completed, id],
-          })),
+          set((s) => {
+            const first = !s.completed.includes(id);
+            track("lesson-finish", { game, lesson: id, first });
+            return {
+              completed: first ? [...s.completed, id] : s.completed,
+            };
+          }),
         reset: () => set({ completed: [] }),
       }),
       {
@@ -30,6 +35,7 @@ export function createTutorialProgress(name: string) {
       },
     ),
   );
+  return Object.assign(store, { game });
 }
 
 export type TutorialProgressStore = ReturnType<typeof createTutorialProgress>;

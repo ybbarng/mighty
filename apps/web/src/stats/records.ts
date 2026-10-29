@@ -4,6 +4,8 @@
  * 그래야 나중에 새 지표를 만들어도 지난 기록으로 바로 볼 수 있다.
  */
 
+import { type GameId, track } from "./track";
+
 /** 혼자(컴퓨터와) 또는 친구와(온라인) */
 export type StatsMode = "solo" | "online";
 
@@ -86,6 +88,8 @@ export function addGame(record: GameRecord): void {
   const book = loadStats();
   if (book.games.some((g) => g.id === record.id)) return;
   book.games.push(record);
+  // 통계에는 게임과 혼자·온라인만 보낸다(id에 방 코드가 들어 있고 data는 게임마다 다르다).
+  track("game-finish", { game: record.game as GameId, mode: record.mode });
   book.games = book.games.slice(-KEEP_GAMES);
   save(book);
 }

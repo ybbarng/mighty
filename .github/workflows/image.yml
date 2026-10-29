@@ -51,6 +51,7 @@ jobs:
           # 정적 빌드라 주소가 빌드할 때 들어간다
           build-args: |
             NEXT_PUBLIC_SITE_URL=https://game.byb.kr
+            NEXT_PUBLIC_UMAMI_WEBSITE_ID=73d4af92-bdfe-4bcb-945a-cdc440d380f4
           cache-from: type=gha,scope=mighty
           cache-to: type=gha,scope=mighty,mode=max
 

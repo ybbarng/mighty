@@ -21,6 +21,13 @@ game.byb.kr에 방문 통계를 붙이는 장기 계획이다. **당장 만들�
 - 수집 주소의 요청 한도는 문제가 생기면 그때 넣는다(사용자, 2026-10-29).
 - 만들기 전에 사용자가 umami 화면에서 사이트를 추가해 ID를 받아야 한다(관리 화면은 로그인 뒤라 Claude가 할 수 없다).
 
+**만든 것(2026-10-29)**: 사용자가 umami에 game.byb.kr 사이트를 추가해 ID를 받았다. 이미지 워크플로의 빌드 인자 `NEXT_PUBLIC_UMAMI_WEBSITE_ID`로 넣는다(개발·시험 빌드에는 없다).
+- `apps/web/src/components/Analytics.tsx`: 스크립트(`data-domains="game.byb.kr"`, `data-do-not-track`, `data-exclude-search`, `data-exclude-hash`, `data-before-send`)
+- `apps/web/src/stats/analytics.ts`: 끄기 값(`localStorage` `game-analytics-off`, 첫 페이지 보기 전에 읽으려고 설정 저장소와 따로), 보내기 직전 확인(`shouldSend`: 끔·GPC·`?net=local`·주소의 `?`·`#`·`room=`)
+- `apps/web/src/stats/track.ts`: 이벤트 넷(`game-start`·`game-finish`·`lesson-finish`·`learn-open`)의 이름과 값 타입. 거는 곳은 게임별 store `newGame`(혼자), `net/session.ts` `openTransport`(온라인), `stats/records.ts` `addGame`(판 끝), `tutorial/progress.ts` `complete`(단원 끝), `TutorialHome`(배우기 열기)
+- `/security`의 "이 사이트가 서버로 보내는 것"에 설명과 "이 기기에서 사이트 통계 보내기" 스위치
+- 시험: `stats/analytics.test.ts`(쿼리·방 코드가 남은 요청 막기, 끔·GPC·같은 탭 시험, 스크립트가 없을 때 조용함, 단원 끝 이벤트 값). 브라우저에서 태그 속성과 보내기 직전 함수를 가짜 스크립트로 확인했다
+
 ## 1. 지금 있는 것
 
 ### 1-1. star.byb.kr의 umami (servers 저장소 `byb.kr/apps/umami/`, star.byb.kr 저장소 `src/ui/`)

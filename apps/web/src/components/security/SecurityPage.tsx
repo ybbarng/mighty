@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
+import { analyticsOff, setAnalyticsOff } from "@/stats/analytics";
 
 import {
   ChatRoutingDemo,
@@ -912,8 +913,8 @@ export function SecurityPage() {
         <Section id="server-data" title="이 사이트가 서버로 보내는 것">
           <P>
             게임은 기기끼리 바로 하고, 혼자 하기와 내 기록·복기는 이 기기에만
-            남습니다. 서버로 가는 것은 아래 셋뿐이고, 셋 다 인터넷 대전을 할
-            때만 씁니다.
+            남습니다. 서버로 가는 것은 아래 넷뿐입니다. 앞의 셋은 인터넷 대전을
+            할 때만 씁니다.
           </P>
           <ul className="list-disc pl-5 text-sm leading-relaxed opacity-90">
             <li>
@@ -934,10 +935,21 @@ export function SecurityPage() {
               씁니다. 패·이름·채팅은 보내지 않습니다. 서버는 IP를 앞부분만(IPv4
               앞 세 자리) 남기고, 기록은 14일 뒤 지웁니다.
             </li>
+            <li>
+              <b>사이트 통계</b>(<code>stats.byb.kr</code>, 직접 운영하는
+              umami): 어느 화면을 열었는지와 판 시작·판 끝·배우기 단원 끝 같은
+              몇 가지 일을 셉니다. 보내는 값은 게임 이름, 혼자·온라인, 컴퓨터
+              단계, 단원 이름처럼 정해 둔 것뿐입니다. 방 코드·초대
+              링크·이름·채팅·패는 보내지 않고, 주소의 <code>?</code> 뒤는 지운
+              뒤 보내며 남아 있으면 아예 보내지 않습니다. 쿠키를 쓰지 않고 IP를
+              저장하지 않습니다. 브라우저에서 "추적하지 말라"(DNT·GPC)를 켰거나
+              아래에서 끄면 보내지 않습니다.
+            </li>
           </ul>
+          <AnalyticsSwitch />
           <P>
-            쿠키나 광고 추적은 쓰지 않습니다. 사이트 통계를 붙이게 되면 이 절에
-            먼저 적습니다(<code>docs/33-site-analytics.md</code>).
+            쿠키나 광고 추적은 쓰지 않습니다. 설계:{" "}
+            <code>docs/33-site-analytics.md</code>.
           </P>
         </Section>
 
@@ -1006,5 +1018,24 @@ export function SecurityPage() {
         </Section>
       </article>
     </main>
+  );
+}
+
+/** 이 기기에서 사이트 통계를 보낼지(docs/33 C). 첫 페이지 보기 전에 읽을 수 있게 따로 저장한다 */
+function AnalyticsSwitch() {
+  const [off, setOff] = useState(false);
+  useEffect(() => setOff(analyticsOff()), []);
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={!off}
+        onChange={(e) => {
+          setAnalyticsOff(!e.target.checked);
+          setOff(!e.target.checked);
+        }}
+      />
+      이 기기에서 사이트 통계 보내기
+    </label>
   );
 }

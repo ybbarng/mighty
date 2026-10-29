@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { track } from "@/stats/track";
 
 import { lessonStates } from "@/tutorial/progress";
 import { GlossarySheet } from "./GlossarySheet";
@@ -22,6 +22,11 @@ export function TutorialHome<View, Event, Scenario, Action>({
   tutorial: TutorialKit<View, Event, Scenario, Action>;
 }) {
   const { lessons } = tutorial;
+  // 배우기 목록은 주소가 바뀌지 않아 페이지 보기로 잡히지 않는다(docs/33 2-2절).
+  const game = tutorial.progress.game;
+  useEffect(() => {
+    track("learn-open", { game });
+  }, [game]);
   const completed = tutorial.progress((s) => s.completed);
   const states = lessonStates(lessons, completed);
   const doneCount = states.filter((s) => s === "done").length;

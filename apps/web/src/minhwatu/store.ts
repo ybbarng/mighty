@@ -8,13 +8,13 @@ import type {
   MinhwatuView,
 } from "@mighty/minhwatu-engine";
 import { create } from "zustand";
-
 import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
 import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 
 import { minhwatuCues } from "./cues";
 import { minhwatuKit } from "./kit";
@@ -261,6 +261,7 @@ export const useMinhwatu = create<MinhwatuStore>((set, get) => {
     practice: false,
 
     newGame({ rules, level, seed: given }) {
+      track("game-start", { game: "minhwatu", mode: "solo", level });
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
       attachLocal(newLocal(rules, seed, level), level, seed);
     },

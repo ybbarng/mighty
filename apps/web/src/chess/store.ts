@@ -14,6 +14,7 @@ import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
 import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 
 import { chessKit } from "./kit";
 import type { ColorPick } from "./settings";
@@ -282,6 +283,7 @@ export const useChess = create<ChessStore>((set, get) => {
     practice: false,
 
     newGame({ rules, level, pick, seed: given }) {
+      track("game-start", { game: "chess", mode: "solo", level });
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
       attachLocal(
         newLocal(rules, seed, seatFor(rules, seed, pick), level),

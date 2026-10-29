@@ -1,4 +1,5 @@
 import { prepareGroup } from "@mighty/fair-play";
+import { type GameId, track } from "@/stats/track";
 import { useChat } from "./chat";
 import type { DiagContext } from "./diag";
 import type { FairSaved, GuestRoom } from "./guest-room";
@@ -38,6 +39,11 @@ export async function openTransport(
   roomCode: string,
   context: DiagContext,
 ): Promise<Transport> {
+  track("game-start", {
+    game: context.game as GameId,
+    mode: "online",
+    role: context.role,
+  });
   // 멘탈 포커 잠그기 군(타원곡선)을 미리 불러 둔다. 방장이 고른 군은 대기실에서 알게 된다.
   const started = performance.now();
   await prepareGroup("r255");

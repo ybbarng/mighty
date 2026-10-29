@@ -23,6 +23,7 @@ import {
   soloArchive,
 } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 
 import { heartsBotFor } from "./bots";
 import { heartsCuesFor } from "./cues";
@@ -403,6 +404,7 @@ export const useHearts = create<HeartsStore>((set, get) => {
     network: false,
 
     newGame(options) {
+      track("game-start", { game: "hearts", mode: "solo" });
       const seed = options.seed ?? Math.floor(Math.random() * 2 ** 31);
       attach(newLocal(options.rules, seed), {
         save: true,

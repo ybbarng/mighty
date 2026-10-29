@@ -14,6 +14,7 @@ import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
 import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 
 import { badukKit } from "./kit";
 import type { StonePick } from "./settings";
@@ -283,6 +284,7 @@ export const useBaduk = create<BadukStore>((set, get) => {
     practice: false,
 
     newGame({ rules, level, pick, seed: given }) {
+      track("game-start", { game: "baduk", mode: "solo", level });
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
       attachLocal(
         newLocal(rules, seed, seatFor(rules, seed, pick), level),

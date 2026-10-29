@@ -161,6 +161,7 @@
 - [ ] 기획 문서의 순서 칸을 끝으로 바꾼다
 - [ ] `docs/00-handoff.md`와 CLAUDE.md 머리말의 게임 목록을 고친다
 - [ ] 아래 "게임별 상태" 표를 고친다
+- [ ] 혼자 하기 새 게임 함수(store `newGame`)에서 `track("game-start", { game, mode: "solo", level })`. 판 끝·온라인·배우기 이벤트는 공통 자리(`addGame`·`openTransport`·배우기 진행)가 보낸다(docs/33)
 
 ## 게임별 상태
 

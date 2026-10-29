@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-
+import { Analytics } from "@/components/Analytics";
 import { SITE } from "@/components/brand/brand";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { StoreHydration } from "@/components/StoreHydration";
@@ -59,6 +59,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body className="min-h-dvh antialiased">
         <StoreHydration />
+        <Analytics />
         {children}
         <ServiceWorker />
       </body>

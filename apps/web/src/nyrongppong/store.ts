@@ -8,12 +8,12 @@ import type {
   NyrongppongView,
 } from "@mighty/nyrongppong-engine";
 import { create } from "zustand";
-
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
 import { playUiCue } from "@/game/ui-sound";
 import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 
 import { nyrongppongKit } from "./kit";
 
@@ -266,6 +266,7 @@ export const useNyrongppong = create<NyrongppongStore>((set, get) => {
     practice: false,
 
     newGame({ rules, level, seed: given }) {
+      track("game-start", { game: "nyrongppong", mode: "solo", level });
       const seed = given ?? Math.floor(Math.random() * 2 ** 31);
       attachLocal(newLocal(rules, seed, level), level, seed);
     },

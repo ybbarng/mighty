@@ -16,6 +16,7 @@ import {
   soloArchive,
 } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
+import { track } from "@/stats/track";
 import { botFor, browserPace } from "./bots";
 import { cuesFor, type DealTiming } from "./cues";
 import type { MatchHost, Snapshot, SubmitResult } from "./host";
@@ -416,6 +417,7 @@ export const useGame = create<GameStore>((set, get) => {
     voteEnd: null,
 
     newGame(options) {
+      track("game-start", { game: "mighty", mode: "solo" });
       const seed = options.seed ?? Math.floor(Math.random() * 2 ** 31);
       const host = new LocalMatch({
         rules: options.rules,
