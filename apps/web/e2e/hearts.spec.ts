@@ -1,6 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
-
 import { prepareFast } from "./fast";
+import { expect, type Locator, type Page, test } from "./test";
 
 /** 하트: 숨은 입구, 혼자 한 판, 친구와 한 판 */
 async function prepare(page: Page) {

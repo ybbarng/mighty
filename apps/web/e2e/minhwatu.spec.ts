@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /*
  * 민화투 화면 시험. 시드(`?seed=`)로 같은 판을 다시 쳐 결과가 기기 속도와 상관없게 한다.
@@ -81,7 +82,8 @@ async function archived(page: Page) {
   );
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   // 처음 열 때만 저장을 지운다(새로고침 뒤 이어하기를 보려고)
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");

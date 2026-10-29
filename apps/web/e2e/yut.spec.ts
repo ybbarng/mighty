@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 const status = (page: Page) => page.getByRole("status").first();
 const over = (page: Page) => page.getByRole("button", { name: "다시 하기" });
@@ -93,9 +94,9 @@ async function startSolo(page: Page, pieces = "2개") {
   await page.getByRole("button", { name: /나홀로 윷놀이/ }).click();
 }
 
-test.beforeEach(async ({ page }) => {
-  // 던지기·말 움직임 연출을 실제 시간으로 기다리지 않는다(연출 자체는 화면 시험의 대상이 아니다)
-  await page.emulateMedia({ reducedMotion: "reduce" });
+test.beforeEach(async ({ page, context }) => {
+  // 움직임 줄이기는 화면 시험 설정이 기본으로 켠다(던지기·말 움직임 연출을 기다리지 않는다)
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     if (!sessionStorage.getItem("keep")) localStorage.removeItem("yut-save");
@@ -142,9 +143,21 @@ test("윷놀이: 게임 목록에서 들어가 입문 컴퓨터와 두다가 판
   // 몇 수 더 둔 뒤 기권해 판 끝 화면(가운데 띠·결과·다시 하기)을 본다. 끝까지 두는 진행은
   // 엔진 단위 시험과 아래 온라인 시험이 본다. 판 끝 화면은 이기든 기권하든 같은 모양이다.
   for (let i = 0; i < 4; i++) if (!(await playStep(page, touch))) break;
-  if (!(await over(page).isVisible())) {
-    await untilMyThrow(page);
-    await page.getByRole("button", { name: "기권" }).click();
+  // 내 던지기 차례가 오면 기권한다. 그 전에 판이 끝났으면(짧은 판이라 컴퓨터가 먼저 날 수 있다) 그대로 본다.
+  for (let i = 0; i < 40; i++) {
+    await expect(
+      throwButton(page)
+        .or(movableStacks(page))
+        .or(newPiece(page))
+        .or(over(page))
+        .first(),
+    ).toBeVisible({ timeout: 20_000 });
+    if (await over(page).isVisible()) break;
+    if (await throwButton(page).isVisible()) {
+      await page.getByRole("button", { name: "기권" }).click();
+      break;
+    }
+    await pickTarget(page, touch);
   }
   await expect(over(page)).toBeVisible();
   await expect(status(page)).toHaveText(/이겼|먼저 말을 모두|기권/);

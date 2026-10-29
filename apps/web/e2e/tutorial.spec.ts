@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./test";
 
 async function prepare(page: Page) {
   await page.addInitScript(() => {

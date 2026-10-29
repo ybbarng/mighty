@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /** 9줄 판과 가장자리 여백(BadukBoard의 BADUK_PAD) */
 const SIZE = 9;
@@ -51,7 +52,8 @@ async function startSolo(page: Page, level?: string) {
   await page.getByRole("button", { name: /나홀로 바둑/ }).click();
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
   });

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("첫 화면: 게임 목록과 보안·기록으로 가는 길이 보이고 가로로 넘치지 않는다", async ({
   page,

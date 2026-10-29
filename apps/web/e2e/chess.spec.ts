@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 const board = (page: Page) => page.getByRole("img", { name: /체스판/ });
 const pieces = (page: Page) => page.locator("[data-piece]");
@@ -73,7 +74,8 @@ async function startSolo(page: Page, level?: string) {
   await page.getByRole("button", { name: /나홀로 체스/ }).click();
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
   });

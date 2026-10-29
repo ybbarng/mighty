@@ -1,4 +1,4 @@
-import { type BrowserContext, expect, type Page, test } from "@playwright/test";
+import { type BrowserContext, expect, type Page, test } from "./test";
 
 /**
  * 멘탈 포커 여럿이 하기: 브라우저 탭 n개(방장 1 + 참가자 n−1)를 BroadcastChannel로 잇고(?net=local)

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 /** 어떻게 지켜지나요? — 시연이 실제 코드로 막고 잡아내는지 */
 test("보안 설명 페이지의 시연이 조작을 잡아낸다", async ({ page }, info) => {

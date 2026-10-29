@@ -1,6 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
-
 import sky from "../src/stardraw/sky-data.json" with { type: "json" };
+import { expect, type Page, test } from "./test";
 
 /**
  * 패스키는 Chrome 가상 인증기(CDP WebAuthn)로: 누르면 곧바로 지문이 확인된 것처럼 서명한다.

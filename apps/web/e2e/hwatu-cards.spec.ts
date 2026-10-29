@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("화투 카드 모음: 48장과 화면 조각이 보이고, 가로로 넘치지 않는다", async ({
   page,

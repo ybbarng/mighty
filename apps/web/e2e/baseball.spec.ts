@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /** 세 자리·1~9 수를 작은 것부터(테스트가 차례로 물을 때) */
 const NUMBERS: string[] = [];
@@ -140,7 +141,8 @@ async function chooseRandomSecret(page: Page): Promise<string> {
   return label.replace("넣은 수 ", "");
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     if (!sessionStorage.getItem("keep"))

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("보안 배우기: 장난감 체험과 퀴즈가 돌아간다", async ({ page }, info) => {
   const errors: string[] = [];

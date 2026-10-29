@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /** 판 한 변 줄 수와 가장자리 여백(OmokBoard의 PAD) */
 const SIZE = 15;
@@ -91,7 +92,8 @@ async function startSolo(page: Page, level?: string) {
   await page.getByRole("button", { name: /나홀로 오목/ }).click();
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     if (!sessionStorage.getItem("keep")) localStorage.removeItem("omok-save");

@@ -1,6 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
-
 import { prepareFast } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /**
  * 친구와 하기: 같은 브라우저의 두 탭(방장, 참가자)을 BroadcastChannel로 이어(?net=local)

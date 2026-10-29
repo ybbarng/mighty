@@ -1,7 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
-
 import { prepareFast } from "./fast";
 import { startSolo } from "./start";
+import { expect, type Page, test } from "./test";
 
 /**
  * 인원별로 내가 주공이 되는 길로 첫 트릭에 카드를 낼 때까지 두며 장면마다 화면을 찍는다.

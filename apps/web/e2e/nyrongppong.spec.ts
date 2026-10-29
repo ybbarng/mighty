@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./test";
 
 /*
  * 나이롱뽕 화면 시험(docs/30 8절). 혼자 하기는 `?seed=`로 패를 정한다.
@@ -86,6 +86,7 @@ async function playUntil(
     await expect
       .poll(async () => (await done()) || (await actionable(page)), {
         timeout: 30_000,
+        intervals: [50],
       })
       .toBe(true);
     if (await done()) return;
@@ -282,7 +283,7 @@ test("나이롱뽕: 방장이 방을 만들고 친구가 링크로 들어와 끝
           await host.clock.runFor(1_000);
           return false;
         },
-        { timeout: 30_000 },
+        { timeout: 30_000, intervals: [50] },
       )
       .toBe(true);
     for (const p of [host, guest])

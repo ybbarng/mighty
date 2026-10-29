@@ -1,9 +1,16 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /*
  * 고스톱 화면 시험. 혼자 하기는 `?seed=`로 패를 정해 늘 같은 판이 나온다.
  * 기다림은 모두 화면 조건으로 한다(정해진 시간을 기다리지 않는다).
  */
+
+/**
+ * 화면 조건을 다시 볼 간격. expect.poll 기본(100·250·500·1000ms로 늘어남)은 컴퓨터 차례를 기다릴 때마다
+ * 최대 1초씩 늦게 알아챈다. 같은 간격으로 자주 본다
+ */
+const POLL = [50];
 
 /** 지금 이 화면에서 할 일: 판 끝, 고·스톱, 고르기, 흔들기, 내기, 뒤집기만. 없으면 null */
 function actionable(page: Page): Promise<string | null> {
@@ -42,10 +49,13 @@ async function playCard(page: Page, id?: string) {
   await target.click();
   // 낸 카드가 손에서 빠지거나, 흔들기·폭탄을 묻는다.
   await expect
-    .poll(async () => {
-      if ((await target.count()) === 0) return true;
-      return (await actionable(page)) === "shake";
-    })
+    .poll(
+      async () => {
+        if ((await target.count()) === 0) return true;
+        return (await actionable(page)) === "shake";
+      },
+      { intervals: POLL },
+    )
     .toBe(true);
   return chosen;
 }
@@ -59,7 +69,7 @@ async function actOnce(page: Page, goStop: "고" | "스톱" = "스톱") {
         what = await actionable(page);
         return what;
       },
-      { timeout: 30_000 },
+      { timeout: 30_000, intervals: POLL },
     )
     .not.toBeNull();
   switch (what as string | null) {
@@ -110,7 +120,8 @@ async function noOverflow(page: Page) {
   expect(overflow).toBe(false);
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
   });
@@ -260,7 +271,7 @@ test("고스톱: 방장이 방을 만들고 친구가 링크로 들어와 맞고
             (await actionable(guest)) === "done"
           );
         },
-        { timeout: 30_000 },
+        { timeout: 30_000, intervals: POLL },
       )
       .toBe(true);
     if (!who) break;

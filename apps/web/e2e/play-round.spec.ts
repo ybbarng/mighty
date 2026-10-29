@@ -1,7 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
-
 import { prepareFast } from "./fast";
 import { startSolo } from "./start";
+import { expect, type Page, test } from "./test";
 
 /** 낼 수 있는 첫 카드나 지금 필요한 단추를 누른다. 판이 끝나면 true */
 async function stepOnce(page: Page): Promise<boolean> {

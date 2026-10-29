@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 /** 효과음끼리 크기 차이가 커서 깜짝 놀라지 않게 한다(/sounds가 그려 본 소리로 잰다) */
 test("효과음 크기 차이가 크지 않다", async ({ page }, info) => {

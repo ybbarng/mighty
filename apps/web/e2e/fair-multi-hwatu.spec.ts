@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./test";
 
 /**
  * 화투 암호화방 여럿이 하기: 브라우저 탭 셋(방장 + 참가자 둘)을 BroadcastChannel로 잇고(?net=local)

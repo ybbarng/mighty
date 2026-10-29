@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { useTestSpeed } from "./fast";
+import { expect, type Page, test } from "./test";
 
 /** 판 크기와 가장자리 여백(JanggiBoard의 PAD) */
 const PAD = 0.62;
@@ -60,7 +61,8 @@ async function startSolo(page: Page, level?: string) {
   await page.getByRole("button", { name: /나홀로 장기/ }).click();
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await useTestSpeed(context);
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     localStorage.removeItem("janggi-save");
