@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // WebCrypto·TextEncoder 타입. 브라우저와 Node가 같은 전역을 가진다
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src"]
+}
