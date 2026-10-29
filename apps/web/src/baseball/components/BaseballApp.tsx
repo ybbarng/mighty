@@ -32,11 +32,11 @@ import {
 import { BASEBALL_LESSONS } from "../tutorial";
 import { BaseballGame } from "./BaseballGame";
 import { baseballTutorial } from "./baseball-tutorial";
-import { DigitBox, LIGHT } from "./parts";
+import { CountLamps, NumberBoxes } from "./parts";
+import { BaseDiamond } from "./scoreboard";
 
 /** 숫자야구 화면들의 배경(밤 야구장 잔디) */
-const BG =
-  "bg-[radial-gradient(ellipse_at_top,#14532d_0%,#052e16_55%,#020617_100%)]";
+const BG = "ballpark";
 
 function Chip({
   active,
@@ -297,27 +297,18 @@ function BaseballHome({
       primaryClass="border-amber-300 bg-amber-300 text-black hover:bg-amber-200"
       hero={
         <>
-          <div className="flex justify-center gap-1" aria-hidden="true">
-            {["3", "7", "1"].map((d) => (
-              <DigitBox key={d} digit={d} size="lg" />
-            ))}
-          </div>
+          {/* 작은 전광판: 도트 숫자와 볼카운트, 주자 */}
           <div
-            className="mt-2 flex justify-center gap-3 text-xs"
             aria-hidden="true"
+            className="scoreboard mx-auto flex w-fit items-center gap-3 rounded-2xl border-[3px] border-zinc-700/80 px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
           >
-            <span className="flex items-center gap-1">
-              <span className={cn("size-2.5 rounded-full", LIGHT.strike)} />S
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={cn("size-2.5 rounded-full", LIGHT.ball)} />B
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={cn("size-2.5 rounded-full", LIGHT.out)} />
-              아웃
-            </span>
+            <NumberBoxes value="371" digits={3} size="lg" />
+            <CountLamps strikes={1} balls={2} digits={3} />
+            <BaseDiamond strikes={1} digits={3} className="h-10 w-12" />
           </div>
-          <h1 className="mt-2 font-black text-4xl tracking-wide">숫자야구</h1>
+          <h1 className="mt-3 font-black text-4xl tracking-wide drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">
+            숫자야구
+          </h1>
         </>
       }
       tagline="숨긴 수를 묻고, 스트라이크·볼로 좁혀 먼저 맞힌다"

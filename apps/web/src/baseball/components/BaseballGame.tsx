@@ -6,12 +6,10 @@ import {
   cluesOf,
   commitmentOf,
   type RoundResult,
-  timeControlOf,
 } from "@mighty/baseball-engine";
 import { useEffect, useState } from "react";
 
 import { ChatBox } from "@/components/ChatBox";
-import { GameClock } from "@/components/GameClock";
 import { ResultBanner } from "@/components/ResultBanner";
 import { RoundOutcome } from "@/components/RoundOutcome";
 import {
@@ -21,62 +19,13 @@ import {
 import type { ResultBanner as Banner } from "@/game/result-banner";
 import { cn } from "@/lib/cn";
 
+import { scoreText } from "../kit";
 import { mySecret, randomSecret, type SecretBook } from "../secret";
 import { baseballSession } from "../session";
 import { BASEBALL_LEVELS, useBaseballSettings } from "../settings";
 import { useBaseball } from "../store";
-import { GuessLog, NumberBoxes, NumberPad } from "./parts";
-
-/** 자리 표: 이름, 이긴 판 수, 맞힐 차례 표시, 시계 */
-function PlayerPlate({
-  view,
-  seat,
-  name,
-}: {
-  view: BaseballView;
-  seat: number;
-  name: string;
-}) {
-  const turn = view.phase === "play" && view.turn === seat;
-  const control = timeControlOf(view.rules);
-  const asked = cluesOf(view, seat).length;
-  return (
-    <div
-      data-turn={turn || undefined}
-      className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2",
-        turn
-          ? "border-amber-300 bg-amber-300/15"
-          : "border-white/10 bg-white/5",
-      )}
-    >
-      <span className="truncate font-semibold text-sm">{name}</span>
-      {view.rules.mode === "duel" && view.starter === seat && (
-        <span className="shrink-0 rounded bg-white/15 px-1 text-[10px]">
-          선
-        </span>
-      )}
-      {control && view.clocks?.[seat] && (
-        <span className="ml-auto">
-          <GameClock
-            clock={view.clocks[seat]}
-            control={control}
-            running={turn}
-          />
-        </span>
-      )}
-      <span
-        className={cn("shrink-0 text-sm text-white/70", !control && "ml-auto")}
-      >
-        {view.rules.mode === "puzzle"
-          ? seat === 0
-            ? `${asked}번`
-            : "숨긴 수 🔒"
-          : `${view.wins[seat] ?? 0}승`}
-      </span>
-    </div>
-  );
-}
+import { type DigitMemo, GuessLog, NumberBoxes, NumberPad } from "./parts";
+import { Infield, PitchCall, Scoreboard, usePitchCalls } from "./scoreboard";
 
 function resultText(
   result: RoundResult,
@@ -160,7 +109,7 @@ function RevealPanel({
     });
   if (rows.length === 0) return null;
   return (
-    <div className="flex w-full max-w-xl flex-col gap-1.5 rounded-xl border border-white/10 bg-black/40 p-3 short-landscape:col-start-2">
+    <div className="flex w-full max-w-xl flex-col gap-1.5 rounded-xl border border-white/10 bg-black/40 p-3 split:col-start-2">
       {rows.map((row) => (
         <div
           key={row.seat}
@@ -194,7 +143,22 @@ function RevealPanel({
   );
 }
 
-/** 대국 화면 */
+/** 휴대폰 세로에서 기록 탭 이름: 회 수와 마지막 답 */
+function tabLabel(
+  title: string,
+  entries: [number, BaseballView["guesses"][number]][],
+  digits: number,
+): string {
+  const last = entries.at(-1)?.[1];
+  if (!last) return title;
+  const answer =
+    last.strikes === null || last.balls === null
+      ? "…"
+      : scoreText(last.strikes, last.balls, digits);
+  return `${title} ${entries.length} · ${answer}`;
+}
+
+/** 대국 화면: 위(가로는 왼쪽)에 전광판과 두 팀 기록, 아래(가로는 오른쪽)에 타석과 숫자 패드 */
 export function BaseballGame({
   onExit,
   mission,
@@ -223,6 +187,9 @@ export function BaseballGame({
   const clearNotice = useBaseball((s) => s.clearNotice);
   const showHints = useBaseballSettings((s) => s.showHints);
   const [entry, setEntry] = useState("");
+  const [memo, setMemo] = useState<DigitMemo>({});
+  const [tab, setTab] = useState<"mine" | "theirs">("mine");
+  const calls = usePitchCalls(view, host?.seat ?? 0);
 
   useEffect(() => {
     if (!notice) return;
@@ -230,11 +197,14 @@ export function BaseballGame({
     return () => clearTimeout(id);
   }, [notice, clearNotice]);
 
-  // 할 일이 바뀌면(물음을 냈다, 비밀을 정했다) 넣던 수를 비운다.
-  const decisionKind = view?.decision?.kind ?? null;
+  // 판이 바뀌거나 비밀 정하기가 끝나면 넣던 수와 메모를 비운다.
+  // 상대 차례에도 다음에 물을 수를 미리 넣어 둘 수 있게, 묻기 차례가 바뀌어도 비우지 않는다.
   const round = view?.roundNumber;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 할 일·판이 바뀔 때만 비운다
-  useEffect(() => setEntry(""), [decisionKind, round]);
+  const setup = view?.phase === "setup";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 판·비밀 정하기가 바뀔 때만 비운다
+  useEffect(() => setEntry(""), [round, setup]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 판이 바뀔 때만 비운다
+  useEffect(() => setMemo({}), [round]);
 
   if (!view || !host) return null;
   const me = host.seat;
@@ -262,10 +232,11 @@ export function BaseballGame({
     .map((g, i) => [i, g] as [number, typeof g])
     .filter(([, g]) => g.seat === opp);
   const candidates =
-    view.phase === "play" || view.phase === "answer"
+    showHints && (view.phase === "play" || view.phase === "answer")
       ? candidatesFor(view.rules, cluesOf(view, me)).length
       : null;
   const result = view.result;
+  const playing = view.phase === "play" || view.phase === "answer";
 
   let status: string;
   if (result) status = resultText(result, me, view);
@@ -322,17 +293,92 @@ export function BaseballGame({
   const hostRoom = baseballSession.host;
   const wrongMine = view.reveals[me]?.wrongAt ?? null;
   const wrongTheirs = view.reveals[opp]?.wrongAt ?? null;
+  const batting = playing ? view.turn : null;
+  const myTurn = decision?.kind === "guess";
+
+  const names = [] as string[];
+  names[me] = "나";
+  names[opp] = puzzle ? "컴퓨터" : opponent;
+  // 선이 원정(초 공격), 후공이 홈(말 공격)
+  const badgeOf = (seat: number) =>
+    puzzle ? undefined : seat === view.starter ? "원정·초" : "홈·말";
+
+  const secretLine = puzzle ? null : (
+    <span className="flex items-center gap-1.5">
+      <span className="text-white/60">내 비밀 수</span>
+      {secret ? (
+        <NumberBoxes value={secret.secret} digits={digits} size="sm" />
+      ) : (
+        <span className="text-white/40">
+          {view.commits[me] ? "이 기기에 없음" : "아직 정하지 않음"}
+        </span>
+      )}
+    </span>
+  );
+  const secretNote = (
+    <>
+      {secret && !keptOwn && (
+        <span className="basis-full text-amber-200 text-xs">
+          연결이 끊긴 사이 컴퓨터가 정한 수예요(방장 기기도 알 수 있어요)
+        </span>
+      )}
+      {!puzzle && view.commits[opp] && !roundOver && candidates === null && (
+        <span className="ml-auto text-white/50">상대 수는 잠겨 있어요 🔒</span>
+      )}
+    </>
+  );
+
+  const myLog = (
+    <GuessLog
+      title={puzzle ? "내 물음" : "내 공격 · 내 물음"}
+      entries={myGuesses}
+      digits={digits}
+      wrongAt={wrongTheirs}
+      empty="아직 묻지 않았어요"
+      seat={me}
+      side="mine"
+      batting={batting === me}
+      badge={badgeOf(me)}
+      className={cn(
+        "max-h-52 split:max-h-[max(8rem,calc(100dvh-15.5rem))]",
+        !puzzle && tab !== "mine" && "max-sm:hidden",
+      )}
+    />
+  );
+  const theirLog = puzzle ? null : (
+    <GuessLog
+      title={`${opponent} 공격`}
+      entries={theirGuesses}
+      digits={digits}
+      wrongAt={wrongMine}
+      empty="아직 묻지 않았어요"
+      seat={opp}
+      side="theirs"
+      batting={batting === opp}
+      badge={badgeOf(opp)}
+      className={cn(
+        "max-h-52 split:max-h-[max(8rem,calc(100dvh-15.5rem))]",
+        tab !== "theirs" && "max-sm:hidden",
+      )}
+    />
+  );
+  // 기록은 원정(선)이 왼쪽, 홈이 오른쪽
+  const logs =
+    !puzzle && view.starter === opp ? [theirLog, myLog] : [myLog, theirLog];
+
+  const showPad = decision?.kind === "commit" || playing;
 
   return (
     <main
       data-game="baseball"
       className={cn(
-        "relative flex min-h-dvh flex-col items-center gap-3 bg-[radial-gradient(ellipse_at_top,#14532d_0%,#052e16_55%,#020617_100%)] px-4 py-3 text-white short-landscape:grid short-landscape:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] short-landscape:content-start short-landscape:items-start short-landscape:justify-center short-landscape:gap-x-5",
+        "ballpark relative isolate flex min-h-dvh flex-col items-center gap-3 overflow-x-clip px-4 py-3 text-white split:grid split:grid-cols-[minmax(0,40rem)_minmax(0,21rem)] split:content-start split:items-start split:justify-center split:gap-x-5 lg:gap-x-8 lg:py-5",
         mission && "pt-16",
       )}
     >
+      <Infield className="absolute bottom-0 left-1/2 -z-10 w-[min(46rem,150vw)] max-w-none -translate-x-1/2 opacity-30 split:w-[min(60rem,100vw)] split:opacity-25" />
       {mission && <MissionOverlay mission={mission} top={8} />}
-      <header className="flex w-full max-w-xl items-center gap-2 text-sm short-landscape:col-span-2 short-landscape:max-w-none">
+      <header className="flex w-full max-w-xl items-center gap-2 text-sm split:col-span-2 split:max-w-none">
         <button
           type="button"
           onClick={onExit}
@@ -343,13 +389,16 @@ export function BaseballGame({
         <span className="ml-auto text-white/60">
           {digits}자리{view.rules.zero ? "·0 씀" : ""}
           {puzzle ? " · 퍼즐" : ` · ${view.roundNumber}판째`}
+          {!puzzle && view.rules.winsToFinish > 1
+            ? ` · ${view.rules.winsToFinish}승 먼저`
+            : ""}
         </span>
       </header>
 
       {online && (reconnecting || hostLeft) && (
         <p
           role="alert"
-          className="w-full max-w-xl rounded-xl bg-rose-700/80 px-3 py-2 text-center text-sm short-landscape:col-span-2"
+          className="w-full max-w-xl rounded-xl bg-rose-700/80 px-3 py-2 text-center text-sm split:col-span-2 split:max-w-none"
         >
           {hostLeft
             ? "방장이 방을 나갔습니다"
@@ -359,7 +408,7 @@ export function BaseballGame({
       {waitingOffline && (
         <div
           role="alert"
-          className="flex w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-xl bg-rose-800/80 px-3 py-2 text-center text-sm short-landscape:col-span-2"
+          className="flex w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-xl bg-rose-800/80 px-3 py-2 text-center text-sm split:col-span-2 split:max-w-none"
         >
           <span>
             {opponent}님 연결이 끊겼어요. 비밀 수는 그 기기에만 있어 컴퓨터가
@@ -377,104 +426,94 @@ export function BaseballGame({
         </div>
       )}
 
-      {/* 왼쪽(가로)·위(세로): 자리 표와 기록 */}
-      <div className="flex w-full max-w-xl flex-col gap-2 short-landscape:col-start-1 short-landscape:row-start-2 short-landscape:row-span-4 short-landscape:max-w-none">
-        <div className="flex gap-2">
-          <PlayerPlate view={view} seat={me} name="나" />
-          <PlayerPlate view={view} seat={opp} name={opponent} />
-        </div>
-        {!puzzle && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-black/30 px-3 py-1.5 text-sm">
-            <span className="text-white/70">내 비밀 수</span>
-            {secret ? (
-              <NumberBoxes value={secret.secret} digits={digits} size="sm" />
-            ) : (
-              <span className="text-white/40">
-                {view.commits[me] ? "이 기기에 없음" : "아직 정하지 않음"}
-              </span>
-            )}
-            {secret && !keptOwn && (
-              <span className="text-amber-200 text-xs">
-                연결이 끊긴 사이 컴퓨터가 정한 수예요(방장 기기도 알 수 있어요)
-              </span>
-            )}
-            {view.commits[opp] && !roundOver && (
-              <span className="ml-auto text-white/50 text-xs">
-                상대 수는 잠겨 있어요 🔒
-              </span>
-            )}
+      {/* 위(세로)·왼쪽(가로): 전광판과 두 팀 기록 */}
+      <div className="flex w-full max-w-xl flex-col gap-2 split:col-start-1 split:row-span-6 split:row-start-2 split:max-w-none">
+        <Scoreboard
+          view={view}
+          me={me}
+          names={names}
+          secret={secretLine}
+          secretNote={secretNote}
+          candidates={candidates}
+        />
+        {!puzzle && !setup && (
+          <div
+            role="tablist"
+            aria-label="기록"
+            className="grid grid-cols-2 gap-1 rounded-xl bg-black/40 p-1 text-xs sm:hidden"
+          >
+            {(
+              [
+                ["mine", tabLabel("내 공격", myGuesses, digits)],
+                ["theirs", tabLabel("상대 공격", theirGuesses, digits)],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={cn(
+                  "truncate rounded-lg px-2 py-1.5",
+                  tab === k
+                    ? "bg-white font-semibold text-black"
+                    : "text-white/70",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
-        <div className="flex gap-2">
-          <GuessLog
-            title={puzzle ? "내 물음" : "내 물음 → 상대 답"}
-            entries={myGuesses}
-            digits={digits}
-            wrongAt={wrongTheirs}
-            empty="아직 묻지 않았어요"
-            seat={me}
-          />
-          {!puzzle && (
-            <GuessLog
-              title={`${opponent}의 물음 → 내 답`}
-              entries={theirGuesses}
-              digits={digits}
-              wrongAt={wrongMine}
-              empty="아직 묻지 않았어요"
-              seat={opp}
-            />
-          )}
-        </div>
-        {showHints && candidates !== null && (
-          <p
-            data-candidates={candidates}
-            className="px-1 text-white/60 text-xs"
-          >
-            지금까지 답과 맞는 후보 {candidates}개
-          </p>
-        )}
+        {!setup && <div className="flex gap-2">{logs}</div>}
       </div>
 
-      {/* 오른쪽(가로)·아래(세로): 입력, 상태, 단추 */}
-      {decision?.kind === "commit" && (
-        <div className="flex w-full max-w-xl flex-col items-center gap-2 short-landscape:col-start-2 short-landscape:row-start-2">
-          <NumberPad
-            value={entry}
-            onChange={setEntry}
-            onSubmit={() => chooseSecret(entry)}
-            digits={digits}
-            zero={view.rules.zero}
-            submitLabel="이 수로 정하기"
-            disabled={false}
-            extra={
-              <button
-                type="button"
-                onClick={() => setEntry(randomSecret(view.rules))}
-                className="flex-1 rounded-xl bg-white/10 py-2 text-sm"
-              >
-                무작위
-              </button>
-            }
-          />
-          <p className="text-center text-white/50 text-xs">
-            비밀 수는 이 기기에만 남고, 상대에게는 잠긴 약속만 갑니다
-          </p>
-        </div>
-      )}
-      {decision?.kind === "guess" && (
-        <div className="w-full max-w-xl short-landscape:col-start-2 short-landscape:row-start-2">
-          <NumberPad
-            value={entry}
-            onChange={setEntry}
-            onSubmit={() => {
-              const result = submit({ type: "guess", guess: entry });
-              if (result.ok) setEntry("");
-            }}
-            digits={digits}
-            zero={view.rules.zero}
-            submitLabel="물어보기"
-            disabled={false}
-          />
+      {/* 아래(세로)·오른쪽(가로): 타석과 숫자 패드, 상태, 단추 */}
+      {showPad && (
+        <div className="flex w-full max-w-xl flex-col items-center gap-2 split:col-start-2 split:row-start-2">
+          {decision?.kind === "commit" ? (
+            <>
+              <NumberPad
+                value={entry}
+                onChange={setEntry}
+                onSubmit={() => chooseSecret(entry)}
+                digits={digits}
+                zero={view.rules.zero}
+                submitLabel="이 수로 정하기"
+                disabled={false}
+                extra={
+                  <button
+                    type="button"
+                    onClick={() => setEntry(randomSecret(view.rules))}
+                    className="flex-1 rounded-xl border border-white/10 bg-black/35 py-2 text-sm"
+                  >
+                    무작위
+                  </button>
+                }
+              />
+              <p className="text-center text-white/50 text-xs">
+                비밀 수는 이 기기에만 남고, 상대에게는 잠긴 약속만 갑니다
+              </p>
+            </>
+          ) : (
+            <NumberPad
+              value={entry}
+              onChange={setEntry}
+              onSubmit={() => {
+                if (!myTurn) return;
+                const result = submit({ type: "guess", guess: entry });
+                if (result.ok) setEntry("");
+              }}
+              digits={digits}
+              zero={view.rules.zero}
+              submitLabel={myTurn ? "물어보기" : "상대 차례…"}
+              disabled={false}
+              submitDisabled={!myTurn}
+              memo={memo}
+              onMemo={setMemo}
+            />
+          )}
         </div>
       )}
 
@@ -482,7 +521,7 @@ export function BaseballGame({
         <RevealPanel view={view} me={me} opponent={opponent} book={secrets} />
       )}
 
-      <div className="relative w-full max-w-xl short-landscape:col-start-2">
+      <div className="relative w-full max-w-xl split:col-start-2">
         <RoundOutcome
           outcome={outcome}
           status={notice ?? status}
@@ -495,10 +534,8 @@ export function BaseballGame({
         <ResultBanner banner={banner} seq={view.roundNumber} />
       </div>
 
-      <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 short-landscape:col-start-2">
-        {(view.phase === "play" ||
-          view.phase === "answer" ||
-          view.phase === "setup") && (
+      <div className="flex w-full max-w-xl flex-wrap justify-center gap-2 split:col-start-2">
+        {(playing || view.phase === "setup") && (
           <>
             {!online && !mission && (
               <button
@@ -508,7 +545,7 @@ export function BaseballGame({
                   setEntry("");
                   undo();
                 }}
-                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
+                className="rounded-xl border border-white/10 bg-black/35 px-4 py-2 text-sm disabled:opacity-40"
               >
                 무르기
               </button>
@@ -516,7 +553,7 @@ export function BaseballGame({
             <button
               type="button"
               onClick={() => submit({ type: "resign" })}
-              className="rounded-xl bg-white/10 px-4 py-2"
+              className="rounded-xl border border-white/10 bg-black/35 px-4 py-2 text-sm"
             >
               {puzzle ? "그만두고 답 보기" : "기권"}
             </button>
@@ -540,7 +577,10 @@ export function BaseballGame({
             >
               다시 하기
             </button>
-            <a href="/" className="rounded-xl bg-white/10 px-4 py-2">
+            <a
+              href="/"
+              className="rounded-xl border border-white/10 bg-black/35 px-4 py-2"
+            >
               게임 목록
             </a>
           </>
@@ -548,9 +588,18 @@ export function BaseballGame({
       </div>
 
       {online && (
-        <div className="w-full max-w-xl short-landscape:col-start-2">
+        <div className="w-full max-w-xl split:col-start-2">
           <ChatBox mySeat={me} />
         </div>
+      )}
+
+      {calls.current && (
+        <PitchCall
+          key={calls.current.id}
+          call={calls.current}
+          busy={calls.busy}
+          onDone={calls.next}
+        />
       )}
     </main>
   );

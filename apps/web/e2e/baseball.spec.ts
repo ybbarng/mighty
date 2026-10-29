@@ -9,9 +9,8 @@ for (const a of "123456789")
 
 const status = (page: Page) => page.getByRole("status").first();
 const over = (page: Page) => page.getByRole("button", { name: "다시 하기" });
-/** 내가 물은 줄들(자리 번호는 화면마다 다르니 data-guess가 있는 첫 기록 상자) */
-const myRows = (page: Page) =>
-  page.locator("section").filter({ hasText: "내 물음" }).locator("li");
+/** 내가 물은 줄들(전광판 아래 "내 공격" 기록. 휴대폰 세로에서 탭에 가려져도 센다) */
+const myRows = (page: Page) => page.locator('[data-log="mine"] li');
 
 /** 숫자 패드로 수를 넣고 단추를 누른다. 휴대폰은 눌러서, PC는 키보드로 */
 async function enter(
@@ -148,6 +147,21 @@ test("숫자야구: 게임 목록에서 들어가 입문 컴퓨터와 서로 맞
   await askNext(page, touch);
   await expect(status(page)).toContainText("내 차례", { timeout: 15_000 });
   await page.screenshot({ path: info.outputPath("baseball-play.png") });
+  // 전광판: 회와 두 팀 줄
+  await expect(page.locator("[data-inning]")).toHaveAttribute(
+    "data-inning",
+    /^\d+회 [초말]$/,
+  );
+  await expect(page.locator("[data-team]")).toHaveCount(2);
+  // 휴대폰 세로는 두 팀 기록을 탭으로 나눠 본다.
+  const theirs = page.locator('[data-log="theirs"]');
+  if (info.project.name === "phone-portrait") {
+    await expect(theirs).toBeHidden();
+    await page.getByRole("tab", { name: /상대 공격/ }).click();
+    await expect(theirs).toBeVisible();
+    await expect(page.locator('[data-log="mine"]')).toBeHidden();
+    await page.getByRole("tab", { name: /내 공격/ }).click();
+  } else await expect(theirs).toBeVisible();
   await page.getByRole("button", { name: "무르기" }).click();
   await expect(myRows(page)).toHaveCount(0);
 
@@ -214,6 +228,58 @@ test("숫자야구 퍼즐: 컴퓨터 수만 맞히기", async ({ page }, info) =
   await expect(status(page)).toContainText("번 만에 맞혔어요!");
   await expect(page.locator('[data-result-banner="win"]')).toBeVisible();
   await page.screenshot({ path: info.outputPath("baseball-puzzle.png") });
+});
+
+test("숫자야구 숫자 패드: 키보드로 넣고 지우고, 메모는 수를 넣지 않는다", async ({
+  page,
+}, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "입력 흐름은 화면 크기와 상관없다",
+  );
+  await page.goto("/baseball");
+  await startSolo(page, "입문", "컴퓨터 수만 맞히기");
+  await expect(status(page)).toContainText("컴퓨터 수를 맞혀 보세요");
+  const entered = (v: string) =>
+    expect(page.getByRole("img", { name: `넣은 수 ${v}` })).toBeVisible();
+
+  // 키보드: 숫자, Backspace 한 자리, Escape 전부. 넣은 숫자와 쓰지 않는 0은 막힌다.
+  await page.keyboard.type("12");
+  await entered("12");
+  await expect(
+    page.getByRole("button", { name: "1", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "0", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Backspace");
+  await entered("1");
+  await page.keyboard.press("Escape");
+  await entered("없음");
+  // 단추: 넣고, 지우기(한 자리), 비우기(전부)
+  for (const d of "345")
+    await page.getByRole("button", { name: d, exact: true }).click();
+  await entered("345");
+  await page.getByRole("button", { name: "지우기", exact: true }).click();
+  await entered("34");
+  await page.getByRole("button", { name: "비우기" }).click();
+  await entered("없음");
+
+  // 메모: 숫자를 누르면 넣지 않고 표시만 바꾼다. 끄면 다시 넣는다.
+  const memo = page.getByRole("button", { name: "✎ 메모" });
+  await memo.click();
+  await expect(memo).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await entered("없음");
+  await memo.click();
+  await expect(memo).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await entered("7");
+  // 메모는 대국 저장에 들어가지 않는다(화면에만 있다).
+  const saved = await page.evaluate(() =>
+    localStorage.getItem("baseball-save"),
+  );
+  expect(saved ?? "").not.toContain("memo");
 });
 
 test("숫자야구: 하던 게임은 새로고침해도 이어 하고, 내 비밀 수도 그대로다", async ({

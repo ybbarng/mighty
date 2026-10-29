@@ -59,8 +59,7 @@ export const baseballTutorial: TutorialKit<
   Action
 > = {
   title: "숫자야구 배우기",
-  background:
-    "bg-[radial-gradient(ellipse_at_top,#14532d_0%,#052e16_55%,#020617_100%)]",
+  background: "ballpark",
   lessons: BASEBALL_LESSONS,
   progress: useBaseballTutorialProgress,
   glossary: false,
