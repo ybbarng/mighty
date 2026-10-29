@@ -35,6 +35,8 @@ interface PlayingCardProps {
   delay?: number;
   dim?: boolean;
   highlight?: boolean;
+  /** 여러 장을 고르는 중 이 카드가 골라졌나(화면 읽기 프로그램에 알린다). 고르는 때가 아니면 두지 않는다 */
+  pressed?: boolean;
   /** 튜토리얼 추천 카드: 강조와 다른 색으로 깜빡이고 "추천" 표를 단다 */
   hint?: boolean;
   /** 바닥 카드에서 막 들어온 카드: "바닥" 표를 단다 */
@@ -70,6 +72,7 @@ export function PlayingCard({
   delay = 0,
   dim = false,
   highlight = false,
+  pressed,
   hint = false,
   fresh = false,
   freshLabel = "바닥",
@@ -113,6 +116,7 @@ export function PlayingCard({
     <button
       type="button"
       aria-label={card ? cardLabel(card) : "뒷면 카드"}
+      {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
       data-card={card ?? undefined}
       disabled={!interactive}
       onPointerUp={handlePointerUp}

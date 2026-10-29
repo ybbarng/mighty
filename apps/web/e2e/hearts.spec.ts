@@ -328,10 +328,15 @@ test("하트 배우기: 설명·퀴즈·미션으로 단원을 끝낸다", async
   await page.getByRole("button", { name: "미션 시작" }).click();
   const pass = page.getByRole("button", { name: "넘기기", exact: true });
   await expect(pass).toBeVisible({ timeout: 20_000 });
-  for (const card of ["♠Q", "♠K", "♠A"])
-    await page
-      .getByRole("button", { name: card, exact: true })
-      .click({ position: { x: 8, y: 8 } });
+  // 고르는 도중 새 화면이 늦게 와 고른 카드가 비워질 수 있다(느린 CI). 카드마다 골라졌는지 보고, 안 골라졌으면 다시 누른다.
+  await expect(async () => {
+    for (const card of ["♠Q", "♠K", "♠A"]) {
+      const button = page.getByRole("button", { name: card, exact: true });
+      if ((await button.getAttribute("aria-pressed")) !== "true")
+        await button.click({ position: { x: 8, y: 8 } });
+    }
+    await expect(pass).toBeEnabled({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   await pass.click();
   await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
     timeout: 20_000,

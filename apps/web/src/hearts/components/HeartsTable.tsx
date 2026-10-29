@@ -621,6 +621,7 @@ export function HeartsTable({
                     (!acting && view.phase === "play")
                   }
                   highlight={passPick.includes(card)}
+                  {...(passing ? { pressed: passPick.includes(card) } : {})}
                   fresh={received.has(card) && !lifted}
                   freshLabel="받음"
                   interactive={acting && (passing || playable !== null)}
