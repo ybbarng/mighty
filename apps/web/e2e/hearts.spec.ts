@@ -1,18 +1,12 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+import { prepareFast } from "./fast";
+
 /** 하트: 숨은 입구, 혼자 한 판, 친구와 한 판 */
 async function prepare(page: Page) {
-  await page.addInitScript(() => {
-    sessionStorage.setItem("mighty-splash-seen", "1");
-    localStorage.setItem(
-      "mighty-settings",
-      JSON.stringify({ state: { speed: 1.6, sound: false }, version: 0 }),
-    );
-    // 고수는 생각이 길어 시험에서는 중수와 한다.
-    localStorage.setItem(
-      "hearts-settings",
-      JSON.stringify({ state: { level: 1 }, version: 0 }),
-    );
+  // 고수는 생각이 길어 시험에서는 중수와 한다.
+  await prepareFast(page, {
+    "hearts-settings": { state: { level: 1 }, version: 0 },
   });
 }
 
@@ -40,7 +34,10 @@ async function stepOnce(page: Page): Promise<boolean> {
     await myCards(page)
       .first()
       .click({ position: { x: 8, y: 8 } });
+    return false;
   }
+  // 컴퓨터 차례: 화면이 바뀔 때까지 잠깐 둔다(폴링 간격)
+  await page.waitForTimeout(50);
   return false;
 }
 
@@ -82,20 +79,17 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   await page.screenshot({ path: info.outputPath("hearts-1-pass.png") });
 
   let shot = false;
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 1200; i++) {
     if (await stepOnce(page)) break;
     if (!shot && (await page.getByText(/2\/13턴/).isVisible())) {
       await page.screenshot({ path: info.outputPath("hearts-2-trick.png") });
       shot = true;
     }
-    await page.waitForTimeout(150);
   }
   await expect(page.getByRole("button", { name: "다음 판" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("hearts-3-result.png") });
   await page.getByRole("button", { name: "점수판" }).click();
   await expect(page.getByRole("dialog", { name: "점수판" })).toBeVisible();
-  // 결과 창이 사라지는 연출이 끝난 뒤 찍는다
-  await page.waitForTimeout(500);
   await page.screenshot({ path: info.outputPath("hearts-4-score.png") });
   await page.getByRole("button", { name: "닫기" }).click();
   await page.getByRole("button", { name: "다음 판" }).click();
@@ -120,10 +114,8 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   await page.getByRole("button", { name: /하트 · 혼자/ }).click();
   await expect(page.getByText("넘긴 카드").first()).toBeVisible();
   await page.getByRole("button", { name: "▶ 이 판 다시 보기" }).first().click();
-  for (let k = 0; k < 8; k++) {
-    await page.getByRole("button", { name: "한 걸음 앞으로" }).click();
-    await page.waitForTimeout(250);
-  }
+  const forward = page.getByRole("button", { name: "한 걸음 앞으로" });
+  for (let k = 0; k < 8; k++) await forward.click();
   await page.getByRole("button", { name: "상황판" }).click();
   await expect(
     page.getByRole("complementary", { name: "상황판" }),
@@ -134,7 +126,9 @@ test("하트: 카드를 넘기고 한 판을 끝까지 둔다", async ({ page },
   // 세로 휴대폰은 상황판을 열 때 이미 펼친다.
   const reveal = page.getByRole("button", { name: "모든 패 보기" });
   if (await reveal.isVisible()) await reveal.click();
-  await page.waitForTimeout(800);
+  await expect(
+    page.getByRole("button", { name: "모든 패 숨기기" }),
+  ).toBeVisible();
   await page.screenshot({ path: info.outputPath("hearts-5-replay.png") });
   expect(errors).toEqual([]);
 });
