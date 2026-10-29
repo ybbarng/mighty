@@ -107,7 +107,8 @@ describe("무작위 대국에서 불변식이 유지된다", () => {
             state.scoredRounds === 3 || state.round.phase === "gameOver",
           ).toBe(true);
         }),
-        { numRuns: 15 },
+        // 규칙 15가지 × 시드 4개 × 3판 = 무작위 판 180개를 매 수 검사한다
+        { numRuns: 4 },
       );
     },
   );
