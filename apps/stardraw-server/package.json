@@ -1,0 +1,20 @@
+{
+  "name": "@mighty/stardraw-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "하늘의 별 따기 회차 서버 — 응모 받기, 마감·봉인, drand 추첨, 공개 장부 파일, 당첨자 확인 전달(docs/36 11-5 3번)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "rolldown -c rolldown.config.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/server.mjs"
+  },
+  "dependencies": {
+    "@mighty/fair-play": "workspace:*",
+    "@mighty/stardraw-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "rolldown": "1.2.14"
+  }
+}
