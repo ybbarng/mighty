@@ -60,6 +60,31 @@ async function tapStar(page: Page, canvas: string, n: number) {
 
 const isPhone = (name: string) => name.startsWith("phone");
 
+/** 데모: 실제 패스키 창 대신 뜨는 흉내 시트에서 확인(또는 취소)한다 */
+async function demoUnlock(page: Page, purpose: "create" | "sign", ok = true) {
+  const sheet = page.locator(`[data-demo-unlock='${purpose}']`);
+  await expect(sheet).toBeVisible({ timeout: 30_000 });
+  await sheet.getByRole("button", { name: ok ? "확인" : "취소" }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** 데모가 실제 패스키(navigator.credentials)를 부르면 표시를 남긴다 */
+async function watchCredentials(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __credentialCalls: number };
+    w.__credentialCalls = 0;
+    for (const name of ["create", "get"] as const) {
+      Object.defineProperty(navigator.credentials, name, {
+        configurable: true,
+        value: () => {
+          w.__credentialCalls++;
+          return Promise.reject(new DOMException("시험", "NotAllowedError"));
+        },
+      });
+    }
+  });
+}
+
 test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모에 남는다", async ({
   page,
 }, info) => {
@@ -214,14 +239,31 @@ test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
 test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 가짜 당첨자 포함)", async ({
   page,
 }, info) => {
-  await virtualAuthenticator(page);
+  // 데모는 실제 패스키를 만들지 않는다: 가상 인증기 없이 흉내 시트로만 끝까지 간다
+  await watchCredentials(page);
   await page.goto("/stardraw/demo");
   await expect(page.getByRole("note")).toContainText("데모입니다");
+  await expect(
+    page.getByText("데모는 패스키를 만들지 않습니다", { exact: false }).first(),
+  ).toBeVisible();
 
-  // 응모: 이번 회차 1등이 되게 채우고 낸다
+  // 응모: 이번 회차 1등이 되게 채우고 낸다. 처음엔 흉내 창을 취소해 본다
   await page.getByRole("button", { name: "1등 되게" }).click();
   await expect(page.getByText("6/6")).toBeVisible();
   await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await expect(page.locator("[data-demo-unlock='create']")).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("stardraw-demo-sheet.png"),
+  });
+  await demoUnlock(page, "create", false);
+  await expect(
+    page.getByRole("alert").filter({ hasText: "응모되지 않았어요" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-receipt]")).toHaveCount(0);
+  // 다시 누르면 만들기·서명 두 번 확인하고 응모된다
+  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await demoUnlock(page, "create");
+  await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
 
   // 추첨
@@ -277,6 +319,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     .click();
   await toWinner();
   await winner.getByRole("button", { name: "확인", exact: true }).click();
+  await demoUnlock(page, "sign");
   const sas = winner.locator("[data-sas]");
   await expect(sas).toBeVisible({ timeout: 30_000 });
   const stars = ((await sas.getAttribute("data-sas")) ?? "")
@@ -327,4 +370,11 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     winner.getByText("확인하는 분의 화면에 초록불이 켜졌습니다"),
   ).toBeVisible();
   await noSideScroll(page);
+  // 끝까지 실제 패스키를 한 번도 부르지 않았다
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __credentialCalls: number }).__credentialCalls,
+    ),
+  ).toBe(0);
 });

@@ -23,6 +23,7 @@ import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
 import type { MyTicket } from "../wallet";
 import { CheckPanel } from "./CheckPanel";
+import { DemoUnlockSheet } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
 import { Inbox } from "./Inbox";
@@ -33,6 +34,7 @@ import { Receipt } from "./Receipt";
  * 하늘의 별 따기 데모: 응모부터 당첨자 확인까지 한 사람이 혼자 끝까지 해 본다.
  * 장부·열쇠·확인 기록은 실제 게임과 따로 저장한다(이름공간 "stardraw-demo").
  * 데모만의 기능: 지금 마감·지금 추첨, 미리 본 당첨 번호로 n등이 되게 고르기, 가짜 당첨자로 답하기.
+ * 데모는 실제 패스키를 만들지 않는다: 서명 순간마다 화면 안 흉내 시트(`DemoUnlockSheet`)가 뜬다.
  */
 export function StardrawDemo() {
   const { services, status, version, refresh, reset } = useLedger(DEMO_NS);
@@ -117,7 +119,12 @@ export function StardrawDemo() {
             응모 → 추첨 → 당첨자 확인까지 혼자 끝까지 해 봅니다. 연습 참가자
             24명이 회차마다 함께 응모합니다.
           </p>
+          <p className="break-keep text-sm text-white/60">
+            데모는 패스키를 만들지 않습니다. 실제 게임에서 Face ID·지문 창이
+            뜨는 순간에는 흉내 창이 뜹니다.
+          </p>
         </header>
+        <DemoUnlockSheet />
 
         <Step n={1} title="회차 조작">
           <div className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4">
@@ -265,8 +272,8 @@ export function StardrawDemo() {
                   data="winner"
                 >
                   <p className="text-sm text-white/65">
-                    확인 요청이 오면 여기에 뜹니다. [확인]을 누르면 패스키로
-                    서명합니다.
+                    확인 요청이 오면 여기에 뜹니다. [확인]을 누르면 패스키 흉내
+                    창이 뜨고, 확인하면 서명합니다.
                   </p>
                   <Inbox
                     services={services}

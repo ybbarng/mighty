@@ -20,7 +20,7 @@ import {
   platformUnlock,
   unlockWith,
 } from "../passkey-env";
-import type { Services } from "../services";
+import { DEMO_NS, type Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
 import { PasskeyFaq } from "./PasskeyHelp";
@@ -68,6 +68,8 @@ export function EnterView({
   const full = picked.length === 6;
   const open = status.phase === "open";
   const hasKey = !!services.wallet.loadKey();
+  // 데모는 실제 패스키 대신 화면 안 흉내 시트를 쓴다: 패스키를 못 쓰는 환경 안내로 막지 않는다
+  const demo = services.ns === DEMO_NS;
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -137,7 +139,8 @@ export function EnterView({
         setWork("처음 한 번, 열쇠를 장부에 올릴 계산을 하고 있습니다");
         registration = await makeRegistration(
           { publicKey: key.pub },
-          "passkey",
+          // 데모 열쇠는 패스키가 아니라 원시 열쇠로 등록한다(연습 장부만 받는다)
+          key.kind === "passkey" ? "passkey" : "raw",
           key.credentialId,
           challenge,
           entry.registerPowTarget,
@@ -293,9 +296,9 @@ export function EnterView({
         </div>
       )}
 
-      {env?.inApp ? (
+      {!demo && env?.inApp ? (
         <InAppNotice app={env.inApp} />
-      ) : env && !env.api ? (
+      ) : !demo && env && !env.api ? (
         <p
           role="note"
           className="break-keep rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/80"
@@ -321,9 +324,14 @@ export function EnterView({
                   ? `별을 ${6 - picked.length}개 더 골라 주세요`
                   : hasKey || !env
                     ? "이 별 6개로 응모하기"
-                    : `${unlockWith(env.ua, env.platform)} 응모하기`}
+                    : `${unlockWith(env.ua, demo || env.platform)} 응모하기`}
           </button>
-          {!hasKey && env && (
+          {demo && (
+            <p className="break-keep text-center text-white/60 text-xs">
+              데모는 패스키를 만들지 않습니다. 확인 창은 흉내예요.
+            </p>
+          )}
+          {!demo && !hasKey && env && (
             <div className="flex flex-col items-center gap-1 text-center text-white/65 text-xs">
               <p className="break-keep">
                 비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요

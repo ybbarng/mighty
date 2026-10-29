@@ -633,6 +633,43 @@ button {
   }
 }
 
+/* 데모의 패스키 흉내 시트: 아래에서 올라오고, 잠금 그림 위로 빛이 훑고 지나간다 */
+.sd-unlock-in {
+  animation: sd-unlock-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sd-unlock-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.sd-unlock-scan {
+  top: 10%;
+  opacity: 0;
+  animation: sd-unlock-scan 1.6s ease-in-out infinite;
+}
+@keyframes sd-unlock-scan {
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    top: 88%;
+    opacity: 0;
+  }
+}
+.sd-unlock-check {
+  animation: sd-unlock-check 0.3s ease-out both;
+}
+@keyframes sd-unlock-check {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
 /* 기다리는 동안 은은한 맥동 */
 .sd-breathe {
   animation: sd-breathe 2.6s ease-in-out infinite;
@@ -735,6 +772,9 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .sd-fold,
   .sd-print,
+  .sd-unlock-in,
+  .sd-unlock-scan,
+  .sd-unlock-check,
   .sd-breathe,
   .sd-pop,
   .sd-drop,
