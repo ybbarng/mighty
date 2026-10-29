@@ -32,6 +32,10 @@ export function ChessReplay({
   archive: GameArchive;
   name: (seat: number) => string;
 }) {
+  // 내 기록에서 열면 체스 화면을 거치지 않으므로 칸 이름·기물 모양 설정을 여기서 읽는다.
+  useEffect(() => {
+    void useChessSettings.persist.rehydrate();
+  }, []);
   const coordinates = useChessSettings((s) => s.coordinates);
   const replayed = useMemo(() => replayArchive(chessKit, archive), [archive]);
   const states = replayed.states as ChessState[];

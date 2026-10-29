@@ -8,6 +8,11 @@ export type ChessLevel = 0 | 1 | 2;
 /** 나홀로 체스에서 내 색: 백(먼저)·흑·무작위 */
 export type ColorPick = "white" | "black" | "random";
 
+/**
+ * 기물 모양: 입체 그림(기본)·유니코드 기호. 입체는 SVG 도형이라 기호 글꼴이 없는 기기에서도 보인다
+ */
+export type PieceSet = "3d" | "glyph";
+
 /** 체스만의 설정. 첫 그리기 뒤에 저장값을 읽는다(ChessApp이 rehydrate) */
 interface ChessSettings {
   winsToFinish: number;
@@ -17,6 +22,8 @@ interface ChessSettings {
   time: TimePreset;
   /** 판 위에 a~h·1~8 칸 이름을 보인다 */
   coordinates: boolean;
+  /** 기물을 입체 그림으로 그릴지 기호 글자로 그릴지 */
+  pieces: PieceSet;
   set(patch: Partial<Omit<ChessSettings, "set">>): void;
 }
 
@@ -28,6 +35,7 @@ export const useChessSettings = create<ChessSettings>()(
       pick: "white",
       time: "none",
       coordinates: true,
+      pieces: "3d",
       set: (patch) => set(patch),
     }),
     {
