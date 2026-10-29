@@ -69,8 +69,12 @@ export const gostopFair: HwatuFairSpec<
   },
   claimedOf: (action) => (action.type === "play" ? [action.card] : []),
   // 더미는 손패를 냈거나(폭탄 포함), 낸 카드로 먹을 것을 고르거나, 뒤집기만 하는 차례에만 뒤집는다.
+  // 흔들기로 이미 모두에게 보인 카드를 내면 새로 열리는 열쇠가 없어, 이 순간에는 냈는지 알 수 없다.
+  // 그때는 미리 보기 확인을 건너뛴다. 방장이 그 사람이 낸 것처럼 꾸몄다면 그 사람 기기가 판 끝 검증에서
+  // "기록 속 내 행동이 내가 보낸 것과 다르다"로 잡는다(컴퓨터 자리는 원래 방장이 안다).
   deckGuard: (view, fresh) =>
     fresh.length > 0 ||
+    (view.revealed[view.turn]?.length ?? 0) > 0 ||
     view.stage === "chooseHand" ||
     (view.stage === "play" && (view.flipOwed[view.turn] ?? 0) > 0),
   refreshView: (view) => {
