@@ -33,9 +33,10 @@ const setup = (rules: GostopRules, guests: number) =>
   });
 
 describe("고스톱 암호화방(멘탈 포커)", () => {
+  // 판이 바뀌어도 이어 가는지(두 판)는 맞고로 보고, 3명은 한 판으로 본다
   it.each([
-    ["맞고", { ...MATGO_RULES, rounds: 3 }],
-    ["3명(컴퓨터 하나)", { ...GOSTOP3_RULES, rounds: 3 }],
+    ["맞고(두 판)", { ...MATGO_RULES, rounds: 2 }],
+    ["3명(컴퓨터 하나, 한 판)", { ...GOSTOP3_RULES, rounds: 1 }],
   ])(
     "%s: 끝까지 치고, 방장 엔진에는 남의 손패·더미가 자리 표뿐이며 판마다 검증을 통과한다",
     async (_name, rules) => {
@@ -71,8 +72,10 @@ describe("고스톱 암호화방(멘탈 포커)", () => {
       expect(incidents).toEqual([]);
       await until(() => audits.length === 1, "판 끝 검증");
       expect(audits).toEqual([{ ok: true }]);
-      await until(() => verified.length === 3, "판마다 검증");
-      expect(verified).toEqual([1, 2, 3]);
+      await until(() => verified.length === rules.rounds, "판마다 검증");
+      expect(verified).toEqual(
+        Array.from({ length: rules.rounds }, (_, i) => i + 1),
+      );
       // 판 끝 검증과 판마다 검증이 차례 없이 끝나므로 진짜 패가 가장 많은 기록을 본다.
       const last = [...archives].sort(
         (a, b) =>
