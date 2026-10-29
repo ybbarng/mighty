@@ -1320,7 +1320,10 @@ export class HwatuGuestSeat<
       case "log":
         if (from === 0) {
           this.logs.set(message.deal, message.log as never);
-          this.tryVerify(message.deal);
+          // 더미 요청은 앞서 온 열쇠를 처리한 뒤에 받는다(`guardDeck`). 다시 들어온 기기가 다시 받은 요청보다
+          // 기록이 먼저 닿으면 요청이 빠진 채 검증하게 되니, 앞선 더미 요청을 다 받은 뒤에 검증한다.
+          const deal = message.deal;
+          this.deckQueue = this.deckQueue.then(() => this.tryVerify(deal));
         }
         break;
     }
