@@ -4,7 +4,7 @@ import { compareBytes, equalBytes, sha256 } from "./bytes";
  * RFC 6962 머클 트리(docs/36 8-1 S2).
  * 잎은 0x00, 가지는 0x01을 앞에 붙여 해시해, 가지 값을 잎인 척하는 위조를 막는다.
  * n개를 나눌 때는 n보다 작은 가장 큰 2의 거듭제곱 k에서 왼쪽 k개, 오른쪽 나머지로 나눈다.
- * 빕또의 잎은 응모권 id이고, id 사전 순으로 정렬해 넣는다(`sortLeaves`).
+ * 하늘의 별 따기의 잎은 응모권 id이고, id 사전 순으로 정렬해 넣는다(`sortLeaves`).
  */
 
 export function leafHash(leaf: Uint8Array): Uint8Array {

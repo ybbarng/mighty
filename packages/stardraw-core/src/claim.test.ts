@@ -132,10 +132,10 @@ describe("확인 요청과 확인 문구 증명(초록불)", () => {
     const { ticket } = await winnerAndTicket();
     const request = newConfirmRequest("Brice", 1, ticketId(ticket));
     const url = confirmRequestUrl(
-      "https://game.byb.kr/bybtto/confirm",
+      "https://game.byb.kr/stardraw/confirm",
       request,
     );
-    expect(url.startsWith("https://game.byb.kr/bybtto/confirm#")).toBe(true);
+    expect(url.startsWith("https://game.byb.kr/stardraw/confirm#")).toBe(true);
     expect(decodeConfirmRequest(url)).toEqual(request);
     expect(decodeConfirmRequest(encodeConfirmRequest(request))).toEqual(
       request,
@@ -184,12 +184,14 @@ describe("확인 요청과 확인 문구 증명(초록불)", () => {
     expect(await verifyClaim(claim, { ticket, request })).toEqual([]);
   });
 
-  it("빕또 증명이 아닌 문자열, 잘린 문자열은 읽지 않는다", async () => {
+  it("하늘의 별 따기 증명이 아닌 문자열, 잘린 문자열은 읽지 않는다", async () => {
     const { winner, ticket } = await winnerAndTicket();
     const text = encodeClaim(
       await makeChallengeClaim(winner, ticket, "ABCDEFGHJK", "Brice"),
     );
-    expect(() => decodeClaim("hello")).toThrow("빕또 당첨 증명이 아니다");
+    expect(() => decodeClaim("hello")).toThrow(
+      "하늘의 별 따기 당첨 증명이 아니다",
+    );
     const body = fromBase64Url(text.slice(CLAIM_PREFIX.length));
     expect(() =>
       decodeClaim(CLAIM_PREFIX + toBase64Url(body.slice(0, body.length - 1))),

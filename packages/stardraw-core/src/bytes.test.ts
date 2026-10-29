@@ -56,8 +56,8 @@ describe("해시", () => {
 
   it("용도 이름이 다르면 같은 바이트라도 해시가 다르다", () => {
     const data = utf8("같은 내용");
-    expect(toHex(taggedHash("bybtto/a", data))).not.toBe(
-      toHex(taggedHash("bybtto/b", data)),
+    expect(toHex(taggedHash("stardraw/a", data))).not.toBe(
+      toHex(taggedHash("stardraw/b", data)),
     );
     // 용도 이름과 내용 사이 0 바이트로 경계가 섞이지 않는다
     expect(toHex(taggedHash("ab", utf8("c")))).not.toBe(

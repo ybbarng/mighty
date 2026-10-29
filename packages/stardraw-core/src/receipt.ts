@@ -26,7 +26,7 @@ function receiptBody(r: Omit<Receipt, "sig">): Uint8Array {
 }
 
 function message(body: Uint8Array): Uint8Array {
-  return concat(utf8("bybtto/receipt/v1"), new Uint8Array([0]), body);
+  return concat(utf8("stardraw/receipt/v1"), new Uint8Array([0]), body);
 }
 
 export async function signReceipt(

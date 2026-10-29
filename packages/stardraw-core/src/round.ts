@@ -45,7 +45,7 @@ export function registrationRoot(
 /**
  * 마감 직후 투명성 로그(Rekor)에 올리는 봉인 값. 응모권 목록과 열쇠 등록 목록을 함께 묶는다.
  * 등록도 drand 전에 고정돼야, 결과를 본 뒤 당첨 응모권의 등록을 빼서 무효로 만들 수 없다.
- * taggedHash("bybtto/seal/v1", round(u32) ‖ count(u32) ‖ merkleRoot ‖ registrationCount(u32) ‖ registrationRoot)
+ * taggedHash("stardraw/seal/v1", round(u32) ‖ count(u32) ‖ merkleRoot ‖ registrationCount(u32) ‖ registrationRoot)
  */
 export function sealDigest(
   r: Pick<
@@ -54,7 +54,7 @@ export function sealDigest(
   >,
 ): Uint8Array {
   return taggedHash(
-    "bybtto/seal/v1",
+    "stardraw/seal/v1",
     new ByteWriter()
       .u32(r.round)
       .u32(r.count)

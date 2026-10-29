@@ -27,10 +27,10 @@ import { type Ticket, ticketId } from "./ticket";
  *    다시 쓸 수 없고, 당첨자는 누가 확인을 요청했는지 보고 서명한다.
  * 2. 바로 보내는 증명: claim ‖ 응모권 id ‖ 받는 사람 ‖ 보내는 사람 ‖ 최근 drand 회차.
  *    메신저 한 번으로 보내는 길로 남겨 둔다.
- * 붙여 넣는 문자열은 `bybtto-claim:` + base64url(바이너리)다.
+ * 붙여 넣는 문자열은 `stardraw-claim:` + base64url(바이너리)다.
  */
 
-export const CLAIM_PREFIX = "bybtto-claim:";
+export const CLAIM_PREFIX = "stardraw-claim:";
 
 export type Claim =
   | {
@@ -69,8 +69,8 @@ function claimBody(c: ClaimFields): Uint8Array {
 function claimMessage(c: ClaimFields): Uint8Array {
   const tag =
     c.kind === "direct"
-      ? "bybtto/claim-direct/v1"
-      : "bybtto/claim-challenge/v1";
+      ? "stardraw/claim-direct/v1"
+      : "stardraw/claim-challenge/v1";
   return concat(utf8(tag), new Uint8Array([0]), claimBody(c));
 }
 
@@ -144,7 +144,7 @@ export function encodeClaim(c: Claim): string {
 export function decodeClaim(text: string): Claim {
   const trimmed = text.trim();
   if (!trimmed.startsWith(CLAIM_PREFIX))
-    throw new Error("빕또 당첨 증명이 아니다");
+    throw new Error("하늘의 별 따기 당첨 증명이 아니다");
   const r = new ByteReader(fromBase64Url(trimmed.slice(CLAIM_PREFIX.length)));
   const kind = r.u8();
   const body = new ByteReader(r.bytes());
@@ -266,7 +266,7 @@ export function encodeConfirmRequest(req: ConfirmRequest): string {
   );
 }
 
-/** `base`(예: https://game.byb.kr/bybtto/confirm) 뒤에 `#`로 붙인다. `#` 뒤는 서버로 가지 않는다 */
+/** `base`(예: https://game.byb.kr/stardraw/confirm) 뒤에 `#`로 붙인다. `#` 뒤는 서버로 가지 않는다 */
 export function confirmRequestUrl(base: string, req: ConfirmRequest): string {
   return `${base}#${encodeConfirmRequest(req)}`;
 }

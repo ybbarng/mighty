@@ -68,7 +68,7 @@ function head(r: UnsolvedRegistration): ByteWriter {
 /** 작업 증명 대상 */
 export function registrationContent(r: UnsolvedRegistration): Uint8Array {
   return concat(
-    utf8("bybtto/register/v1"),
+    utf8("stardraw/register/v1"),
     new Uint8Array([0]),
     head(r).done(),
   );
@@ -98,7 +98,7 @@ export function decodeRegistration(bytes: Uint8Array): KeyRegistration {
 }
 
 export function registrationId(r: KeyRegistration): Uint8Array {
-  return taggedHash("bybtto/registration/v1", encodeRegistration(r));
+  return taggedHash("stardraw/registration/v1", encodeRegistration(r));
 }
 
 /** 장부의 등록 목록과 머클 잎은 id 사전 순이다 */

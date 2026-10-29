@@ -1,9 +1,9 @@
 {
-  "name": "@mighty/bybtto-core",
+  "name": "@mighty/stardraw-core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "빕또(정시 로또) 규칙 — 일정표, 응모권, 작업 증명, 머클, 당첨 번호, 장부 체인, 당첨 증명, 검사. 화면·서버·터미널이 같이 쓴다",
+  "description": "하늘의 별 따기(Stardraw, 정시 로또) 규칙 — 일정표, 응모권, 작업 증명, 머클, 당첨 번호, 장부 체인, 당첨 증명, 검사. 화면·서버·터미널이 같이 쓴다",
   "exports": {
     ".": "./src/index.ts"
   },

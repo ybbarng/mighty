@@ -49,7 +49,7 @@ export function checkNickname(text: string): string | null {
 
 function nicknameMessage(n: Omit<Nickname, "sig">): Uint8Array {
   return concat(
-    utf8("bybtto/nickname/v1"),
+    utf8("stardraw/nickname/v1"),
     new Uint8Array([0]),
     new ByteWriter().u32(n.round).fixed(n.ticketId, 32).text(n.nickname).done(),
   );

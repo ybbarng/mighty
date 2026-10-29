@@ -12,12 +12,12 @@ describe("당첨 번호", () => {
   it("시험 값: 회차 1 + 실제 drand 난수 → seed → 번호", () => {
     const seed = drawSeed(1, RANDOMNESS);
     expect(toHex(seed)).toBe(
-      "df62e99c6e1f30ae9947c1d5d529ed32671ad2f42d0d439a3875e3b0f5e80d61",
+      "7b7a451b60cccb19ef15e24b8880f62c7961ecce5ea34daf6e68bf82101a22f1",
     );
     expect(drawNumbers(seed)).toEqual({
-      order: [13, 41, 44, 35, 21, 32, 16],
-      numbers: [13, 21, 32, 35, 41, 44],
-      bonus: 16,
+      order: [45, 29, 5, 38, 37, 41, 4],
+      numbers: [5, 29, 37, 38, 41, 45],
+      bonus: 4,
     });
   });
 

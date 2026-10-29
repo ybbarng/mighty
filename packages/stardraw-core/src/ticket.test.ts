@@ -42,14 +42,14 @@ describe("열쇠와 서명(WebCrypto P-256)", () => {
     const signer = await generateSigner();
     expect(signer.publicKey.length).toBe(65);
     expect(entrantId(signer.publicKey).length).toBe(16);
-    const message = new TextEncoder().encode("빕또");
+    const message = new TextEncoder().encode("하늘의 별 따기");
     const sig = await signer.sign(message);
     expect(sig.length).toBe(64);
     expect(await verifySignature(signer.publicKey, message, sig)).toBe(true);
     expect(
       await verifySignature(
         signer.publicKey,
-        new TextEncoder().encode("빕또!"),
+        new TextEncoder().encode("하늘의 별 따기!"),
         sig,
       ),
     ).toBe(false);
@@ -86,7 +86,7 @@ describe("응모권 형식", () => {
       `${toHex(ticketContent(FIXED))}00000102`,
     );
     expect(toHex(ticketId(FIXED))).toBe(
-      "8363a6147d4d97c4fe3da0483d3f8c502d81b326c6cb1c4341914c5e2893363d",
+      "00319210354f9c7f5c03ed2a3ae21483b051a4595bbaef6fd7f2848d6091e321",
     );
     // 앞부분 80바이트 ‖ 서명 종류 01 ‖ 원시 서명 64바이트
     expect(TICKET_BODY_LENGTH).toBe(80);

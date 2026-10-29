@@ -7,30 +7,31 @@ const PUB_2 = Uint8Array.from([4, ...new Array<number>(64).fill(2)]);
 
 describe("별자리 지문", () => {
   // 기대값은 사용자에게 보인 시안 HTML의 스크립트를 그대로 Node에서 돌려 얻었다
-  it("시험 값: 04 ‖ 01×64 → 노을빛 부엉이자리", () => {
+  it("시험 값: 04 ‖ 01×64 → 금빛 물병자리", () => {
     const c = constellation(PUB_1);
-    expect(c.name).toBe("노을빛 부엉이자리");
-    expect(c.color).toBe("#ff9f4a");
-    expect(c.seed).toBe(74);
-    expect(c.stars.map((s) => s.n)).toEqual([4, 34, 26, 30, 6, 20, 44]);
-    expect(c.stars[0]?.x).toBeCloseTo(0.5336962531582685, 12);
-    expect(c.stars[0]?.y).toBeCloseTo(0.4389226501722384, 12);
-    expect(c.stars[6]?.x).toBeCloseTo(0.5617190832247727, 12);
-    expect(c.faint).toHaveLength(9);
-    expect(c.lines).toHaveLength(4);
-    expect(c.lines[0]?.[0]?.x).toBeCloseTo(0.321031394223543, 12);
+    expect(c.name).toBe("금빛 물병자리");
+    expect(c.color).toBe("#f4d27a");
+    expect(c.seed).toBe(111);
+    expect(c.stars.map((s) => s.n)).toEqual([6, 17, 22, 4, 34, 2, 45]);
+    expect(c.stars[0]?.x).toBeCloseTo(0.6711556913941317, 12);
+    expect(c.stars[0]?.y).toBeCloseTo(0.4604105724262273, 12);
+    expect(c.stars[6]?.x).toBeCloseTo(0.6538212496912238, 12);
+    expect(c.faint).toHaveLength(6);
+    expect(c.lines).toHaveLength(3);
+    expect(c.lines[0]?.[0]?.y).toBeCloseTo(0.21975246565840878, 12);
   });
 
-  it("시험 값: 04 ‖ 02×64 → 붉은 여우자리", () => {
+  it("시험 값: 04 ‖ 02×64 → 하얀 등대자리", () => {
     const c = constellation(PUB_2);
-    expect(c.name).toBe("붉은 여우자리");
-    expect(c.color).toBe("#ff7a6b");
-    expect(c.seed).toBe(34);
-    expect(c.stars.map((s) => s.n)).toEqual([33, 17, 30, 26, 31, 34, 11]);
-    expect(c.stars[6]?.x).toBeCloseTo(0.8167730822135431, 12);
-    expect(c.stars[6]?.y).toBeCloseTo(0.6741153499246301, 12);
-    expect(c.faint).toHaveLength(6);
-    expect(c.lines[0]?.[0]?.y).toBeCloseTo(0.35757086917463443, 12);
+    expect(c.name).toBe("하얀 등대자리");
+    expect(c.color).toBe("#ffffff");
+    expect(c.seed).toBe(181);
+    expect(c.stars.map((s) => s.n)).toEqual([17, 26, 27, 28, 40, 14, 39]);
+    expect(c.stars[2]?.x).toBeCloseTo(0.33831638529788677, 12);
+    expect(c.stars[2]?.y).toBeCloseTo(0.8232516116453297, 12);
+    expect(c.faint).toHaveLength(8);
+    expect(c.lines).toHaveLength(5);
+    expect(c.lines[0]?.[0]?.x).toBeCloseTo(0.5060879404079185, 12);
   });
 
   it("밝은 별 7개는 서로 다른 꼭짓점, 번호는 1~45에서 서로 다르고, 꺾은선 점은 꼭짓점 중 하나다", async () => {

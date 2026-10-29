@@ -13,7 +13,7 @@ import {
 } from "./signature";
 import { fakePasskey } from "./testing";
 
-const MESSAGE = utf8("bybtto/test\u0000빕또 12회 응모권");
+const MESSAGE = utf8("stardraw/test\u0000하늘의 별 따기 12회 응모권");
 
 describe("원시 P-256 서명", () => {
   it("원시 열쇠(Signer)의 바이트 서명은 raw 서명이 되고 확인을 통과한다", async () => {

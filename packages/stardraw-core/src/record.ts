@@ -55,7 +55,7 @@ export function emptyWinners(): Record<Rank, Uint8Array[]> {
 export function genesisHash(schedule: Schedule): Uint8Array {
   const w = new ByteWriter().u64(schedule.epoch).u16(schedule.entries.length);
   for (const e of schedule.entries) writeEntry(w, e);
-  return taggedHash("bybtto/genesis/v1", w.done());
+  return taggedHash("stardraw/genesis/v1", w.done());
 }
 
 function writeEntry(w: ByteWriter, e: ScheduleEntry): void {
@@ -155,5 +155,5 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
 }
 
 export function recordHash(r: RoundRecord): Uint8Array {
-  return taggedHash("bybtto/record/v1", encodeRecord(r));
+  return taggedHash("stardraw/record/v1", encodeRecord(r));
 }

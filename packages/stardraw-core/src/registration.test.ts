@@ -40,7 +40,7 @@ describe("열쇠 등록 형식", () => {
     );
     // 작업 증명 대상은 용도 이름 ‖ 00 ‖ nonce를 뺀 앞부분
     expect(toHex(registrationContent(RAW))).toBe(
-      `${toHex(new TextEncoder().encode("bybtto/register/v1"))}0001010000${toHex(PUB)}`,
+      `${toHex(new TextEncoder().encode("stardraw/register/v1"))}0001010000${toHex(PUB)}`,
     );
   });
 

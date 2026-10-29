@@ -231,7 +231,7 @@ export async function verifyLedger(
       skipped.push(`${round}회차: 머클 루트 로그 시각(확인 수단 없음)`);
     }
 
-    let sampleSeed = taggedHash("bybtto/sample/v1", record.merkleRoot, head);
+    let sampleSeed = taggedHash("stardraw/sample/v1", record.merkleRoot, head);
     if (!record.void) {
       const beacon = {
         round: record.drandRound,
@@ -239,7 +239,7 @@ export async function verifyLedger(
       };
       if (!beaconVerifier(beacon)) fail("drand 서명이 맞지 않는다");
       const randomness = drandRandomness(beacon);
-      sampleSeed = taggedHash("bybtto/sample/v1", randomness);
+      sampleSeed = taggedHash("stardraw/sample/v1", randomness);
       const draw = drawNumbers(drawSeed(round, randomness));
       if (
         draw.numbers.join() !== record.numbers.join() ||
@@ -366,7 +366,7 @@ export function pickSample(
   }
   for (let j = 0; picked.size < k; j++) {
     const h = taggedHash(
-      "bybtto/sample-pick/v1",
+      "stardraw/sample-pick/v1",
       seed,
       new ByteWriter().u32(j).done(),
     );

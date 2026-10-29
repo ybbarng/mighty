@@ -3,7 +3,7 @@ import { MAX_NUMBER, PICK_COUNT } from "./ticket";
 
 /**
  * 당첨 번호(docs/36 4절).
- * seed = taggedHash("bybtto/seed/v1", round(u32) ‖ drand 난수)
+ * seed = taggedHash("stardraw/seed/v1", round(u32) ‖ drand 난수)
  * 머클 루트·응모 수처럼 운영자가 바꿀 수 있는 값은 seed에 넣지 않는다(8-1 O4).
  *
  * 뽑기: SHA-256(seed ‖ i(u32))를 i = 0, 1, 2, …로 이어 바이트를 하나씩 읽는다.
@@ -15,7 +15,7 @@ const ACCEPT_BELOW = Math.floor(256 / MAX_NUMBER) * MAX_NUMBER;
 
 export function drawSeed(round: number, randomness: Uint8Array): Uint8Array {
   return taggedHash(
-    "bybtto/seed/v1",
+    "stardraw/seed/v1",
     new ByteWriter().u32(round).fixed(randomness, 32).done(),
   );
 }
@@ -32,7 +32,7 @@ export function drawNumbers(seed: Uint8Array): Draw {
   const order: number[] = [];
   for (let i = 0; order.length < PICK_COUNT + 1; i++) {
     const block = taggedHash(
-      "bybtto/draw/v1",
+      "stardraw/draw/v1",
       seed,
       new ByteWriter().u32(i).done(),
     );

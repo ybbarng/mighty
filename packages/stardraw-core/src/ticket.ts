@@ -68,11 +68,11 @@ export function ticketBody(t: Omit<Ticket, "sig">): Uint8Array {
 }
 
 export function ticketId(t: Omit<Ticket, "sig">): Uint8Array {
-  return taggedHash("bybtto/ticket/v1", ticketBody(t));
+  return taggedHash("stardraw/ticket/v1", ticketBody(t));
 }
 
 function signMessage(body: Uint8Array): Uint8Array {
-  return concat(utf8("bybtto/ticket-sig/v1"), new Uint8Array([0]), body);
+  return concat(utf8("stardraw/ticket-sig/v1"), new Uint8Array([0]), body);
 }
 
 export function encodeTicket(t: Ticket): Uint8Array {

@@ -6,7 +6,7 @@ import { MAX_NUMBER } from "./ticket";
  * 눈으로 맞춰 본다. 복사돼도 증명을 만들 수 없어 보여 줘도 된다. 그리기는 화면 몫이고 여기는 재료만 낸다.
  *
  * 규칙(사용자에게 보인 시안 그대로):
- * - h = SHA-256("bybtto-star" ‖ 공개 열쇠 65바이트), b = h ‖ SHA-256(h) (64바이트)
+ * - h = SHA-256("stardraw-star" ‖ 공개 열쇠 65바이트), b = h ‖ SHA-256(h) (64바이트)
  * - 그림 = FIGURES[b[0] & 15](꺾은선 묶음, 0~10 칸 좌표), 앞말·색 = TINTS[(b[0] >> 4) & 7],
  *   좌우 뒤집기 = b[0] >> 7, 기울기 = (b[1] / 255 - 0.5) × 0.45 라디안
  * - b[2]부터 한 바이트씩 읽는다(64바이트를 넘으면 처음부터 다시):
@@ -539,7 +539,7 @@ const BRIGHT_STARS = 7;
 const ACCEPT_BELOW = Math.floor(256 / MAX_NUMBER) * MAX_NUMBER;
 
 export function constellation(publicKey: Uint8Array): Constellation {
-  const h = sha256(utf8("bybtto-star"), publicKey);
+  const h = sha256(utf8("stardraw-star"), publicKey);
   const b = concat(h, sha256(h));
   let i = 2;
   const next = () => b[i++ % b.length] as number;
