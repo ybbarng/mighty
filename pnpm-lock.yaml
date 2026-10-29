@@ -262,6 +262,9 @@ importers:
       '@mighty/omok-engine':
         specifier: workspace:*
         version: link:../../packages/omok-engine
+      '@mighty/stardraw-core':
+        specifier: workspace:*
+        version: link:../../packages/stardraw-core
       '@trystero-p2p/core':
         specifier: 0.26.0
         version: 0.26.0
