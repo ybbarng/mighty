@@ -3,8 +3,8 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-29T05:33:41Z",
-  "here": "next-commit-reveal",
+  "updatedAt": "2026-10-29T06:22:33Z",
+  "here": "fairness-realtime",
   "regions": [
     {
       "id": "platform",
@@ -766,13 +766,42 @@
     },
     {
       "id": "next-commit-reveal",
-      "title": "숫자야구(배틀십은 다음)",
+      "title": "숫자야구",
       "parent": "next-games",
-      "status": "building",
+      "status": "done",
       "size": 2,
-      "summary": "서브에이전트가 만드는 중. 각자 숫자를 잠가 두고(약속), 판정은 비밀을 가진 기기가 답하고, 판 끝에 공개해 모두가 다시 계산한다",
+      "summary": "내 비밀 수는 약속(해시)만 엔진에, 답은 내 기기가, 판 끝 공개로 모든 답을 다시 계산. 컴퓨터 세 단계, 퍼즐, 온라인, 5단원 배우기",
+      "since": "2026-10-29",
       "found": "2026-10-29",
-      "since": "2026-10-29"
+      "links": [
+        {
+          "label": "숫자야구",
+          "path": "docs/34-number-baseball.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "baseball-defaults",
+          "type": "fork",
+          "title": "숫자야구 기본값(세 자리·1~9·공정 규칙 켬·한 판), 거짓이 드러나면 진다",
+          "owner": "me",
+          "options": [
+            "고른 기본값 그대로",
+            "하던 규칙으로 고치기"
+          ],
+          "recommend": "고른 기본값으로 해 보고 고치기",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "next-battleship",
+      "title": "배틀십",
+      "parent": "next-games",
+      "status": "fog",
+      "size": 2,
+      "summary": "배 배치를 칸마다 약속해 두고, 맞았는지 물을 때 그 칸만 공개(숫자야구의 약속 후 공개를 넓힌다)",
+      "found": "2026-10-29"
     },
     {
       "id": "next-yut",
