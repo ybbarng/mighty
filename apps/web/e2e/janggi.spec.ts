@@ -116,6 +116,10 @@ test("장기: 게임 목록에서 들어가 상차림을 고르고 두다가 무
 test("장기 배우기: 첫 단원 미션에서 차로 졸을 잡는다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/janggi");
   await page.getByRole("button", { name: /장기 배우기/ }).click();
@@ -332,6 +336,10 @@ test("장기 수 배우기: 외통 문제를 틀렸다 다시 풀고, 진행이 
 test("장기 수 배우기: 포 길 열기를 틀렸다 다시 풀고, 멱 막기와 세 수 외통 첫 수를 둔다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "문제 풀이 진행은 크기와 상관없다(공통 문제 화면의 배치는 장기 외통 문제가 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/janggi");
   await page.getByRole("button", { name: /장기 배우기/ }).click();

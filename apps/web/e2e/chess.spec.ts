@@ -62,7 +62,7 @@ async function openOptions(page: Page) {
     await expect(page.getByRole("button", { name: "처음으로" })).toBeVisible({
       timeout: 1000,
     });
-  }).toPass();
+  }).toPass({ intervals: [50] });
 }
 
 /** 첫 화면 → 옵션에서 컴퓨터(고르면)와 백을 고르고 → 나홀로 체스 */
@@ -132,6 +132,10 @@ test("체스: 게임 목록에서 들어가 두다가 이어하고, 무르고 �
 test("체스 배우기: 첫 단원 미션을 틀렸다가 다시 해 룩으로 폰을 잡는다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/chess");
   await page.getByRole("button", { name: /체스 배우기/ }).click();
@@ -206,6 +210,10 @@ test("체스 옵션: 기물 모양을 기호로 바꾸면 판의 기물이 기�
 test("체스 배우기: 폰이 끝줄에 닿으면 고르기 창에서 퀸을 고른다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   // 앞 두 단원을 마친 상태로 시작한다(단원은 차례대로 열린다).
   await page.addInitScript(() => {
@@ -398,6 +406,10 @@ test("체스: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
 test("체스 수 배우기: 메이트 문제를 틀렸다 다시 풀고, 진행이 목록에 남는다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "문제 풀이 진행은 크기와 상관없다(공통 문제 화면의 배치는 장기 외통 문제가 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/chess");
   await page.getByRole("button", { name: /체스 배우기/ }).click();
@@ -435,6 +447,10 @@ test("체스 수 배우기: 메이트 문제를 틀렸다 다시 풀고, 진행�
 test("체스 수 배우기: 포크 문제를 틀렸다 다시 풀고, 진행이 목록에 남는다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "문제 풀이 진행은 크기와 상관없다(공통 문제 화면의 배치는 장기 외통 문제가 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/chess");
   await page.getByRole("button", { name: /체스 배우기/ }).click();

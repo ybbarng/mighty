@@ -148,6 +148,10 @@ test("바둑: 둘이 이어 쉬면 판 위 그대로 세어 끝난다", async ({
 test("바둑 배우기: 첫 단원 미션을 틀렸다가 다시 해서 백 한 점을 따낸다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/baduk");
   await page.getByRole("button", { name: /바둑 배우기/ }).click();
@@ -314,6 +318,10 @@ test("바둑 개인 시간: 시계가 가고, 다 쓰면 시간패다", async ({
 test("바둑 수 배우기: 단수 방향을 틀렸다 다시 풀고, 축으로 몰아 따내고, 급소로 잡는다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "문제 풀이 진행은 크기와 상관없다(공통 문제 화면의 배치는 장기 외통 문제가 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/baduk");
   await page.getByRole("button", { name: /바둑 배우기/ }).click();

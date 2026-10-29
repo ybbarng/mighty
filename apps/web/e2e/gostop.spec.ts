@@ -193,6 +193,10 @@ test("고스톱: 새로고침해도 하던 판을 이어서 친다", async ({ pa
 test("고스톱 배우기: 첫 단원 미션을 틀렸다가 다시 해서 짝을 맞춘다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   await page.goto("/gostop");
   await page.getByRole("button", { name: /고스톱 배우기/ }).click();
   await expect(page.getByText("0/6")).toBeVisible();

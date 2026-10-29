@@ -282,6 +282,10 @@ test("하트: 방장이 방을 만들고 친구가 들어와 한 판을 둔다",
 test("하트 배우기: 설명·퀴즈·미션으로 단원을 끝낸다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await prepare(page);
@@ -337,7 +341,7 @@ test("하트 배우기: 설명·퀴즈·미션으로 단원을 끝낸다", async
         await button.click({ position: { x: 8, y: 8 } });
     }
     await expect(pass).toBeEnabled({ timeout: 2_000 });
-  }).toPass({ timeout: 20_000 });
+  }).toPass({ intervals: [50], timeout: 20_000 });
   await pass.click();
   await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
     timeout: 20_000,

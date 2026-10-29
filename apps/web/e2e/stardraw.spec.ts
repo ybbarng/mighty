@@ -32,7 +32,7 @@ async function showDrawResult(page: Page) {
     // 누르려는 사이에 연출이 끝나 단추가 숨으면(결과가 나온다) 누르기가 실패해도 된다
     await skip.click({ timeout: 1_000 }).catch(() => {});
     await expect(result).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 30_000 });
+  }).toPass({ intervals: [50], timeout: 30_000 });
 }
 
 /** 첫 응모 단추: "Touch ID로 응모하기"처럼 기기에 맞는 잠금 이름이 붙는다 */

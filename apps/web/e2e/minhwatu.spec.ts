@@ -148,6 +148,10 @@ test("민화투: 목록에서 들어가 컴퓨터와 한 판을 끝까지 치고
 test("민화투 배우기: 첫 단원 미션은 틀리면 실패하고 다시 해서 성공한다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/minhwatu");
   await page.getByRole("button", { name: /민화투 배우기/ }).click();

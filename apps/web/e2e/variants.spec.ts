@@ -92,7 +92,7 @@ for (const variant of VARIANTS) {
           await expect(page.getByText(/\((\d)\/\1\)/)).toBeVisible({
             timeout: 200,
           });
-        }).toPass({ timeout: 10_000 });
+        }).toPass({ intervals: [50], timeout: 10_000 });
         await shot("exchange-selected");
         await page.getByRole("button", { name: /로 확정$/ }).click();
       } else if (await page.getByText("프렌드를 정하세요").isVisible()) {

@@ -228,7 +228,9 @@ test("오목: 끝낸 판은 내 기록에 쌓이고 복기에서 한 수씩 다�
   await page.getByRole("button", { name: "기권" }).click();
   await expect(page.getByRole("status")).toHaveText("기권했어요");
   // 복기 기록은 IndexedDB에 비동기로 쓴다. 끝난 판이 실제로 쓰인 뒤에 떠난다(바로 떠나면 쓰기가 끊긴다).
-  await expect.poll(() => page.evaluate(finishedOmokGames)).toBe(1);
+  await expect
+    .poll(() => page.evaluate(finishedOmokGames), { intervals: [50] })
+    .toBe(1);
 
   await page.goto("/profile?game=omok");
   await expect(page.getByRole("tab", { name: "● 오목" })).toHaveAttribute(
@@ -261,6 +263,10 @@ async function placeAt(page: Page, x: number, y: number, touch: boolean) {
 test("오목 배우기: 단원을 끝내고, 미션은 틀리면 다시 한다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/omok");
   await page.getByRole("button", { name: /오목 배우기/ }).click();

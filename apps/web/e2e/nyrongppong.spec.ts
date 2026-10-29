@@ -174,6 +174,10 @@ test("나이롱뽕: 목록에서 들어가 정해진 패로 컴퓨터와 끝까�
 test("나이롱뽕 배우기: 첫 단원 미션에서 12월을 버린다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/nyrongppong");
   await page.getByRole("button", { name: /나이롱뽕 배우기/ }).click();

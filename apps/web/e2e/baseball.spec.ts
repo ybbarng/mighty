@@ -448,7 +448,9 @@ test("숫자야구: 끝낸 판은 내 기록에 쌓이고 복기에서 한 걸�
   });
   await page.getByRole("button", { name: "기권" }).click();
   await expect(status(page)).toHaveText("기권했어요");
-  await expect.poll(() => page.evaluate(finishedBaseballGames)).toBe(1);
+  await expect
+    .poll(() => page.evaluate(finishedBaseballGames), { intervals: [50] })
+    .toBe(1);
 
   await page.goto("/profile?game=baseball");
   await expect(page.getByRole("tab", { name: "⚾ 숫자야구" })).toHaveAttribute(
@@ -476,6 +478,10 @@ test("숫자야구: 끝낸 판은 내 기록에 쌓이고 복기에서 한 걸�
 test("숫자야구 배우기: 단원을 끝내고, 미션은 틀리면 다시 한다", async ({
   page,
 }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "배우기 진행은 크기와 상관없다(공통 배우기 화면의 배치는 tutorial.spec이 세 크기로 본다)",
+  );
   const touch = info.project.name.startsWith("phone");
   await page.goto("/baseball");
   await page.getByRole("button", { name: /숫자야구 배우기/ }).click();
