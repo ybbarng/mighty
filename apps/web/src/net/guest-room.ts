@@ -134,6 +134,14 @@ export class RemoteMatch<
    * 새로고침한 방장의 기록에 내 행동이 `mine`개뿐이다: 결과를 기다리던 행동을 받지 못했다.
    * 그 행동을 그대로 다시 보낸다(카드 열쇠는 이미 공개했다)
    */
+  /** 방장 연결이 다시 잡혔다: 연결이 없을 때 누른 행동을 바로 다시 보낸다(방장에게 간 적이 없어 두 번 들어갈 수 없다) */
+  resendUndelivered(): void {
+    if (!this.inFlight || !this.undelivered) return;
+    this.undelivered = false;
+    this.resent = true;
+    this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
+  }
+
   resendLost(mine: number): void {
     // 방장 연결이 없을 때 누른 행동은 어디에도 가지 않았다. 기록 수와 상관없이 다시 보낸다.
     // (보낸 행동 목록은 내가 새로고침한 뒤 것만 있을 수 있어 `mine`과 견줄 수 없다)
@@ -152,11 +160,9 @@ export class RemoteMatch<
   private resent = false;
 
   receive(snapshot: Snapshot<View, Event>): void {
+    // 아예 못 보낸 행동은 방장에게 간 적이 없어 어떤 화면도 그 결과가 아니다. 다시 보낼 때까지 기다림을 풀지 않는다.
     if (this.resent) this.resent = false;
-    else {
-      this.inFlight = false;
-      this.undelivered = false;
-    }
+    else if (!this.undelivered) this.inFlight = false;
     this.last = snapshot.view;
     this.seen.push(JSON.stringify(snapshot.view));
     if (this.listeners.size === 0) this.pending.push(snapshot);
@@ -896,6 +902,7 @@ export class GuestRoom<
           // 받지 못한 행동이 있는지 지금 화면에서 확인한다.
           this.checkLost = true;
           this.resendOwnFair(from);
+          this.match?.resendUndelivered();
         }
         this.seat = message.seat;
         this.token = message.token;
