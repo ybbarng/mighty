@@ -88,7 +88,19 @@ export type Cue =
   /** 하늘의 별 따기: 공 하나가 관으로 나와 별이 켜지는 "똑-딩" */
   | "starBall"
   /** 하늘의 별 따기: 당첨(맑은 종이 올라가며 반짝임) */
-  | "starWin";
+  | "starWin"
+  /** 윷놀이: 윷가락을 던져 공중에서 서로 부딪는 "따르륵" */
+  | "yutThrow"
+  /** 윷놀이: 윷가락이 멍석에 떨어지는 "탁탁" */
+  | "yutLand"
+  /** 윷놀이: 윷·모가 나와 한 번 더(떨어지는 소리와 맑은 종) */
+  | "yutBonus"
+  /** 윷놀이: 말을 판에 놓는 "톡" */
+  | "yutPiece"
+  /** 윷놀이: 상대 말을 잡는 "딱-퐁" */
+  | "yutCapture"
+  /** 윷놀이: 말이 나는 "띠링" */
+  | "yutHome";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -134,6 +146,12 @@ export const CUE_LABELS: Record<Cue, string> = {
   starMix: "하늘의 별 따기: 공 섞기",
   starBall: "하늘의 별 따기: 공 나옴",
   starWin: "하늘의 별 따기: 당첨",
+  yutThrow: "윷놀이: 던지기",
+  yutLand: "윷놀이: 떨어지기",
+  yutBonus: "윷놀이: 윷·모(한 번 더)",
+  yutPiece: "윷놀이: 말 놓기",
+  yutCapture: "윷놀이: 잡기",
+  yutHome: "윷놀이: 나기",
 };
 
 /**
@@ -176,6 +194,12 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   ball: 8,
   homerun: 8.5,
   go: -1.5,
+  yutThrow: 6,
+  yutLand: 5,
+  yutBonus: 2,
+  yutPiece: 7,
+  yutCapture: 3,
+  yutHome: 0,
 };
 
 function trim(cue: Cue): number {
@@ -496,6 +520,24 @@ function tap(v: Voice, at: number, gain = 1, bright = 1): void {
     gain: 0.9 * gain,
   });
   thump(v, at, 210 * vary, 110, 0.06, 0.3 * gain);
+}
+
+/** 단단한 나무끼리 부딪는 짧은 "탁"(윷가락·윷말). `pitch`가 크면 높고 가볍다 */
+function woodClack(v: Voice, at: number, gain = 1, pitch = 1): void {
+  const vary = 0.92 + random() * 0.16;
+  noise(v, at, 0.03, {
+    filter: "bandpass",
+    freq: 1900 * pitch * vary,
+    q: 2.2,
+    gain: 0.7 * gain,
+    attack: 0.001,
+  });
+  tone(v, 820 * pitch * vary, at, 0.07, {
+    type: "triangle",
+    gain: 0.08 * gain,
+    endFreq: 640 * pitch * vary,
+    attack: 0.001,
+  });
 }
 
 /** 덱을 둘로 가르는 "스윽" */
@@ -1057,6 +1099,55 @@ function render(cue: Cue, v: Voice): void {
           gain: 0.025,
           attack: 0.003,
         });
+      break;
+    case "yutThrow":
+      // 손을 떠난 윷가락 넷이 공중에서 서로 스치며 부딪는 가벼운 "따르륵"
+      for (let i = 0; i < 4; i++)
+        woodClack(v, i * 0.045 + random() * 0.02, 0.35);
+      noise(v, 0, 0.25, {
+        filter: "bandpass",
+        freq: 1600,
+        sweepTo: 900,
+        q: 0.7,
+        gain: 0.04,
+        attack: 0.05,
+      });
+      break;
+    case "yutLand":
+      // 멍석에 떨어진 가락들이 차례로 닿는 "탁 타닥"
+      woodClack(v, 0, 0.9);
+      woodClack(v, 0.05 + random() * 0.02, 0.6);
+      woodClack(v, 0.11 + random() * 0.02, 0.5);
+      thump(v, 0, 140, 80, 0.09, 0.18);
+      break;
+    case "yutBonus":
+      // 윷·모: 떨어지는 소리 뒤 맑은 종 둘이 올라간다(한 번 더)
+      woodClack(v, 0, 0.9);
+      woodClack(v, 0.05, 0.6);
+      bell(v, E5, 0.12, 0.45, 0.07);
+      bell(v, A5, 0.22, 0.7, 0.08);
+      break;
+    case "yutPiece":
+      // 나무 말을 판에 놓는 짧고 둥근 "톡"
+      woodClack(v, 0, 0.8, 0.75);
+      thump(v, 0, 180, 110, 0.06, 0.16);
+      break;
+    case "yutCapture":
+      // 상대 말을 쳐 내는 "딱"과 말이 처음으로 튕겨 가는 "퐁"
+      woodClack(v, 0, 1, 1.2);
+      thump(v, 0, 160, 90, 0.08, 0.22);
+      tone(v, 700, 0.07, 0.18, {
+        type: "sine",
+        gain: 0.12,
+        endFreq: 1100,
+        attack: 0.004,
+      });
+      break;
+    case "yutHome":
+      // 말이 참먹이를 지나 나는 "띠링"
+      pluck(v, C5, 0, 0.25, 0.12);
+      bell(v, G5, 0.08, 0.6, 0.07);
+      bell(v, C6, 0.16, 0.8, 0.06);
       break;
     case "roundEnd":
       // 점수표를 펼치는 "사락"과 "띵동"

@@ -137,6 +137,21 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "beep", when: "별·번호를 고름" },
     ],
   },
+  {
+    title: "윷놀이",
+    cues: [
+      { cue: "yutThrow", when: "던지기를 누름(나·상대 모두)" },
+      { cue: "yutLand", when: "윷가락이 떨어져 도·개·걸·빽도가 나옴" },
+      { cue: "yutBonus", when: "윷·모가 나와 한 번 더" },
+      { cue: "yutPiece", when: "말을 움직임·업음" },
+      { cue: "yutCapture", when: "상대 말을 잡음(한 번 더)" },
+      { cue: "yutHome", when: "말이 참먹이를 지나 남" },
+      { cue: "invalid", when: "쓸 수 없는 결과·말" },
+      { cue: "win", when: "내 편이 말을 모두 냄" },
+      { cue: "lose", when: "상대 편이 먼저 냄·기권" },
+      { cue: "roundEnd", when: "이긴 편 없이 끝남" },
+    ],
+  },
 ];
 
 interface Level {

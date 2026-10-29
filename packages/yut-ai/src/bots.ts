@@ -187,14 +187,26 @@ function chanceValue(state: YutState, side: number, mySeat: number): number {
   return total;
 }
 
-/** 고수: 수를 둔 뒤 다음 던지기를 확률대로 펼쳐 기댓값이 가장 큰 수(2수 expectimax) */
-export const yutExpertBot = makeBot("고수", (view, options) => {
+/** 고수가 보는 수마다의 기댓값(다시 보기 해설에도 쓴다). 단위는 던지기 수 */
+export function expertValues(
+  view: YutView,
+  options: readonly MoveOption[],
+): number[] {
   const state = asState(view);
   const side = sideOf(view.rules, view.turn);
-  return argmax(options, (option) => {
+  return options.map((option) => {
     const after = finishTurn(apply(state, option), side, view.turn);
     return chanceValue(after, side, view.turn);
   });
+}
+
+/** 고수: 수를 둔 뒤 다음 던지기를 확률대로 펼쳐 기댓값이 가장 큰 수(2수 expectimax) */
+export const yutExpertBot = makeBot("고수", (view, options) => {
+  const values = expertValues(view, options);
+  return argmax(
+    options.map((option, i) => ({ option, value: values[i] as number })),
+    (o) => o.value,
+  ).option;
 });
 
 export const YUT_BOTS = [

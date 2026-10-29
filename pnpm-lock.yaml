@@ -265,6 +265,12 @@ importers:
       '@mighty/stardraw-core':
         specifier: workspace:*
         version: link:../../packages/stardraw-core
+      '@mighty/yut-ai':
+        specifier: workspace:*
+        version: link:../../packages/yut-ai
+      '@mighty/yut-engine':
+        specifier: workspace:*
+        version: link:../../packages/yut-engine
       '@trystero-p2p/core':
         specifier: 0.26.0
         version: 0.26.0

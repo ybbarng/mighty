@@ -14,7 +14,8 @@ export type GameEntry = {
     | "gostop"
     | "minhwatu"
     | "baseball"
-    | "stardraw";
+    | "stardraw"
+    | "yut";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -114,5 +115,14 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?",
     players: "누구나",
     path: "/stardraw",
+  },
+  {
+    id: "yut",
+    name: "윷놀이",
+    englishName: "Yut",
+    tagline:
+      "윷가락을 던져 말을 몰고, 업고, 잡는다. 던지기는 모두의 기기가 함께 정한다",
+    players: "2~4명",
+    path: "/yut",
   },
 ];

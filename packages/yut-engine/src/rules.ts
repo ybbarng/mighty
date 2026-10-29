@@ -15,6 +15,8 @@ export interface YutRules {
   backDo: boolean;
   flatPercent: 50 | 60;
   landOnHome: boolean;
+  /** 판 게임 공통 온라인 화면이 보는 개인 시간 자리. 윷놀이는 시간 규칙이 없어 늘 비어 있다(docs/37 4절) */
+  time?: never;
 }
 
 export const STANDARD_RULES: YutRules = {
