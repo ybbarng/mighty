@@ -17,7 +17,7 @@ await prepareGroup("r255");
  */
 export async function until(
   condition: () => boolean,
-  ms = 170_000,
+  ms = 50_000,
 ): Promise<void> {
   const start = Date.now();
   while (!condition()) {
@@ -147,7 +147,7 @@ export async function playRounds(
   match.drain();
   while (scored < rounds) {
     // 다른 시험과 CPU를 나눠 쓰거나 기기가 바쁘면 몇 배 느려진다. 멈춘 판만 잡도록 넉넉히 둔다.
-    if (Date.now() - start > 300_000) throw new Error("판이 끝나지 않는다");
+    if (Date.now() - start > 50_000) throw new Error("판이 끝나지 않는다");
     if (incidents.length > 0) break;
     const hostView = match.current();
     if (hostView.phase === "gameOver") break;

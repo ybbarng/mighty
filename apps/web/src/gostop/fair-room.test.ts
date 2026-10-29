@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { gostopBeginnerBot, gostopIntermediateBot } from "@mighty/gostop-ai";
 import {
   GOSTOP3_RULES,
@@ -91,6 +92,5 @@ describe("고스톱 암호화방(멘탈 포커)", () => {
       expect(replayed.error).toBeNull();
       expect((replayed.states.at(-1) as GostopState).phase).toBe("gameOver");
     },
-    120_000,
   );
 });

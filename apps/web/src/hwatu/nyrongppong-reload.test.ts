@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * 나이롱뽕 암호화방 새로고침 시험: 참가자·방장이 판 중간에 새로고침해도 이어 치고 모두의 검증을 통과한다.
  * 나이롱뽕은 가져온 카드를 그 사람만 알아 새로고침 뒤 되살리는 것이 많다. 다른 시험과 떨어져 혼자 돌게
@@ -31,7 +32,7 @@ describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) �
     for (let attempt = 0; attempt < 10; attempt++)
       if (await nyrongppongReloadScenario()) return;
     throw new Error("새로고침할 지점까지 가는 판을 만들지 못했다");
-  }, 180_000);
+  });
 });
 
 /**

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { type Action, presetRules } from "@mighty/engine";
 import { ManualClock } from "@mighty/fair-play";
@@ -24,7 +25,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function until(condition: () => boolean): Promise<void> {
   const start = Date.now();
   while (!condition()) {
-    if (Date.now() - start > 60_000)
+    if (Date.now() - start > 50_000)
       throw new Error("조건을 기다리다 시간이 지났다");
     await flush();
   }
@@ -175,7 +176,7 @@ describe("컴퓨터 자리", () => {
     host.finish();
     await until(() => audits.length === 1);
     expect(audits[0]).toEqual({ ok: true });
-  }, 30_000);
+  });
 
   it("A4: 방장이 컴퓨터 자리를 다른 수로 조종하면 잡힌다", async () => {
     const { host, a } = await botRoom();
@@ -212,7 +213,7 @@ describe("컴퓨터 자리", () => {
     host.finish();
     await until(() => audits.length === 1);
     expect(audits[0]?.ok).toBe(false);
-  }, 30_000);
+  });
 });
 
 describe("참가자가 고친 경우", () => {

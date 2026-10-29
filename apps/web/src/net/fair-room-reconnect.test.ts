@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot } from "@mighty/ai";
 import { type MatchState, type PlayerView, presetRules } from "@mighty/engine";
 import { isToken } from "@mighty/fair-play";
@@ -74,7 +75,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
     );
     expect(scored).toBe(1);
     await until(() => verified.length > 0);
-  }, 180_000);
+  });
 
   it("끊긴 사람을 기다리다 투표가 열리고, 남은 사람의 과반이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
     const { net, host, guests, clock } = await setup(
@@ -124,7 +125,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
       [g1, g2].every((g) => g.match?.current().phase === "gameOver"),
     );
     expect(g1.lobby?.endVote).toBeUndefined();
-  }, 120_000);
+  });
 
   it("복기: 방장과 참가자가 남기는 기록(판별 실제 패 포함)을 다시 돌리면 실제 카드로 같은 판이 나온다", async () => {
     const { host, guests, incidents } = await setup(
@@ -187,7 +188,7 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
         expect(scoredAt).toBeGreaterThan(0);
       }
     }
-  }, 180_000);
+  });
 
   it("방장이 잠깐 끊겼다 돌아오면 참가자는 기다렸다 같은 판을 이어 간다", async () => {
     const { net, host, guests, incidents } = await setup(
@@ -218,5 +219,5 @@ describe("멘탈 포커 온라인 대전: 끊김과 기록", () => {
     const scored = await playRounds(host, guests, 1, incidents, hostBidsTop);
     expect(incidents.map((i) => i.reason)).toEqual([]);
     expect(scored).toBe(1);
-  }, 180_000);
+  });
 });

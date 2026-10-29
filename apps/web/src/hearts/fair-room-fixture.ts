@@ -17,7 +17,7 @@ await prepareGroup("r255");
 
 export async function until(
   condition: () => boolean,
-  ms = 25_000,
+  ms = 50_000,
 ): Promise<void> {
   const start = Date.now();
   while (!condition()) {
@@ -105,7 +105,7 @@ export async function playUntil(
   );
   const start = Date.now();
   while (!done() && incidents.length === 0) {
-    if (Date.now() - start > 25_000) {
+    if (Date.now() - start > 50_000) {
       const raw = (
         match as unknown as {
           rawState(): {

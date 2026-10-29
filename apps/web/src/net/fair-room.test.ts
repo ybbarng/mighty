@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { presetRules } from "@mighty/engine";
 import {
   type FairGuestSeat,
@@ -45,14 +46,12 @@ describe("멘탈 포커 온라인 대전", () => {
       expect(
         incidents.map((i) => `${i.reporter}:${i.seat}:${i.reason}`),
       ).toEqual([]);
-      await until(
-        () =>
-          guests.every(
-            (g) =>
-              g.match?.current().roundNumber ===
-              host.match?.current().roundNumber,
-          ),
-        30_000,
+      await until(() =>
+        guests.every(
+          (g) =>
+            g.match?.current().roundNumber ===
+            host.match?.current().roundNumber,
+        ),
       ).catch(() => {
         throw new Error(
           `판 번호: 방장 ${host.match?.current().roundNumber}, 참가자 ${guests.map((g) => `${g.match?.current().roundNumber}(${(g.fair as FairGuestSeat | null)?.coordinator.deal})`).join(",")} 방장 기기 ${(host.fair as FairHostTable | null)?.coordinator.deal}`,
@@ -66,6 +65,5 @@ describe("멘탈 포커 온라인 대전", () => {
       expect(verified.length).toBeGreaterThanOrEqual(scored * guestCount);
       expect(seen.some((m) => m.includes('"hands"'))).toBe(false);
     },
-    180_000,
   );
 });

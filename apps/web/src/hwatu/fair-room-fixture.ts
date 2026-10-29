@@ -15,7 +15,7 @@ await prepareGroup("r255");
 export async function until(
   condition: () => boolean,
   what = "조건",
-  ms = 170_000,
+  ms = 50_000,
 ): Promise<void> {
   const start = Date.now();
   while (!condition()) {

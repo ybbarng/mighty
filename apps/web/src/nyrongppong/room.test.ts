@@ -25,7 +25,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function until(condition: () => boolean): Promise<void> {
   const start = Date.now();
   while (!condition()) {
-    if (Date.now() - start > 25_000)
+    if (Date.now() - start > 50_000)
       throw new Error("조건을 기다리다 시간이 지났다");
     await flush();
   }

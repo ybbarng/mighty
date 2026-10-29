@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { gostopIntermediateBot } from "@mighty/gostop-ai";
 import {
   createGostopScenario,

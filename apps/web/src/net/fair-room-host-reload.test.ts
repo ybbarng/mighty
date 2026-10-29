@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot } from "@mighty/ai";
 import { type PlayerView, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
@@ -60,7 +61,8 @@ describe("멘탈 포커 온라인 대전: 방장 새로고침", () => {
         const before = current.match?.actionLog().length ?? 0;
         // 새로고침: 방장 기기 메모리는 사라지고, 남긴 것으로 새 연결에서 방을 다시 연다.
         net.disconnect(k === 0 ? "host" : `host${k}`);
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        // 메모리 네트워크는 끊김 알림을 마이크로태스크로 보내므로, 다음 차례 하나만 양보하면 모두에게 닿는다
+        await new Promise((resolve) => setTimeout(resolve, 0));
         const restore = store.load();
         expect(restore?.saved.match).not.toBeNull();
         current = new HostRoom({
@@ -98,6 +100,5 @@ describe("멘탈 포커 온라인 대전: 방장 새로고침", () => {
       // 판마다 검증은 판 끝 기록을 받은 뒤 비동기로 끝난다.
       await until(() => verified.length >= rounds * guestCount);
     },
-    240_000,
   );
 });

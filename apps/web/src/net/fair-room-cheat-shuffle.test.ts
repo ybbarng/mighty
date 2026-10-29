@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { presetRules } from "@mighty/engine";
 import { Party, PROOF_DEFER_MS } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
@@ -56,6 +57,6 @@ describe("멘탈 포커 온라인 대전", () => {
       );
       expect(own.every((i) => i.seat === cheater)).toBe(true);
       expect(own[0]?.reason).toMatch(/섞기 증명/);
-    }, 600_000);
+    });
   });
 });

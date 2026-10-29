@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { gostopBeginnerBot } from "@mighty/gostop-ai";
 import {
   type Action,

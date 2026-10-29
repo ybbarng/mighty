@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot, intermediateBot } from "@mighty/ai";
 import { encodeRuleString, presetRules } from "@mighty/engine";
 import { ManualClock } from "@mighty/fair-play";
@@ -174,7 +175,7 @@ describe("온라인 방", () => {
     fresh.finish();
     await until(() => audits.length === 1, 5000);
     expect(audits).toEqual([{ ok: true }]);
-  }, 60_000);
+  });
 
   it("새로고침한 방장의 환영(서명 확인)보다 판 끝 검증이 먼저 와도 버리지 않고 환영을 확인한 뒤 검증한다", async () => {
     const net = new MemoryNetwork();

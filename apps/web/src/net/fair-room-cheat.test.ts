@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { presetRules, suitOf } from "@mighty/engine";
 import { Party } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";
@@ -48,7 +49,7 @@ describe("멘탈 포커 온라인 대전", () => {
       expect(own[0]?.reason).toMatch(/무늬|조커|규칙에 맞지 않는/);
       // 방장 대국도 멈췄다.
       expect(host.match?.halted).not.toBeNull();
-    }, 180_000);
+    });
 
     it("틀린 열쇠: 나눠 줄 때 남의 자리에 잠글 때와 다른 열쇠를 공개하면 받은 사람들이 열쇠 증명으로 그 자리를 짚는다", async () => {
       const { host, guests, incidents } = await setup(
@@ -74,7 +75,7 @@ describe("멘탈 포커 온라인 대전", () => {
         [0, (guests[1] as GuestRoom).seat].sort(),
       );
       expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
-    }, 180_000);
+    });
 
     it("가짜 카드: 다른 자리 열쇠로 다른 카드를 낸다고 하면 방장이 바로 잡는다", async () => {
       const { host, guests, incidents } = await setup(
@@ -114,7 +115,7 @@ describe("멘탈 포커 온라인 대전", () => {
       const own = incidents.find((i) => i.own);
       expect(own?.seat).toBe(cheater);
       expect(own?.reason).toMatch(/열쇠로 연 카드/);
-    }, 180_000);
+    });
 
     it("6마 죽이기 거짓말: 불린 카드를 갖고도 없다고 하면 마지막 턴에 그 자리가 찍힌다", async () => {
       const { host, guests, incidents } = await setup(
@@ -166,6 +167,6 @@ describe("멘탈 포커 온라인 대전", () => {
       const own = incidents.filter((i) => i.own);
       expect(own[0]?.seat).toBe(guests[0]?.seat);
       expect(own[0]?.reason).toMatch(/없다고 했다/);
-    }, 300_000);
+    });
   });
 });
