@@ -187,6 +187,7 @@ test("연출을 켜면 섞고 나눠 주는 장면을 지나 공약을 정한다
 }, testInfo) => {
   // 다른 시험은 움직임 줄이기로 연출을 건너뛴다. 연출이 있는 길은 여기서 한 번 본다.
   test.skip(testInfo.project.name !== "desktop", "데스크톱에서만 돌린다");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     localStorage.setItem(

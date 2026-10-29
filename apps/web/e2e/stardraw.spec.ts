@@ -21,6 +21,18 @@ async function virtualAuthenticator(page: Page, verified = true) {
   });
 }
 
+/**
+ * 추첨 화면에서 결과까지 간다. 연출이 있으면 「결과 바로 보기」로 건너뛰고,
+ * 움직임 줄이기(화면 시험 기본)면 연출 없이 결과가 바로 나온다
+ */
+async function showDrawResult(page: Page) {
+  const skip = page.getByRole("button", { name: "결과 바로 보기" });
+  const result = page.locator("[data-draw-result]");
+  await expect(skip.or(result).first()).toBeVisible();
+  if (await skip.isVisible()) await skip.click();
+  await expect(result).toBeVisible();
+}
+
 /** 첫 응모 단추: "Touch ID로 응모하기"처럼 기기에 맞는 잠금 이름이 붙는다 */
 const FIRST_ENTRY =
   /^(Face ID|Face ID·Touch ID|Touch ID|지문·화면 잠금|Windows Hello|패스키)(로|으로) 응모하기$/;
@@ -88,6 +100,9 @@ async function watchCredentials(page: Page) {
 test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모에 남는다", async ({
   page,
 }, info) => {
+  // 데스크톱은 연출을 켜 추첨 연출과 「결과 바로 보기」를 지난다. 나머지는 결과가 바로 나오는 길
+  const motion = info.project.name === "desktop";
+  if (motion) await page.emulateMedia({ reducedMotion: "no-preference" });
   await virtualAuthenticator(page);
   await page.goto("/");
   await page.getByRole("link", { name: /하늘의 별 따기/ }).click();
@@ -143,8 +158,11 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   const envelope = page.locator("[data-envelope]").first();
   await expect(envelope).toBeVisible({ timeout: 60_000 });
   await envelope.click();
-  await page.getByRole("button", { name: "결과 바로 보기" }).click();
-  await expect(page.locator("[data-draw-result]")).toBeVisible();
+  if (motion)
+    await expect(
+      page.getByRole("button", { name: "결과 바로 보기" }),
+    ).toBeVisible();
+  await showDrawResult(page);
   await expect(page.getByRole("status").first()).toHaveAttribute(
     "aria-label",
     /당첨 번호 .+보너스/,
@@ -272,7 +290,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     timeout: 60_000,
   });
   await page.getByRole("button", { name: "추첨 보기" }).click();
-  await page.getByRole("button", { name: "결과 바로 보기" }).click();
+  await showDrawResult(page);
   await expect(page.locator("[data-draw-result='1']")).toBeVisible();
   await page
     .getByRole("region", { name: /회 추첨/ })

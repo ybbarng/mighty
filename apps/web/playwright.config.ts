@@ -11,6 +11,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
+    // 연출(섞기·나눠 주기·던지기·말 움직임 등)을 실제 시간으로 기다리지 않는다.
+    // 연출이 있는 길을 보는 시험만 `emulateMedia({ reducedMotion: "no-preference" })`로 켠다.
+    contextOptions: { reducedMotion: "reduce" },
   },
   projects: [
     {
