@@ -1,6 +1,5 @@
 export * from "./bytes";
 export * from "./claim";
-export * from "./constellation";
 export * from "./drand";
 export * from "./draw";
 export * from "./keys";

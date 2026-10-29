@@ -847,7 +847,7 @@
       "parent": "next-games",
       "status": "building",
       "size": 2,
-      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core와 화면(/stardraw, 설명 /stardraw/about, 데모 /stardraw/demo)을 기기 안 연습 장부로 만듦(2026-10-29). 당첨자 확인은 회차·등수 묶음 + 별 세 개(임시 ECDH) + 초록불. 남은 것: 서버(apps/stardraw-server), 배포, 터미널 도구, 보안 배우기",
+      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core와 화면(/stardraw, 설명 /stardraw/about, 데모 /stardraw/demo)을 기기 안 연습 장부로 만듦(2026-10-29). 당첨자 확인은 회차·등수 묶음 + 별 세 개(임시 ECDH) + 초록불. 서버 apps/stardraw-server도 만듦(로컬에서 돌고 시험됨, 같은 출처 /stardraw-api, 배포 초안 deploy/stardraw). 화면은 NEXT_PUBLIC_STARDRAW_API가 있을 때만 서버를 쓴다(지금은 연습 장부). 남은 것: 배포(사용자 확인), 터미널 도구, 보안 배우기",
       "found": "2026-10-29",
       "links": [
         {
@@ -861,6 +861,14 @@
         {
           "label": "화면",
           "path": "apps/web/src/stardraw"
+        },
+        {
+          "label": "서버",
+          "path": "apps/stardraw-server"
+        },
+        {
+          "label": "서버 배포 초안",
+          "path": "deploy/stardraw/README.md"
         }
       ],
       "signs": [
@@ -889,6 +897,18 @@
           "recommend": "이 저장소, game.byb.kr/bybtto",
           "status": "decided",
           "decided": "이 저장소, game.byb.kr/bybtto(이름을 바꾸며 game.byb.kr/stardraw로). 브라우저 열쇠는 패스키(2026-10-29)"
+        },
+        {
+          "id": "stardraw-deploy",
+          "type": "fork",
+          "title": "하늘의 별 따기 서버 배포: 1회차 시작 시각, Rekor 공용 로그 사용, 앵커 저장소 이름·토큰, 서명 열쇠 보관, 이미지 빌드를 image.yml에 넣을지(deploy/stardraw/README.md)",
+          "owner": "me",
+          "options": [
+            "추천대로(다음 정시, Rekor 사용, ybbarng/stardraw-ledger 공개, 열쇠는 서버 파일+비밀번호 관리 앱, image.yml에 더함)",
+            "하나씩 정하기"
+          ],
+          "recommend": "추천대로",
+          "status": "open"
         }
       ]
     }
