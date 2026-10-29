@@ -116,6 +116,36 @@ describe("회차 진행: 응모 → 마감·봉인 → drand 추첨 → 공개 �
     expect(messages(await check(ledger))).toEqual([]);
   });
 
+  it("재배포로 서버가 마감 직후나 추첨 전에 다시 떠도, 밀린 봉인·추첨을 이어서 해 회차가 무효가 되지 않는다", async () => {
+    const first = await makeRig();
+    const dir = first.dir;
+    const [a, b] = await Promise.all([player(), player()]);
+    await first.at(EPOCH + 10);
+    await enter(first, a, [1, 2, 3, 4, 5, 6]);
+    await enter(first, b, drawOf(1).numbers);
+    const { closesAt } = roundTimes(SCHEDULE, 1);
+    // 마감 1초 전에 내려간다(데이터 폴더는 그대로)
+    await first.at(closesAt - 1);
+    first.store.close();
+
+    // ① 마감 60초 뒤 다시 뜬다: 봉인 기한(180초) 안이라 봉인한다
+    const second = await makeRig({ dir, at: closesAt + 60 });
+    await second.at(closesAt + 60);
+    expect(second.engine.state()).toMatchObject({ sealed: 1, records: 0 });
+    second.store.close();
+
+    // ② 봉인 뒤, drand 시각 전에 또 내려갔다가 drand 시각 뒤에 다시 뜬다: 이어서 추첨한다
+    const drawAt = drawTimeOf(1);
+    rig = await makeRig({ dir, at: drawAt + 30 });
+    await rig.at(drawAt + 30);
+    expect(rig.engine.state()).toMatchObject({ sealed: 1, records: 1 });
+    const record1 = rig.store.record(1) as RoundRecord;
+    expect(record1.void).toBe(false);
+    expect(record1.count).toBe(2);
+    expect(record1.winners[1]).toHaveLength(1);
+    expect(messages(await check(readLedger(dir)))).toEqual([]);
+  });
+
   it("장부를 고치면 검사에서 드러난다(응모권 끼워 넣기·빼기, 번호 바꾸기)", async () => {
     rig = await makeRig();
     const [a, b] = await Promise.all([player(), player()]);
