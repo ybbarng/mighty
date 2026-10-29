@@ -519,6 +519,12 @@ importers:
         specifier: 4.12.0
         version: 4.12.0
 
+  packages/yut-engine:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
 packages:
 
   '@alloc/quick-lru@5.3.0':

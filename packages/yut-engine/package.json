@@ -1,0 +1,16 @@
+{
+  "name": "@mighty/yut-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "윷놀이 규칙 엔진 — 해시 사슬로 정한 던지기, 순수 함수",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mighty/engine": "workspace:*"
+  }
+}
