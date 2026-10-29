@@ -1,21 +1,26 @@
 import {
-  answerConfirmRequest,
   type ConfirmRequest,
   decodeClaim,
   type EntrantSigner,
   encodeClaim,
   equalBytes,
+  generateSasKey,
+  makeChallengeClaim,
+  sasChallenge,
+  sasSecret,
+  sasStars,
   type Ticket,
   ticketId,
   verifyClaim,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
-import type { ConfirmAnswer, ConfirmOutcome } from "./confirm-relay";
+import type { ConfirmAnswer, OpenRequest } from "./confirm-relay";
 
 /**
  * 당첨자 확인의 양쪽 계산(docs/36 11-2). 전달은 confirm-relay, 계산은 규칙 패키지다.
- * 확인하는 분의 브라우저가 장부에서 찾은 응모권으로 서명을 직접 검사한다.
+ * 판정은 늘 확인하는 분의 기기에서 한다: 장부에서 찾은 응모권으로 서명을 직접 검사하고,
+ * 임시 ECDH 공유 비밀로 별 세 개를 계산해 상대가 보낸 별과 맞춰 본다.
  */
 
 /** 규칙 패키지의 문제 문장을 화면 말투로 */
@@ -32,37 +37,48 @@ function friendly(problem: string): string {
   return REASONS.find(([re]) => re.test(problem))?.[1] ?? problem;
 }
 
-/** 확인하는 분: 받은 응답(서명이나 거절)을 결과로 */
+export type AnswerCheck =
+  | { declined: true }
+  | { ok: false; reasons: string[] }
+  /** 서명이 맞았다. 이제 상대가 보낸 별 세 개를 맞춰 본다 */
+  | { ok: true; stars: number[] };
+
+/** 확인하는 분: 받은 응답(서명이나 거절)을 검사하고, 맞으면 별 세 개를 계산한다 */
 export async function checkAnswer(
   answer: ConfirmAnswer,
-  request: ConfirmRequest,
+  open: Pick<OpenRequest, "id" | "request" | "checkerKey">,
+  checkerPrivateKey: CryptoKey,
   ticket: Ticket,
   policy: WebAuthnPolicy,
-): Promise<ConfirmOutcome> {
+): Promise<AnswerCheck> {
   if ("declined" in answer) return { declined: true };
-  return checkClaim(answer.claim, request, ticket, policy);
-}
-
-/** 확인하는 분: 받은 서명을 검사한다 */
-export async function checkClaim(
-  claimText: string,
-  request: ConfirmRequest,
-  ticket: Ticket,
-  policy: WebAuthnPolicy,
-): Promise<ConfirmOutcome> {
   let claim: ReturnType<typeof decodeClaim>;
   try {
-    claim = decodeClaim(claimText);
+    claim = decodeClaim(answer.claim);
   } catch {
     return { ok: false, reasons: ["서명을 읽을 수 없습니다"] };
   }
   const problems = await verifyClaim(claim, {
     ticket,
-    request: { challenge: request.challenge, requester: request.requester },
+    request: {
+      // 당첨자는 양쪽 임시 공개 열쇠를 묶은 문구에 서명한다(가운데서 열쇠를 바꿔치기할 수 없게)
+      challenge: sasChallenge(
+        open.request.challenge,
+        open.checkerKey,
+        answer.winnerKey,
+      ),
+      requester: open.request.requester,
+    },
     policy,
   });
-  if (problems.length === 0) return { ok: true };
-  return { ok: false, reasons: [...new Set(problems.map(friendly))] };
+  if (problems.length > 0)
+    return { ok: false, reasons: [...new Set(problems.map(friendly))] };
+  try {
+    const secret = await sasSecret(checkerPrivateKey, answer.winnerKey);
+    return { ok: true, stars: sasStars(secret, open.id) };
+  } catch {
+    return { ok: false, reasons: ["응답의 임시 열쇠가 맞지 않습니다"] };
+  }
 }
 
 /** 당첨자: 확인 요청에 맞는 내 응모권을 찾는다 */
@@ -78,11 +94,38 @@ export function myTicketFor(
   );
 }
 
-/** 당첨자: 확인 요청에 서명해 올릴 문자열을 만든다 */
-export async function signAnswer(
+/** 당첨자: 확인 요청에 서명하고, 확인하는 분께 보낼 별 세 개를 계산한다 */
+export async function prepareAnswer(
   signer: EntrantSigner,
   ticket: Ticket,
-  request: ConfirmRequest,
-): Promise<string> {
-  return encodeClaim(await answerConfirmRequest(signer, ticket, request));
+  open: OpenRequest,
+): Promise<{ answer: ConfirmAnswer; stars: number[] }> {
+  if (
+    open.request.round !== ticket.round ||
+    !equalBytes(open.request.ticketId, ticketId(ticket))
+  )
+    throw new Error("이 응모권에 대한 확인 요청이 아닙니다");
+  const mine = await generateSasKey();
+  const claim = await makeChallengeClaim(
+    signer,
+    ticket,
+    sasChallenge(open.request.challenge, open.checkerKey, mine.publicKey),
+    open.request.requester,
+  );
+  const secret = await sasSecret(mine.privateKey, open.checkerKey);
+  return {
+    answer: { claim: encodeClaim(claim), winnerKey: mine.publicKey },
+    stars: sasStars(secret, open.id),
+  };
+}
+
+/** 확인하는 분: 상대가 보낸 별(누른 차례)이 계산한 별과 같은가 */
+export function starsMatch(
+  expected: readonly number[],
+  entered: readonly number[],
+): boolean {
+  return (
+    expected.length === entered.length &&
+    expected.every((n, i) => entered[i] === n)
+  );
 }
