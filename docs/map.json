@@ -3,7 +3,7 @@
   "title": "게임 센터 (game.byb.kr)",
   "goal": "누구나 game.byb.kr에서 서버 없이 친구와, 혼자라면 컴퓨터와 여러 카드·판 게임을 공정하게 즐긴다. 게임마다 PC·휴대폰 화면, 컴퓨터 세 단계, 효과음, 온라인 대전, 배우기를 갖춘다",
   "baselineAt": "2026-10-20",
-  "updatedAt": "2026-10-29T06:22:33Z",
+  "updatedAt": "2026-10-29T07:02:50Z",
   "here": "fairness-realtime",
   "regions": [
     {
@@ -820,6 +820,35 @@
       "size": 2,
       "summary": "멘탈 포커로 역할을 나눠 사회자 없이도, 방장도 모르게",
       "found": "2026-10-29"
+    },
+    {
+      "id": "next-lotto",
+      "title": "로또 확률 체감 게임",
+      "parent": "next-games",
+      "status": "fog",
+      "size": 2,
+      "summary": "함께 보는 추첨(공이 하나씩 떨어지는 긴장, 희귀도 점수, 1등까지 진행률). 돈·현금성 보상 없이 1등이 얼마나 먼지 몸으로 느끼게",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "로또 게임 설계",
+          "path": "docs/35-lotto-game.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "lotto-forks",
+          "type": "fork",
+          "title": "로또 게임 갈림길(컴퓨터 단계 예외, 이름, 표 장수, '거의 맞을 뻔' 연출 세기 등. docs/35 7절)",
+          "owner": "me",
+          "options": [
+            "추천대로 첫 단계(혼자 한 판)",
+            "보류"
+          ],
+          "recommend": "추천대로 첫 단계",
+          "status": "open"
+        }
+      ]
     }
   ]
 }
