@@ -197,7 +197,7 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   yutThrow: 6,
   yutLand: 5,
   yutBonus: 2,
-  yutPiece: 7,
+  yutPiece: 12,
   yutCapture: 3,
   yutHome: 0,
 };

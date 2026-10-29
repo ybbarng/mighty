@@ -21,6 +21,8 @@ import {
   useOmokTutorialProgress,
   useTutorialProgress,
 } from "@/tutorial/progress";
+import { useYutTutorialProgress } from "@/yut/progress";
+import { useYutSettings } from "@/yut/settings";
 
 /**
  * 브라우저에 저장해 둔 설정과 튜토리얼 진행을 첫 그리기 뒤에 불러온다.
@@ -45,6 +47,8 @@ export function StoreHydration() {
     void useMinhwatuTutorialProgress.persist.rehydrate();
     void useBaseballSettings.persist.rehydrate();
     void useBaseballTutorialProgress.persist.rehydrate();
+    void useYutSettings.persist.rehydrate();
+    void useYutTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

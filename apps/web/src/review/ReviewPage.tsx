@@ -16,6 +16,7 @@ import { JanggiReplay } from "@/janggi/components/JanggiReplay";
 import { MinhwatuReplay } from "@/minhwatu/components/MinhwatuReplay";
 import { NyrongppongReplay } from "@/nyrongppong/components/NyrongppongReplay";
 import { OmokReplay } from "@/omok/components/OmokReplay";
+import { YutReplay } from "@/yut/components/YutReplay";
 
 import {
   deleteArchive,
@@ -44,6 +45,7 @@ const GAME_NAME: Record<string, string> = {
   minhwatu: "🎴 민화투",
   nyrongppong: "🎴 나이롱뽕",
   baseball: "⚾ 숫자야구",
+  yut: "🪵 윷놀이",
 };
 
 function when(at: number): string {
@@ -231,7 +233,8 @@ function ArchiveView({
     archive.game === "nyrongppong" ||
     archive.game === "gostop" ||
     archive.game === "minhwatu" ||
-    archive.game === "baseball"
+    archive.game === "baseball" ||
+    archive.game === "yut"
   )
     return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
@@ -276,6 +279,8 @@ function BoardArchiveView({
           <NyrongppongReplay archive={archive} name={name} />
         ) : archive.game === "baseball" ? (
           <BaseballReplay archive={archive} name={name} />
+        ) : archive.game === "yut" ? (
+          <YutReplay archive={archive} name={name} />
         ) : (
           <OmokReplay archive={archive} name={name} />
         )}
