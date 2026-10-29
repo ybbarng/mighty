@@ -11,7 +11,7 @@ import {
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
-import type { ConfirmOutcome } from "./confirm-relay";
+import type { ConfirmAnswer, ConfirmOutcome } from "./confirm-relay";
 
 /**
  * 당첨자 확인의 양쪽 계산(docs/36 11-2). 전달은 confirm-relay, 계산은 규칙 패키지다.
@@ -22,9 +22,9 @@ import type { ConfirmOutcome } from "./confirm-relay";
 const REASONS: [RegExp, string][] = [
   [/다른 응모권/, "다른 응모권의 서명입니다"],
   [/열쇠가 아니다/, "그 응모권을 낸 열쇠의 서명이 아닙니다"],
-  [/확인 문구가 다르다/, "이 확인 번호에 대한 서명이 아닙니다"],
-  [/요청자가 다르다/, "이 확인 번호에 대한 서명이 아닙니다"],
-  [/바로 보내는 증명/, "확인 번호에 대한 서명이 아닙니다"],
+  [/확인 문구가 다르다/, "이 확인 요청에 대한 서명이 아닙니다"],
+  [/요청자가 다르다/, "이 확인 요청에 대한 서명이 아닙니다"],
+  [/바로 보내는 증명/, "이 확인 요청에 대한 서명이 아닙니다"],
   [/서명이 맞지 않는다/, "서명이 맞지 않습니다"],
 ];
 
@@ -32,8 +32,19 @@ function friendly(problem: string): string {
   return REASONS.find(([re]) => re.test(problem))?.[1] ?? problem;
 }
 
-/** 확인하는 분: 받은 서명을 검사한다 */
+/** 확인하는 분: 받은 응답(서명이나 거절)을 결과로 */
 export async function checkAnswer(
+  answer: ConfirmAnswer,
+  request: ConfirmRequest,
+  ticket: Ticket,
+  policy: WebAuthnPolicy,
+): Promise<ConfirmOutcome> {
+  if ("declined" in answer) return { declined: true };
+  return checkClaim(answer.claim, request, ticket, policy);
+}
+
+/** 확인하는 분: 받은 서명을 검사한다 */
+export async function checkClaim(
   claimText: string,
   request: ConfirmRequest,
   ticket: Ticket,

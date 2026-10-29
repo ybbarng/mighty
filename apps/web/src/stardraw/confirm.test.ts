@@ -12,12 +12,11 @@ import {
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
-import { checkAnswer, myTicketFor, signAnswer } from "./confirm";
+import { checkAnswer, checkClaim, myTicketFor, signAnswer } from "./confirm";
 import {
   CONFIRM_TTL_MS,
   type ConfirmOutcome,
   LocalConfirmRelay,
-  newConfirmCode,
   type RelayStore,
 } from "./confirm-relay";
 import { PRACTICE_POW } from "./local-ledger";
@@ -32,6 +31,7 @@ function sharedStore() {
       data.set(k, v);
       for (const s of subscribers) s(k);
     },
+    keys: () => [...data.keys()],
     subscribe: (l) => {
       subscribers.add(l);
       return () => subscribers.delete(l);
@@ -62,65 +62,95 @@ function setup() {
   return { clock, checker, winner };
 }
 
-describe("확인 번호", () => {
-  it("6자리 숫자, 앞자리 0도 그대로", () => {
-    expect(newConfirmCode(() => new Uint8Array([0, 0, 7]))).toBe("000007");
-    expect(newConfirmCode()).toMatch(/^\d{6}$/);
+const policy = DEFAULT_WEBAUTHN_POLICY;
+
+describe("당첨자 확인: 전달", () => {
+  it("당첨자 기기는 내 응모권에 온 요청만 찾는다", async () => {
+    const { checker, winner } = setup();
+    const me = await generateSigner();
+    const mine = await ticketOf(me, 12);
+    const other = await ticketOf(await generateSigner(), 12);
+    await checker.create(12, ticketId(other), "Brice");
+    const opened = await checker.create(12, ticketId(mine), "Brice");
+    const found = await winner.openFor([ticketId(mine)]);
+    expect(found.map((r) => r.id)).toEqual([opened.id]);
+    expect(found[0]?.request.requester).toBe("Brice");
+  });
+
+  it("요청은 한 번만, 10분 동안만 답할 수 있다", async () => {
+    const { clock, checker, winner } = setup();
+    const me = await generateSigner();
+    const ticket = await ticketOf(me, 1);
+    const once = await checker.create(1, ticketId(ticket), "Brice");
+    await winner.answer(once.id, { declined: true });
+    await expect(winner.answer(once.id, { declined: true })).rejects.toThrow(
+      "이미 답한",
+    );
+    expect(await winner.openFor([ticketId(ticket)])).toEqual([]);
+
+    const late = await checker.create(1, ticketId(ticket), "Brice");
+    clock.advance(CONFIRM_TTL_MS);
+    expect(await winner.openFor([ticketId(ticket)])).toEqual([]);
+    await expect(winner.answer(late.id, { declined: true })).rejects.toThrow(
+      "시간이 지났습니다",
+    );
   });
 });
 
-describe("당첨자 확인: 전달과 검사", () => {
-  it("번호로 찾아 서명하면 확인하는 분은 초록불, 당첨자는 그 결과를 본다", async () => {
+describe("당첨자 확인: 검사", () => {
+  it("서명하면 확인하는 분은 초록불, 당첨자는 그 결과를 본다", async () => {
     const { checker, winner } = setup();
     const me = await generateSigner();
     const ticket = await ticketOf(me, 12);
-    const opened = await checker.open(12, ticketId(ticket));
+    const opened = await checker.create(12, ticketId(ticket), "Brice");
 
-    const outcomes: ConfirmOutcome[] = [];
     const seen: ConfirmOutcome[] = [];
-    checker.onAnswer(opened.code, async (claim) => {
-      const outcome = await checkAnswer(
-        claim,
-        opened.request,
-        ticket,
-        DEFAULT_WEBAUTHN_POLICY,
+    checker.onAnswer(opened.id, async (answer) => {
+      await checker.report(
+        opened.id,
+        await checkAnswer(answer, opened.request, ticket, policy),
       );
-      outcomes.push(outcome);
-      await checker.report(opened.code, outcome);
     });
-    winner.onOutcome(opened.code, (o) => seen.push(o));
 
-    const request = await winner.find(opened.code);
-    const mine = myTicketFor(request, [ticket]);
+    const [found] = await winner.openFor([ticketId(ticket)]);
+    if (!found) throw new Error("요청을 찾지 못했다");
+    winner.onOutcome(found.id, (o) => seen.push(o));
+    const mine = myTicketFor(found.request, [ticket]);
     if (!mine) throw new Error("내 응모권을 찾지 못했다");
-    await winner.answer(opened.code, await signAnswer(me, mine, request));
+    await winner.answer(found.id, {
+      claim: await signAnswer(me, mine, found.request),
+    });
     await expect.poll(() => seen).toEqual([{ ok: true }]);
-    expect(outcomes).toEqual([{ ok: true }]);
   });
 
-  it("다른 사람의 열쇠로 서명하면 빨간불과 이유", async () => {
+  it("거절하면 확인하는 분에게 거절로 알린다", async () => {
     const { checker, winner } = setup();
+    const ticket = await ticketOf(await generateSigner(), 4);
+    const opened = await checker.create(4, ticketId(ticket), "Brice");
+    const answers: unknown[] = [];
+    checker.onAnswer(opened.id, (a) => answers.push(a));
+    await winner.answer(opened.id, { declined: true });
+    expect(
+      await checkAnswer({ declined: true }, opened.request, ticket, policy),
+    ).toEqual({ declined: true });
+    expect(answers).toEqual([{ declined: true }]);
+  });
+
+  it("남의 당첨 응모권에 내 열쇠로 서명하면 빨간불과 이유", async () => {
+    const { checker } = setup();
     const owner = await generateSigner();
     const other = await generateSigner();
     const ticket = await ticketOf(owner, 3);
-    const opened = await checker.open(3, ticketId(ticket));
-    const request = await winner.find(opened.code);
-    // 남의 당첨 응모권을 들고 내 열쇠로 서명해 보아도
+    const opened = await checker.create(3, ticketId(ticket), "Brice");
     const claim = encodeClaim(
       await makeChallengeClaim(
         other,
         ticket,
-        request.challenge,
-        request.requester,
+        opened.request.challenge,
+        opened.request.requester,
       ),
     );
-    const outcome = await checkAnswer(
-      claim,
-      opened.request,
-      ticket,
-      DEFAULT_WEBAUTHN_POLICY,
-    );
-    expect(outcome).toEqual({
+    expect(await checkClaim(claim, opened.request, ticket, policy)).toEqual({
       ok: false,
       reasons: expect.arrayContaining([
         "그 응모권을 낸 열쇠의 서명이 아닙니다",
@@ -128,50 +158,31 @@ describe("당첨자 확인: 전달과 검사", () => {
     });
   });
 
-  it("다른 응모권에 대한 서명이면 그렇다고 알려 준다", async () => {
+  it("다른 요청이나 다른 응모권에 대한 서명이면 그렇다고 알려 준다", async () => {
     const { checker } = setup();
     const me = await generateSigner();
     const a = await ticketOf(me, 5);
     const b = await ticketOf(me, 6);
-    const forA = await checker.open(5, ticketId(a));
-    const forB = await checker.open(6, ticketId(b));
+    const forA = await checker.create(5, ticketId(a), "Brice");
+    const forB = await checker.create(6, ticketId(b), "Brice");
     const claimB = await signAnswer(me, b, forB.request);
-    const outcome = await checkAnswer(
-      claimB,
-      forA.request,
-      a,
-      DEFAULT_WEBAUTHN_POLICY,
-    );
-    expect(outcome).toEqual({
+    expect(await checkClaim(claimB, forA.request, a, policy)).toEqual({
       ok: false,
       reasons: expect.arrayContaining([
         "다른 응모권의 서명입니다",
-        "이 확인 번호에 대한 서명이 아닙니다",
+        "이 확인 요청에 대한 서명이 아닙니다",
       ]),
+    });
+    expect(await checkClaim("엉뚱한 글", forA.request, a, policy)).toEqual({
+      ok: false,
+      reasons: ["서명을 읽을 수 없습니다"],
     });
   });
 
-  it("확인 번호는 한 번만, 10분 동안만 쓸 수 있다", async () => {
-    const { clock, checker, winner } = setup();
-    const me = await generateSigner();
-    const ticket = await ticketOf(me, 1);
-    const once = await checker.open(1, ticketId(ticket));
-    const request = await winner.find(once.code);
-    await winner.answer(once.code, await signAnswer(me, ticket, request));
-    await expect(winner.find(once.code)).rejects.toThrow("이미 쓴 확인 번호");
-
-    const late = await checker.open(1, ticketId(ticket));
-    clock.advance(CONFIRM_TTL_MS);
-    await expect(winner.find(late.code)).rejects.toThrow("시간이 지났습니다");
-    await expect(winner.find("999999x")).rejects.toThrow();
-  });
-
-  it("이 기기에 없는 응모권이면 찾지 못한다", async () => {
-    const { checker, winner } = setup();
-    const me = await generateSigner();
-    const ticket = await ticketOf(me, 2);
-    const opened = await checker.open(2, ticketId(ticket));
-    const request = await winner.find(opened.code);
-    expect(myTicketFor(request, [])).toBeNull();
+  it("이 기기에 없는 응모권 요청이면 내 응모권을 찾지 못한다", async () => {
+    const { checker } = setup();
+    const ticket = await ticketOf(await generateSigner(), 2);
+    const opened = await checker.create(2, ticketId(ticket), "Brice");
+    expect(myTicketFor(opened.request, [])).toBeNull();
   });
 });
