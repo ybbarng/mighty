@@ -1,5 +1,8 @@
+import { iconMaple } from "@/hwatu/icon-cards";
+
 /**
  * 나이롱뽕 앱 아이콘 그림(`next/og` ImageResponse용 JSX): 녹색 담요 위에 같은 달 화투 석 장(뽕).
+ * 붉은 단풍 석 장(피·청단·피)이라 한눈에 "같은 달 셋"이 보인다. 카드는 `hwatu/icon-cards`를 쓴다.
  * 다른 게임처럼 공통 `IconArt`로 옮길 수 있게 같은 모양(`maskable`)을 받는다(docs/30 9절)
  */
 export function NyrongppongIconArt({
@@ -7,22 +10,6 @@ export function NyrongppongIconArt({
 }: {
   maskable?: boolean;
 }) {
-  const card = (x: number, rotate: number, key: string) => (
-    <g key={key} transform={`rotate(${rotate} 50 80)`}>
-      <rect
-        x={x}
-        y={22}
-        width={30}
-        height={48}
-        rx={4}
-        fill="#fbf5e6"
-        stroke="#2b1d14"
-        strokeWidth={2}
-      />
-      <rect x={x + 6} y={30} width={18} height={30} rx={2} fill="#c2272d" />
-      <circle cx={x + 15} cy={45} r={6} fill="#f3a6b8" />
-    </g>
-  );
   return (
     <div
       style={{
@@ -50,9 +37,9 @@ export function NyrongppongIconArt({
           aria-hidden="true"
           style={{ display: "flex" }}
         >
-          {card(16, -14, "a")}
-          {card(35, 0, "b")}
-          {card(54, 14, "c")}
+          {iconMaple({ x: 8, y: 24, rotate: -16, scale: 0.56 }, "pi")}
+          {iconMaple({ x: 58, y: 24, rotate: 16, scale: 0.56 }, "mirror")}
+          {iconMaple({ x: 33, y: 18, rotate: 0, scale: 0.58 }, "blue")}
         </svg>
       </div>
     </div>

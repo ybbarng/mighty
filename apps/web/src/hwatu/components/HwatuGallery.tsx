@@ -36,6 +36,17 @@ export function HwatuGallery() {
             </div>
           ))}
         </section>
+        <section aria-label="작은 크기" className="flex flex-col gap-2">
+          <h2 className="font-bold text-sm text-white/80">
+            작은 크기(먹은 패·상대 칸)
+          </h2>
+          <div className="flex flex-wrap gap-1">
+            {HWATU_DECK.map((c) => (
+              <HwatuCardView key={c.id} id={c.id} width={22} />
+            ))}
+            <HwatuCardView faceDown width={22} />
+          </div>
+        </section>
         <section
           aria-label="화면 조각 예시"
           className="flex flex-col gap-4 rounded-2xl bg-black/25 p-4"
