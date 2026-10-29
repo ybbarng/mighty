@@ -11,6 +11,7 @@ export * from "./receipt";
 export * from "./record";
 export * from "./registration";
 export * from "./round";
+export * from "./sas";
 export * from "./schedule";
 export * from "./signature";
 export * from "./ticket";
