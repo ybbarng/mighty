@@ -74,7 +74,12 @@ class Device {
 const HOST_SEED = "1a".repeat(32);
 const GUEST_SEED = "9f".repeat(32);
 
-async function setup(rules: YutRules = STANDARD_RULES) {
+/**
+ * 방 시험은 약속·공개·판 끝 검증 진행만 보므로 말 두 개로 짧게 둔다(말 수만큼 판이 길어질 뿐 진행 논리는 같다)
+ */
+const ROOM_RULES: YutRules = { ...STANDARD_RULES, pieces: 2 };
+
+async function setup(rules: YutRules = ROOM_RULES) {
   const clock = new ManualClock();
   const net = new MemoryNetwork();
   const host = new HostRoom({
@@ -163,7 +168,8 @@ describe("윷놀이 온라인 방", () => {
     room.host.finish();
     await until(() => room.audits.length === 1);
     expect(room.audits).toEqual([{ ok: true }]);
-  });
+    // 상한은 멈춘 시험을 잡는 안전장치다(다른 방 시험과 같다). 혼자 0.6초 남짓
+  }, 60_000);
 
   it("약속한 사슬에 없는 고리를 보내면 방장 엔진이 받지 않는다", async () => {
     const room = await setup();
@@ -205,11 +211,12 @@ describe("윷놀이 온라인 방", () => {
   });
 
   it("빈자리를 컴퓨터가 맡은 3인 방도 끝까지 두고 검증을 통과한다", async () => {
-    const room = await setup({ ...STANDARD_RULES, players: 3 });
+    const room = await setup({ ...ROOM_RULES, players: 3 });
     await play(room, () => over(room));
     expect(room.host.match?.current().result?.kind).toBe("finish");
     room.host.finish();
     await until(() => room.audits.length === 1);
     expect(room.audits).toEqual([{ ok: true }]);
-  });
+    // 상한은 멈춘 시험을 잡는 안전장치다(다른 방 시험과 같다). 혼자 0.9초 남짓
+  }, 60_000);
 });
