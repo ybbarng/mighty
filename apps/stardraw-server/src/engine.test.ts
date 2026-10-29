@@ -88,6 +88,34 @@ describe("회차 진행: 응모 → 마감·봉인 → drand 추첨 → 공개 �
     expect(toHex(report.head)).toBe(ledger.head.head);
   });
 
+  it("아무도 응모하지 않아도 회차가 스스로 닫히고 이어지며, 그 뒤 응모도 받는다", async () => {
+    rig = await makeRig();
+    // 응모 없이 세 회차를 그냥 보낸다(실제 서버처럼 회차마다 차례로 시각을 지난다.
+    // 한 번에 건너뛰면 지난 회차는 봉인 기한을 놓쳐 무효가 된다 — 서버가 꺼져 있던 때와 같다)
+    for (const round of [1, 2, 3]) await rig.finish(round);
+    expect(rig.engine.state()).toMatchObject({
+      round: 4,
+      records: 3,
+      sealed: 3,
+    });
+    const empty = readLedger(rig.dir);
+    expect(empty.records.map((r) => [r.count, r.void])).toEqual([
+      [0, false],
+      [0, false],
+      [0, false],
+    ]);
+    expect(messages(await check(empty))).toEqual([]);
+
+    // 빈 회차 뒤에도 응모·추첨이 그대로 된다
+    const a = await player();
+    await enter(rig, a, drawOf(4).numbers);
+    await rig.finish(4);
+    const ledger = readLedger(rig.dir);
+    expect(ledger.records.map((r) => r.count)).toEqual([0, 0, 0, 1]);
+    expect(rig.store.record(4)?.winners[1]).toHaveLength(1);
+    expect(messages(await check(ledger))).toEqual([]);
+  });
+
   it("장부를 고치면 검사에서 드러난다(응모권 끼워 넣기·빼기, 번호 바꾸기)", async () => {
     rig = await makeRig();
     const [a, b] = await Promise.all([player(), player()]);
