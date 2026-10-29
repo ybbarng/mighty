@@ -1,0 +1,151 @@
+"use client";
+
+import {
+  drandRoundForClose,
+  drandTime,
+  type Rank,
+  type RoundRecord,
+  roundTimes,
+  type Schedule,
+  type Ticket,
+  ticketId,
+  toHex,
+} from "@mighty/stardraw-core";
+
+import { cn } from "@/lib/cn";
+
+import { myRank } from "../results";
+import { starOf } from "../sky";
+import { formatTime, LottoBall, RANK_LABEL, shortId } from "./parts";
+import { SkyBoard } from "./SkyBoard";
+
+/**
+ * 응모 영수증: 실제 복권 영수증처럼 감열지(흰 종이에 검은 글씨, 점선 절취선).
+ * 작은 네모 하늘에는 내 별 6개만 밝게 뜬다. 추첨이 끝났으면 결과를 아래에 찍는다.
+ */
+export function Receipt({
+  ticket,
+  receivedAt,
+  schedule,
+  record,
+  printing = false,
+}: {
+  ticket: Ticket;
+  receivedAt: number;
+  schedule: Schedule;
+  record?: RoundRecord | undefined;
+  /** 막 응모해 영수증이 인쇄되어 나오는 중 */
+  printing?: boolean | undefined;
+}) {
+  const times = roundTimes(schedule, ticket.round);
+  const drawAt = drandTime(drandRoundForClose(times.closesAt));
+  const id = toHex(ticketId(ticket));
+  const rank: Rank | null = record ? myRank(record, ticket) : null;
+  return (
+    <article
+      aria-label={`${ticket.round}회 응모권`}
+      data-receipt={id}
+      className={cn(
+        "sd-paper relative mx-auto w-full max-w-sm px-5 pt-6 pb-7 text-neutral-900",
+        printing && "sd-print",
+      )}
+    >
+      <header className="flex flex-col items-center gap-0.5 text-center">
+        <span className="text-[11px] text-neutral-500 tracking-[0.3em]">
+          STARDRAW
+        </span>
+        <span className="font-black text-xl tracking-tight">
+          하늘의 별 따기
+        </span>
+        <span className="text-neutral-600 text-xs">응모권 · 영수증</span>
+      </header>
+
+      <Cut />
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[13px] tabular-nums">
+        <dt className="text-neutral-500">회차</dt>
+        <dd className="text-right font-bold">제 {ticket.round} 회</dd>
+        <dt className="text-neutral-500">추첨</dt>
+        <dd className="text-right">{formatTime(drawAt)}</dd>
+        <dt className="text-neutral-500">응모</dt>
+        <dd className="text-right">{formatTime(receivedAt)}</dd>
+        <dt className="text-neutral-500">번호</dt>
+        <dd className="text-right" data-ticket-id>
+          {shortId(id)}
+        </dd>
+      </dl>
+
+      <Cut />
+
+      <div className="rounded-lg bg-[#0b1322] p-1.5">
+        <SkyBoard
+          state={{
+            mode: "receipt",
+            picked: ticket.numbers,
+            focus: null,
+            lit: [],
+            bonus: null,
+          }}
+          label={`내 별 6개: ${ticket.numbers.map((n) => starOf(n).ko).join(", ")}`}
+          className="rounded-md border-0"
+        />
+      </div>
+
+      <ol className="mt-4 flex flex-col gap-2.5">
+        {ticket.numbers.map((n) => {
+          const s = starOf(n);
+          const hit =
+            record && !record.void
+              ? record.numbers.includes(n) || record.bonus === n
+              : false;
+          return (
+            <li key={n} className="flex items-start gap-3">
+              <LottoBall n={n} size="sm" ring={hit} className="mt-0.5" />
+              <div className="flex min-w-0 flex-col leading-snug">
+                <span className="font-bold text-sm">
+                  {s.ko}{" "}
+                  <span className="font-normal text-neutral-500 text-xs">
+                    {s.con}
+                  </span>
+                </span>
+                <span className="break-keep text-neutral-700 text-xs">
+                  {s.fact}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <Cut />
+
+      {record ? (
+        <p className="text-center font-bold" data-result>
+          {record.void
+            ? "이 회차는 무효가 되어 추첨하지 않았습니다"
+            : rank
+              ? `${RANK_LABEL[rank]} 당첨`
+              : "아쉽게도 당첨되지 않았습니다"}
+        </p>
+      ) : (
+        <p className="text-center text-neutral-600 text-sm">
+          추첨을 기다리고 있습니다
+        </p>
+      )}
+      <p className="mt-3 break-keep text-center text-[11px] text-neutral-500">
+        당첨 확인은 응모한 열쇠(패스키)로만 할 수 있습니다. 이 그림을 남에게
+        보여 줘도 당첨을 가져갈 수는 없습니다.
+      </p>
+    </article>
+  );
+}
+
+/** 점선 절취선 */
+function Cut() {
+  return (
+    <div
+      aria-hidden="true"
+      className="-mx-5 my-4 border-neutral-400 border-t border-dashed"
+    />
+  );
+}

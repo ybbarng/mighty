@@ -13,7 +13,8 @@ export type GameEntry = {
     | "nyrongppong"
     | "gostop"
     | "minhwatu"
-    | "baseball";
+    | "baseball"
+    | "stardraw";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -105,5 +106,13 @@ export const GAMES: readonly GameEntry[] = [
       "숨긴 수를 스트라이크·볼로 좁혀 먼저 맞힌다. 비밀 수는 각자 기기에만",
     players: "1~2명",
     path: "/baseball",
+  },
+  {
+    id: "stardraw",
+    name: "하늘의 별 따기",
+    englishName: "Stardraw",
+    tagline: "로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?",
+    players: "누구나",
+    path: "/stardraw",
   },
 ];

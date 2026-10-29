@@ -1,14 +1,20 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  ByteWriter,
   checkPow,
   checkRegistration,
   closeRound,
+  concat,
   type DrandBeacon,
+  type Draw,
   decodeRecord,
   decodeRegistration,
   decodeTicket,
+  drandRandomness,
   drandRoundForClose,
   drandTime,
+  drawNumbers,
+  drawSeed,
   encodeRecord,
   encodeRegistration,
   encodeTicket,
@@ -31,6 +37,7 @@ import {
   sortRegistrations,
   sortTickets,
   type Ticket,
+  taggedHash,
   ticketContent,
   toBase64Url,
   toHex,
@@ -44,7 +51,7 @@ import {
  * 기기 안 연습 장부(docs/36 11-5 2번). 서버가 생기기 전까지 화면이 이것으로 응모 → 마감 → 추첨 →
  * 결과 → 이력 → 증명까지 돈다. 계산은 모두 규칙 패키지(`@mighty/stardraw-core`) 그대로이고,
  * 서버만 할 수 있는 일 둘을 흉내 낸다.
- * - drand: 진짜 공개 난수 대신 이 기기가 만든 난수를 서명 자리에 넣는다(검사기는 서명 확인을 건너뛴다)
+ * - drand: 진짜 공개 난수 대신 이 기기의 씨앗과 회차로 정한 값을 서명 자리에 넣는다(검사기는 서명 확인을 건너뛴다)
  * - 투명성 로그(Rekor): 마감 1분 뒤 올렸다고 적는다
  * 연습 참가자(컴퓨터 24명)가 최근 회차마다 함께 응모해 등수별 당첨자 수가 비지 않게 한다.
  * 시각은 `Clock`으로 재고, 연습용 "건너뛰기"는 그 위에 더한 시간이다(시험은 ManualClock).
@@ -94,6 +101,8 @@ interface Saved {
   epoch: number;
   /** 건너뛴 시간(초) */
   skipped: number;
+  /** 연습 drand 값의 씨앗(이 기기에만) */
+  secret: string;
   records: string[];
   tickets: string[][];
   registrations: string[][];
@@ -128,6 +137,8 @@ const dec = (s: string) => fromBase64Url(s);
 export class LocalLedger {
   readonly schedule: Schedule;
   private skipped: number;
+  /** 연습 drand 값의 씨앗. 회차마다 정해진 값이라 데모는 당첨 번호를 미리 볼 수 있다 */
+  private readonly secret: Uint8Array;
   private records: RoundRecord[];
   private tickets: Ticket[][];
   private registrations: KeyRegistration[][];
@@ -158,6 +169,7 @@ export class LocalLedger {
       saved?.epoch ?? Math.floor(this.clock.now() / 1000 / 3600) * 3600;
     this.schedule = practiceSchedule(epoch);
     this.skipped = saved?.skipped ?? 0;
+    this.secret = saved?.secret ? dec(saved.secret) : this.random(32);
     this.records = (saved?.records ?? []).map((r) => decodeRecord(dec(r)));
     this.tickets = (saved?.tickets ?? []).map((l) =>
       l.map((t) => decodeTicket(dec(t))),
@@ -215,10 +227,7 @@ export class LocalLedger {
           : { tickets: [], registrations: [] };
       const tickets = [...mine.tickets, ...bots.tickets];
       const registrations = [...mine.registrations, ...bots.registrations];
-      const beacon: DrandBeacon = {
-        round: drandRound,
-        signature: this.random(48),
-      };
+      const beacon = this.beaconFor(round);
       const record = closeRound({
         schedule: this.schedule,
         round,
@@ -391,6 +400,35 @@ export class LocalLedger {
     );
   }
 
+  /** 연습 drand 값: 씨앗과 회차로 정한 48바이트(진짜 drand 서명 자리) */
+  private beaconFor(round: number): DrandBeacon {
+    const { closesAt } = roundTimes(this.schedule, round);
+    const tag = (i: number) =>
+      taggedHash(
+        "stardraw/practice-beacon",
+        this.secret,
+        new ByteWriter().u32(round).u8(i).done(),
+      );
+    return {
+      round: drandRoundForClose(closesAt),
+      signature: concat(tag(0), tag(1).slice(0, 16)),
+    };
+  }
+
+  /** 데모 전용: 그 회차의 당첨 번호를 미리 본다(진짜 장부에는 없는 기능) */
+  peekDraw(round: number): Draw {
+    return drawNumbers(drawSeed(round, drandRandomness(this.beaconFor(round))));
+  }
+
+  /** 연습용: 이번 회차 마감 시각까지 건너뛴다 */
+  async skipToClose(): Promise<void> {
+    await this.settle();
+    const target = this.status().times.closesAt;
+    if (target > this.now()) this.skipped += target - this.now();
+    this.write();
+    await this.settle();
+  }
+
   /** 연습용: 다음 추첨 시각까지 시간을 건너뛰고 추첨한다 */
   async skipToNextDraw(): Promise<void> {
     await this.settle();
@@ -416,6 +454,7 @@ export class LocalLedger {
       v: 1,
       epoch: this.schedule.epoch,
       skipped: this.skipped,
+      secret: enc(this.secret),
       records: this.records.map((r) => enc(encodeRecord(r))),
       tickets: this.tickets.map((l) => l.map((t) => enc(encodeTicket(t)))),
       registrations: this.registrations.map((l) =>

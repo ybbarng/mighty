@@ -22,10 +22,10 @@ export function SkyBoard({
 }: {
   state: SkyState;
   /** 응모: 별을 누르면 그 번호 */
-  onPick?: (n: number) => void;
+  onPick?: ((n: number) => void) | undefined;
   label: string;
-  className?: string;
-  clock?: Clock;
+  className?: string | undefined;
+  clock?: Clock | undefined;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef(state);

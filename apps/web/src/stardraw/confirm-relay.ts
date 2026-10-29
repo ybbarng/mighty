@@ -88,8 +88,6 @@ export interface RelayStore {
   subscribe?(listener: (key: string) => void): () => void;
 }
 
-const PREFIX = "stardraw-confirm:";
-
 export function browserRelayStore(): RelayStore {
   const safe = <T>(fn: () => T, fallback: T): T => {
     try {
@@ -126,17 +124,19 @@ export class LocalConfirmRelay implements ConfirmRelay {
   constructor(
     private readonly clock: Clock,
     private readonly store: RelayStore,
+    /** 저장 이름 앞머리(데모는 실제 게임과 따로 둔다) */
+    private readonly prefix = "stardraw-confirm:",
   ) {
     store.subscribe?.((key) => this.emit(key));
   }
 
   private read(id: string): Entry | null {
-    const text = this.store.get(PREFIX + id);
+    const text = this.store.get(this.prefix + id);
     if (!text) return null;
     try {
       const entry = JSON.parse(text) as Entry;
       if (entry.keepUntil <= this.clock.now()) {
-        this.store.remove(PREFIX + id);
+        this.store.remove(this.prefix + id);
         return null;
       }
       return entry;
@@ -146,8 +146,8 @@ export class LocalConfirmRelay implements ConfirmRelay {
   }
 
   private write(id: string, entry: Entry): void {
-    this.store.set(PREFIX + id, JSON.stringify(entry));
-    this.emit(PREFIX + id);
+    this.store.set(this.prefix + id, JSON.stringify(entry));
+    this.emit(this.prefix + id);
   }
 
   private emit(key: string): void {
@@ -156,12 +156,12 @@ export class LocalConfirmRelay implements ConfirmRelay {
 
   private watch(id: string, check: (entry: Entry) => boolean): () => void {
     const listener = (key: string) => {
-      if (key !== PREFIX + id) return;
+      if (key !== this.prefix + id) return;
       const entry = this.read(id);
       if (entry && check(entry)) this.listeners.delete(listener);
     };
     this.listeners.add(listener);
-    listener(PREFIX + id);
+    listener(this.prefix + id);
     return () => this.listeners.delete(listener);
   }
 
@@ -194,8 +194,8 @@ export class LocalConfirmRelay implements ConfirmRelay {
     const now = this.clock.now();
     const out: OpenRequest[] = [];
     for (const key of this.store.keys()) {
-      if (!key.startsWith(PREFIX)) continue;
-      const id = key.slice(PREFIX.length);
+      if (!key.startsWith(this.prefix)) continue;
+      const id = key.slice(this.prefix.length);
       const entry = this.read(id);
       if (!entry || entry.answer || entry.answerBy <= now) continue;
       const request = decodeConfirmRequest(entry.request);
@@ -251,7 +251,7 @@ export class LocalConfirmRelay implements ConfirmRelay {
 
   onChange(listener: () => void): () => void {
     const l = (key: string) => {
-      if (key.startsWith(PREFIX)) listener();
+      if (key.startsWith(this.prefix)) listener();
     };
     this.listeners.add(l);
     return () => this.listeners.delete(l);

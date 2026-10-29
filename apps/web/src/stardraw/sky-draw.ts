@@ -20,7 +20,11 @@ export interface SkyState {
   lit: readonly number[];
   /** 추첨에서 나온 보너스(아직이면 null) */
   bonus: number | null;
+  /** 차례가 있는 별(당첨자 확인의 별 세 개): ①②③을 단다 */
+  marks?: readonly number[];
 }
+
+const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥"];
 
 /** 어두운 별(별자리 선 꼭짓점) */
 export const FAINT_STARS: readonly { x: number; y: number; con: string }[] =
@@ -82,7 +86,7 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
   const { width: W, state, now, twinkles } = f;
   const scale = scaleOf(W);
   const receipt = state.mode === "receipt";
-  const picked = new Set(state.picked);
+  const picked = new Set([...state.picked, ...(state.marks ?? [])]);
   const lit = new Set(state.lit);
   g.clearRect(0, 0, W, W);
 
@@ -184,19 +188,31 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
       (drawn || isBonus ? 1.25 : 1);
     g.globalAlpha = dim ? 0.3 : 1;
 
-    // 추첨: 켜진 당첨 별은 금빛 빛무리
+    // 추첨: 켜진 당첨 별은 금빛 빛무리와 고리(내 별과 겹치면 더 크게 맥동)
     if (drawn || isBonus) {
-      const pulse = 0.6 + 0.4 * Math.sin(now / 260 + s.n);
-      const halo = g.createRadialGradient(x, y, 0, x, y, r * 6);
+      const pulse = 0.65 + 0.35 * Math.sin(now / 260 + s.n);
+      const reach = (hit ? 34 : 26) * scale;
+      const halo = g.createRadialGradient(x, y, 0, x, y, reach);
       halo.addColorStop(
         0,
-        hit ? `rgba(255,236,150,${0.75 * pulse})` : `rgba(244,210,122,0.5)`,
+        hit ? `rgba(255,236,150,${0.85 * pulse})` : "rgba(255,222,130,0.62)",
+      );
+      halo.addColorStop(
+        0.45,
+        hit ? "rgba(255,226,120,0.22)" : "rgba(244,210,122,0.14)",
       );
       halo.addColorStop(1, "rgba(244,210,122,0)");
       g.fillStyle = halo;
       g.beginPath();
-      g.arc(x, y, r * 6, 0, Math.PI * 2);
+      g.arc(x, y, reach, 0, Math.PI * 2);
       g.fill();
+      if (!isBonus) {
+        g.strokeStyle = "rgba(255,226,140,0.9)";
+        g.lineWidth = 2 * Math.min(1.2, scale);
+        g.beginPath();
+        g.arc(x, y, r + 8 * scale, 0, Math.PI * 2);
+        g.stroke();
+      }
     }
 
     const glowR = r * (s.mag < 1 ? 4.2 : 3);
@@ -290,6 +306,27 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
     g.textBaseline = "alphabetic";
     g.globalAlpha = 1;
   }
+
+  // 차례 표시(①②③): 별 위에 금빛 동그라미 숫자
+  (state.marks ?? []).forEach((n, i) => {
+    const s = SKY_STARS[n - 1];
+    if (!s) return;
+    const x = s.x * W;
+    const y = s.y * W;
+    const r = starRadius(s.mag) * scale;
+    const halo = g.createRadialGradient(x, y, 0, x, y, r * 7);
+    halo.addColorStop(0, "rgba(255,236,150,0.55)");
+    halo.addColorStop(1, "rgba(255,236,150,0)");
+    g.fillStyle = halo;
+    g.beginPath();
+    g.arc(x, y, r * 7, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(255,240,190,0.98)";
+    g.font = `700 ${Math.round(16 * Math.min(1.3, scale))}px sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.fillText(CIRCLED[i] ?? String(i + 1), x, y - r - 9 * scale);
+  });
 
   const m = f.meteor;
   if (m && !receipt) {

@@ -128,6 +128,15 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "roundEnd", when: "비김" },
     ],
   },
+  {
+    title: "하늘의 별 따기",
+    cues: [
+      { cue: "starMix", when: "추첨 시작: 천구의 안에서 공이 섞임" },
+      { cue: "starBall", when: "공 하나가 나와 하늘의 별이 켜짐" },
+      { cue: "starWin", when: "내 응모권이 당첨(1~5등)" },
+      { cue: "beep", when: "별·번호를 고름" },
+    ],
+  },
 ];
 
 interface Level {

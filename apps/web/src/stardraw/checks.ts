@@ -279,7 +279,7 @@ export class Checker {
     prize: boolean,
   ): Promise<void> {
     const t = batch.tickets.find((x) => x.ticketId === ticketIdHex);
-    if (!t || t.status !== "confirmed") return;
+    if (t?.status !== "confirmed") return;
     t.memo = memo.trim().slice(0, 60);
     t.prize = prize;
     await this.store.put(batch);
@@ -351,10 +351,10 @@ export class Checker {
 }
 
 /** 확인 기록을 이 기기 IndexedDB에 둔다 */
-export function browserCheckStore(): CheckStore {
+export function browserCheckStore(dbName = "stardraw-checks"): CheckStore {
   const open = () =>
     new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open("stardraw-checks", 1);
+      const req = indexedDB.open(dbName, 1);
       req.onupgradeneeded = () =>
         req.result.createObjectStore("batches", { keyPath: "key" });
       req.onsuccess = () => resolve(req.result);
