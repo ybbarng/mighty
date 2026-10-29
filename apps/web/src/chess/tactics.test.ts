@@ -23,6 +23,14 @@ const rows = (ps: readonly TacticPuzzle[]) => ps.map((p) => [p.id, p] as const);
 const scoreAfter = (pos: Position, move: Move) =>
   -negamax(applyMove(pos, move), 3, -Infinity, Infinity, newContext());
 
+/**
+ * 이 수의 값이 limit 이하인지만 판정한다(같은 깊이, 좁은 창). negamax는 fail-soft 알파베타라
+ * 상대 쪽 값이 -limit 이상으로 나오면 참값도 그 이상, 곧 이 수는 limit 이하다.
+ * 정확한 값을 다 읽지 않아 빠르다.
+ */
+const atMost = (pos: Position, move: Move, limit: number) =>
+  negamax(applyMove(pos, move), 3, -limit - 1, -limit, newContext()) >= -limit;
+
 describe("체스 전술 문제 데이터", () => {
   it("포크·핀·스큐어·발견 공격이 모두 있다", () => {
     const kinds = new Set(tactics.map((p) => p.tactic));
@@ -50,18 +58,21 @@ describe("체스 전술 문제 데이터", () => {
     "%s: 엔진으로 읽으면 정답이 기물을 확실히 얻고(폰 둘 이상), 다른 수는 폰 둘 이상 못하다",
     (_id, p) => {
       const { position } = puzzleState(p);
-      const scored = legalMoves(position)
-        .map((m) => ({ m, s: scoreAfter(position, m) }))
-        .sort((a, b) => b.s - a.s);
-      const [best, second] = scored;
-      if (!best || !second) throw new Error("수가 모자라다");
-      expect(moveToSan(position, best.m)).toBe(p.solution);
+      const solution = solutionMove(p);
+      // 정답 수만 정확한 값을 읽는다
+      const best = scoreAfter(position, solution);
       // 메이트 문제가 아니다(메이트가 되면 전술이 아니라 메이트 문제다).
-      expect(Math.abs(best.s)).toBeLessThan(MATE / 2);
-      expect(best.s - evaluate(position.board, "w")).toBeGreaterThanOrEqual(
-        200,
+      expect(Math.abs(best)).toBeLessThan(MATE / 2);
+      expect(best - evaluate(position.board, "w")).toBeGreaterThanOrEqual(200);
+      // 다른 모든 수는 정답보다 폰 둘 이상 못하다(곧 정답이 가장 좋은 수이고 2등과 200 이상 차이)
+      const others = legalMoves(position).filter(
+        (m) => moveToSan(position, m) !== p.solution,
       );
-      expect(best.s - second.s).toBeGreaterThanOrEqual(200);
+      expect(others.length).toBeGreaterThan(0);
+      const close = others
+        .filter((m) => !atMost(position, m, best - 200))
+        .map((m) => moveToSan(position, m));
+      expect(close).toEqual([]);
     },
   );
 
