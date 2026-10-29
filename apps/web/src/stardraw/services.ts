@@ -13,13 +13,19 @@ import type { Ledger } from "./ledger";
 import { type LedgerStatus, LocalLedger } from "./local-ledger";
 import { RemoteLedger } from "./remote-ledger";
 import { browserTokenStore, RemoteConfirmRelay } from "./remote-relay";
-import { createWallet, sitePolicy, type Wallet } from "./wallet";
+import {
+  createDemoWallet,
+  createWallet,
+  sitePolicy,
+  type Wallet,
+} from "./wallet";
 
 /**
  * 화면이 쓰는 장부·지갑·확인 전달·확인 기록.
  * 빌드에 서버 주소(`NEXT_PUBLIC_STARDRAW_API`, 예: /stardraw-api)가 있으면 실제 게임은 서버 장부를 쓰고,
  * 없으면 이 기기 안 연습 장부로 돈다. 데모는 늘 연습 장부다.
  * 저장 이름공간(`ns`)마다 따로 둔다: 실제 게임은 "stardraw", 데모는 "stardraw-demo".
+ * 데모 지갑은 실제 패스키 대신 흉내 시트와 기기 안 데모 열쇠를 쓴다.
  */
 export interface Services {
   ns: string;
@@ -80,7 +86,8 @@ export function getServices(ns: string = GAME_NS): Services {
     ns,
     clock,
     relay,
-    wallet: createWallet(ns),
+    // 데모는 실제 패스키를 만들지 않고 흉내만 낸다(wallet.ts `createDemoWallet`)
+    wallet: ns === DEMO_NS ? createDemoWallet(ns) : createWallet(ns),
     checker: new Checker(
       relay,
       browserCheckStore(`${ns}-checks`),

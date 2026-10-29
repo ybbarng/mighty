@@ -5,11 +5,14 @@ import {
   fromBase64Url,
   passkeySigner,
   rawPublicKeyFromSpki,
+  signerFromKeyPair,
   type Ticket,
   toBase64Url,
   type WebAuthnAssertion,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
+
+import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
 
 /**
  * 내 열쇠와 내 응모권(docs/36 11-2). 브라우저 응모는 패스키로만 한다(2026-10-29 사용자).
@@ -22,7 +25,9 @@ import {
 export const PASSKEY_NAME = "하늘의 별 따기";
 
 export interface KeyInfo {
-  kind: "passkey";
+  /** passkey: 실제 게임. demo: 데모만 쓰는 기기 안 열쇠(패스키 흉내, 장부에는 원시 열쇠로 등록) */
+  kind: "passkey" | "demo";
+  /** 패스키 번호(데모 열쇠는 비어 있다) */
   credentialId: Uint8Array;
   pub: Uint8Array;
 }
@@ -210,6 +215,119 @@ export function createWallet(ns: string): Wallet {
           localStorage.removeItem(k);
         } catch {
           // 지우지 못해도 다음 데모는 새 패스키를 만든다
+        }
+      }
+    },
+  };
+}
+
+/**
+ * 데모 지갑: 실제 패스키를 만들지 않는다(`navigator.credentials`를 부르지 않는다).
+ * 실제 게임의 "브라우저 응모는 패스키로만" 규칙의 데모만의 예외다. 데모와 실제 게임이 같은 주소라
+ * 데모 패스키가 비밀번호 관리 앱에 남으면 실제 게임의 패스키 목록에 섞이기 때문이다(2026-10-29 사용자).
+ * 대신 이 기기 안 임시 P-256 열쇠로 원시 서명을 하고, 서명마다 화면의 흉내 시트(`requestUnlock`)로 확인받는다.
+ * 응모권·확인 기록은 실제 지갑과 같은 방식으로 이 이름공간에만 둔다.
+ */
+export function createDemoWallet(
+  ns: string,
+  unlock: (purpose: UnlockPurpose) => Promise<boolean> = requestUnlock,
+): Wallet {
+  const base = createWallet(ns);
+  const DEMO_KEY = `${ns}-demo-key`;
+
+  const confirm = async (purpose: UnlockPurpose) => {
+    // 실제 패스키 창을 닫은 것과 같은 오류로 알린다(화면은 "응모되지 않았습니다"로 이어 간다)
+    if (!(await unlock(purpose)))
+      throw new DOMException("확인을 취소했습니다", "NotAllowedError");
+  };
+
+  const loadPair = async (): Promise<CryptoKeyPair | null> => {
+    const saved = readJson<{ priv: JsonWebKey; pub: JsonWebKey }>(DEMO_KEY);
+    if (!saved) return null;
+    try {
+      const algorithm = { name: "ECDSA", namedCurve: "P-256" };
+      return {
+        privateKey: await crypto.subtle.importKey(
+          "jwk",
+          saved.priv,
+          algorithm,
+          false,
+          ["sign"],
+        ),
+        publicKey: await crypto.subtle.importKey(
+          "jwk",
+          saved.pub,
+          algorithm,
+          true,
+          ["verify"],
+        ),
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    ...base,
+
+    loadKey() {
+      const saved = readJson<{ raw: string }>(`${DEMO_KEY}-pub`);
+      return saved
+        ? {
+            kind: "demo",
+            credentialId: new Uint8Array(),
+            pub: fromBase64Url(saved.raw),
+          }
+        : null;
+    },
+
+    async createPasskey() {
+      await confirm("create");
+      // 다음 방문에도 같은 열쇠로 서명하려고 비밀 열쇠를 이 기기 저장소에 둔다(데모 전용, 실제 게임은 이렇게 하지 않는다)
+      const pair = await crypto.subtle.generateKey(
+        { name: "ECDSA", namedCurve: "P-256" },
+        true,
+        ["sign", "verify"],
+      );
+      const pub = new Uint8Array(
+        await crypto.subtle.exportKey("raw", pair.publicKey),
+      );
+      writeJson(DEMO_KEY, {
+        priv: await crypto.subtle.exportKey("jwk", pair.privateKey),
+        pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
+      });
+      writeJson(`${DEMO_KEY}-pub`, { raw: toBase64Url(pub) });
+      return { kind: "demo", credentialId: new Uint8Array(), pub };
+    },
+
+    async recoverPasskey() {
+      // 데모 열쇠는 다른 기기로 따라가지 않는다
+      return null;
+    },
+
+    async signerFor(key) {
+      const pair = await loadPair();
+      if (!pair)
+        throw new Error(
+          "데모 열쇠가 없습니다. 「데모 처음부터」를 눌러 주세요",
+        );
+      const signer = await signerFromKeyPair(pair);
+      return {
+        publicKey: key.pub,
+        sign: async (message) => {
+          await confirm("sign");
+          return signer.sign(message);
+        },
+      };
+    },
+
+    async clear() {
+      await base.clear();
+      for (const k of [DEMO_KEY, `${DEMO_KEY}-pub`]) {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          // 지우지 못해도 다음 데모는 새 열쇠를 만든다
         }
       }
     },
