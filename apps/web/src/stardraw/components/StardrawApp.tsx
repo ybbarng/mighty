@@ -151,10 +151,14 @@ export function StardrawApp() {
             onDraw={(round) => go({ name: "draw", round })}
             onMine={() => go({ name: "mine" })}
             onRounds={() => go({ name: "rounds" })}
-            onSkip={async () => {
-              await services.ledger.skipToNextDraw();
-              await refresh();
-            }}
+            onSkip={
+              services.practice
+                ? async () => {
+                    await services.practice?.skipToNextDraw();
+                    await refresh();
+                  }
+                : null
+            }
           />
         )}
         <footer className="pt-4 text-center text-[11px] text-white/40">
@@ -195,7 +199,8 @@ function Home({
   onDraw: (round: number) => void;
   onMine: () => void;
   onRounds: () => void;
-  onSkip: () => Promise<void>;
+  /** 연습 장부일 때만(서버 장부는 시간을 건너뛸 수 없다) */
+  onSkip: (() => Promise<void>) | null;
 }) {
   const [skipping, setSkipping] = useState(false);
   const current = mine.find((m) => m.ticket.round === status.round);
@@ -345,27 +350,29 @@ function Home({
 
       <Odds />
 
-      <section className="flex flex-col gap-2 rounded-2xl border border-white/10 border-dashed p-4 text-sm text-white/65">
-        <p className="break-keep">
-          지금은 서버가 열리기 전이라, 이 기기 안 연습 장부로 돌아갑니다. 연습
-          참가자 24명이 회차마다 함께 응모합니다. 상품은 없습니다.
-        </p>
-        <button
-          type="button"
-          disabled={skipping}
-          onClick={async () => {
-            setSkipping(true);
-            try {
-              await onSkip();
-            } finally {
-              setSkipping(false);
-            }
-          }}
-          className="self-start rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
-        >
-          {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
-        </button>
-      </section>
+      {onSkip && (
+        <section className="flex flex-col gap-2 rounded-2xl border border-white/10 border-dashed p-4 text-sm text-white/65">
+          <p className="break-keep">
+            지금은 서버가 열리기 전이라, 이 기기 안 연습 장부로 돌아갑니다. 연습
+            참가자 24명이 회차마다 함께 응모합니다. 상품은 없습니다.
+          </p>
+          <button
+            type="button"
+            disabled={skipping}
+            onClick={async () => {
+              setSkipping(true);
+              try {
+                await onSkip();
+              } finally {
+                setSkipping(false);
+              }
+            }}
+            className="self-start rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
+          >
+            {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
+          </button>
+        </section>
+      )}
     </>
   );
 }

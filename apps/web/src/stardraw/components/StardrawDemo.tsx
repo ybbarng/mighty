@@ -17,6 +17,7 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { cn } from "@/lib/cn";
 
 import { demoPick } from "../demo-pick";
+import type { LocalLedger } from "../local-ledger";
 import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
 import type { MyTicket } from "../wallet";
@@ -136,7 +137,9 @@ export function StardrawDemo() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void act(() => services.ledger.skipToClose())}
+                onClick={() =>
+                  void act(() => practiceOf(services).skipToClose())
+                }
                 className="rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-40"
               >
                 지금 마감
@@ -144,7 +147,9 @@ export function StardrawDemo() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void act(() => services.ledger.skipToNextDraw())}
+                onClick={() =>
+                  void act(() => practiceOf(services).skipToNextDraw())
+                }
                 className="sd-cta rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm disabled:opacity-40"
               >
                 지금 추첨
@@ -359,6 +364,12 @@ function Pane({
   );
 }
 
+/** 데모는 늘 기기 안 연습 장부다(시간 건너뛰기·당첨 번호 미리 보기) */
+function practiceOf(services: Services): LocalLedger {
+  if (!services.practice) throw new Error("데모는 연습 장부로만 돈다");
+  return services.practice;
+}
+
 /** 데모: 미리 본 이번 회차 당첨 번호로 n등이 되게 번호를 채운다 */
 function RankPicker({
   services,
@@ -369,7 +380,7 @@ function RankPicker({
   round: number;
   onPick: (picks: number[]) => void;
 }) {
-  const draw = services.ledger.peekDraw(round);
+  const draw = practiceOf(services).peekDraw(round);
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3">
       <p className="text-amber-100 text-sm">

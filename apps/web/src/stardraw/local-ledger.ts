@@ -47,6 +47,8 @@ import {
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
+import type { Ledger } from "./ledger";
+
 /**
  * 기기 안 연습 장부(docs/36 11-5 2번). 서버가 생기기 전까지 화면이 이것으로 응모 → 마감 → 추첨 →
  * 결과 → 이력 → 증명까지 돈다. 계산은 모두 규칙 패키지(`@mighty/stardraw-core`) 그대로이고,
@@ -134,8 +136,9 @@ export interface LedgerStatus {
 const enc = (b: Uint8Array) => toBase64Url(b);
 const dec = (s: string) => fromBase64Url(s);
 
-export class LocalLedger {
+export class LocalLedger implements Ledger {
   readonly schedule: Schedule;
+  readonly powParams = PRACTICE_POW;
   private skipped: number;
   /** 연습 drand 값의 씨앗. 회차마다 정해진 값이라 데모는 당첨 번호를 미리 볼 수 있다 */
   private readonly secret: Uint8Array;

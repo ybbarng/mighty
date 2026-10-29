@@ -11,7 +11,7 @@ import { type ReactNode, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
-import { type LedgerStatus, PRACTICE_POW } from "../local-ledger";
+import type { LedgerStatus } from "../local-ledger";
 import type { Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
 import { type KeyInfo, passkeySupported } from "../wallet";
@@ -82,7 +82,7 @@ export function EnterView({
       const challenge = ledger.head();
       const signer = await services.wallet.signerFor(key);
       let registration: KeyRegistration | null | undefined;
-      if (!ledger.isRegistered(key.pub)) {
+      if (!(await ledger.isRegistered(key.pub))) {
         setWork("처음 한 번, 열쇠를 장부에 올릴 계산을 하고 있습니다");
         registration = await makeRegistration(
           { publicKey: key.pub },
@@ -90,7 +90,7 @@ export function EnterView({
           key.kind === "passkey" ? key.credentialId : new Uint8Array(),
           challenge,
           entry.registerPowTarget,
-          { params: PRACTICE_POW },
+          { params: ledger.powParams },
         );
       }
       setWork(
@@ -104,7 +104,7 @@ export function EnterView({
         picked,
         challenge,
         entry.powTarget,
-        { params: PRACTICE_POW },
+        { params: ledger.powParams },
       );
       if (!ticket || registration === null)
         throw new Error("응모권을 만들지 못했습니다");

@@ -9,16 +9,23 @@ import {
   type ConfirmRelay,
   LocalConfirmRelay,
 } from "./confirm-relay";
+import type { Ledger } from "./ledger";
 import { type LedgerStatus, LocalLedger } from "./local-ledger";
+import { RemoteLedger } from "./remote-ledger";
+import { browserTokenStore, RemoteConfirmRelay } from "./remote-relay";
 import { createWallet, sitePolicy, type Wallet } from "./wallet";
 
 /**
- * 화면이 쓰는 장부·지갑·확인 전달·확인 기록. 지금은 모두 이 기기 안 연습용이다(서버가 생기면 여기서 바꿔 끼운다).
+ * 화면이 쓰는 장부·지갑·확인 전달·확인 기록.
+ * 빌드에 서버 주소(`NEXT_PUBLIC_STARDRAW_API`, 예: /stardraw-api)가 있으면 실제 게임은 서버 장부를 쓰고,
+ * 없으면 이 기기 안 연습 장부로 돈다. 데모는 늘 연습 장부다.
  * 저장 이름공간(`ns`)마다 따로 둔다: 실제 게임은 "stardraw", 데모는 "stardraw-demo".
  */
 export interface Services {
   ns: string;
-  ledger: LocalLedger;
+  ledger: Ledger;
+  /** 연습 장부일 때만(건너뛰기·데모의 당첨 번호 미리 보기) */
+  practice: LocalLedger | null;
   wallet: Wallet;
   relay: ConfirmRelay;
   /** 확인하는 분 기기의 확인 기록 */
@@ -31,16 +38,44 @@ const cache = new Map<string, Services>();
 export const GAME_NS = "stardraw";
 export const DEMO_NS = "stardraw-demo";
 
+/** 서버 주소(빌드할 때 들어간다). 비어 있으면 연습 장부 */
+const SERVER_API = process.env.NEXT_PUBLIC_STARDRAW_API ?? "";
+
 export function getServices(ns: string = GAME_NS): Services {
   const found = cache.get(ns);
   if (found) return found;
   const clock = realClock;
-  const relay = new LocalConfirmRelay(
-    clock,
-    browserRelayStore(),
-    `${ns}-confirm:`,
-  );
+  const useServer = ns === GAME_NS && SERVER_API !== "";
+  const relay: ConfirmRelay = useServer
+    ? new RemoteConfirmRelay(
+        SERVER_API,
+        clock,
+        browserTokenStore(`${ns}-relay-tokens`),
+      )
+    : new LocalConfirmRelay(clock, browserRelayStore(), `${ns}-confirm:`);
   const ledgerKey = `${ns}-ledger`;
+  const practice = useServer
+    ? null
+    : new LocalLedger({
+        clock,
+        policy: sitePolicy(),
+        store: {
+          load: () => {
+            try {
+              return localStorage.getItem(ledgerKey);
+            } catch {
+              return null;
+            }
+          },
+          save: (text) => {
+            try {
+              localStorage.setItem(ledgerKey, text);
+            } catch {
+              // 저장소를 못 쓰면 이번 방문 동안만 장부가 남는다
+            }
+          },
+        },
+      });
   const services: Services = {
     ns,
     clock,
@@ -52,26 +87,10 @@ export function getServices(ns: string = GAME_NS): Services {
       clock,
       sitePolicy(),
     ),
-    ledger: new LocalLedger({
-      clock,
-      policy: sitePolicy(),
-      store: {
-        load: () => {
-          try {
-            return localStorage.getItem(ledgerKey);
-          } catch {
-            return null;
-          }
-        },
-        save: (text) => {
-          try {
-            localStorage.setItem(ledgerKey, text);
-          } catch {
-            // 저장소를 못 쓰면 이번 방문 동안만 장부가 남는다
-          }
-        },
-      },
-    }),
+    ledger:
+      practice ??
+      new RemoteLedger({ base: SERVER_API, clock, policy: sitePolicy() }),
+    practice,
   };
   cache.set(ns, services);
   return services;
@@ -114,16 +133,20 @@ export function useLedger(ns: string = GAME_NS): {
     let alive = true;
     let lastRecords = -1;
     const tick = async () => {
-      await s.ledger.settle();
-      if (!alive) return;
-      const closed = s.ledger.closed().length;
-      setState((prev) => ({
-        services: s,
-        status: s.ledger.status(),
-        version: closed !== lastRecords ? prev.version + 1 : prev.version,
-      }));
-      lastRecords = closed;
-      stop = s.clock.after(1000, () => void tick());
+      try {
+        await s.ledger.settle();
+        if (!alive) return;
+        const closed = s.ledger.closed().length;
+        setState((prev) => ({
+          services: s,
+          status: s.ledger.status(),
+          version: closed !== lastRecords ? prev.version + 1 : prev.version,
+        }));
+        lastRecords = closed;
+      } catch {
+        // 서버 장부에 잠깐 닿지 못해도 멈추지 않고 다시 묻는다
+      }
+      if (alive) stop = s.clock.after(1000, () => void tick());
     };
     void tick();
     return () => {
