@@ -1,18 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { prepareFast } from "./fast";
+
 /**
  * 친구와 하기: 같은 브라우저의 두 탭(방장, 참가자)을 BroadcastChannel로 이어(?net=local)
  * 방 만들기 → 링크로 들어가기 → 대기실 → 시작 → 한 판 끝까지를 확인한다.
  */
-async function prepare(page: Page) {
-  await page.addInitScript(() => {
-    sessionStorage.setItem("mighty-splash-seen", "1");
-    localStorage.setItem(
-      "mighty-settings",
-      JSON.stringify({ state: { speed: 1.6, sound: false }, version: 0 }),
-    );
-  });
-}
+const prepare = (page: Page) => prepareFast(page);
 
 /** 지금 필요한 단추나 낼 수 있는 카드를 하나 누른다. 판이 끝났으면 true */
 async function stepOnce(page: Page): Promise<boolean> {
