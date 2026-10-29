@@ -3,6 +3,7 @@ import { encodeRuleString, presetRules } from "@mighty/engine";
 import { ManualClock } from "@mighty/fair-play";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { tokenProof } from "./fairness";
 import { type AuditResult, GuestRoom } from "./guest-room";
 import { HostRoom } from "./host-room";
 import { memoryHostStore } from "./host-store";
@@ -174,6 +175,34 @@ describe("온라인 방", () => {
     await until(() => audits.length === 1, 5000);
     expect(audits).toEqual([{ ok: true }]);
   }, 60_000);
+
+  it("토큰을 확인하는 사이 나가 버린 연결은 자리에 앉히지 않는다(떠난 연결이 자리를 '연결됨'으로 차지하지 않게)", async () => {
+    const { net, host, a } = await setup();
+    await host.start();
+    await until(() => a.match !== null);
+    const seat = a.seat ?? -1;
+    const token = a.token ?? "";
+    net.disconnect("a");
+    await until(() => host.lobby().seats[seat]?.connected === false);
+    // 맞는 토큰 증명으로 들어오자마자 나간다(예: 새로고침한 옛 탭의 늦은 입장 인사).
+    // 방장은 토큰을 확인하느라 기다리는 중에 나감 신호를 먼저 받는다.
+    const stale = net.join("a-stale");
+    stale.send(
+      {
+        t: "join",
+        name: "철수",
+        tokenProof: await tokenProof(token, "host"),
+        commit: "x",
+      },
+      "host",
+    );
+    stale.leave();
+    for (let i = 0; i < 50; i++) await flush();
+    expect(host.lobby().seats[seat]?.connected).toBe(false);
+    // 그 자리는 진짜로 돌아온 사람이 다시 받는다
+    net.reconnect("a");
+    await until(() => host.lobby().seats[seat]?.connected === true);
+  });
 
   it("방장이 대기실에서 고친 규칙과 이름이 참가자에게 간다", async () => {
     const { host, a } = await setup();

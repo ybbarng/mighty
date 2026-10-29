@@ -180,6 +180,12 @@ export class HostRoom<
   private readonly kickedTokens = new Set<string>();
   match: LocalMatch<Rules, State, View, ActionT, Event, Extra> | null = null;
   private joinQueue: Promise<void> = Promise.resolve();
+  /**
+   * 나간 연결(같은 아이디로 다시 들어오면 지운다). 입장 처리는 토큰 확인을 기다리는 동안
+   * 그 연결이 나갈 수 있다. 나가는 신호는 아직 앉지 않은 연결이라 무시되므로, 기다림 뒤에
+   * 이 연결을 앉히면 떠난 연결이 자리를 영영 "연결됨"으로 차지한다(끊김 투표가 열리지 않는다)
+   */
+  private readonly gone = new Set<string>();
 
   constructor(
     options: HostRoomOptions<Rules, State, View, ActionT, Event, Extra>,
@@ -224,8 +230,14 @@ export class HostRoom<
     });
     if (options.restore) this.restoreRoom(options.restore);
 
-    this.transport.onPeerJoin(() => this.broadcastLobby());
-    this.transport.onPeerLeave((peerId) => this.onPeerLeave(peerId));
+    this.transport.onPeerJoin((peerId) => {
+      this.gone.delete(peerId);
+      this.broadcastLobby();
+    });
+    this.transport.onPeerLeave((peerId) => {
+      this.gone.add(peerId);
+      this.onPeerLeave(peerId);
+    });
     this.transport.onMessage((message, from) => {
       if (isGuestMessage<ActionT>(message)) this.onMessage(message, from);
     });
@@ -1267,6 +1279,8 @@ export class HostRoom<
       this.send({ t: "kicked" }, peerId);
       return;
     }
+    // 토큰 확인을 기다리는 사이 나간 연결은 앉히지 않는다(gone 설명)
+    if (this.gone.has(peerId)) return;
     // 이미 앉은 연결이 다시 요청하면 새 자리를 주지 않고 같은 자리를 다시 알린다(한 연결로 여러 자리).
     const already = this.seatOf(peerId);
     if (already !== null) {
@@ -1277,6 +1291,7 @@ export class HostRoom<
     // 재접속: 토큰 증명이 맞으면 같은 자리로 돌려보낸다.
     for (const [seat, guest] of this.guests) {
       if (await matches(guest.token)) {
+        if (this.gone.has(peerId)) return;
         const token = guest.token;
         guest.peerId = peerId;
         guest.standInTimer?.();
@@ -1337,6 +1352,7 @@ export class HostRoom<
       this.send({ t: "full" }, peerId);
       return;
     }
+    if (this.gone.has(peerId)) return;
     const newToken = randomId(24);
     this.guests.set(free, {
       peerId,
