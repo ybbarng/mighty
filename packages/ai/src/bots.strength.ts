@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import type { Bot } from "./bot";
 import { beginnerBot, heuristicBot } from "./heuristic-bot";
+import { randomBot } from "./random-bot";
 import { createSearchBot } from "./search-bot";
 import { simulate } from "./simulate";
+
+const standard5 = presetRules("standard5");
 
 /**
  * 도전자를 기준 봇과 섞어 앉혀 판당 돈 차이를 잰다.
@@ -53,5 +56,46 @@ describe("실력 단계 사이의 세기 (pnpm --filter @mighty/ai bench)", () =
 
   it("고수는 중수보다 판당 돈을 더 번다", () => {
     expect(duel(createSearchBot(), heuristicBot, 60)).toBeGreaterThan(0.8);
+  });
+});
+
+// 단위 시험(bots.test)에서 옮겨 왔다: 세기 측정이라 bench에서 돈다(2026-10-29)
+describe("규칙 기반 봇의 실력", () => {
+  it("무작위 봇과 섞어 앉히면 규칙 기반 봇이 돈을 더 번다", () => {
+    let heuristicTotal = 0;
+    let randomTotal = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      // 자리 효과를 없애려고 시드마다 봇 자리를 바꾼다.
+      const heuristicSeats = seed % 2 === 0 ? [0, 2, 4] : [1, 3];
+      const bots = [0, 1, 2, 3, 4].map((s) =>
+        heuristicSeats.includes(s) ? heuristicBot : randomBot,
+      );
+      const result = simulate({ rules: standard5, seed, bots, rounds: 8 });
+      result.moneyDelta.forEach((delta, seat) => {
+        if (heuristicSeats.includes(seat))
+          heuristicTotal += delta / heuristicSeats.length;
+        else randomTotal += delta / (5 - heuristicSeats.length);
+      });
+    }
+    expect(heuristicTotal).toBeGreaterThan(randomTotal);
+  });
+
+  it("규칙 기반 봇끼리 하면 주공이 공약을 꽤 자주 지킨다", () => {
+    let wins = 0;
+    let rounds = 0;
+    for (let seed = 0; seed < 20; seed++) {
+      const result = simulate({
+        rules: standard5,
+        seed,
+        bots: Array(5).fill(heuristicBot),
+        rounds: 10,
+      });
+      wins += result.declarerWins;
+      rounds += result.declarerRounds;
+    }
+    const rate = wins / rounds;
+    // 너무 낮으면 공약을 무리하게 부르고, 너무 높으면 너무 소심하게 부른다는 뜻이다.
+    expect(rate).toBeGreaterThan(0.3);
+    expect(rate).toBeLessThan(0.9);
   });
 });

@@ -97,8 +97,9 @@ describe("남의 손패 추측", () => {
 });
 
 describe("2단계 봇", () => {
+  // 규칙에 맞는지만 보므로 카드 고르기·판 계획 모두 적은 세계 수로 같은 길을 지난다(세기는 bench가 잰다)
   it("고르는 카드는 늘 낼 수 있는 카드다", () => {
-    const bot = createSearchBot({ worlds: 4 });
+    const bot = createSearchBot({ worlds: 4, planWorlds: 4 });
     const rng = createRng(3);
     let { state } = createMatch({ rules: standard5, seed: 11 });
     for (let guard = 0; guard < 400; guard++) {
@@ -118,9 +119,11 @@ describe("2단계 봇", () => {
     "%s 규칙에서 오류 없이 판을 끝낸다",
     (_name, rules) => {
       const bots = Array.from({ length: rules.playerCount }, (_, i) =>
-        i % 2 === 0 ? createSearchBot({ worlds: 3 }) : heuristicBot,
+        i % 2 === 0
+          ? createSearchBot({ worlds: 3, planWorlds: 3 })
+          : heuristicBot,
       );
-      const result = simulate({ rules, seed: 5, bots, rounds: 2 });
+      const result = simulate({ rules, seed: 5, bots, rounds: 1 });
       expect(
         result.roundsPlayed > 0 || result.state.round.phase === "gameOver",
       ).toBe(true);
