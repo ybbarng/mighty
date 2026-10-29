@@ -46,7 +46,7 @@ test("민화투 암호화방: 사람 셋이 한 판을 끝까지 치고, 참가�
   context,
 }, info) => {
   test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
-  test.setTimeout(300_000);
+  test.setTimeout(180_000);
   const pages = [
     await context.newPage(),
     await context.newPage(),

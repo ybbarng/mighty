@@ -188,7 +188,7 @@ for (const [preset, players] of [
     context,
   }, info) => {
     test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
-    test.setTimeout(30 * 60_000);
+    test.setTimeout(3 * 60_000);
     const { pages, host, errors, fairLog } = await openTable(
       context,
       players,
@@ -316,7 +316,7 @@ test("고친 프로그램: 다른 카드라고 속여 내면 방장 화면에 �
   context,
 }, info) => {
   test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
-  test.setTimeout(5 * 60_000);
+  test.setTimeout(3 * 60_000);
   // 1번 참가자 탭에만 고친 프로그램을 내려보낸다: 낼 카드 대신 내 다른 자리 열쇠를 공개한다.
   // 압축된 코드라 변수 이름은 빌드마다 바뀐다. 모양으로 찾는다.
   const original =
@@ -375,7 +375,7 @@ for (const [preset, players] of [
     context,
   }, info) => {
     test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
-    test.setTimeout(10 * 60_000);
+    test.setTimeout(3 * 60_000);
     const { pages, host, errors, fairLog } = await openTable(
       context,
       players,
@@ -434,8 +434,6 @@ for (const [preset, players] of [
         timeout: 30_000,
       });
     await host.screenshot({ path: info.outputPath("after-reload.png") });
-    await host.waitForTimeout(2000);
-    await host.screenshot({ path: info.outputPath("after-reload-2s.png") });
     // 판을 끝까지 두고 다음 판으로 넘어간다.
     await play(async () =>
       (await host.evaluate(() => document.body.innerText)).includes("다음 판"),
@@ -455,7 +453,7 @@ for (const [preset, players] of [
     context,
   }, info) => {
     test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
-    test.setTimeout(5 * 60_000);
+    test.setTimeout(3 * 60_000);
     const { pages, host } = await openTable(
       context,
       players,

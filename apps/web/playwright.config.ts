@@ -5,7 +5,9 @@ const PORT = 4173;
 /** 실제 정적 빌드(out/)를 띄워 화면 크기별로 한 판을 끝까지 해 본다 */
 export default defineConfig({
   testDir: "e2e",
-  timeout: 180_000,
+  // 멈춤을 빨리 드러내는 안전장치. 가장 긴 보통 시험이 이 기계에서 약 14초(2026-10-30, docs/38).
+  // 여러 탭 멘탈 포커처럼 무거운 시험은 파일 안에서 따로 정한다
+  timeout: 90_000,
   fullyParallel: true,
   reporter: process.env.CI ? "github" : "list",
   use: {

@@ -29,6 +29,8 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   page,
 }, info) => {
   await prepare(page);
+  // 시간은 그대로 흐르되, "머무는지"를 볼 때 실제로 기다리지 않고 시계를 건너뛴다
+  await page.clock.install();
   await page.goto("/mighty");
   await page.getByRole("button", { name: /마이티 배우기/ }).click();
   await expect(page.getByText("0/10")).toBeVisible();
@@ -75,8 +77,8 @@ test("튜토리얼: 설명·퀴즈·미션을 거쳐 단원을 끝낸다", async
   await expect(page.getByRole("dialog", { name: "미션 성공" })).toBeVisible({
     timeout: 10_000,
   });
-  // 안내 상자는 사라지지 않고 머문다.
-  await page.waitForTimeout(1500);
+  // 안내 상자는 사라지지 않고 머문다(1.5초를 실제로 기다리지 않고 시계를 건너뛴다).
+  await page.clock.fastForward(1500);
   await expect(
     page.getByRole("button", { name: "다음", exact: true }),
   ).toBeVisible();
