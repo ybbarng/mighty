@@ -8,6 +8,7 @@ import {
 } from "./drand";
 import { drawNumbers, drawSeed } from "./draw";
 import type { Signer } from "./keys";
+import { makeNickname, type Nickname } from "./nickname";
 import { checkPow } from "./pow";
 import {
   decodeRecord,
@@ -16,6 +17,12 @@ import {
   type RoundRecord,
   recordHash,
 } from "./record";
+import {
+  type KeyRegistration,
+  makeRegistration,
+  registrationContent,
+  sortRegistrations,
+} from "./registration";
 import { closeRound, isVoidRound } from "./round";
 import {
   roundTimes,
@@ -25,8 +32,11 @@ import {
 } from "./schedule";
 import {
   EASY_TARGET,
+  fakePasskey,
   fakeSignature,
   HOURLY,
+  registerPasskey,
+  registerRaw,
   signers,
   TEST_POW,
   ticketFor,
@@ -74,6 +84,7 @@ interface Ledger {
   schedule: Schedule;
   records: RoundRecord[];
   tickets: Ticket[][];
+  registrations: KeyRegistration[][];
   people: Signer[];
 }
 
@@ -88,6 +99,7 @@ async function buildLedger(
   const people = await signers(4);
   const records: RoundRecord[] = [];
   const tickets: Ticket[][] = [];
+  const registrations: KeyRegistration[][] = [];
   let prev = genesisHash(schedule);
   for (let round = 1; round <= rounds; round++) {
     const draw = drawFor(schedule, round);
@@ -103,19 +115,23 @@ async function buildLedger(
     const roundTickets = await Promise.all(
       picks.map((p, i) => ticketFor(people[i] as Signer, round, p, prev)),
     );
+    // 4명 모두 1회차에 열쇠를 등록한다
+    const roundRegs = round === 1 ? await registerRaw(people, prev) : [];
     const record = closeRound({
       schedule,
       round,
       prev,
       tickets: roundTickets,
+      registrations: roundRegs,
       rootLoggedAt: loggedAt(schedule, round),
       beacon: beaconFor(schedule, round),
     });
     records.push(record);
     tickets.push(sortedLike(record, roundTickets));
+    registrations.push(sortRegistrations(roundRegs));
     prev = recordHash(record);
   }
-  return { schedule, records, tickets, people };
+  return { schedule, records, tickets, registrations, people };
 }
 
 /** 장부의 응모권 목록은 id 순서다 */
@@ -218,6 +234,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toEqual([]);
@@ -237,6 +254,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toEqual(
@@ -266,6 +284,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toEqual(
@@ -282,6 +301,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       records,
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toEqual(
@@ -300,6 +320,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       records,
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toContain(
@@ -310,6 +331,7 @@ describe("장부 검사", () => {
   it("같은 열쇠가 한 회차에 두 장 내면 드러난다", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
+    const regs = await registerRaw([person as Signer], prev);
     const a = await ticketFor(person as Signer, 1, [1, 2, 3, 4, 5, 6], prev);
     const b = await ticketFor(person as Signer, 1, [7, 8, 9, 10, 11, 12], prev);
     const record = closeRound({
@@ -317,6 +339,7 @@ describe("장부 검사", () => {
       round: 1,
       prev,
       tickets: [a, b],
+      registrations: regs,
       rootLoggedAt: loggedAt(HOURLY, 1),
       beacon: beaconFor(HOURLY, 1),
     });
@@ -324,6 +347,7 @@ describe("장부 검사", () => {
       HOURLY,
       [record],
       [sortedLike(record, [a, b])],
+      [regs],
       OPTIONS,
     );
     expect(messages(report)).toEqual(
@@ -336,6 +360,7 @@ describe("장부 검사", () => {
   it("작업 증명이 틀린 응모권은 서명이 맞아도 드러난다(전부 검사)", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
+    const regs = await registerRaw([person as Signer], prev);
     const unsigned = unsignedTicket(person as Signer, 1, [1, 2, 3, 4, 5, 6]);
     let nonce = 0;
     while (
@@ -354,10 +379,11 @@ describe("장부 검사", () => {
       round: 1,
       prev,
       tickets: [bad],
+      registrations: regs,
       rootLoggedAt: loggedAt(HOURLY, 1),
       beacon: beaconFor(HOURLY, 1),
     });
-    const report = await verifyLedger(HOURLY, [record], [[bad]], {
+    const report = await verifyLedger(HOURLY, [record], [[bad]], [regs], {
       ...OPTIONS,
       powSample: Infinity,
     });
@@ -374,6 +400,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       ledger.tickets,
+      ledger.registrations,
       { ...OPTIONS, powSample: 0 },
     );
     // 당첨 3장(1·2·5등)만 검사, 낙첨 1장은 건너뜀
@@ -384,6 +411,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       ledger.tickets,
+      ledger.registrations,
       {
         ...OPTIONS,
         powSample: 0,
@@ -399,6 +427,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       ledger.records,
       ledger.tickets,
+      ledger.registrations,
       { ...OPTIONS, beaconVerifier: () => false },
     );
     expect(messages(report)).toContain("1: drand 서명이 맞지 않는다");
@@ -412,6 +441,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       [late],
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toContain(
@@ -425,6 +455,7 @@ describe("장부 검사", () => {
       ledger.schedule,
       [ledger.records[0], ledger.records[2]] as RoundRecord[],
       [ledger.tickets[0], ledger.tickets[2]] as Ticket[][],
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(report)).toEqual(
@@ -442,6 +473,7 @@ describe("일정 변경", () => {
     length: 7200,
     closeMargin: 60,
     powTarget: EASY_TARGET,
+    registerPowTarget: EASY_TARGET,
   });
 
   it("24시간 뒤 회차부터의 변경은 반영되고, 그보다 이른 변경은 드러난다", async () => {
@@ -451,6 +483,7 @@ describe("일정 변경", () => {
       ledger.schedule,
       [{ ...record, scheduleChanges: [twoHours(26)] }],
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(ok)).toEqual([]);
@@ -459,6 +492,7 @@ describe("일정 변경", () => {
       ledger.schedule,
       [{ ...record, scheduleChanges: [twoHours(10)] }],
       ledger.tickets,
+      ledger.registrations,
       OPTIONS,
     );
     expect(messages(early)).toContain(
@@ -493,5 +527,292 @@ describe("내 응모권 포함 증명", () => {
     expect(
       proveMembership(ledger.tickets[1] as Ticket[], ticketId(mine)),
     ).toBeNull();
+  });
+});
+
+describe("열쇠 등록", () => {
+  it("등록하지 않은 열쇠의 응모권은 드러난다", async () => {
+    const [person] = await signers(1);
+    const prev = genesisHash(HOURLY);
+    const t = await ticketFor(person as Signer, 1, [1, 2, 3, 4, 5, 6], prev);
+    const record = closeRound({
+      schedule: HOURLY,
+      round: 1,
+      prev,
+      tickets: [t],
+      rootLoggedAt: loggedAt(HOURLY, 1),
+      beacon: beaconFor(HOURLY, 1),
+    });
+    const report = await verifyLedger(HOURLY, [record], [[t]], [[]], OPTIONS);
+    expect(messages(report)).toEqual([
+      expect.stringMatching(/^1: 응모권 .*: 등록되지 않은 열쇠$/),
+    ]);
+  });
+
+  it("결과 뒤 등록을 빼면 등록 수·루트가 맞지 않고 그 열쇠의 응모권도 드러난다", async () => {
+    const ledger = await buildLedger(1);
+    const report = await verifyLedger(
+      ledger.schedule,
+      ledger.records,
+      ledger.tickets,
+      [(ledger.registrations[0] as KeyRegistration[]).slice(1)],
+      OPTIONS,
+    );
+    expect(messages(report)).toEqual(
+      expect.arrayContaining([
+        "1: 등록 수가 3인데 기록은 4",
+        "1: 등록 목록으로 만든 머클 루트가 기록과 다르다",
+        expect.stringMatching(/등록되지 않은 열쇠/),
+      ]),
+    );
+  });
+
+  it("같은 열쇠를 두 번 등록하거나, 같은 패스키 번호를 다른 열쇠로 등록하면 드러난다", async () => {
+    const prev = genesisHash(HOURLY);
+    const [person] = (await signers(1)) as [Signer];
+    const [first] = await registerRaw([person], prev);
+    const again = (await makeRegistration(
+      person,
+      "raw",
+      new Uint8Array(),
+      prev,
+      EASY_TARGET,
+      { params: TEST_POW, start: (first as KeyRegistration).nonce + 1 },
+    )) as KeyRegistration;
+    const a = await fakePasskey();
+    const b = await fakePasskey();
+    const regA = await registerPasskey(a, prev);
+    const regB = await registerPasskey(
+      { ...b, credentialId: a.credentialId },
+      prev,
+    );
+    const regs = sortRegistrations([
+      first as KeyRegistration,
+      again,
+      regA,
+      regB,
+    ]);
+    const record = closeRound({
+      schedule: HOURLY,
+      round: 1,
+      prev,
+      tickets: [],
+      registrations: regs,
+      rootLoggedAt: loggedAt(HOURLY, 1),
+      beacon: beaconFor(HOURLY, 1),
+    });
+    const report = await verifyLedger(HOURLY, [record], [[]], [regs], OPTIONS);
+    expect(messages(report)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/이미 등록된 열쇠$/),
+        expect.stringMatching(/이미 등록된 패스키 번호$/),
+      ]),
+    );
+    expect(report.keys).toHaveLength(2);
+  });
+
+  it("등록 작업 증명이 틀리면 드러난다", async () => {
+    const prev = genesisHash(HOURLY);
+    const [person] = (await signers(1)) as [Signer];
+    const unsolved = {
+      v: 1,
+      kind: "raw" as const,
+      credentialId: new Uint8Array(),
+      pub: person.publicKey,
+    };
+    let nonce = 0;
+    while (
+      await checkPow(
+        prev,
+        registrationContent(unsolved),
+        nonce,
+        EASY_TARGET,
+        TEST_POW,
+      )
+    )
+      nonce++;
+    const regs = [{ ...unsolved, nonce }];
+    const record = closeRound({
+      schedule: HOURLY,
+      round: 1,
+      prev,
+      tickets: [],
+      registrations: regs,
+      rootLoggedAt: loggedAt(HOURLY, 1),
+      beacon: beaconFor(HOURLY, 1),
+    });
+    const report = await verifyLedger(HOURLY, [record], [[]], [regs], OPTIONS);
+    expect(messages(report)).toEqual([
+      expect.stringMatching(/^1: 등록 .*: 작업 증명이 맞지 않는다$/),
+    ]);
+  });
+
+  it("패스키로 등록하고 응모한 장부는 통과하고, 패스키 번호로 공개 열쇠를 찾을 수 있다", async () => {
+    const prev = genesisHash(HOURLY);
+    const passkey = await fakePasskey();
+    const reg = await registerPasskey(passkey, prev);
+    const t = await ticketFor(passkey.signer, 1, [1, 2, 3, 4, 5, 6], prev);
+    const record = closeRound({
+      schedule: HOURLY,
+      round: 1,
+      prev,
+      tickets: [t],
+      registrations: [reg],
+      rootLoggedAt: loggedAt(HOURLY, 1),
+      beacon: beaconFor(HOURLY, 1),
+    });
+    const report = await verifyLedger(
+      HOURLY,
+      [record],
+      [[t]],
+      [[reg]],
+      OPTIONS,
+    );
+    expect(messages(report)).toEqual([]);
+    const found = report.keys.find(
+      (k) => toHex(k.credentialId) === toHex(passkey.credentialId),
+    );
+    expect(toHex(found?.pub as Uint8Array)).toBe(
+      toHex(passkey.signer.publicKey),
+    );
+  });
+});
+
+describe("별명 남기기", () => {
+  /**
+   * 회차마다 별명을 넣어 장부를 처음부터 다시 닫는다. 기록 해시가 바뀌면 다음 회차의
+   * 작업 증명 문제 값도 바뀌므로, 2회차부터는 같은 사람·같은 번호로 응모권을 다시 만든다.
+   */
+  async function rechain(ledger: Ledger, nicknamesByRound: Nickname[][]) {
+    let prev = genesisHash(ledger.schedule);
+    const records: RoundRecord[] = [];
+    const tickets: Ticket[][] = [];
+    for (let i = 0; i < ledger.records.length; i++) {
+      const round = i + 1;
+      const old = ledger.tickets[i] as Ticket[];
+      const list =
+        i === 0
+          ? old
+          : await Promise.all(
+              old.map((t) => {
+                const who = ledger.people.find(
+                  (p) => toHex(p.publicKey) === toHex(t.pub),
+                ) as Signer;
+                return ticketFor(who, round, t.numbers, prev);
+              }),
+            );
+      const record = closeRound({
+        schedule: ledger.schedule,
+        round,
+        prev,
+        tickets: list,
+        registrations: ledger.registrations[i] as KeyRegistration[],
+        rootLoggedAt: loggedAt(ledger.schedule, round),
+        beacon: beaconFor(ledger.schedule, round),
+        nicknames: nicknamesByRound[i] ?? [],
+      });
+      records.push(record);
+      tickets.push(sortedLike(record, list));
+      prev = recordHash(record);
+    }
+    return { records, tickets };
+  }
+
+  async function check(ledger: Ledger, nicknamesByRound: Nickname[][]) {
+    const { records, tickets } = await rechain(ledger, nicknamesByRound);
+    return verifyLedger(
+      ledger.schedule,
+      records,
+      tickets,
+      ledger.registrations,
+      OPTIONS,
+    );
+  }
+
+  /** 1회차의 1등 응모권(사람 0)과 낙첨 응모권(사람 3) */
+  function round1(ledger: Ledger) {
+    const list = ledger.tickets[0] as Ticket[];
+    const byPerson = (k: number) =>
+      list.find(
+        (t) => toHex(t.pub) === toHex((ledger.people[k] as Signer).publicKey),
+      ) as Ticket;
+    return { first: byPerson(0), loser: byPerson(3) };
+  }
+
+  it("지난 회차 1등이 자기 열쇠로 남긴 별명은 통과한다", async () => {
+    const ledger = await buildLedger(2);
+    const { first } = round1(ledger);
+    const nick = await makeNickname(
+      ledger.people[0] as Signer,
+      first,
+      "  철수 ",
+    );
+    expect(nick.nickname).toBe("철수");
+    const { records } = await rechain(ledger, [[], [nick]]);
+    expect(decodeRecord(encodeRecord(records[1] as RoundRecord))).toEqual(
+      records[1],
+    );
+    const report = await check(ledger, [[], [nick]]);
+    expect(messages(report)).toEqual([]);
+    expect(report.nicknames.map((n) => n.nickname)).toEqual(["철수"]);
+  });
+
+  it("낙첨 응모권, 남의 열쇠 서명, 같은 회차 기록에 넣은 별명은 드러난다", async () => {
+    const ledger = await buildLedger(2);
+    const { first, loser } = round1(ledger);
+    const loserNick = await makeNickname(
+      ledger.people[3] as Signer,
+      loser,
+      "영희",
+    );
+    const stolen = await makeNickname(
+      ledger.people[1] as Signer,
+      first,
+      "가로챔",
+    );
+    const sameRound = await makeNickname(
+      ledger.people[0] as Signer,
+      first,
+      "철수",
+    );
+    const report = await check(ledger, [[sameRound], [loserNick]]);
+    expect(messages(report)).toEqual([
+      expect.stringMatching(/^1: 별명 .*: 지난 회차 당첨 응모권이 아니다$/),
+      expect.stringMatching(/^2: 별명 .*: 지난 회차 당첨 응모권이 아니다$/),
+    ]);
+    const stolenReport = await check(ledger, [[], [stolen]]);
+    expect(messages(stolenReport)).toEqual([
+      expect.stringMatching(/^2: 별명 .*: 서명이 맞지 않는다$/),
+    ]);
+  });
+
+  it("한 응모권에 별명은 한 번", async () => {
+    const ledger = await buildLedger(3);
+    const { first } = round1(ledger);
+    const signer = ledger.people[0] as Signer;
+    const report = await check(ledger, [
+      [],
+      [await makeNickname(signer, first, "철수")],
+      [await makeNickname(signer, first, "다시 철수")],
+    ]);
+    expect(messages(report)).toEqual([
+      expect.stringMatching(/^3: 별명 .*: 이미 별명을 남긴 응모권$/),
+    ]);
+  });
+
+  it("별명은 NFC로 맞추고, 20자를 넘거나 보이지 않는 글자가 있으면 만들지 않는다", async () => {
+    const ledger = await buildLedger(1);
+    const { first } = round1(ledger);
+    const signer = ledger.people[0] as Signer;
+    // "철" 을 자모로 풀어 쓴(NFD) 글자도 NFC 한 글자로 맞춘다
+    const nfd = "철수".normalize("NFD");
+    expect(nfd).not.toBe("철수");
+    expect((await makeNickname(signer, first, nfd)).nickname).toBe("철수");
+    await expect(makeNickname(signer, first, "가".repeat(21))).rejects.toThrow(
+      "별명은 1~20자",
+    );
+    await expect(makeNickname(signer, first, "철​수")).rejects.toThrow(
+      "보이지 않는 글자",
+    );
   });
 });

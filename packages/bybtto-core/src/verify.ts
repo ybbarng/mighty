@@ -14,6 +14,11 @@ import {
 import { drawNumbers, drawSeed, RANKS, rankOf } from "./draw";
 import { entrantId } from "./keys";
 import { inclusionProof, merkleRoot, verifyInclusion } from "./merkle";
+import {
+  checkNickname,
+  type Nickname,
+  verifyNicknameSignature,
+} from "./nickname";
 import { checkPow, POW_PARAMS, type PowParams } from "./pow";
 import {
   genesisHash,
@@ -21,6 +26,12 @@ import {
   type RoundRecord,
   recordHash,
 } from "./record";
+import {
+  checkRegistration,
+  type KeyRegistration,
+  registrationContent,
+  registrationId,
+} from "./registration";
 import { isVoidRound } from "./round";
 import {
   checkSchedule,
@@ -54,7 +65,7 @@ export interface VerifyOptions {
   /** 늘 전부 검사할 내 응모권 id */
   mine?: readonly Uint8Array[];
   /**
-   * 머클 루트가 그 시각(rootLoggedAt)에 투명성 로그에 들어갔는지 확인.
+   * 봉인 값(round.ts `sealDigest`)이 그 시각(rootLoggedAt)에 투명성 로그에 들어갔는지 확인.
    * TODO: Rekor 포함 증명 확인(서버를 만들 때). 없으면 확인하지 않고 skipped에 남긴다.
    */
   rootLogVerifier?: (record: RoundRecord) => Promise<boolean>;
@@ -77,12 +88,17 @@ export interface VerifyReport {
   schedule: Schedule;
   /** 작업 증명을 실제로 검사한 응모권 수 */
   powChecked: number;
+  /** 규칙을 지킨 열쇠 등록(장부 순서). 패스키 번호로 공개 열쇠를 찾을 때 쓴다 */
+  keys: KeyRegistration[];
+  /** 규칙을 지킨 별명 */
+  nicknames: Nickname[];
 }
 
 export async function verifyLedger(
   genesis: Schedule,
   records: readonly RoundRecord[],
   ticketsByRound: readonly (readonly Ticket[])[],
+  registrationsByRound: readonly (readonly KeyRegistration[])[],
   options: VerifyOptions = {},
 ): Promise<VerifyReport> {
   const problems: Problem[] = [];
@@ -95,6 +111,8 @@ export async function verifyLedger(
       head: new Uint8Array(32),
       schedule: genesis,
       powChecked: 0,
+      keys: [],
+      nicknames: [],
     };
   }
   const beaconVerifier = options.beaconVerifier ?? verifyQuicknetBeacon;
@@ -102,12 +120,20 @@ export async function verifyLedger(
   let schedule = genesis;
   let head = genesisHash(genesis);
   let powChecked = 0;
+  const keys: KeyRegistration[] = [];
+  const keyByEntrant = new Set<string>();
+  const keyByCredential = new Set<string>();
+  /** 당첨 응모권 id → 그 회차와 공개 열쇠(별명 확인용) */
+  const winnerKeys = new Map<string, { round: number; pub: Uint8Array }>();
+  const accepted: Nickname[] = [];
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i] as RoundRecord;
     const tickets = ticketsByRound[i] ?? [];
+    const registrations = registrationsByRound[i] ?? [];
     const round = i + 1;
     const fail = (message: string) => problems.push({ round, message });
+    const { closesAt, entry } = roundTimes(schedule, round);
 
     if (record.v !== RECORD_VERSION) fail(`모르는 기록 판 ${record.v}`);
     if (record.round !== round)
@@ -115,7 +141,51 @@ export async function verifyLedger(
     if (!equalBytes(record.prev, head))
       fail("앞 기록 해시와 이어지지 않는다(장부가 바뀌었다)");
 
-    // 1. 응모권: 판, 회차, 정렬, 서명, 1인 1장
+    // 0. 열쇠 등록: 정렬, 형식, 처음 보는 열쇠·패스키 번호, 작업 증명(모두 검사, 드물다)
+    const regIds = registrations.map(registrationId);
+    for (let k = 0; k < registrations.length; k++) {
+      const reg = registrations[k] as KeyRegistration;
+      const id = regIds[k] as Uint8Array;
+      if (k > 0 && compareBytes(regIds[k - 1] as Uint8Array, id) >= 0)
+        fail("등록 목록이 id 순서가 아니거나 같은 등록이 두 번 있다");
+      const problem = checkRegistration(reg);
+      if (problem) {
+        fail(`등록 ${short(id)}: ${problem}`);
+        continue;
+      }
+      const who = toHex(entrantId(reg.pub));
+      const credential = toHex(reg.credentialId);
+      if (keyByEntrant.has(who)) {
+        fail(`등록 ${short(id)}: 이미 등록된 열쇠`);
+        continue;
+      }
+      if (reg.kind === "passkey" && keyByCredential.has(credential)) {
+        fail(`등록 ${short(id)}: 이미 등록된 패스키 번호`);
+        continue;
+      }
+      const ok = await checkPow(
+        record.prev,
+        registrationContent(reg),
+        reg.nonce,
+        entry.registerPowTarget,
+        options.powParams ?? POW_PARAMS,
+      );
+      if (!ok) {
+        fail(`등록 ${short(id)}: 작업 증명이 맞지 않는다`);
+        continue;
+      }
+      keyByEntrant.add(who);
+      if (reg.kind === "passkey") keyByCredential.add(credential);
+      keys.push(reg);
+    }
+    if (record.registrationCount !== registrations.length)
+      fail(
+        `등록 수가 ${registrations.length}인데 기록은 ${record.registrationCount}`,
+      );
+    if (!equalBytes(record.registrationRoot, merkleRoot(regIds)))
+      fail("등록 목록으로 만든 머클 루트가 기록과 다르다");
+
+    // 1. 응모권: 판, 회차, 정렬, 등록된 열쇠, 서명, 1인 1장
     const ids = tickets.map(ticketId);
     const entrants = new Set<string>();
     for (let k = 0; k < tickets.length; k++) {
@@ -131,6 +201,8 @@ export async function verifyLedger(
       if (entrants.has(who))
         fail(`응모권 ${short(id)}: 같은 열쇠가 이 회차에 두 장 냈다`);
       entrants.add(who);
+      if (!keyByEntrant.has(who))
+        fail(`응모권 ${short(id)}: 등록되지 않은 열쇠`);
       if (!(await verifyTicketSignature(t, options.webauthnPolicy)))
         fail(`응모권 ${short(id)}: 서명이 맞지 않는다`);
     }
@@ -142,7 +214,6 @@ export async function verifyLedger(
       fail("응모권 목록으로 만든 머클 루트가 기록과 다르다");
 
     // 3. drand 회차, 무효 규칙, 서명, 당첨 번호, 등수
-    const { closesAt, entry } = roundTimes(schedule, round);
     if (record.drandRound !== drandRoundForClose(closesAt))
       fail("정해진 drand 회차가 아니다");
     const shouldBeVoid = isVoidRound(closesAt, record.rootLoggedAt);
@@ -218,7 +289,50 @@ export async function verifyLedger(
     if (unchecked > 0)
       skipped.push(`${round}회차: 작업 증명 ${unchecked}장(표본 밖)`);
 
-    // 5. 일정 변경
+    // 5. 별명: 지난 회차 당첨 응모권, 응모권마다 한 번, 그 열쇠의 서명
+    for (let k = 0; k < record.nicknames.length; k++) {
+      const n = record.nicknames[k] as Nickname;
+      const key = toHex(n.ticketId);
+      const label = `별명 ${short(n.ticketId)}`;
+      if (
+        k > 0 &&
+        compareBytes(
+          (record.nicknames[k - 1] as Nickname).ticketId,
+          n.ticketId,
+        ) >= 0
+      ) {
+        fail("별명 목록이 응모권 id 순서가 아니거나 한 응모권에 두 번 있다");
+      }
+      const winner = winnerKeys.get(key);
+      if (!winner || winner.round !== n.round || n.round >= round) {
+        fail(`${label}: 지난 회차 당첨 응모권이 아니다`);
+        continue;
+      }
+      if (accepted.some((a) => equalBytes(a.ticketId, n.ticketId))) {
+        fail(`${label}: 이미 별명을 남긴 응모권`);
+        continue;
+      }
+      const problem = checkNickname(n.nickname);
+      if (problem) {
+        fail(`${label}: ${problem}`);
+        continue;
+      }
+      if (
+        !(await verifyNicknameSignature(n, winner.pub, options.webauthnPolicy))
+      ) {
+        fail(`${label}: 서명이 맞지 않는다`);
+        continue;
+      }
+      accepted.push(n);
+    }
+    for (const rank of RANKS) {
+      for (const id of record.winners[rank]) {
+        const t = tickets[ids.findIndex((x) => equalBytes(x, id))];
+        if (t) winnerKeys.set(toHex(id), { round, pub: t.pub });
+      }
+    }
+
+    // 6. 일정 변경
     for (const change of record.scheduleChanges) {
       const problem = checkScheduleChange(schedule, change, round);
       if (problem) fail(`일정 변경: ${problem}`);
@@ -228,7 +342,15 @@ export async function verifyLedger(
     head = recordHash(record);
   }
 
-  return { problems, skipped, head, schedule, powChecked };
+  return {
+    problems,
+    skipped,
+    head,
+    schedule,
+    powChecked,
+    keys,
+    nicknames: accepted,
+  };
 }
 
 /** 공개 seed로 n장 중 k장을 고른다(검사기마다 같은 표본) */

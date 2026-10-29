@@ -16,7 +16,13 @@ const EPOCH = 1793253600;
 const hourly: Schedule = {
   epoch: EPOCH,
   entries: [
-    { fromRound: 1, length: HOUR, closeMargin: 60, powTarget: 2 ** 26 },
+    {
+      fromRound: 1,
+      length: HOUR,
+      closeMargin: 60,
+      powTarget: 2 ** 26,
+      registerPowTarget: 2 ** 20,
+    },
   ],
 };
 
@@ -43,6 +49,7 @@ describe("회차 시각", () => {
       length: 24 * HOUR,
       closeMargin: 300,
       powTarget: 2 ** 26,
+      registerPowTarget: 2 ** 20,
     });
     expect(roundTimes(changed, 10).closesAt).toBe(EPOCH + 10 * HOUR);
     expect(roundTimes(changed, 11)).toMatchObject({
@@ -89,6 +96,7 @@ describe("일정 변경은 24시간 뒤부터", () => {
     length: 2 * HOUR,
     closeMargin: 60,
     powTarget: 2 ** 26,
+    registerPowTarget: 2 ** 20,
   });
 
   it("1회차 마감에 정하면 25회차(마감 + 24시간에 열림)부터 바꿀 수 있다", () => {

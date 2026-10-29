@@ -1,5 +1,6 @@
 import { ByteReader, ByteWriter, taggedHash } from "./bytes";
 import { RANKS, type Rank } from "./draw";
+import { type Nickname, readNickname, writeNickname } from "./nickname";
 import type { Schedule, ScheduleEntry } from "./schedule";
 import { PICK_COUNT } from "./ticket";
 
@@ -8,10 +9,13 @@ import { PICK_COUNT } from "./ticket";
  * 1회차의 prev는 처음 일정표로 만든 genesis 해시라, 처음 일정표도 체인에 묶인다.
  *
  * 고정 바이너리 형식:
- *   v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32) ‖ rootLoggedAt(u64)
+ *   v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
+ *   ‖ registrationCount(u32) ‖ registrationRoot(32) ‖ rootLoggedAt(u64)
  *   ‖ void(u8) ‖ drandRound(u64) ‖ drandSig(bytes) ‖ numbers(6) ‖ bonus(u8)
  *   ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
- *   ‖ 일정 변경 [개수(u16) ‖ (fromRound u32, length u32, closeMargin u32, powTarget u32) × 개수] * 무효 회차는 numbers 0 6개, bonus 0, 당첨 없음, drandSig 빈 바이트다.
+ *   ‖ 일정 변경 [개수(u16) ‖ (fromRound, length, closeMargin, powTarget, registerPowTarget 각 u32) × 개수]
+ *   ‖ 별명 [개수(u16) ‖ (round u32 ‖ 응모권 id(32) ‖ 별명(text) ‖ 서명) × 개수]
+ * 무효 회차는 numbers 0 6개, bonus 0, 당첨 없음, drandSig 빈 바이트다.
  */
 
 export const RECORD_VERSION = 1;
@@ -22,6 +26,9 @@ export interface RoundRecord {
   prev: Uint8Array;
   count: number;
   merkleRoot: Uint8Array;
+  /** 이 회차에 들어간 열쇠 등록 수와 등록 id 머클 루트(registration.ts) */
+  registrationCount: number;
+  registrationRoot: Uint8Array;
   /** 머클 루트가 투명성 로그(Rekor)에 들어간 시각. 0이면 올리지 못함 */
   rootLoggedAt: number;
   /** 루트가 drand보다 늦게 기록돼 당첨 없이 끝난 회차(docs/36 11-1) */
@@ -37,6 +44,8 @@ export interface RoundRecord {
   winners: Record<Rank, Uint8Array[]>;
   /** 이 회차에 정한 일정 변경(24시간 뒤 효력) */
   scheduleChanges: ScheduleEntry[];
+  /** 이 회차까지 사이에 당첨자가 남긴 별명(지난 회차 당첨 응모권, nickname.ts) */
+  nicknames: Nickname[];
 }
 
 export function emptyWinners(): Record<Rank, Uint8Array[]> {
@@ -50,7 +59,11 @@ export function genesisHash(schedule: Schedule): Uint8Array {
 }
 
 function writeEntry(w: ByteWriter, e: ScheduleEntry): void {
-  w.u32(e.fromRound).u32(e.length).u32(e.closeMargin).u32(e.powTarget);
+  w.u32(e.fromRound)
+    .u32(e.length)
+    .u32(e.closeMargin)
+    .u32(e.powTarget)
+    .u32(e.registerPowTarget);
 }
 
 function writeIds(w: ByteWriter, ids: readonly Uint8Array[]): void {
@@ -65,6 +78,8 @@ export function encodeRecord(r: RoundRecord): Uint8Array {
     .fixed(r.prev, 32)
     .u32(r.count)
     .fixed(r.merkleRoot, 32)
+    .u32(r.registrationCount)
+    .fixed(r.registrationRoot, 32)
     .u64(r.rootLoggedAt)
     .u8(r.void ? 1 : 0)
     .u64(r.drandRound)
@@ -74,6 +89,8 @@ export function encodeRecord(r: RoundRecord): Uint8Array {
   for (const rank of RANKS) writeIds(w, r.winners[rank]);
   w.u16(r.scheduleChanges.length);
   for (const e of r.scheduleChanges) writeEntry(w, e);
+  w.u16(r.nicknames.length);
+  for (const n of r.nicknames) writeNickname(w, n);
   return w.done();
 }
 
@@ -92,6 +109,8 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
   const prev = r.fixed(32);
   const count = r.u32();
   const merkleRoot = r.fixed(32);
+  const registrationCount = r.u32();
+  const registrationRoot = r.fixed(32);
   const rootLoggedAt = r.u64();
   const isVoid = r.u8() === 1;
   const drandRound = r.u64();
@@ -108,8 +127,12 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
       length: r.u32(),
       closeMargin: r.u32(),
       powTarget: r.u32(),
+      registerPowTarget: r.u32(),
     });
   }
+  const nicknames: Nickname[] = [];
+  const nicknameCount = r.u16();
+  for (let i = 0; i < nicknameCount; i++) nicknames.push(readNickname(r));
   r.end();
   return {
     v,
@@ -117,6 +140,8 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
     prev,
     count,
     merkleRoot,
+    registrationCount,
+    registrationRoot,
     rootLoggedAt,
     void: isVoid,
     drandRound,
@@ -125,6 +150,7 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
     bonus,
     winners,
     scheduleChanges: changes,
+    nicknames,
   };
 }
 

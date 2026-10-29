@@ -1,6 +1,7 @@
 import { ByteWriter, concat, sha256, toBase64Url, utf8 } from "./bytes";
 import { generateSigner, type Signer } from "./keys";
 import type { PowParams } from "./pow";
+import { type KeyRegistration, makeRegistration } from "./registration";
 import type { Schedule } from "./schedule";
 import {
   type EntrantSigner,
@@ -26,7 +27,13 @@ export const TEST_EPOCH = 1793253600;
 export const HOURLY: Schedule = {
   epoch: TEST_EPOCH,
   entries: [
-    { fromRound: 1, length: 3600, closeMargin: 60, powTarget: EASY_TARGET },
+    {
+      fromRound: 1,
+      length: 3600,
+      closeMargin: 60,
+      powTarget: EASY_TARGET,
+      registerPowTarget: EASY_TARGET,
+    },
   ],
 };
 
@@ -45,6 +52,43 @@ export async function ticketFor(
   });
   if (!t) throw new Error("응모권을 만들지 못했다");
   return t;
+}
+
+/** 원시 열쇠 등록(쉬운 목표값). 시험은 1회차 문제 값으로 1회차에 등록한다 */
+export async function registerRaw(
+  keys: readonly { publicKey: Uint8Array }[],
+  challenge: Uint8Array,
+): Promise<KeyRegistration[]> {
+  return Promise.all(
+    keys.map(async (key) => {
+      const r = await makeRegistration(
+        key,
+        "raw",
+        new Uint8Array(),
+        challenge,
+        EASY_TARGET,
+        { params: TEST_POW },
+      );
+      if (!r) throw new Error("등록을 만들지 못했다");
+      return r;
+    }),
+  );
+}
+
+export async function registerPasskey(
+  passkey: { credentialId: Uint8Array; signer: EntrantSigner },
+  challenge: Uint8Array,
+): Promise<KeyRegistration> {
+  const r = await makeRegistration(
+    passkey.signer,
+    "passkey",
+    passkey.credentialId,
+    challenge,
+    EASY_TARGET,
+    { params: TEST_POW },
+  );
+  if (!r) throw new Error("등록을 만들지 못했다");
+  return r;
 }
 
 export interface FakePasskeyOptions {

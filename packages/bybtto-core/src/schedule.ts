@@ -13,6 +13,8 @@ export interface ScheduleEntry {
   closeMargin: number;
   /** 작업 증명 목표값(argon 결과 앞 4바이트가 이것보다 작아야 한다, pow.ts) */
   powTarget: number;
+  /** 새 열쇠 등록의 작업 증명 목표값(응모권보다 훨씬 무겁게, docs/36 5절) */
+  registerPowTarget: number;
 }
 
 export interface Schedule {
@@ -37,7 +39,8 @@ export interface RoundTimes {
 }
 
 export function checkScheduleEntry(entry: ScheduleEntry): string | null {
-  const { fromRound, length, closeMargin, powTarget } = entry;
+  const { fromRound, length, closeMargin, powTarget, registerPowTarget } =
+    entry;
   if (!Number.isInteger(fromRound) || fromRound < 1)
     return "fromRound는 1 이상 정수";
   if (!Number.isInteger(length) || length < MIN_ROUND_LENGTH) {
@@ -52,6 +55,13 @@ export function checkScheduleEntry(entry: ScheduleEntry): string | null {
   }
   if (!Number.isInteger(powTarget) || powTarget < 1 || powTarget > 0xffffffff) {
     return "작업 증명 목표값은 1~2^32-1 정수";
+  }
+  if (
+    !Number.isInteger(registerPowTarget) ||
+    registerPowTarget < 1 ||
+    registerPowTarget > 0xffffffff
+  ) {
+    return "등록 작업 증명 목표값은 1~2^32-1 정수";
   }
   return null;
 }
