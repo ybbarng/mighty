@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 const board = (page: Page) => page.getByRole("img", { name: /체스판/ });
 const pieces = (page: Page) => page.locator("[data-piece]");
@@ -57,6 +57,7 @@ async function playOne(page: Page, touch: boolean, side: "w" | "b" = "w") {
 /** 첫 화면에서 옵션을 연다. 미리 그린 HTML이 살아나기 전에 누르면 아무 일도 없어서, 열릴 때까지 다시 누른다 */
 async function openOptions(page: Page) {
   await expect(async () => {
+    await ready(page);
     await page.getByRole("button", { name: "옵션" }).click();
     await expect(page.getByRole("button", { name: "처음으로" })).toBeVisible({
       timeout: 1000,

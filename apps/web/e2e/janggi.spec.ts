@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /** 판 크기와 가장자리 여백(JanggiBoard의 PAD) */
 const PAD = 0.62;
@@ -54,6 +54,7 @@ async function playOne(page: Page, touch: boolean) {
 
 /** 첫 화면 → 옵션에서 컴퓨터(고르면)와 초를 고르고 → 나홀로 장기 */
 async function startSolo(page: Page, level?: string) {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   if (level) await page.getByRole("button", { name: level }).click();
   await page.getByRole("button", { name: "초(먼저)" }).click();
@@ -396,6 +397,7 @@ test("장기 개인 시간: 상차림 뒤부터 시계가 가고, 다 쓰면 시
   test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
   await page.clock.install();
   await page.goto("/janggi");
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: "빠른 3분" }).click();
   await page.getByRole("button", { name: "초(먼저)" }).click();

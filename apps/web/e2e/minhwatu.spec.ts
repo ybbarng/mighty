@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /*
  * 민화투 화면 시험. 시드(`?seed=`)로 같은 판을 다시 쳐 결과가 기기 속도와 상관없게 한다.
@@ -14,6 +14,7 @@ const status = (page: Page) => page.getByRole("status");
 
 /** 옵션에서 판 수·컴퓨터를 고른다 */
 async function chooseOptions(page: Page, rounds: string, level?: string) {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: rounds, exact: true }).click();
   if (level) await page.getByRole("button", { name: level }).click();

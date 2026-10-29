@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /*
  * 나이롱뽕 화면 시험(docs/30 8절). 혼자 하기는 `?seed=`로 패를 정한다.
@@ -19,6 +19,7 @@ async function choose(
     level,
   }: { players: number; rounds: number; level: string },
 ) {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: `${players}명`, exact: true }).click();
   await page.getByRole("button", { name: `${rounds}판`, exact: true }).click();

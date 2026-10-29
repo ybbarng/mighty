@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /**
  * 화투 암호화방 여럿이 하기: 브라우저 탭 셋(방장 + 참가자 둘)을 BroadcastChannel로 잇고(?net=local)
@@ -59,6 +59,7 @@ test("민화투 암호화방: 사람 셋이 한 판을 끝까지 치고, 참가�
   }
   const [host, a, b] = pages as [Page, Page, Page];
   await host.goto("/minhwatu?net=local");
+  await ready(host);
   await host.getByRole("button", { name: "옵션" }).click();
   await host.getByRole("button", { name: "한 판", exact: true }).click();
   await host.getByRole("button", { name: "처음으로" }).click();

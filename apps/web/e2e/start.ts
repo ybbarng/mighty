@@ -1,8 +1,9 @@
-import type { Page } from "@playwright/test";
+import { type Page, ready } from "./test";
 
 /** 옵션에서 규칙을 고른다(없으면 지금 규칙 그대로) */
 export async function chooseRule(page: Page, preset?: string) {
   if (!preset) return;
+  await ready(page);
   await page.getByRole("button", { name: "옵션", exact: true }).click();
   await page.getByRole("button", { name: preset, exact: true }).click();
   await page.getByRole("button", { name: "처음으로" }).click();

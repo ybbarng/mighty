@@ -1,5 +1,5 @@
 import { TEST_SPEED } from "./fast";
-import { type BrowserContext, expect, type Page, test } from "./test";
+import { type BrowserContext, expect, type Page, ready, test } from "./test";
 
 /**
  * 멘탈 포커 여럿이 하기: 브라우저 탭 n개(방장 1 + 참가자 n−1)를 BroadcastChannel로 잇고(?net=local)
@@ -158,6 +158,7 @@ async function openTable(
     await host.getByRole("button", { name: /다함께 하트/ }).click();
   } else {
     await host.goto(`/mighty?net=local${query}`);
+    await ready(host);
     await host.getByRole("button", { name: "옵션", exact: true }).click();
     await host.getByRole("button", { name: preset, exact: true }).click();
     await host.getByRole("button", { name: "처음으로" }).click();

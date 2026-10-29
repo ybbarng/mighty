@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /** 9줄 판과 가장자리 여백(BadukBoard의 BADUK_PAD) */
 const SIZE = 9;
@@ -43,6 +43,7 @@ async function playOne(page: Page, touch: boolean, stone = "black") {
 
 /** 첫 화면 → 옵션에서 9줄·컴퓨터(고르면)·흑을 고르고 → 나홀로 바둑 */
 async function startSolo(page: Page, level?: string) {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   // 기본은 19줄이다. 시험은 짧게 9줄로 둔다.
   await page.getByRole("button", { name: "9줄", exact: true }).click();
@@ -188,6 +189,7 @@ test("바둑: 방장이 방을 만들고 친구가 링크로 들어와 두고, �
     p.on("pageerror", (e) => errors.push(e.message));
 
   await host.goto("/baduk?net=local");
+  await ready(host);
   await host.getByRole("button", { name: "옵션" }).click();
   await host.getByRole("button", { name: "9줄", exact: true }).click();
   await host.getByRole("button", { name: "처음으로" }).click();
@@ -297,6 +299,7 @@ test("바둑 개인 시간: 시계가 가고, 다 쓰면 시간패다", async ({
   test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
   await page.clock.install();
   await page.goto("/baduk");
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: "빠른 3분" }).click();
   await page.getByRole("button", { name: "흑(먼저)" }).click();

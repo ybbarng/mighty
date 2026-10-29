@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 const status = (page: Page) => page.getByRole("status").first();
 const over = (page: Page) => page.getByRole("button", { name: "다시 하기" });
@@ -87,6 +87,7 @@ async function finishedYutGames(): Promise<number> {
 
 /** 옵션에서 컴퓨터 단계와 말 수를 고르고 → 나홀로 윷놀이 */
 async function startSolo(page: Page, pieces = "2개") {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: "입문", exact: true }).click();
   await page.getByRole("button", { name: pieces, exact: true }).click();
@@ -203,6 +204,7 @@ test("윷놀이: 방장이 방을 만들고 친구가 링크로 들어와 두다
 
   await host.goto("/yut?net=local");
   // 판을 짧게: 말 2개
+  await ready(host);
   await host.getByRole("button", { name: "옵션" }).click();
   await host.getByRole("button", { name: "2개", exact: true }).click();
   await host.getByRole("button", { name: "처음으로" }).click();

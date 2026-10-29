@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /** 세 자리·1~9 수를 작은 것부터(테스트가 차례로 물을 때) */
 const NUMBERS: string[] = [];
@@ -122,6 +122,7 @@ async function finishedBaseballGames(): Promise<number> {
 
 /** 옵션에서 컴퓨터 단계와 혼자 하기 방식을 고르고 → 나홀로 숫자야구 */
 async function startSolo(page: Page, level = "입문", mode = "서로 맞히기") {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: level, exact: true }).click();
   await page.getByRole("button", { name: mode, exact: true }).click();

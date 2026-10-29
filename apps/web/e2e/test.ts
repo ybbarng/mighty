@@ -18,6 +18,14 @@ export const test = base.extend({
 
 const READY = "html[data-hydrated]";
 
+/**
+ * 화면이 준비될 때까지 기다린다. goto·reload는 저절로 기다리지만, 링크를 눌러 새 문서로 넘어간 뒤
+ * 바로 단추를 누를 때는 이것을 먼저 부른다(같은 문서 안에서 넘어갔으면 이미 준비돼 있어 바로 지나간다)
+ */
+export async function ready(page: Page): Promise<void> {
+  await page.locator(READY).waitFor({ state: "attached" });
+}
+
 function waitForReady(page: Page): void {
   const goto = page.goto.bind(page);
   const reload = page.reload.bind(page);

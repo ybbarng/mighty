@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /** 판 한 변 줄 수와 가장자리 여백(OmokBoard의 PAD) */
 const SIZE = 15;
@@ -85,6 +85,7 @@ async function finishedOmokGames(): Promise<number> {
 
 /** 첫 화면 → 옵션에서 컴퓨터(고르면)와 흑을 고르고 → 나홀로 오목 */
 async function startSolo(page: Page, level?: string) {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   if (level) await page.getByRole("button", { name: level }).click();
   await page.getByRole("button", { name: /흑\(먼저\)/ }).click();
@@ -315,6 +316,7 @@ test("오목 개인 시간: 빠른 3분으로 두면 내 시계가 가고, 다 �
   // 시계를 시험이 움직인다(실제로 4분 반을 기다리지 않는다).
   await page.clock.install();
   await page.goto("/omok");
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: "빠른 3분" }).click();
   await page.getByRole("button", { name: /흑\(먼저\)/ }).click();

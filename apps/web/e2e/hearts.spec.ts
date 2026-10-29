@@ -1,5 +1,5 @@
 import { prepareFast } from "./fast";
-import { expect, type Locator, type Page, test } from "./test";
+import { expect, type Locator, type Page, ready, test } from "./test";
 
 /** 하트: 숨은 입구, 혼자 한 판, 친구와 한 판 */
 async function prepare(page: Page) {
@@ -191,8 +191,11 @@ test("하트: 키보드로 넘기고 내며, 터치로 끌어 낸다", async ({ 
   const box = await settledBox(target);
   if (!box) throw new Error("카드 자리를 모른다");
   await target.evaluate(
-    (el, { x, y, h }) => {
-      const fire = (type: string, cy: number) =>
+    async (el, { x, y, h }) => {
+      // 실제 손가락처럼 동작 사이에 화면이 한 번씩 그려진다(한꺼번에 보내면 끌기 시작이 반영되기 전에
+      // 나머지가 닿아 "고르기"로 처리될 때가 있다)
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      const fire = async (type: string, cy: number) => {
         el.dispatchEvent(
           new PointerEvent(type, {
             bubbles: true,
@@ -202,10 +205,15 @@ test("하트: 키보드로 넘기고 내며, 터치로 끌어 낸다", async ({ 
             clientY: cy,
           }),
         );
-      fire("pointerdown", y);
-      fire("pointermove", y - 20);
-      fire("pointermove", y - h * 1.5);
-      fire("pointerup", y - h * 1.5);
+        await frame();
+      };
+      // 손패 위쪽 끝보다 카드 반 장 넘게 올려야 낸다. 손패가 두 줄로 겹치면 아래 줄 카드는 제 자리에서
+      // 1.5장 올려도 모자라므로, 손패보다 확실히 위(카드 두 장 높이 위쪽)까지 올린다
+      const above = Math.max(4, y - h * 1.5 - h * 2);
+      await fire("pointerdown", y);
+      await fire("pointermove", y - 20);
+      await fire("pointermove", above);
+      await fire("pointerup", above);
     },
     { x: box.x + 6, y: box.y + 10, h: box.height },
   );
@@ -342,6 +350,7 @@ test("무늬 표기: 기본은 그림, 옵션에서 이름·첫 글자로 바꾼
 }) => {
   await prepare(page);
   await page.goto("/hearts");
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   const sample = page.locator("[data-suit-sample]");
   // 그림이어도 읽을 때는 기호로 읽힌다.

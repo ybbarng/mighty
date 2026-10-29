@@ -1,5 +1,5 @@
 import { useTestSpeed } from "./fast";
-import { expect, type Page, test } from "./test";
+import { expect, type Page, ready, test } from "./test";
 
 /*
  * 고스톱 화면 시험. 혼자 하기는 `?seed=`로 패를 정해 늘 같은 판이 나온다.
@@ -106,6 +106,7 @@ async function playRound(page: Page) {
 
 /** 옵션에서 맞고·한 판·컴퓨터를 고르고 처음 화면으로 */
 async function setOptions(page: Page, level = "입문") {
+  await ready(page);
   await page.getByRole("button", { name: "옵션" }).click();
   await page.getByRole("button", { name: "맞고(2명)" }).click();
   await page.getByRole("button", { name: "1판", exact: true }).click();
