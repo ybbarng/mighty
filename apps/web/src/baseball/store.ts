@@ -126,9 +126,16 @@ interface BaseballStore {
 function cuesFor(events: readonly GameEvent[], me: number): void {
   for (const e of events) {
     if (e.type === "answered") {
-      // 맞힌 답은 판 끝 소리가 이어지므로 따로 내지 않는다.
-      if (e.strikes === e.guess.length) continue;
-      playUiCue(e.strikes > 0 ? "strike" : e.balls > 0 ? "beep" : "pass");
+      // 다 맞힌 답은 방망이 소리(뒤이어 판 끝 소리가 난다), 아니면 미트 소리
+      playUiCue(
+        e.strikes === e.guess.length
+          ? "homerun"
+          : e.strikes > 0
+            ? "strike"
+            : e.balls > 0
+              ? "ball"
+              : "pass",
+      );
     }
     if (e.type === "roundEnded") {
       const r = e.result;

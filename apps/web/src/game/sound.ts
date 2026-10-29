@@ -78,7 +78,11 @@ export type Cue =
   /** 나이롱뽕: "뽕!" */
   | "ppong"
   /** 숫자야구: 스트라이크가 나온 답(공이 미트에 꽂히는 "팡") */
-  | "strike";
+  | "strike"
+  /** 숫자야구: 볼만 나온 답(미트에 부드럽게 받는 "퍽") */
+  | "ball"
+  /** 숫자야구: 다 맞힌 답(방망이 "딱"과 관중 함성) */
+  | "homerun";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -119,6 +123,8 @@ export const CUE_LABELS: Record<Cue, string> = {
   go: "고스톱: 고",
   ppong: "나이롱뽕: 뽕",
   strike: "숫자야구: 스트라이크",
+  ball: "숫자야구: 볼",
+  homerun: "숫자야구: 홈런",
 };
 
 /**
@@ -158,6 +164,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   hwatuFlip: 6,
   ppong: 6.5,
   strike: 4,
+  ball: 8,
+  homerun: 8.5,
   go: -1.5,
 };
 
@@ -958,6 +966,42 @@ function render(cue: Cue, v: Voice): void {
         gain: 0.06,
         endFreq: 1100,
         attack: 0.002,
+      });
+      break;
+    case "ball":
+      // 공을 미트로 부드럽게 받는 "퍽": 스트라이크보다 낮고 밝은 "딱"이 없다
+      noise(v, 0, 0.06, {
+        filter: "lowpass",
+        freq: 700,
+        q: 0.8,
+        gain: 0.7,
+        attack: 0.003,
+      });
+      thump(v, 0, 110, 65, 0.1, 0.2);
+      break;
+    case "homerun":
+      // 방망이가 공을 때리는 마른 "딱"과 뒤따라 부풀었다 잦아드는 관중 함성
+      noise(v, 0, 0.035, {
+        filter: "bandpass",
+        freq: 2400,
+        q: 1.6,
+        gain: 0.8,
+        attack: 0.001,
+      });
+      tone(v, 1750, 0, 0.07, {
+        type: "triangle",
+        gain: 0.07,
+        endFreq: 1500,
+        attack: 0.001,
+      });
+      thump(v, 0, 180, 120, 0.05, 0.12);
+      noise(v, 0.08, 1.1, {
+        filter: "bandpass",
+        freq: 900,
+        sweepTo: 1300,
+        q: 0.6,
+        gain: 0.12,
+        attack: 0.35,
       });
       break;
     case "roundEnd":
