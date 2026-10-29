@@ -66,7 +66,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
           await verifyShuffle(g, label, input, output, work.commit, b, answers),
         ).toBe(true);
       }
-    }, 60_000);
+    });
 
     it("같은 섞기 열쇠면 같은 약속과 nonce를 다시 만든다(새로고침해도 이어 간다)", async () => {
       const { input, e } = await shuffled();
@@ -75,7 +75,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
       expect(b.commit).toEqual(a.commit);
       expect(await shuffleNonce(e, label)).toBe(await shuffleNonce(e, label));
       expect(await nonceCommit("x")).not.toBe(await nonceCommit("y"));
-    }, 60_000);
+    });
 
     describe("카드를 바꿔치기한 덱", () => {
       /** 섞은 뒤 한 장을 다른 카드의 복제로 바꿨다(남의 카드를 엿보는 부정) */
@@ -118,7 +118,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
             forged,
           ),
         ).toBe(false);
-      }, 60_000);
+      });
 
       it("중간 덱을 출력에서 거꾸로 만들면 도전 0에서 들킨다", async () => {
         const { input, output } = await tampered();
@@ -147,7 +147,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
             answers,
           ),
         ).toBe(false);
-      }, 60_000);
+      });
     });
 
     it("다른 섞기로 옮겨 쓰거나 약속 모양이 틀리면 맞지 않는다", async () => {
@@ -185,7 +185,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
           answers,
         ),
       ).toBe(false);
-    }, 60_000);
+    });
 
     it("base64로 바꿨다 되돌리면 같은 수다", () => {
       for (const n of [1n, 255n, 256n, 65535n, (1n << 2048n) - 1n])

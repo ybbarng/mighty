@@ -25,7 +25,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function until(condition: () => boolean): Promise<void> {
   const start = Date.now();
   while (!condition()) {
-    if (Date.now() - start > 60_000)
+    if (Date.now() - start > 25_000)
       throw new Error("조건을 기다리다 시간이 지났다");
     await flush();
   }
@@ -169,8 +169,7 @@ describe("윷놀이 온라인 방", () => {
     room.host.finish();
     await until(() => room.audits.length === 1);
     expect(room.audits).toEqual([{ ok: true }]);
-    // 상한은 멈춘 시험을 잡는 안전장치다(다른 방 시험과 같다). 혼자 0.6초 남짓
-  }, 60_000);
+  });
 
   it("약속한 사슬에 없는 고리를 보내면 방장 엔진이 받지 않는다", async () => {
     const room = await setup();
@@ -218,6 +217,5 @@ describe("윷놀이 온라인 방", () => {
     room.host.finish();
     await until(() => room.audits.length === 1);
     expect(room.audits).toEqual([{ ok: true }]);
-    // 상한은 멈춘 시험을 잡는 안전장치다(다른 방 시험과 같다). 혼자 0.9초 남짓
-  }, 60_000);
+  });
 });

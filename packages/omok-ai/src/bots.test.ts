@@ -85,5 +85,5 @@ describe("오목 컴퓨터: 끝까지 두기", () => {
   it("고수도 금지 수 없이 끝까지 둔다", () => {
     const end = playGame([omokExpertBot, omokBeginnerBot], STANDARD, 1);
     expect(end.phase).toBe("gameOver");
-  }, 60_000);
+  });
 });

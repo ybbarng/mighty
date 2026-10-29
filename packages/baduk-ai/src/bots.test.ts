@@ -66,16 +66,11 @@ describe("바둑 컴퓨터", () => {
       createBadukIntermediateBot(200),
       createBadukSearchBot(200),
     ].map((b) => [b.name, b] as const),
-  )(
-    "%s: 판 끝까지 규칙에 맞는 수만 둔다",
-    (_name, bot) => {
-      const end = playGame([bot, badukBeginnerBot], STANDARD_RULES, 3);
-      expect(end.phase).toBe("gameOver");
-      expect(end.result?.kind).toBe("score");
-    },
-    // 상한은 멈춘 시험을 잡는 안전장치다
-    60_000,
-  );
+  )("%s: 판 끝까지 규칙에 맞는 수만 둔다", (_name, bot) => {
+    const end = playGame([bot, badukBeginnerBot], STANDARD_RULES, 3);
+    expect(end.phase).toBe("gameOver");
+    expect(end.result?.kind).toBe("score");
+  });
 
   it.each(BOTS.map((b) => [b.name, b] as const))(
     "%s: 단수에 걸린 석 점을 따낸다",

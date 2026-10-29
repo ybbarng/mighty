@@ -24,22 +24,13 @@ describe("고스톱 컴퓨터", () => {
   it.each([
     ["맞고", { ...MATGO_RULES, rounds: 1 }],
     ["3명", { ...GOSTOP3_RULES, rounds: 1 }],
-  ] as const)(
-    "%s: 세 단계가 끝까지 둘 수 있는 수만 둔다",
-    (_n, rules) => {
-      for (let seed = 1; seed <= 2; seed++) {
-        const bots = [
-          gostopExpertBot,
-          gostopBeginnerBot,
-          gostopIntermediateBot,
-        ];
-        const end = playGame(bots.slice(0, rules.players), rules, seed);
-        expect(end.phase).toBe("gameOver");
-      }
-      // 고수는 판마다 수백 번 앞날을 굴려 본다. 시간 상한은 멈춘 시험을 잡는 안전장치다.
-    },
-    60_000,
-  );
+  ] as const)("%s: 세 단계가 끝까지 둘 수 있는 수만 둔다", (_n, rules) => {
+    for (let seed = 1; seed <= 2; seed++) {
+      const bots = [gostopExpertBot, gostopBeginnerBot, gostopIntermediateBot];
+      const end = playGame(bots.slice(0, rules.players), rules, seed);
+      expect(end.phase).toBe("gameOver");
+    }
+  });
 
   it("단계 번호로 고른다", () => {
     expect(gostopBotFor(0).name).toBe("입문");

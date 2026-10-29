@@ -82,7 +82,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         const results = await Promise.all(stateOf(d)?.checked.values() ?? []);
         expect(results).toEqual([true, true]);
       }
-    }, 180_000);
+    });
 
     it("복제 카드를 넣고 nonce를 숨기면(도전값을 정하지 못하게) 조작이 드러날 때 nonce를 공개하지 않은 그 기기를 짚는다", async () => {
       const { devices, problems } = await run(1, true);
@@ -96,7 +96,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         expect(culprit?.device).toBe(1);
         expect(culprit?.reason).toMatch(/nonce를 공개하지/);
       }
-    }, 180_000);
+    });
 
     it("복제 카드를 넣고 섞으면(응답을 만들 수 없다) 조작이 드러날 때 다른 두 기기가 그 기기를 짚는다", async () => {
       const { devices } = await run(1);
@@ -105,6 +105,6 @@ describe("메시지로 하는 멘탈 포커", () => {
         expect(culprit?.device).toBe(1);
         expect(culprit?.reason).toMatch(/섞기 증명/);
       }
-    }, 180_000);
+    });
   });
 });

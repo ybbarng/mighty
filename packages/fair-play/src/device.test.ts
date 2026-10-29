@@ -45,7 +45,7 @@ describe("메시지로 하는 멘탈 포커", () => {
     expect(timings).toEqual(
       expect.arrayContaining(["begin", "compute:shuffle", "proof:shuffle"]),
     );
-  }, 60_000);
+  });
 
   describe("열쇠 증명: 카드가 열리지 않으면 누가 틀린 열쇠를 냈는지 짚는다", () => {
     async function dealt(cheater: number, reason: RevealReason) {
@@ -77,7 +77,7 @@ describe("메시지로 하는 멘탈 포커", () => {
       expect(problems.length).toBeGreaterThan(0);
       expect(problems.every((p) => p.device === 2 && p.by !== 2)).toBe(true);
       expect(problems[0]?.reason).toMatch(/열쇠 증명 실패/);
-    }, 60_000);
+    });
 
     it("카드를 낼 때 틀린 열쇠를 내면 모두가 그 기기를 짚는다", async () => {
       const { devices, problems, settle } = await dealt(1, "play");
@@ -92,7 +92,7 @@ describe("메시지로 하는 멘탈 포커", () => {
         [0, 1],
         [2, 1],
       ]);
-    }, 60_000);
+    });
 
     it("정직하게 두면 아무도 짚지 않고 판 끝에 모든 자리가 열린다", async () => {
       const { devices, problems, settle } = await dealt(1, "proof");
@@ -100,6 +100,6 @@ describe("메시지로 하는 멘탈 포커", () => {
       await settle();
       expect(problems).toEqual([]);
       expect(devices[0]?.openAll(1)?.size).toBe(8);
-    }, 60_000);
+    });
   });
 });

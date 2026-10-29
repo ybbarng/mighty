@@ -78,5 +78,5 @@ describe("민화투 암호화방(멘탈 포커)", () => {
     } as never);
     expect(replayed.error).toBeNull();
     expect((replayed.states.at(-1) as MinhwatuState).phase).toBe("gameOver");
-  }, 180_000);
+  });
 });

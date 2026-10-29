@@ -16,7 +16,7 @@ import { replayArchive } from "@/review/replay";
 
 import { heartsKit } from "./kit";
 
-async function until(condition: () => boolean, ms = 60_000): Promise<void> {
+async function until(condition: () => boolean, ms = 25_000): Promise<void> {
   const start = Date.now();
   while (!condition()) {
     if (Date.now() - start > ms)
@@ -99,7 +99,7 @@ async function playUntil(
   );
   const start = Date.now();
   while (!done() && incidents.length === 0) {
-    if (Date.now() - start > 150_000) {
+    if (Date.now() - start > 25_000) {
       const raw = (
         match as unknown as {
           rawState(): {
@@ -202,7 +202,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
         .filter((m) => m.includes('"handover"'))
         .every((m) => m.includes(`"to":${guests[0]?.seat}`)),
     ).toBe(true);
-  }, 200_000);
+  });
 
   it("방장이 카드 넘기기와 첫 판 중간에 새로고침해도 이어 가고, 모두의 검증을 통과한다", async () => {
     const store = memoryHostStore();
@@ -251,7 +251,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     );
     await until(() => audits.length === guests.length);
     expect(audits.filter((a) => !a.ok)).toEqual([]);
-  }, 240_000);
+  });
 
   it("카드를 넘기는 중에 끊긴 사람을 기다리다 방장이 끝내기를 고르면 모두의 게임이 끝난다", async () => {
     const { net, host, guests, clock } = await setup(3, undefined, 50);
@@ -271,7 +271,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     await until(() =>
       guests.slice(1).every((g) => phase(g.match) === "gameOver"),
     );
-  }, 120_000);
+  });
 
   it("넘기는 카드에 잠글 때와 다른 열쇠를 주면 받은 사람이 열쇠 증명으로 그 자리를 짚는다", async () => {
     const { host, guests, incidents } = await setup(3);
@@ -299,7 +299,7 @@ describe("하트 멘탈 포커 온라인 대전", () => {
     const own = incidents.filter((i) => i.own);
     expect(own[0]?.seat).toBe(cheater);
     expect(own[0]?.reason).toMatch(/열쇠 증명 실패/);
-  }, 120_000);
+  });
 
   it("복기: 방장이 남기는 기록(판별 실제 패 포함)을 다시 돌리면 실제 카드로 같은 판이 나온다", async () => {
     const { host, guests, incidents } = await setup(2);
@@ -343,5 +343,5 @@ describe("하트 멘탈 포커 온라인 대전", () => {
         .flatMap((t) => t.plays)
         .every((p) => !p.card.startsWith("?_")),
     ).toBe(true);
-  }, 180_000);
+  });
 });
