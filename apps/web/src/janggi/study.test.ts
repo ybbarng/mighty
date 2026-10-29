@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { negamax } from "@mighty/janggi-ai";
 import {
   applyMove,
