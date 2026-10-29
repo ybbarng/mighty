@@ -297,7 +297,7 @@ umami 수집 끝점(`POST https://stats.byb.kr/api/send`)은 브라우저가 불
 - **CSP**: 지금 없으므로 막히는 것이 없다. 나중에 CSP를 들이면 `script-src https://stats.byb.kr; connect-src https://stats.byb.kr`(신호·TURN·진단은 같은 출처라 `'self'`)를 넣는다. 7-1의 인라인 before-send를 쓰면 CSP에 해시나 nonce가 필요해지니, CSP를 먼저 들일 계획이면 before-send를 번들 안에서 붙이는 쪽을 고른다.
 - **성능**: 스크립트는 몇 KB, `afterInteractive`라 첫 그리기를 막지 않는다. 다른 이름(`stats.byb.kr`)이라 TLS 연결이 하나 더 생긴다(같은 서버라 빠르다). 보내기는 `keepalive` fetch 한 번씩이다. 게임 중에는 이벤트가 판 시작·끝에만 나가므로 부담이 없다.
 - **광고 차단기**: 일부 차단 목록은 umami 스크립트·`/api/send`를 막는다. 막히면 그 방문은 세지 않는다. **숫자는 "최소 이만큼"으로 읽는다.** 같은 출처 프록시(`game.byb.kr/…` → umami)나 umami의 스크립트 이름 바꾸기(`TRACKER_SCRIPT_NAME`, `COLLECT_API_ENDPOINT`)로 피할 수 있지만, 사용자가 일부러 막은 것을 피해 가는 일이라 **하지 않는다**.
-- **서비스 워커**: 다른 출처 요청을 건드리지 않으므로 고칠 것이 없다. 같은 출처 프록시를 고르게 되면 `public/sw.js`의 `NO_STORE_PREFIX`에 그 경로를 더한다.
+- **서비스 워커**: 다른 출처 요청을 건드리지 않으므로 고칠 것이 없다. 같은 출처 프록시를 고르게 되면 `public/sw.js`의 `NO_STORE_PREFIXES`에 그 경로를 더한다.
 
 ### 7-4. 클라이언트 쪽 이동
 

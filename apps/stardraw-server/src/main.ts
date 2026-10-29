@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { backup } from "node:sqlite";
 import { realClock } from "@mighty/fair-play";
 
 import { loadConfig } from "./config";
@@ -98,7 +99,20 @@ async function main(): Promise<void> {
   process.on("SIGINT", stop);
 }
 
-void main().catch((err) => {
+/**
+ * `node server.mjs backup <파일>`: 서버를 멈추지 않고 SQLite를 한 파일로 떠 둔다(node:sqlite backup).
+ * 장부 파일(ledger/)은 공개돼 있고 앵커에도 남지만, 마감 전 응모권과 확인 전달은 DB에만 있다
+ */
+async function backupTo(target: string): Promise<void> {
+  const config = loadConfig();
+  const store = new Store(join(config.dataDir, "stardraw.sqlite"));
+  const pages = await backup(store.db, target);
+  store.close();
+  console.log(`[stardraw] ${target}에 ${pages}쪽을 떠 두었다`);
+}
+
+const [command, arg] = process.argv.slice(2);
+void (command === "backup" && arg ? backupTo(arg) : main()).catch((err) => {
   console.error(err);
   process.exit(1);
 });

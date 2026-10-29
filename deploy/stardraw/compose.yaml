@@ -1,0 +1,55 @@
+# 초안 — servers 저장소 byb.kr/apps/stardraw/compose.yaml 로 옮길 것(사용자 확인 뒤). 아직 배포하지 않았다.
+# https://game.byb.kr/stardraw-api/ — 하늘의 별 따기 회차 서버(응모 받기, 봉인, drand 추첨, 공개 장부, 당첨자 확인 전달).
+# 신호 서버(apps/mighty-signal)처럼 같은 출처의 경로 하나를 Traefik이 넘긴다. 화면은 상대 주소로 부르므로 CORS가 없다.
+#
+#   처음 한 번: 서명 열쇠 만들기(아래 README "서명 열쇠"), .env 채우기
+#   docker compose -f ~/servers/byb.kr/apps/stardraw/compose.yaml up -d
+# 되돌리기: docker compose ... down (데이터 볼륨은 남는다. 화면은 서버 주소가 없으면 기기 안 연습 장부로 돈다)
+services:
+  stardraw:
+    image: ghcr.io/ybbarng/stardraw-server:${STARDRAW_TAG:-latest}
+    restart: unless-stopped
+    # Argon2 확인 2개 × 16MB + SQLite + Node
+    mem_limit: 256m
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    env_file: .env # STARDRAW_EPOCH(1회차 시작, 유닉스 초), 앵커·Rekor 설정(README)
+    environment:
+      STARDRAW_BASE_PATH: /stardraw-api
+      STARDRAW_RP_ID: game.byb.kr
+      # 개발 서버(3456)와 화면 시험(4173)에서도 이 서버를 시험할 수 있게 localhost를 둔다
+      STARDRAW_ORIGINS: https://game.byb.kr,http://localhost:3456,http://localhost:4173
+      STARDRAW_DEV_ORIGINS: http://localhost:3456,http://localhost:4173
+      STARDRAW_TRUST_PROXY: "1"
+    volumes:
+      # SQLite(stardraw.sqlite)와 공개 장부 파일(ledger/). 백업 대상
+      - ./data:/data
+    secrets:
+      - stardraw-server-key
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.stardraw.rule=Host(`game.byb.kr`) && PathPrefix(`/stardraw-api/`)
+      - traefik.http.routers.stardraw.entrypoints=websecure
+      - traefik.http.routers.stardraw.tls.certresolver=le
+      - traefik.http.routers.stardraw.middlewares=stardraw-ratelimit
+      # 같은 공인 IP 하나당 1분에 300번, 한꺼번에 60번. 화면은 1초마다 상태를 묻지 않고(10초) 장부 파일은 캐시된다.
+      # 응모 자체의 상한(회차당 IP 앞부분 20장, 하루 새 열쇠 10개)은 서버가 따로 센다
+      - traefik.http.middlewares.stardraw-ratelimit.ratelimit.average=300
+      - traefik.http.middlewares.stardraw-ratelimit.ratelimit.period=1m
+      - traefik.http.middlewares.stardraw-ratelimit.ratelimit.burst=60
+      - traefik.http.services.stardraw.loadbalancer.server.port=8080
+
+secrets:
+  stardraw-server-key:
+    # 이 폴더에만 두는 파일(저장소에 올리지 않는다, chmod 600). README "서명 열쇠"
+    file: ./server-key.pkcs8
+
+networks:
+  web:
+    external: true

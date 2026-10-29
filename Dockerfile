@@ -13,6 +13,7 @@ WORKDIR /app
 # 의존성 — lockfile 과 각 패키지의 package.json 이 바뀔 때만 다시 받는다
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
+COPY apps/stardraw-server/package.json apps/stardraw-server/
 COPY packages/engine/package.json packages/engine/
 COPY packages/ai/package.json packages/ai/
 COPY packages/hearts-engine/package.json packages/hearts-engine/

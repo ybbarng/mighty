@@ -66,7 +66,7 @@ CODE=$(docker compose exec -T mighty wget -qO /dev/null -S http://127.0.0.1/heal
 - 주소: 같은 출처 `https://game.byb.kr/signal/`. `GET /signal/sub?t=<주제>` 로 구독(SSE), `POST /signal/pub?t=<주제>` 로 올린다. 주제는 방 코드에서 만든 SHA-1 해시(바이트마다 36진수, 20~40자).
 - 저장하지 않고 지금 구독한 사람에게만 넘긴다. 내용은 trystero가 방 코드로 암호화한 연결 정보라 서버가 읽지 못한다.
 - 앱 쪽은 `apps/web/src/net/signal.ts`(trystero `createTopicStrategy`). 같은 서버를 통로 셋(`LANES`)으로 써서 연결 시도를 겹친다(한 사람이 들어갈 때 구독 6개, 올리기 수십 번). 주소는 `NEXT_PUBLIC_SIGNAL_URL`(기본 `https://game.byb.kr/signal`). 개발 서버(localhost:3456)도 같은 서버를 쓴다.
-- 서비스 워커는 `/signal/` 아래를 건드리지 않는다(`public/sw.js` 의 `NO_STORE_PREFIX`).
+- 서비스 워커는 `/signal/` 아래를 건드리지 않는다(`public/sw.js` 의 `NO_STORE_PREFIXES`).
 - 남용 막기: Traefik 요청 횟수 제한, 본문 16KB, 연결 수(전체·IP·주제), 다른 사이트 출처 거절.
 
 ## 확인

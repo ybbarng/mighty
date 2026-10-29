@@ -6,8 +6,12 @@
 const CACHE = "mighty-v2";
 /** 저장하면 안 되는 주소: 요청마다 새로 받는 시간 제한 TURN 계정 */
 const NO_STORE = new Set(["/turn-credentials"]);
-/** 계속 열려 있는 신호 구독(SSE)과 올리기. 저장하면 끝난 응답을 다시 돌려준다 */
-const NO_STORE_PREFIX = "/signal/";
+/**
+ * 저장하면 안 되는 주소 앞머리.
+ * - 계속 열려 있는 신호 구독(SSE)과 올리기. 저장하면 끝난 응답을 다시 돌려준다
+ * - 하늘의 별 따기 서버(회차 상태·장부·확인 전달). 저장하면 지난 회차를 계속 보여 준다
+ */
+const NO_STORE_PREFIXES = ["/signal/", "/stardraw-api/"];
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -31,7 +35,7 @@ self.addEventListener("fetch", (event) => {
     request.method !== "GET" ||
     url.origin !== self.location.origin ||
     NO_STORE.has(url.pathname) ||
-    url.pathname.startsWith(NO_STORE_PREFIX)
+    NO_STORE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
   )
     return;
 
