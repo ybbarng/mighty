@@ -92,10 +92,11 @@ describe("게임 진행", () => {
     expect(last.state.lastThrow?.seat).toBe(thrower);
   });
 
+  // 편 놀이·3인은 편과 차례가 도는 길을 보므로 말 2개로 짧게 둔다(말 수만큼 판이 길어질 뿐이다)
   for (const [label, rules] of [
     ["1:1 기본", STANDARD_RULES],
-    ["2:2 편 놀이", TEAM_RULES],
-    ["3인 각자", { ...STANDARD_RULES, players: 3 }],
+    ["2:2 편 놀이(말 2개)", { ...TEAM_RULES, pieces: 2 }],
+    ["3인 각자(말 2개)", { ...STANDARD_RULES, players: 3, pieces: 2 }],
     [
       "말 2개, 빽도 없음, 고른 확률, 서면 남",
       {

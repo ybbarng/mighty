@@ -23,11 +23,12 @@ import {
 import { playGame } from "./simulate";
 
 describe("세 단계가 끝까지 둔다", () => {
+  // 편 놀이·3인은 편과 차례가 도는 길을 보므로 말 2개로 짧게 둔다(세기는 bots.strength가 잰다)
   for (const bot of YUT_BOTS) {
     for (const [label, rules] of [
       ["1:1", STANDARD_RULES],
-      ["2:2 편", TEAM_RULES],
-      ["3인", { ...STANDARD_RULES, players: 3 }],
+      ["2:2 편(말 2개)", { ...TEAM_RULES, pieces: 2 }],
+      ["3인(말 2개)", { ...STANDARD_RULES, players: 3, pieces: 2 }],
     ] as [string, YutRules][]) {
       it(`${bot.name} · ${label}`, () => {
         const bots = Array.from({ length: rules.players }, () => bot);
