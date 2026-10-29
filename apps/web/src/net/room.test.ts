@@ -176,6 +176,70 @@ describe("온라인 방", () => {
     expect(audits).toEqual([{ ok: true }]);
   }, 60_000);
 
+  it("새로고침한 방장의 환영(서명 확인)보다 판 끝 검증이 먼저 와도 버리지 않고 환영을 확인한 뒤 검증한다", async () => {
+    const net = new MemoryNetwork();
+    const store = memoryHostStore();
+    const options = {
+      hostName: "방장",
+      rules,
+      revealTimeoutMs: 500,
+      bot: intermediateBot,
+      botLevel: 1,
+      store,
+      clock,
+    };
+    const host = new HostRoom({ transport: net.join("host"), ...options });
+    const a = new GuestRoom({
+      transport: net.join("a"),
+      clock,
+      name: "철수",
+      token: null,
+    });
+    await until(() => a.seat !== null);
+    const audits: AuditResult[] = [];
+    a.on("audit", (r) => audits.push(r));
+    await host.start();
+    await until(() => a.match !== null);
+    const match = host.match;
+    for (let i = 0; i < 2000 && (match?.actionLog().length ?? 0) < 10; i++) {
+      const hv = match?.current();
+      if (hv?.decision) match?.submit(heuristicBot.decide(hv, { seed: i }));
+      const gv = a.match?.current();
+      if (gv?.decision) a.match?.submit(heuristicBot.decide(gv, { seed: i }));
+      await flush();
+    }
+    net.disconnect("host");
+    await flush();
+    const restore = store.load();
+    // 새로고침한 방장의 "어서 와"를 붙잡아 둔다(서명 계산·확인이 늦은 것과 같다)
+    const inner = net.join("host-reloaded");
+    const heldWelcomes: [unknown, string | undefined][] = [];
+    const transport = {
+      ...inner,
+      send: (message: unknown, to?: string) => {
+        if ((message as { t?: string }).t === "welcome")
+          heldWelcomes.push([message, to]);
+        else inner.send(message, to);
+      },
+    };
+    const fresh = new HostRoom({
+      transport,
+      ...options,
+      ...(restore ? { restore } : {}),
+    });
+    await until(
+      () =>
+        fresh.lobby().seats.every((s) => s.connected) &&
+        heldWelcomes.length > 0,
+    );
+    fresh.finish();
+    for (let i = 0; i < 20; i++) await flush();
+    expect(audits).toEqual([]);
+    for (const [m, to] of heldWelcomes) inner.send(m, to);
+    await until(() => audits.length === 1);
+    expect(audits).toEqual([{ ok: true }]);
+  });
+
   it("토큰을 확인하는 사이 나가 버린 연결은 자리에 앉히지 않는다(떠난 연결이 자리를 '연결됨'으로 차지하지 않게)", async () => {
     const { net, host, a } = await setup();
     await host.start();

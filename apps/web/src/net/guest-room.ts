@@ -272,6 +272,18 @@ export interface GuestEvents<
   archive: (source: ArchiveSource) => void;
 }
 
+/** 방장만 보내는 메시지. 방장이 돌아오는 사이 환영 확인 전에 오면 모아 둔다(`holdUntilWelcome`) */
+const HELD_UNTIL_WELCOME: ReadonlySet<string> = new Set([
+  "seed",
+  "fpHistory",
+  "fpRelay",
+  "started",
+  "snapshot",
+  "chat",
+  "rejected",
+  "audit",
+]);
+
 /**
  * 참가자 기기의 방. 방장을 찾아 들어가고, 대기실 정보와 대국 스냅숏을 받는다.
  * 게임이 끝나면 방장이 공개한 비밀 값과 기록으로 시드와 진행을 직접 다시 계산해 확인한다.
@@ -313,6 +325,15 @@ export class GuestRoom<
   private readonly peers = new Set<string>();
   /** 마지막으로 확인한 방장 연결. 다른 연결로 돌아오면 방장이 새로고침한 것이다 */
   private lastHostId: string | null = null;
+  /**
+   * 방장이 끊겼다 (새 연결로) 돌아오는 사이, 환영을 확인하기 전에 그 연결이 먼저 보낸 방장 메시지.
+   * 방장은 자리를 다시 잡자마자 화면·판 끝 검증을 보내는데, 환영의 서명 계산·확인은 비동기라 그보다 늦을 수 있다.
+   * 버리면 판 끝 검증처럼 다시 오지 않는 것을 잃는다. 환영을 확인하면 그 연결의 것을 받은 차례대로 처리한다
+   */
+  private readonly heldFromHost = new Map<
+    string,
+    HostMessage<View, Event, ActionT>[]
+  >();
   /** 새로고침한 방장이 보낼 지금 화면에서 받지 못한 내 행동을 확인한다 */
   private checkLost = false;
   /** 내 기기가 보낸 멘탈 포커 메시지. 새로고침한 방장에게 다시 보낸다 */
@@ -875,11 +896,33 @@ export class GuestRoom<
     });
   }
 
+  /**
+   * 방장과 끊긴 뒤 아직 환영을 확인하지 않은 연결이 보낸 방장 메시지면 모아 두고 true(heldFromHost 설명).
+   * 처음 들어갈 때(방장을 한 번도 정하지 않음)와 다른 참가자가 보낸 것(부정 알림, 검증 결과, 자리를 아는 사람의
+   * 멘탈 포커 메시지)은 모으지 않는다
+   */
+  private holdUntilWelcome(
+    message: HostMessage<View, Event, ActionT>,
+    from: string,
+  ): boolean {
+    if (this.hostId !== null || this.lastHostId === null) return false;
+    const hostOnly = isFairMessage(message)
+      ? this.seatOfPeer(from) === null
+      : HELD_UNTIL_WELCOME.has(message.t);
+    if (!hostOnly) return false;
+    const held = this.heldFromHost.get(from) ?? [];
+    // 방장이 아닌 연결이 쏟아 내도 끝없이 쌓이지 않게 한 연결에 일정 수까지만
+    if (held.length < 500) held.push(message);
+    this.heldFromHost.set(from, held);
+    return true;
+  }
+
   private async onMessage(
     message: HostMessage<View, Event, ActionT>,
     from: string,
   ): Promise<void> {
     if (this.kicked) return;
+    if (this.holdUntilWelcome(message, from)) return;
     if (isFairMessage(message)) {
       const seat = this.seatOfPeer(from);
       if (seat !== null) this.onFair(message, seat);
@@ -961,6 +1004,10 @@ export class GuestRoom<
         const early = this.unverifiedLobby.get(from);
         this.unverifiedLobby.clear();
         if (early) void this.onMessage({ t: "lobby", lobby: early }, from);
+        // 환영보다 먼저 온 이 방장의 메시지를 받은 차례대로(다른 연결의 것은 버린다)
+        const held = this.heldFromHost.get(from) ?? [];
+        this.heldFromHost.clear();
+        for (const m of held) void this.onMessage(m, from);
         if (reconnected)
           for (const l of this.listeners.connection) l("connected");
         break;
