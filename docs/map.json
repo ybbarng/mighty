@@ -863,7 +863,8 @@
             "따로 저장소·bybtto.byb.kr"
           ],
           "recommend": "이 저장소, game.byb.kr/bybtto",
-          "status": "open"
+          "status": "decided",
+          "decided": "이 저장소, game.byb.kr/bybtto. 브라우저 열쇠는 패스키(2026-10-29)"
         }
       ]
     }
