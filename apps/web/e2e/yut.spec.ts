@@ -94,13 +94,15 @@ async function startSolo(page: Page, pieces = "2개") {
 }
 
 test.beforeEach(async ({ page }) => {
+  // 던지기·말 움직임 연출을 실제 시간으로 기다리지 않는다(연출 자체는 화면 시험의 대상이 아니다)
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
     sessionStorage.setItem("mighty-splash-seen", "1");
     if (!sessionStorage.getItem("keep")) localStorage.removeItem("yut-save");
   });
 });
 
-test("윷놀이: 게임 목록에서 들어가 입문 컴퓨터와 한 판을 끝까지 한다", async ({
+test("윷놀이: 게임 목록에서 들어가 입문 컴퓨터와 두다가 판 끝 화면까지 간다", async ({
   page,
 }, info) => {
   const touch = info.project.name.startsWith("phone");
@@ -137,7 +139,13 @@ test("윷놀이: 게임 목록에서 들어가 입문 컴퓨터와 한 판을 �
     await expect(newPiece(page)).toBeVisible({ timeout: 20_000 });
   }
 
-  for (let i = 0; i < 300; i++) if (!(await playStep(page, touch))) break;
+  // 몇 수 더 둔 뒤 기권해 판 끝 화면(가운데 띠·결과·다시 하기)을 본다. 끝까지 두는 진행은
+  // 엔진 단위 시험과 아래 온라인 시험이 본다. 판 끝 화면은 이기든 기권하든 같은 모양이다.
+  for (let i = 0; i < 4; i++) if (!(await playStep(page, touch))) break;
+  if (!(await over(page).isVisible())) {
+    await untilMyThrow(page);
+    await page.getByRole("button", { name: "기권" }).click();
+  }
   await expect(over(page)).toBeVisible();
   await expect(status(page)).toHaveText(/이겼|먼저 말을 모두|기권/);
   await expect(page.locator("[data-result-banner]")).toBeVisible();
@@ -170,7 +178,7 @@ test("윷놀이: 하던 게임은 새로고침해도 이어 한다", async ({ pa
   await playStep(page, false);
 });
 
-test("윷놀이: 방장이 방을 만들고 친구가 링크로 들어와 한 판을 하고 판 끝 검증을 통과한다", async ({
+test("윷놀이: 방장이 방을 만들고 친구가 링크로 들어와 두다가 판을 끝내고 판 끝 검증을 통과한다", async ({
   context,
 }, info) => {
   test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
@@ -202,19 +210,31 @@ test("윷놀이: 방장이 방을 만들고 친구가 링크로 들어와 한 �
     path: info.outputPath("yut-online-guest-start.png"),
   });
 
-  for (let i = 0; i < 1500; i++) {
+  // 둘이 몇 번씩 던지고 움직인 뒤 방장이 기권한다. 판 끝 검증은 그때까지의 모든 던지기
+  // (양쪽 사슬 공개)를 다시 계산한다. 끝까지 두는 진행은 엔진·방 단위 시험이 본다.
+  let actions = 0;
+  for (let i = 0; i < 1500 && actions < 12; i++) {
     if ((await over(host).isVisible()) && (await over(guest).isVisible()))
       break;
     for (const p of [host, guest]) {
       if (await over(p).isVisible()) continue;
-      if (await throwButton(p).isVisible()) await throwButton(p).click();
-      else if (
+      if (await throwButton(p).isVisible()) {
+        await throwButton(p).click();
+        actions++;
+      } else if (
         (await movableStacks(p).count()) > 0 ||
         (await newPiece(p).count()) > 0
-      )
+      ) {
         await pickTarget(p, false);
+        actions++;
+      }
     }
     await host.waitForTimeout(30);
+  }
+  if (!(await over(host).isVisible())) {
+    const resign = host.getByRole("button", { name: "기권" });
+    await expect(resign).toBeEnabled({ timeout: 20_000 });
+    await resign.click();
   }
   await expect(over(host)).toBeVisible();
   await expect(over(guest)).toBeVisible();
