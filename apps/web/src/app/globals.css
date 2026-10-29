@@ -585,15 +585,18 @@ button {
 }
 
 /* 감열지: 흰 종이, 위아래 톱니 가장자리, 아주 옅은 줄무늬 */
+/* 밤하늘 화면에서 눈부시지 않게, 하늘보다 한 단계 밝은 짙은 남회색 종이(감열지의 가는 결은 그대로) */
 .sd-paper {
   background:
     repeating-linear-gradient(
       0deg,
-      rgba(0, 0, 0, 0.018) 0 2px,
+      rgba(255, 255, 255, 0.022) 0 2px,
       transparent 2px 4px
     ),
-    #fbfaf6;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    linear-gradient(180deg, #212a3c, #1a2232);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --tooth: 7px;
   mask:
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)
