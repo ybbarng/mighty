@@ -26,6 +26,8 @@ export interface Ledger {
   settle(): Promise<void>;
   status(): LedgerStatus;
   isRegistered(pub: Uint8Array): boolean | Promise<boolean>;
+  /** 패스키 번호로 장부에 등록된 공개 열쇠를 찾는다(다른 기기에서 내 패스키 찾기) */
+  passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null>;
   submit(
     ticket: Ticket,
     registration?: KeyRegistration,

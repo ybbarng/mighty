@@ -311,6 +311,14 @@ export class LocalLedger implements Ledger {
     return this.keys.has(toHex(entrantId(pub)));
   }
 
+  async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {
+    const id = toHex(credentialId);
+    for (const list of [...this.registrations, this.pending.registrations])
+      for (const r of list)
+        if (r.kind === "passkey" && toHex(r.credentialId) === id) return r.pub;
+    return null;
+  }
+
   /** 응모권 받기(서버가 할 확인을 그대로 한다). 받은 시각(초)을 돌려준다 */
   async submit(
     ticket: Ticket,

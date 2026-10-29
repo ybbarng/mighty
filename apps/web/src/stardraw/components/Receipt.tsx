@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 
 import { myRank } from "../results";
 import { starOf } from "../sky";
+import { KeyIcon } from "./PasskeyHelp";
 import { formatTime, LottoBall, RANK_LABEL, shortId } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -73,6 +74,18 @@ export function Receipt({
         <dd className="text-right" data-ticket-id>
           {shortId(id)}
         </dd>
+        {ticket.sig.kind === "webauthn" && (
+          <>
+            <dt className="text-neutral-500">서명</dt>
+            <dd
+              className="flex items-center justify-end gap-1"
+              data-passkey-mark
+            >
+              <KeyIcon className="size-3.5" />
+              패스키
+            </dd>
+          </>
+        )}
       </dl>
 
       <Cut />

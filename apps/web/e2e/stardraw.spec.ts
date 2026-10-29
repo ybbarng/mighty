@@ -2,8 +2,11 @@ import { expect, type Page, test } from "@playwright/test";
 
 import sky from "../src/stardraw/sky-data.json" with { type: "json" };
 
-/** 패스키는 Chrome 가상 인증기(CDP WebAuthn)로: 누르면 곧바로 지문이 확인된 것처럼 서명한다 */
-async function virtualAuthenticator(page: Page) {
+/**
+ * 패스키는 Chrome 가상 인증기(CDP WebAuthn)로: 누르면 곧바로 지문이 확인된 것처럼 서명한다.
+ * `verified: false`면 지문 확인이 안 되는 인증기라, 확인을 요구하는 만들기가 거절된다(취소와 같은 길)
+ */
+async function virtualAuthenticator(page: Page, verified = true) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -12,10 +15,21 @@ async function virtualAuthenticator(page: Page) {
       transport: "internal",
       hasResidentKey: true,
       hasUserVerification: true,
-      isUserVerified: true,
+      isUserVerified: verified,
       automaticPresenceSimulation: true,
     },
   });
+}
+
+/** 첫 응모 단추: "Touch ID로 응모하기"처럼 기기에 맞는 잠금 이름이 붙는다 */
+const FIRST_ENTRY =
+  /^(Face ID|Face ID·Touch ID|Touch ID|지문·화면 잠금|Windows Hello|패스키)(로|으로) 응모하기$/;
+
+/** 응모 화면까지 가서 별 6개를 자동으로 채운다 */
+async function pickSix(page: Page) {
+  await page.goto("/stardraw");
+  await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  await page.getByRole("button", { name: "자동", exact: true }).click();
 }
 
 async function noSideScroll(page: Page) {
@@ -74,12 +88,18 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-enter.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "이 별 6개로 응모하기" }).click();
-  await page.getByRole("button", { name: /패스키로 만들기/ }).click();
+  // 첫 응모 단추가 곧 패스키 만들기다(기기에 맞는 말)
+  await expect(
+    page.getByText(
+      "비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요",
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: FIRST_ENTRY }).click();
   const receipt = page.locator("[data-receipt]");
   await expect(receipt).toBeVisible({ timeout: 30_000 });
   await expect(receipt).toContainText("베텔게우스");
   await expect(receipt).toContainText("시리우스");
+  await expect(receipt.locator("[data-passkey-mark]")).toBeVisible();
   await page.screenshot({
     path: info.outputPath("stardraw-receipt.png"),
     fullPage: true,
@@ -104,10 +124,65 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.getByRole("button", { name: "← 돌아가기" }).click();
   await page.getByRole("button", { name: /내 응모/ }).click();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
+  // 열쇠 상태와 "서버가 가진 것 / 내 기기에만 있는 것"
+  await expect(page.getByText("패스키 · 기기를 바꿔도 안전")).toBeVisible();
+  await expect(page.getByText("꺼낼 수 없음")).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("stardraw-mine.png"),
+    fullPage: true,
+  });
   // 다시 열어도 응모권이 남는다
   await page.reload();
   await page.getByRole("button", { name: /내 응모/ }).click();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
+});
+
+test("패스키를 취소하면 응모되지 않았다고 알리고 문답으로 이어 준다", async ({
+  page,
+}) => {
+  await virtualAuthenticator(page, false);
+  await pickSix(page);
+  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  // Next.js 경로 안내용 빈 alert가 따로 있어 문구로 고른다
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "응모되지 않았어요" });
+  await expect(alert).toBeVisible({ timeout: 30_000 });
+  await alert.getByRole("button", { name: "패스키가 뭐예요?" }).click();
+  const faq = page.getByRole("region", { name: "패스키가 뭐예요?" });
+  await faq.getByText("가짜 사이트에 속으면요?").click();
+  await expect(faq.getByText(/game\.byb\.kr에 묶여/)).toBeVisible();
+  await expect(page.locator("[data-receipt]")).toHaveCount(0);
+  await noSideScroll(page);
+});
+
+test("패스키를 못 쓰는 브라우저와 앱 안 브라우저는 응모 대신 안내한다", async ({
+  browser,
+  page,
+}) => {
+  // WebAuthn이 없는 브라우저
+  await page.addInitScript(() => {
+    // @ts-expect-error 시험: 패스키가 없는 브라우저 흉내
+    delete window.PublicKeyCredential;
+  });
+  await pickSix(page);
+  await expect(page.getByRole("note")).toContainText(
+    "이 브라우저는 패스키를 지원하지 않아요",
+  );
+  await expect(page.getByRole("button", { name: FIRST_ENTRY })).toHaveCount(0);
+
+  // 카카오톡 안 브라우저
+  const kakao = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.8.5",
+  });
+  const inApp = await kakao.newPage();
+  await pickSix(inApp);
+  await expect(inApp.getByRole("note")).toContainText(
+    "카카오톡 안에서는 패스키를 쓸 수 없어요",
+  );
+  await expect(inApp.getByRole("button", { name: "주소 복사" })).toBeVisible();
+  await kakao.close();
 });
 
 test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
@@ -120,6 +195,12 @@ test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
       exact: false,
     }),
   ).toBeVisible();
+  // 패스키 문답
+  await expect(
+    page.getByRole("heading", { name: "패스키가 뭐예요?" }),
+  ).toBeVisible();
+  await expect(page.getByText("얼굴·지문이 서버로 가나요?")).toBeVisible();
+  await expect(page.getByText(/솔직한 한계/)).toBeVisible();
   await noSideScroll(page);
 });
 
@@ -133,8 +214,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   // 응모: 이번 회차 1등이 되게 채우고 낸다
   await page.getByRole("button", { name: "1등 되게" }).click();
   await expect(page.getByText("6/6")).toBeVisible();
-  await page.getByRole("button", { name: "이 별 6개로 응모하기" }).click();
-  await page.getByRole("button", { name: /패스키로 만들기/ }).click();
+  await page.getByRole("button", { name: FIRST_ENTRY }).click();
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
 
   // 추첨

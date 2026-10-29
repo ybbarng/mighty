@@ -173,6 +173,17 @@ export class RemoteLedger implements Ledger {
     return registered;
   }
 
+  async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {
+    const res = await this.f(
+      `${this.o.base}/api/passkeys/${toBase64Url(credentialId)}`,
+      { cache: "no-store" },
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`장부에 묻지 못했습니다(${res.status})`);
+    const { pub } = (await res.json()) as { pub: string };
+    return fromBase64Url(pub);
+  }
+
   async submit(
     ticket: Ticket,
     registration?: KeyRegistration,

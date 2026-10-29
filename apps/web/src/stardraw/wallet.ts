@@ -3,10 +3,8 @@ import {
   type EntrantSigner,
   encodeTicket,
   fromBase64Url,
-  generateSigner,
   passkeySigner,
   rawPublicKeyFromSpki,
-  signerFromKeyPair,
   type Ticket,
   toBase64Url,
   type WebAuthnAssertion,
@@ -14,18 +12,20 @@ import {
 } from "@mighty/stardraw-core";
 
 /**
- * 내 열쇠와 내 응모권(docs/36 11-2). 열쇠는 패스키가 먼저이고, 못 쓰는 브라우저는 이 기기 안 열쇠다.
- * - 패스키: 비밀 열쇠는 인증기(iCloud 키체인·Google 비밀번호 관리자·1Password 등) 안에만 있다.
- *   여기에는 패스키 번호와 공개 열쇠만 둔다. 응모·증명마다 Face ID·지문 한 번.
- * - 기기 안 열쇠: 꺼낼 수 없는 WebCrypto 열쇠를 IndexedDB에 둔다. 이 브라우저에서만 증명할 수 있다.
+ * 내 열쇠와 내 응모권(docs/36 11-2). 브라우저 응모는 패스키로만 한다(2026-10-29 사용자).
+ * 비밀 열쇠는 인증기(iCloud 키체인·Google 비밀번호 관리자·1Password·Windows Hello·보안 키 등) 안에만 있고,
+ * 여기에는 패스키 번호와 공개 열쇠만 둔다. 응모·확인마다 Face ID·지문·화면 잠금 한 번.
+ * 터미널 도구(나중)는 열쇠 파일을 쓴다.
  * 저장 이름공간(`ns`)이 다르면 서로 보이지 않는다(데모는 실제 게임과 따로 둔다).
  */
 
 export const PASSKEY_NAME = "하늘의 별 따기";
 
-export type KeyInfo =
-  | { kind: "passkey"; credentialId: Uint8Array; pub: Uint8Array }
-  | { kind: "raw"; pub: Uint8Array };
+export interface KeyInfo {
+  kind: "passkey";
+  credentialId: Uint8Array;
+  pub: Uint8Array;
+}
 
 export interface MyTicket {
   ticket: Ticket;
@@ -36,14 +36,6 @@ export interface MyTicket {
 /** 이 페이지 주소의 패스키 정책(검사기·확인 화면도 같은 값을 쓴다) */
 export function sitePolicy(): WebAuthnPolicy {
   return { rpId: location.hostname, origins: [location.origin] };
-}
-
-export function passkeySupported(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.PublicKeyCredential === "function" &&
-    typeof navigator.credentials?.create === "function"
-  );
 }
 
 function readJson<T>(key: string): T | null {
@@ -65,8 +57,15 @@ function writeJson(key: string, value: unknown): void {
 
 export interface Wallet {
   loadKey(): KeyInfo | null;
+  /** 새 패스키를 만든다(응모 단추를 처음 누를 때) */
   createPasskey(): Promise<KeyInfo>;
-  createDeviceKey(): Promise<KeyInfo>;
+  /**
+   * 다른 기기·브라우저에서: 따라온 패스키로 한 번 확인하고, 장부에서 그 패스키의 공개 열쇠를 찾아 기억한다.
+   * `lookup`은 패스키 번호로 공개 열쇠를 찾는다(장부에 등록이 있어야 한다)
+   */
+  recoverPasskey(
+    lookup: (credentialId: Uint8Array) => Promise<Uint8Array | null>,
+  ): Promise<KeyInfo | null>;
   signerFor(key: KeyInfo): Promise<EntrantSigner>;
   loadTickets(): MyTicket[];
   addTicket(mine: MyTicket): void;
@@ -81,48 +80,18 @@ export function createWallet(ns: string): Wallet {
   const KEY = `${ns}-key`;
   const TICKETS = `${ns}-tickets`;
   const OPENED = `${ns}-opened`;
-  const DB = ns;
-  const STORE = "keys";
-
-  const idb = () =>
-    new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DB, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  const idbPut = async (key: string, value: unknown) => {
-    const db = await idb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  };
-  const idbGet = async <T>(key: string): Promise<T | undefined> => {
-    const db = await idb();
-    const value = await new Promise<T | undefined>((resolve, reject) => {
-      const req = db.transaction(STORE, "readonly").objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result as T | undefined);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    return value;
-  };
 
   const saveKey = (key: KeyInfo) =>
     writeJson(KEY, {
       kind: key.kind,
       pub: toBase64Url(key.pub),
-      ...(key.kind === "passkey"
-        ? { credentialId: toBase64Url(key.credentialId) }
-        : {}),
+      credentialId: toBase64Url(key.credentialId),
     });
 
   const readTickets = () =>
     readJson<{ t: string; at: number }[]>(TICKETS) ?? [];
+
+  const ticketIds = () => new Set(readTickets().map((s) => s.t));
 
   return {
     loadKey() {
@@ -131,16 +100,13 @@ export function createWallet(ns: string): Wallet {
         credentialId?: string;
         pub: string;
       }>(KEY);
-      if (!saved) return null;
-      if (saved.kind === "passkey" && saved.credentialId)
-        return {
-          kind: "passkey",
-          credentialId: fromBase64Url(saved.credentialId),
-          pub: fromBase64Url(saved.pub),
-        };
-      if (saved.kind === "raw")
-        return { kind: "raw", pub: fromBase64Url(saved.pub) };
-      return null;
+      // 예전 판의 "이 기기에만 둔 열쇠"(raw)는 더 쓰지 않는다
+      if (saved?.kind !== "passkey" || !saved.credentialId) return null;
+      return {
+        kind: "passkey",
+        credentialId: fromBase64Url(saved.credentialId),
+        pub: fromBase64Url(saved.pub),
+      };
     },
 
     async createPasskey() {
@@ -148,6 +114,7 @@ export function createWallet(ns: string): Wallet {
         publicKey: {
           rp: { id: location.hostname, name: PASSKEY_NAME },
           user: {
+            // 이름·이메일은 받지 않는다. 비밀번호 관리 앱에는 "하늘의 별 따기"로 보인다
             id: crypto.getRandomValues(new Uint8Array(16)),
             name: PASSKEY_NAME,
             displayName: PASSKEY_NAME,
@@ -155,19 +122,24 @@ export function createWallet(ns: string): Wallet {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           // ES256(P-256)만: 응모자 id와 서명 규칙이 P-256이다
           pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+          // 새 기기에서 이름 없이 찾을 수 있게(discoverable). 기기 종류는 정하지 않는다:
+          // iCloud·Google 비밀번호 관리자·1Password·Windows Hello·보안 키·휴대폰 QR 모두 되게
           authenticatorSelection: {
-            residentKey: "preferred",
-            userVerification: "preferred",
+            residentKey: "required",
+            requireResidentKey: true,
+            userVerification: "required",
           },
           attestation: "none",
         },
       })) as PublicKeyCredential | null;
-      if (!credential) throw new Error("패스키를 만들지 않았습니다");
+      if (!credential)
+        throw new DOMException("패스키를 만들지 않았습니다", "NotAllowedError");
       const response = credential.response as AuthenticatorAttestationResponse;
       const spki = response.getPublicKey?.();
-      if (!spki)
-        throw new Error(
-          "이 브라우저는 패스키의 공개 열쇠를 알려 주지 않습니다",
+      if (!spki || response.getPublicKeyAlgorithm?.() !== -7)
+        throw new DOMException(
+          "이 기기는 이 게임에 맞는 패스키를 만들지 못합니다",
+          "NotSupportedError",
         );
       const key: KeyInfo = {
         kind: "passkey",
@@ -178,25 +150,27 @@ export function createWallet(ns: string): Wallet {
       return key;
     },
 
-    async createDeviceKey() {
-      const signer = await generateSigner(false);
-      await idbPut("device", signer.keyPair);
-      const key: KeyInfo = { kind: "raw", pub: signer.publicKey };
+    async recoverPasskey(lookup) {
+      const credential = (await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rpId: location.hostname,
+          userVerification: "required",
+        },
+      })) as PublicKeyCredential | null;
+      if (!credential) return null;
+      const credentialId = new Uint8Array(credential.rawId);
+      const pub = await lookup(credentialId);
+      if (!pub) return null;
+      const key: KeyInfo = { kind: "passkey", credentialId, pub };
       saveKey(key);
       return key;
     },
 
     async signerFor(key) {
-      if (key.kind === "passkey")
-        return passkeySigner(key.pub, (challenge) =>
-          passkeyAssertion(key.credentialId, challenge),
-        );
-      const pair = await idbGet<CryptoKeyPair>("device");
-      if (!pair)
-        throw new Error(
-          "이 기기의 열쇠를 찾지 못했습니다. 브라우저 저장소가 지워졌을 수 있습니다",
-        );
-      return signerFromKeyPair(pair);
+      return passkeySigner(key.pub, (challenge) =>
+        passkeyAssertion(key.credentialId, challenge),
+      );
     },
 
     loadTickets() {
@@ -215,10 +189,9 @@ export function createWallet(ns: string): Wallet {
     },
 
     addTicket(mine) {
-      writeJson(TICKETS, [
-        ...readTickets(),
-        { t: toBase64Url(encodeTicket(mine.ticket)), at: mine.receivedAt },
-      ]);
+      const t = toBase64Url(encodeTicket(mine.ticket));
+      if (ticketIds().has(t)) return;
+      writeJson(TICKETS, [...readTickets(), { t, at: mine.receivedAt }]);
     },
 
     openedRounds() {
@@ -236,10 +209,9 @@ export function createWallet(ns: string): Wallet {
         try {
           localStorage.removeItem(k);
         } catch {
-          // 지우지 못해도 다음 데모에 겹치지 않게 아래에서 열쇠는 지운다
+          // 지우지 못해도 다음 데모는 새 패스키를 만든다
         }
       }
-      await idbPut("device", undefined);
     },
   };
 }
@@ -255,10 +227,11 @@ async function passkeyAssertion(
       allowCredentials: [
         { type: "public-key", id: new Uint8Array(credentialId) },
       ],
-      userVerification: "preferred",
+      userVerification: "required",
     },
   })) as PublicKeyCredential | null;
-  if (!credential) throw new Error("패스키로 서명하지 않았습니다");
+  if (!credential)
+    throw new DOMException("패스키로 서명하지 않았습니다", "NotAllowedError");
   const response = credential.response as AuthenticatorAssertionResponse;
   return {
     authenticatorData: new Uint8Array(response.authenticatorData),

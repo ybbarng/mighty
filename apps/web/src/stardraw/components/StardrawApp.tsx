@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  equalBytes,
   RANKS,
   type Rank,
   type RoundRecord,
@@ -19,13 +20,15 @@ import { track } from "@/stats/track";
 
 import { type CheckBatch, type CheckTicket, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
+import { passkeyProblem } from "../passkey-env";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
 import { type Services, useLedger } from "../services";
-import type { MyTicket } from "../wallet";
+import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckPanel } from "./CheckPanel";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
 import { Inbox } from "./Inbox";
+import { KeyChip, KeyHolding, PasskeyFaq } from "./PasskeyHelp";
 import {
   formatLeft,
   formatTime,
@@ -115,6 +118,7 @@ export function StardrawApp() {
             mine={mine}
             onBack={() => go({ name: "home" })}
             onOpen={(m) => go({ name: "receipt", mine: m })}
+            onRecovered={() => setMine(services.wallet.loadTickets())}
           />
         ) : view.name === "rounds" ? (
           <RoundsView
@@ -481,13 +485,17 @@ function MineView({
   mine,
   onBack,
   onOpen,
+  onRecovered,
 }: {
   services: Services;
   mine: MyTicket[];
   onBack: () => void;
   onOpen: (m: MyTicket) => void;
+  onRecovered: () => void;
 }) {
   const sorted = [...mine].sort((a, b) => b.ticket.round - a.ticket.round);
+  const [key, setKey] = useState(() => services.wallet.loadKey());
+  const [faq, setFaq] = useState(false);
   return (
     <section className="flex flex-col gap-4" aria-label="내 응모">
       <div className="flex items-center justify-between">
@@ -553,7 +561,106 @@ function MineView({
           })}
         </ul>
       )}
+
+      <section aria-label="내 열쇠" className="flex flex-col gap-2 pt-2">
+        <h3 className="font-semibold text-white/85">내 열쇠</h3>
+        {key ? (
+          <>
+            <KeyChip />
+            <KeyHolding keyInfo={key} />
+          </>
+        ) : (
+          <RecoverKey
+            services={services}
+            onFound={(found) => {
+              setKey(found);
+              onRecovered();
+            }}
+          />
+        )}
+        <button
+          type="button"
+          aria-expanded={faq}
+          onClick={() => setFaq((v) => !v)}
+          className="self-start text-sky-200 text-sm underline underline-offset-2"
+        >
+          패스키가 뭐예요?
+        </button>
+        {faq && <PasskeyFaq />}
+      </section>
     </section>
+  );
+}
+
+/**
+ * 이 기기에 패스키 기억이 없을 때: 다른 기기에서 만든 패스키(따라온 것)로 한 번 확인하고,
+ * 장부에서 그 패스키의 공개 열쇠를 찾아 닫힌 회차의 내 응모권을 모은다
+ */
+function RecoverKey({
+  services,
+  onFound,
+}: {
+  services: Services;
+  onFound: (key: KeyInfo) => void;
+}) {
+  const [state, setState] = useState<
+    "idle" | "working" | "missing" | "cancelled" | "error"
+  >("idle");
+  const find = async () => {
+    setState("working");
+    try {
+      const key = await services.wallet.recoverPasskey((id) =>
+        services.ledger.passkeyPub(id),
+      );
+      if (!key) {
+        setState("missing");
+        return;
+      }
+      for (const { tickets } of services.ledger.closed())
+        for (const ticket of tickets)
+          if (equalBytes(ticket.pub, key.pub))
+            services.wallet.addTicket({
+              ticket,
+              // 받은 시각은 장부에 없어 그 회차가 열린 시각으로 적는다
+              receivedAt: roundTimes(services.ledger.schedule, ticket.round)
+                .opensAt,
+            });
+      onFound(key);
+    } catch (err) {
+      setState(passkeyProblem(err) === "cancelled" ? "cancelled" : "error");
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
+      <p className="break-keep text-white/80">
+        이 기기에는 아직 패스키가 없어요. 다른 기기에서 응모했다면, 따라온
+        패스키로 내 응모권을 찾을 수 있어요.
+      </p>
+      <button
+        type="button"
+        disabled={state === "working"}
+        onClick={() => void find()}
+        className="self-start rounded-lg border border-white/25 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
+      >
+        {state === "working" ? "찾고 있습니다" : "다른 기기에서 내 응모권 찾기"}
+      </button>
+      {state === "missing" && (
+        <p className="break-keep text-amber-100/85 text-xs">
+          장부에서 이 패스키를 찾지 못했어요. 응모한 적이 있는 패스키인지 확인해
+          주세요.
+          {services.practice &&
+            " 지금은 연습 장부라 기기마다 장부가 따로여서, 다른 기기에서 낸 응모는 찾을 수 없어요."}
+        </p>
+      )}
+      {state === "cancelled" && (
+        <p className="text-amber-100/85 text-xs">패스키 확인을 취소했어요.</p>
+      )}
+      {state === "error" && (
+        <p className="text-rose-200 text-xs">
+          찾지 못했어요. 잠시 뒤 다시 해 주세요.
+        </p>
+      )}
+    </div>
   );
 }
 

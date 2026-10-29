@@ -170,6 +170,13 @@ export class StardrawServer {
     return this.o.store.isRegistered(toHex(entrantId(pub)));
   }
 
+  /** 패스키 번호 → 공개 열쇠(장부에 공개될 값이라 숨길 것이 없다) */
+  passkeyPub(credentialId: Uint8Array): Uint8Array | null {
+    return (
+      this.o.store.registrationByCredential(toHex(credentialId))?.pub ?? null
+    );
+  }
+
   // ── 응모 ──
 
   async submit(input: EntryInput): Promise<Receipt> {

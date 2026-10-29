@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { MadeWith } from "@/components/brand/MadeWith";
+import { PasskeyFaq } from "@/stardraw/components/PasskeyHelp";
 import { LottoBall } from "@/stardraw/components/parts";
 import { RANK_RULE } from "@/stardraw/results";
 import { SKY_STARS, tempWord } from "@/stardraw/sky";
@@ -64,9 +65,10 @@ export default function StardrawAbout() {
               칸에서 번호를 눌러도 같습니다. 자동·남은 칸 자동도 됩니다.
             </li>
             <li>
-              처음 한 번 응모 열쇠(패스키)를 만듭니다. 응모권에 이 열쇠의 서명이
-              들어가고, 이름·이메일은 받지 않습니다. 한 열쇠는 회차마다 한 장만
-              낼 수 있습니다.
+              응모는 패스키로 합니다. 처음 응모 단추를 누르면 Face ID·지문·화면
+              잠금으로 패스키가 만들어지고, 바로 응모권에 서명합니다.
+              이름·이메일은 받지 않고, 한 패스키는 회차마다 한 장만 낼 수
+              있습니다. 패스키에 응모권이나 확률 혜택은 없습니다.
             </li>
             <li>
               회차는 1시간이고, 마감 5분 뒤 공개 난수로 당첨 번호 6개와 보너스
@@ -151,6 +153,15 @@ export default function StardrawAbout() {
             아닙니다. 별 세 개는 요청을 전달하는 서버도 알 수 없어, 가운데서
             누가 끼어들어도 맞출 수 없습니다.
           </p>
+        </Section>
+
+        <Section title="패스키가 뭐예요?">
+          <p className="text-white/85">
+            하늘의 별 따기는 패스키로만 응모합니다. 비밀번호보다 안전하고 쓰기도
+            쉬워서, 이 게임으로 패스키에 익숙해지면 좋겠습니다. 사람들이 많이
+            묻는 것을 모았습니다.
+          </p>
+          <PasskeyFaq />
         </Section>
 
         <Section title="별 45개">

@@ -148,6 +148,14 @@ export class Store {
       .get(credentialHex);
   }
 
+  /** 패스키 번호로 등록을 찾는다(다른 기기에서 내 패스키 찾기) */
+  registrationByCredential(credentialHex: string): KeyRegistration | null {
+    const row = this.db
+      .prepare("SELECT reg FROM registrations WHERE credential = ?")
+      .get(credentialHex);
+    return row ? decodeRegistration(bytes(row.reg)) : null;
+  }
+
   addRegistration(
     round: number,
     entrantHex: string,

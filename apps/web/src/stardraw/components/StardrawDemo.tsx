@@ -264,8 +264,8 @@ export function StardrawDemo() {
                   data="winner"
                 >
                   <p className="text-sm text-white/65">
-                    확인 요청이 오면 여기에 뜹니다. [확인]을 누르면 패스키(또는
-                    기기 안 열쇠)로 서명합니다.
+                    확인 요청이 오면 여기에 뜹니다. [확인]을 누르면 패스키로
+                    서명합니다.
                   </p>
                   <Inbox
                     services={services}

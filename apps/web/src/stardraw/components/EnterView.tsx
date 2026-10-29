@@ -6,19 +6,39 @@ import {
   makeTicket,
   type Ticket,
 } from "@mighty/stardraw-core";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import type { LedgerStatus } from "../local-ledger";
+import {
+  inAppBrowser,
+  type PasskeyProblem,
+  passkeyApi,
+  passkeyProblem,
+  platformUnlock,
+  unlockWith,
+} from "../passkey-env";
 import type { Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
-import { type KeyInfo, passkeySupported } from "../wallet";
+import type { KeyInfo } from "../wallet";
+import { PasskeyFaq } from "./PasskeyHelp";
 import { LottoBall, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
-type Step = "pick" | "key" | "working" | "folding";
+type Step = "pick" | "working" | "folding";
+
+/** 패스키를 쓸 수 있는 환경(첫 그리기 뒤에 잰다) */
+interface Env {
+  inApp: string | null;
+  api: boolean;
+  /** 이 기기 잠금(얼굴·지문·PIN)으로 패스키를 쓸 수 있는지 */
+  platform: boolean;
+  ua: string;
+}
+
+type Failure = { kind: PasskeyProblem; text: string };
 
 /** 응모: 네모 하늘이나 아래 번호 칸에서 별 6개를 고르고 낸다 */
 export function EnterView({
@@ -42,9 +62,40 @@ export function EnterView({
   const [focus, setFocus] = useState<number | null>(null);
   const [step, setStep] = useState<Step>("pick");
   const [work, setWork] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
+  const [env, setEnv] = useState<Env | null>(null);
+  const [faq, setFaq] = useState(false);
   const full = picked.length === 6;
   const open = status.phase === "open";
+  const hasKey = !!services.wallet.loadKey();
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    let alive = true;
+    void platformUnlock().then((platform) => {
+      if (alive)
+        setEnv({ inApp: inAppBrowser(ua), api: passkeyApi(), platform, ua });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const fail = (err: unknown) => {
+    setStep("pick");
+    const kind = passkeyProblem(err);
+    setError({
+      kind,
+      text:
+        kind === "cancelled"
+          ? "응모되지 않았어요. 패스키 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요."
+          : kind === "unsupported"
+            ? "이 기기에서는 패스키를 만들 수 없어요. 다시 누른 뒤 '다른 기기 사용'(휴대폰)을 고르고, 화면의 QR을 휴대폰 카메라로 찍어 주세요."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+    });
+  };
 
   const toggle = (n: number) => {
     setFocus(n);
@@ -86,18 +137,14 @@ export function EnterView({
         setWork("처음 한 번, 열쇠를 장부에 올릴 계산을 하고 있습니다");
         registration = await makeRegistration(
           { publicKey: key.pub },
-          key.kind === "passkey" ? "passkey" : "raw",
-          key.kind === "passkey" ? key.credentialId : new Uint8Array(),
+          "passkey",
+          key.credentialId,
           challenge,
           entry.registerPowTarget,
           { params: ledger.powParams },
         );
       }
-      setWork(
-        key.kind === "passkey"
-          ? "응모권을 계산하고, 패스키로 서명합니다"
-          : "응모권을 계산하고 서명합니다",
-      );
+      setWork("응모권을 계산하고, 패스키로 서명합니다");
       const ticket = await makeTicket(
         signer,
         status.round,
@@ -115,40 +162,24 @@ export function EnterView({
       const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
       services.clock.after(reduce ? 0 : 900, () => onDone(ticket, receivedAt));
     } catch (err) {
-      setStep("pick");
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "패스키 서명을 취소했습니다. 다시 눌러 주세요"
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
+      fail(err);
     }
   };
 
-  const start = () => {
+  /** 응모 단추: 패스키가 없으면 이 누름이 곧 패스키 만들기다(따로 등록시키지 않는다) */
+  const start = async () => {
     const key = services.wallet.loadKey();
-    if (key) void submit(key);
-    else setStep("key");
-  };
-
-  const makeKey = async (kind: "passkey" | "device") => {
-    setError(null);
-    try {
-      const key =
-        kind === "passkey"
-          ? await services.wallet.createPasskey()
-          : await services.wallet.createDeviceKey();
+    if (key) {
       await submit(key);
+      return;
+    }
+    setStep("working");
+    setError(null);
+    setWork("패스키를 만들고 있습니다(처음 한 번은 확인을 두 번 해요)");
+    try {
+      await submit(await services.wallet.createPasskey());
     } catch (err) {
-      setStep("key");
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "패스키를 만들지 않았습니다. 다시 하거나 이 기기에만 열쇠를 두어 주세요"
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
+      fail(err);
     }
   };
 
@@ -245,34 +276,77 @@ export function EnterView({
       </div>
 
       {error && (
-        <p
+        <div
           role="alert"
-          className="rounded-lg bg-rose-500/15 px-3 py-2 text-rose-200 text-sm"
+          className="flex flex-col gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-rose-100 text-sm"
         >
-          {error}
-        </p>
+          <p className="break-keep">{error.text}</p>
+          {error.kind === "cancelled" && (
+            <button
+              type="button"
+              onClick={() => setFaq(true)}
+              className="self-start text-rose-100 underline underline-offset-2"
+            >
+              패스키가 뭐예요?
+            </button>
+          )}
+        </div>
       )}
 
-      {step === "key" ? (
-        <KeyChoice onChoose={makeKey} />
-      ) : (
-        <button
-          type="button"
-          disabled={!full || !open || step !== "pick"}
-          onClick={start}
-          className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950 disabled:opacity-40"
+      {env?.inApp ? (
+        <InAppNotice app={env.inApp} />
+      ) : env && !env.api ? (
+        <p
+          role="note"
+          className="break-keep rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/80"
         >
-          {step === "working" || step === "folding"
-            ? work || "응모하고 있습니다"
-            : !open
-              ? status.phase === "waiting"
-                ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
-                : "이번 회차 응모가 마감되었습니다"
-              : full
-                ? "이 별 6개로 응모하기"
-                : `별을 ${6 - picked.length}개 더 골라 주세요`}
-        </button>
+          이 브라우저는 패스키를 지원하지 않아요. 브라우저를 최신 판으로
+          업데이트하거나, Safari·Chrome으로 열어 주세요.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={!env || !full || !open || step !== "pick"}
+            onClick={() => void start()}
+            className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950 disabled:opacity-40"
+          >
+            {step === "working" || step === "folding"
+              ? work || "응모하고 있습니다"
+              : !open
+                ? status.phase === "waiting"
+                  ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
+                  : "이번 회차 응모가 마감되었습니다"
+                : !full
+                  ? `별을 ${6 - picked.length}개 더 골라 주세요`
+                  : hasKey || !env
+                    ? "이 별 6개로 응모하기"
+                    : `${unlockWith(env.ua, env.platform)} 응모하기`}
+          </button>
+          {!hasKey && env && (
+            <div className="flex flex-col items-center gap-1 text-center text-white/65 text-xs">
+              <p className="break-keep">
+                비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요
+              </p>
+              {!env.platform && (
+                <p className="break-keep text-white/55">
+                  화면 잠금(지문·얼굴·PIN)을 켜면 이 기기에서 바로 쓸 수 있어요.
+                  지금은 휴대폰(QR)이나 보안 키로 할 수 있어요.
+                </p>
+              )}
+              <button
+                type="button"
+                aria-expanded={faq}
+                onClick={() => setFaq((v) => !v)}
+                className="text-sky-200 underline underline-offset-2"
+              >
+                패스키가 뭐예요?
+              </button>
+            </div>
+          )}
+        </div>
       )}
+      {faq && <PasskeyFaq />}
     </section>
   );
 }
@@ -330,40 +404,35 @@ function NumberSlip({
   );
 }
 
-function KeyChoice({
-  onChoose,
-}: {
-  onChoose: (kind: "passkey" | "device") => void;
-}) {
-  const passkey = passkeySupported();
+/** 앱 안 브라우저(카톡 등)는 패스키가 막힌다: Safari·Chrome으로 열도록 주소를 복사해 준다 */
+function InAppNotice({ app }: { app: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/5 p-4">
-      <p className="font-semibold">처음 한 번, 응모 열쇠를 만듭니다</p>
-      <p className="break-keep text-sm text-white/70">
-        응모권에는 이 열쇠의 서명이 들어갑니다. 당첨되면 같은 열쇠로 본인임을
-        확인합니다. 이름·이메일은 받지 않습니다.
+    <div
+      role="note"
+      className="flex flex-col gap-2 rounded-2xl border border-amber-200/30 bg-amber-200/10 px-4 py-3 text-sm"
+    >
+      <p className="break-keep text-amber-50">
+        {app} 안에서는 패스키를 쓸 수 없어요. Safari나 Chrome으로 열어 주세요.
       </p>
-      {passkey && (
-        <button
-          type="button"
-          onClick={() => onChoose("passkey")}
-          className="sd-cta rounded-xl py-3 font-bold text-slate-950"
-        >
-          패스키로 만들기(추천)
-        </button>
-      )}
+      <p className="break-keep text-amber-100/70 text-xs">
+        오른쪽 위(또는 아래) 메뉴의 「다른 브라우저로 열기」를 누르거나, 주소를
+        복사해 Safari·Chrome에 붙여 넣으세요.
+      </p>
       <button
         type="button"
-        onClick={() => onChoose("device")}
-        className="rounded-xl border border-white/20 py-2.5 text-sm hover:bg-white/10"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(location.href);
+            setCopied(true);
+          } catch {
+            setCopied(false);
+          }
+        }}
+        className="self-start rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-50 hover:bg-amber-200/10"
       >
-        이 기기에만 열쇠 두기
+        {copied ? "주소를 복사했어요" : "주소 복사"}
       </button>
-      <p className="break-keep text-white/55 text-xs">
-        {passkey
-          ? "패스키는 iCloud 키체인·Google 비밀번호 관리자·1Password 등에 저장되어 기기를 바꿔도 따라옵니다. 이 기기에만 둔 열쇠는 브라우저 저장소를 지우면 사라집니다."
-          : "이 브라우저는 패스키를 쓸 수 없어 이 기기에만 열쇠를 둡니다. 브라우저 저장소를 지우면 사라집니다."}
-      </p>
     </div>
   );
 }
