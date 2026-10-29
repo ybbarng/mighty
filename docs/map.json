@@ -823,11 +823,11 @@
     },
     {
       "id": "next-lotto",
-      "title": "정시 로또(매시 추첨)",
+      "title": "빕또(bybtto, 정시 로또)",
       "parent": "next-games",
-      "status": "fog",
+      "status": "building",
       "size": 2,
-      "summary": "설계안(docs/36): 매시 응모권(서명·작업 증명) → 마감 때 머클 루트 공개 → drand로 번호 → 해시 체인 장부 + GitHub 앵커. 누구든 독립 검사, 운영자도 결과를 모름",
+      "summary": "docs/36: 회차마다 응모권(서명·작업 증명) → 마감 때 머클 루트 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·추첨기, 보안 배우기·이력·당첨 증명. 11절 순서로 만든다",
       "found": "2026-10-29",
       "links": [
         {
@@ -850,6 +850,19 @@
             "보류"
           ],
           "recommend": "작게 시작",
+          "status": "decided",
+          "decided": "누구나, 6/45, 1시간(바꿀 수 있음), 이름 빕또. 나머지는 기본값(docs/36 11절, 2026-10-29)"
+        },
+        {
+          "id": "bybtto-home",
+          "type": "fork",
+          "title": "빕또를 게임 센터 저장소·주소 안에 둘지, 따로 둘지",
+          "owner": "me",
+          "options": [
+            "이 저장소, game.byb.kr/bybtto",
+            "따로 저장소·bybtto.byb.kr"
+          ],
+          "recommend": "이 저장소, game.byb.kr/bybtto",
           "status": "open"
         }
       ]
