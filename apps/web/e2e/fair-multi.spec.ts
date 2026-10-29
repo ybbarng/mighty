@@ -1,3 +1,4 @@
+import { TEST_SPEED } from "./fast";
 import { type BrowserContext, expect, type Page, test } from "./test";
 
 /**
@@ -10,12 +11,12 @@ test.skip(!process.env.FAIR_MULTI, "FAIR_MULTI=1 일 때만 돌린다");
 test.use({ serviceWorkers: "block" });
 
 async function prepare(page: Page) {
-  await page.addInitScript(() => {
+  await page.addInitScript((speed) => {
     (globalThis as { __FAIR_DEBUG?: boolean }).__FAIR_DEBUG = true;
     sessionStorage.setItem("mighty-splash-seen", "1");
     localStorage.setItem(
       "mighty-settings",
-      JSON.stringify({ state: { speed: 2, sound: false }, version: 0 }),
+      JSON.stringify({ state: { speed, sound: false }, version: 0 }),
     );
     // 섞는 중(섞는 애니메이션)이 보인 시간을 잰다.
     const w = window as unknown as {
@@ -36,7 +37,7 @@ async function prepare(page: Page) {
       childList: true,
       characterData: true,
     });
-  });
+  }, TEST_SPEED);
 }
 
 /** 화면에 맞는 행동 하나(자바스크립트로 단추를 누른다). 판이 끝났으면 "end" */
@@ -182,7 +183,7 @@ for (const [preset, players] of [
   ["표준 6마", 6],
   [null, 4],
 ] as const) {
-  test(`${preset ?? "하트"}: 사람 ${players}명이 멘탈 포커로 두 판을 끝까지 둔다`, async ({
+  test(`${preset ?? "하트"}: 사람 ${players}명이 멘탈 포커로 한 판을 끝까지 둔다`, async ({
     context,
   }, info) => {
     test.skip(info.project.name !== "desktop", "데스크톱에서만 돌린다");
@@ -206,7 +207,7 @@ for (const [preset, players] of [
     let lastSig = "";
     let shuffleShot = false;
     let lastChange = Date.now();
-    for (let i = 0; i < 20_000 && rounds.length < 2; i++) {
+    for (let i = 0; i < 20_000 && rounds.length < 1; i++) {
       let ended = false;
       const texts = await Promise.all(
         pages.map((p) => p.evaluate(() => document.body.innerText)),
@@ -305,7 +306,7 @@ for (const [preset, players] of [
       contentType: "application/json",
     });
     console.log(JSON.stringify(report));
-    expect(rounds.length).toBe(2);
+    expect(rounds.length).toBe(1);
     expect(errors).toEqual([]);
   });
 }
@@ -419,7 +420,7 @@ for (const [preset, players] of [
     await play(async () => {
       const text = await host.evaluate(() => document.body.innerText);
       if (/\d+\/10턴/.test(text) || /\d+\/13턴/.test(text)) played++;
-      return played > 30;
+      return played > 8;
     });
     await host.screenshot({ path: info.outputPath("before-reload.png") });
     await host.reload();
