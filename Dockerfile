@@ -33,6 +33,8 @@ COPY packages/gostop-engine/package.json packages/gostop-engine/
 COPY packages/gostop-ai/package.json packages/gostop-ai/
 COPY packages/minhwatu-engine/package.json packages/minhwatu-engine/
 COPY packages/minhwatu-ai/package.json packages/minhwatu-ai/
+COPY packages/baseball-engine/package.json packages/baseball-engine/
+COPY packages/baseball-ai/package.json packages/baseball-ai/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

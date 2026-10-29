@@ -1,3 +1,4 @@
+import { BaseballIconArt } from "@/baseball/icon-art";
 import { ChessPawnArt } from "@/chess/icon-art";
 import { GostopIconArt } from "@/gostop/components/GostopIcon";
 import { MinhwatuIconArt } from "@/minhwatu/components/MinhwatuIconArt";
@@ -428,11 +429,13 @@ export function IconArt({
     | "nyrongppong"
     | "gostop"
     | "minhwatu"
+    | "baseball"
     | "center";
 }) {
   if (game === "nyrongppong") return <NyrongppongIconArt maskable={maskable} />;
   if (game === "gostop") return <GostopIconArt maskable={maskable} />;
   if (game === "minhwatu") return <MinhwatuIconArt maskable={maskable} />;
+  if (game === "baseball") return <BaseballIconArt maskable={maskable} />;
   return (
     <div
       style={{

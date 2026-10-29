@@ -4,6 +4,7 @@ import type { MatchState } from "@mighty/engine";
 import type { MatchState as HeartsState } from "@mighty/hearts-engine";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadukReplay } from "@/baduk/components/BadukReplay";
+import { BaseballReplay } from "@/baseball/components/BaseballReplay";
 import { ChessReplay } from "@/chess/components/ChessReplay";
 import { botName } from "@/game/bot-names";
 import type { GameKit } from "@/game/kit";
@@ -42,6 +43,7 @@ const GAME_NAME: Record<string, string> = {
   gostop: "🎴 고스톱",
   minhwatu: "🎴 민화투",
   nyrongppong: "🎴 나이롱뽕",
+  baseball: "⚾ 숫자야구",
 };
 
 function when(at: number): string {
@@ -228,7 +230,8 @@ function ArchiveView({
     archive.game === "baduk" ||
     archive.game === "nyrongppong" ||
     archive.game === "gostop" ||
-    archive.game === "minhwatu"
+    archive.game === "minhwatu" ||
+    archive.game === "baseball"
   )
     return <BoardArchiveView archive={archive} onBack={onBack} />;
   return <CardArchiveView archive={archive} onBack={onBack} />;
@@ -271,6 +274,8 @@ function BoardArchiveView({
           <MinhwatuReplay archive={archive} name={name} />
         ) : archive.game === "nyrongppong" ? (
           <NyrongppongReplay archive={archive} name={name} />
+        ) : archive.game === "baseball" ? (
+          <BaseballReplay archive={archive} name={name} />
         ) : (
           <OmokReplay archive={archive} name={name} />
         )}

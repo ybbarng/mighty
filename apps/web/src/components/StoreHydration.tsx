@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { useBaseballTutorialProgress } from "@/baseball/progress";
+import { useBaseballSettings } from "@/baseball/settings";
 import { useSettings } from "@/game/settings";
 import { useGostopTutorialProgress } from "@/gostop/progress";
 import { useGostopSettings } from "@/gostop/settings";
@@ -41,6 +43,8 @@ export function StoreHydration() {
     void useGostopTutorialProgress.persist.rehydrate();
     void useMinhwatuSettings.persist.rehydrate();
     void useMinhwatuTutorialProgress.persist.rehydrate();
+    void useBaseballSettings.persist.rehydrate();
+    void useBaseballTutorialProgress.persist.rehydrate();
   }, []);
   return null;
 }

@@ -12,7 +12,8 @@ export type GameEntry = {
     | "baduk"
     | "nyrongppong"
     | "gostop"
-    | "minhwatu";
+    | "minhwatu"
+    | "baseball";
   name: string;
   englishName: string;
   /** 목록에 보일 한 줄 설명 */
@@ -95,5 +96,14 @@ export const GAMES: readonly GameEntry[] = [
     tagline: "화투로 하는 뽕! 같은 달 두 장이면 뽕, 손패 합을 가장 작게",
     players: "2~5명",
     path: "/nyrongppong",
+  },
+  {
+    id: "baseball",
+    name: "숫자야구",
+    englishName: "Number Baseball",
+    tagline:
+      "숨긴 수를 스트라이크·볼로 좁혀 먼저 맞힌다. 비밀 수는 각자 기기에만",
+    players: "1~2명",
+    path: "/baseball",
   },
 ];

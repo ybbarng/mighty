@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { summarizeBaduk } from "@/baduk/kit";
+import { BaseballStats } from "@/baseball/components/BaseballStats";
 import { ChessStats } from "@/chess/components/ChessStats";
 import { summarizeMighty } from "@/game/mighty-stats";
 import { useSettings } from "@/game/settings";
@@ -36,7 +37,8 @@ type GameTab =
   | "baduk"
   | "nyrongppong"
   | "gostop"
-  | "minhwatu";
+  | "minhwatu"
+  | "baseball";
 
 const TAB_LABEL: Record<GameTab, string> = {
   omok: "● 오목",
@@ -48,6 +50,7 @@ const TAB_LABEL: Record<GameTab, string> = {
   nyrongppong: "🎴 나이롱뽕",
   mighty: "♠ 마이티",
   hearts: "♥ 하트",
+  baseball: "⚾ 숫자야구",
 };
 
 /** 열 판마다 한 단계 오른다 */
@@ -89,7 +92,8 @@ export function ProfilePage() {
       game === "baduk" ||
       game === "nyrongppong" ||
       game === "gostop" ||
-      game === "minhwatu"
+      game === "minhwatu" ||
+      game === "baseball"
     ) {
       setBack(`/${game}`);
       setTab(game);
@@ -180,6 +184,7 @@ export function ProfilePage() {
                 "gostop",
                 "minhwatu",
                 "nyrongppong",
+                "baseball",
               ] as const
             ).map((t) => (
               <button
@@ -215,6 +220,8 @@ export function ProfilePage() {
           <MinhwatuStats book={book} />
         ) : tab === "nyrongppong" ? (
           <NyrongppongStats book={book} />
+        ) : tab === "baseball" ? (
+          <BaseballStats book={book} />
         ) : (
           <OmokStats book={book} />
         )}

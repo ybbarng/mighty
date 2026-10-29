@@ -40,6 +40,12 @@ html:has([data-game="baduk"]) body {
   background: #1c1917;
 }
 
+/* 숫자야구 화면: 밤 야구장 잔디 */
+html:has([data-game="baseball"]),
+html:has([data-game="baseball"]) body {
+  background: #052e16;
+}
+
 /* 나이롱뽕(화투) 화면 */
 html:has([data-game="nyrongppong"]),
 html:has([data-game="nyrongppong"]) body,

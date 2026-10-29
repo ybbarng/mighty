@@ -205,6 +205,12 @@ importers:
       '@mighty/baduk-engine':
         specifier: workspace:*
         version: link:../../packages/baduk-engine
+      '@mighty/baseball-ai':
+        specifier: workspace:*
+        version: link:../../packages/baseball-ai
+      '@mighty/baseball-engine':
+        specifier: workspace:*
+        version: link:../../packages/baseball-engine
       '@mighty/chess-ai':
         specifier: workspace:*
         version: link:../../packages/chess-ai
@@ -328,6 +334,21 @@ importers:
         version: link:../engine
 
   packages/baduk-engine:
+    dependencies:
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/baseball-ai:
+    dependencies:
+      '@mighty/baseball-engine':
+        specifier: workspace:*
+        version: link:../baseball-engine
+      '@mighty/engine':
+        specifier: workspace:*
+        version: link:../engine
+
+  packages/baseball-engine:
     dependencies:
       '@mighty/engine':
         specifier: workspace:*
