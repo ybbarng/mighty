@@ -1,23 +1,28 @@
 import { ByteReader, ByteWriter, concat, taggedHash, utf8 } from "./bytes";
-import {
-  PUBLIC_KEY_LENGTH,
-  SIGNATURE_LENGTH,
-  type Signer,
-  verifySignature,
-} from "./keys";
+import { PUBLIC_KEY_LENGTH } from "./keys";
 import { type SolveOptions, solvePow } from "./pow";
+import {
+  type EntrantSigner,
+  readSignature,
+  type SignatureData,
+  signAsEntrant,
+  verifyEntrantSignature,
+  type WebAuthnPolicy,
+  writeSignature,
+} from "./signature";
 
 /**
- * 응모권(docs/36 4절). 고정 바이너리 형식:
- *   v(u8) ‖ round(u32) ‖ numbers(6바이트) ‖ pub(65) ‖ nonce(u32) ‖ sig(64) = 144바이트
+ * 응모권(docs/36 4절). 바이너리 형식:
+ *   v(u8) ‖ round(u32) ‖ numbers(6바이트) ‖ pub(65) ‖ nonce(u32) = 80바이트 ‖ 서명(signature.ts)
+ * 서명은 원시 P-256(65바이트) 또는 패스키 단언(가변)이다.
  * - 작업 증명 대상은 v·round·numbers·pub(= `ticketContent`)
  * - 서명 대상과 응모권 id는 서명을 뺀 앞부분(= `ticketBody`). id에 서명이 빠져
  *   서명 모양만 바꾼 복제(ECDSA 변형)도 같은 id로 걸러진다(8-1 P3)
  */
 
 export const TICKET_VERSION = 1;
-export const TICKET_LENGTH =
-  1 + 4 + 6 + PUBLIC_KEY_LENGTH + 4 + SIGNATURE_LENGTH;
+/** 서명을 뺀 앞부분 길이 */
+export const TICKET_BODY_LENGTH = 1 + 4 + 6 + PUBLIC_KEY_LENGTH + 4;
 export const PICK_COUNT = 6;
 export const MAX_NUMBER = 45;
 
@@ -28,7 +33,7 @@ export interface Ticket {
   numbers: number[];
   pub: Uint8Array;
   nonce: number;
-  sig: Uint8Array;
+  sig: SignatureData;
 }
 
 export type UnsignedTicket = Omit<Ticket, "nonce" | "sig">;
@@ -71,10 +76,7 @@ function signMessage(body: Uint8Array): Uint8Array {
 }
 
 export function encodeTicket(t: Ticket): Uint8Array {
-  return concat(
-    ticketBody(t),
-    new ByteWriter().fixed(t.sig, SIGNATURE_LENGTH).done(),
-  );
+  return concat(ticketBody(t), writeSignature(new ByteWriter(), t.sig).done());
 }
 
 export function decodeTicket(bytes: Uint8Array): Ticket {
@@ -85,23 +87,31 @@ export function decodeTicket(bytes: Uint8Array): Ticket {
   const numbers = Array.from(r.fixed(PICK_COUNT));
   const pub = r.fixed(PUBLIC_KEY_LENGTH);
   const nonce = r.u32();
-  const sig = r.fixed(SIGNATURE_LENGTH);
+  const sig = readSignature(r);
   r.end();
   const problem = checkNumbers(numbers);
   if (problem) throw new Error(problem);
   return { v, round, numbers, pub, nonce, sig };
 }
 
-export async function verifyTicketSignature(t: Ticket): Promise<boolean> {
+export async function verifyTicketSignature(
+  t: Ticket,
+  policy?: WebAuthnPolicy,
+): Promise<boolean> {
   try {
-    return await verifySignature(t.pub, signMessage(ticketBody(t)), t.sig);
+    return await verifyEntrantSignature(
+      t.pub,
+      signMessage(ticketBody(t)),
+      t.sig,
+      policy,
+    );
   } catch {
     return false;
   }
 }
 
 export function unsignedTicket(
-  signer: Signer,
+  signer: Pick<EntrantSigner, "publicKey">,
   round: number,
   numbers: readonly number[],
 ): UnsignedTicket {
@@ -115,11 +125,12 @@ export function unsignedTicket(
 
 /** 작업 증명을 따로(예: 웹 워커에서) 푼 뒤 서명만 한다 */
 export async function signTicket(
-  signer: Signer,
+  signer: EntrantSigner,
   unsigned: UnsignedTicket,
   nonce: number,
 ): Promise<Ticket> {
-  const sig = await signer.sign(
+  const sig = await signAsEntrant(
+    signer,
     signMessage(ticketBody({ ...unsigned, nonce })),
   );
   return { ...unsigned, nonce, sig };
@@ -127,7 +138,7 @@ export async function signTicket(
 
 /** 작업 증명을 풀고 서명해 응모권을 만든다. 취소되면 null */
 export async function makeTicket(
-  signer: Signer,
+  signer: EntrantSigner,
   round: number,
   numbers: readonly number[],
   challenge: Uint8Array,

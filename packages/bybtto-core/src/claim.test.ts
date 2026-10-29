@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { fromBase64Url, toBase64Url } from "./bytes";
 import {
+  answerConfirmRequest,
   CLAIM_PREFIX,
+  confirmRequestUrl,
   decodeClaim,
+  decodeConfirmRequest,
   encodeClaim,
+  encodeConfirmRequest,
   makeChallengeClaim,
   makeDirectClaim,
-  newChallengeText,
+  newConfirmRequest,
   verifyClaim,
 } from "./claim";
 import type { Signer } from "./keys";
@@ -19,7 +23,7 @@ import {
 } from "./receipt";
 import { genesisHash } from "./record";
 import { roundTimes } from "./schedule";
-import { HOURLY, signers, ticketFor } from "./testing";
+import { fakePasskey, HOURLY, signers, ticketFor } from "./testing";
 import { ticketId } from "./ticket";
 
 async function winnerAndTicket() {
@@ -101,32 +105,89 @@ describe("바로 보내는 당첨 증명", () => {
   });
 });
 
-describe("확인 문구 증명", () => {
-  it("내가 준 문구에 서명했으면 통과, 다른 문구면 거절", async () => {
+describe("확인 요청과 확인 문구 증명(초록불)", () => {
+  it("확인하는 쪽이 만든 요청에 당첨자가 서명하면 통과, 다른 문구·요청자면 거절", async () => {
     const { winner, ticket } = await winnerAndTicket();
-    const challenge = newChallengeText();
-    expect(challenge).toMatch(/^[A-HJ-NP-Z2-9]{10}$/);
+    const request = newConfirmRequest("Brice", 1, ticketId(ticket));
+    expect(request.challenge).toMatch(/^[A-HJ-NP-Z2-9]{10}$/);
     const claim = decodeClaim(
-      encodeClaim(await makeChallengeClaim(winner, ticket, challenge)),
+      encodeClaim(await answerConfirmRequest(winner, ticket, request)),
     );
-    expect(await verifyClaim(claim, { ticket, challenge })).toEqual([]);
+    expect(await verifyClaim(claim, { ticket, request })).toEqual([]);
     expect(
-      await verifyClaim(claim, { ticket, challenge: "ANOTHERONE" }),
+      await verifyClaim(claim, {
+        ticket,
+        request: { ...request, challenge: "ANOTHERONE" },
+      }),
     ).toEqual(["확인 문구가 다르다"]);
+    expect(
+      await verifyClaim(claim, {
+        ticket,
+        request: { ...request, requester: "영희" },
+      }),
+    ).toEqual(['확인 요청자가 다르다(증명에는 "Brice")']);
   });
 
-  it("확인 문구를 요청했는데 바로 보내는 증명을 내면 거절", async () => {
+  it("확인 요청 링크: 주소 뒤 #에 실려 오가고, 링크 전체나 # 뒤만으로 읽는다", async () => {
+    const { ticket } = await winnerAndTicket();
+    const request = newConfirmRequest("Brice", 1, ticketId(ticket));
+    const url = confirmRequestUrl(
+      "https://game.byb.kr/bybtto/confirm",
+      request,
+    );
+    expect(url.startsWith("https://game.byb.kr/bybtto/confirm#")).toBe(true);
+    expect(decodeConfirmRequest(url)).toEqual(request);
+    expect(decodeConfirmRequest(encodeConfirmRequest(request))).toEqual(
+      request,
+    );
+    expect(() => decodeConfirmRequest(`${url.slice(0, -2)}`)).toThrow();
+  });
+
+  it("다른 응모권에 대한 확인 요청에는 서명하지 않는다", async () => {
+    const { winner, ticket } = await winnerAndTicket();
+    const another = await ticketFor(
+      winner,
+      2,
+      [1, 2, 3, 4, 5, 6],
+      genesisHash(HOURLY),
+    );
+    const request = newConfirmRequest("Brice", 2, ticketId(another));
+    await expect(answerConfirmRequest(winner, ticket, request)).rejects.toThrow(
+      "이 응모권에 대한 확인 요청이 아니다",
+    );
+  });
+
+  it("확인 요청을 했는데 바로 보내는 증명을 내면 거절", async () => {
     const { winner, ticket } = await winnerAndTicket();
     const claim = await makeDirectClaim(winner, ticket, "ybbarng", "철수", 1);
     expect(
-      await verifyClaim(claim, { ticket, challenge: newChallengeText() }),
+      await verifyClaim(claim, {
+        ticket,
+        request: newConfirmRequest("Brice", 1, ticketId(ticket)),
+      }),
     ).toContain("확인 문구 증명을 요청했는데 바로 보내는 증명이다");
+  });
+
+  it("패스키로 낸 응모권도 패스키로 확인 요청에 답한다", async () => {
+    const { signer } = await fakePasskey();
+    const ticket = await ticketFor(
+      signer,
+      1,
+      [3, 11, 19, 27, 38, 44],
+      genesisHash(HOURLY),
+    );
+    const request = newConfirmRequest("Brice", 1, ticketId(ticket));
+    const claim = decodeClaim(
+      encodeClaim(await answerConfirmRequest(signer, ticket, request)),
+    );
+    expect(claim.sig.kind).toBe("webauthn");
+    expect(await verifyClaim(claim, { ticket, request })).toEqual([]);
   });
 
   it("빕또 증명이 아닌 문자열, 잘린 문자열은 읽지 않는다", async () => {
     const { winner, ticket } = await winnerAndTicket();
     const text = encodeClaim(
-      await makeChallengeClaim(winner, ticket, "ABCDEFGHJK"),
+      await makeChallengeClaim(winner, ticket, "ABCDEFGHJK", "Brice"),
     );
     expect(() => decodeClaim("hello")).toThrow("빕또 당첨 증명이 아니다");
     const body = fromBase64Url(text.slice(CLAIM_PREFIX.length));

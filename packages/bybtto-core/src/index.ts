@@ -9,5 +9,6 @@ export * from "./receipt";
 export * from "./record";
 export * from "./round";
 export * from "./schedule";
+export * from "./signature";
 export * from "./ticket";
 export * from "./verify";

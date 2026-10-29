@@ -14,12 +14,12 @@ import {
   powTargetForTries,
   solvePow,
 } from "./pow";
-import { EASY_TARGET, TEST_POW, ticketFor } from "./testing";
+import { EASY_TARGET, fakePasskey, TEST_POW, ticketFor } from "./testing";
 import {
   checkNumbers,
   decodeTicket,
   encodeTicket,
-  TICKET_LENGTH,
+  TICKET_BODY_LENGTH,
   type Ticket,
   ticketBody,
   ticketContent,
@@ -34,7 +34,7 @@ const FIXED: Ticket = {
   numbers: [3, 11, 19, 27, 38, 44],
   pub: Uint8Array.from([4, ...new Array<number>(64).fill(1)]),
   nonce: 258,
-  sig: new Uint8Array(64),
+  sig: { kind: "raw", sig: new Uint8Array(64) },
 };
 
 describe("열쇠와 서명(WebCrypto P-256)", () => {
@@ -88,18 +88,25 @@ describe("응모권 형식", () => {
     expect(toHex(ticketId(FIXED))).toBe(
       "8363a6147d4d97c4fe3da0483d3f8c502d81b326c6cb1c4341914c5e2893363d",
     );
-    expect(encodeTicket(FIXED).length).toBe(TICKET_LENGTH);
+    // 앞부분 80바이트 ‖ 서명 종류 01 ‖ 원시 서명 64바이트
+    expect(TICKET_BODY_LENGTH).toBe(80);
+    expect(toHex(encodeTicket(FIXED))).toBe(
+      `${toHex(ticketBody(FIXED))}01${"00".repeat(64)}`,
+    );
   });
 
   it("바이트로 바꿨다 되돌리면 같은 응모권이다", () => {
     expect(decodeTicket(encodeTicket(FIXED))).toEqual(FIXED);
     expect(() =>
-      decodeTicket(encodeTicket(FIXED).slice(0, TICKET_LENGTH - 1)),
+      decodeTicket(encodeTicket(FIXED).slice(0, TICKET_BODY_LENGTH + 64)),
     ).toThrow();
   });
 
   it("서명이 달라도 id는 같다(서명 모양 복제를 같은 응모권으로 거른다)", () => {
-    const resigned: Ticket = { ...FIXED, sig: new Uint8Array(64).fill(9) };
+    const resigned: Ticket = {
+      ...FIXED,
+      sig: { kind: "raw", sig: new Uint8Array(64).fill(9) },
+    };
     expect(toHex(ticketId(resigned))).toBe(toHex(ticketId(FIXED)));
   });
 });
@@ -155,6 +162,23 @@ describe("작업 증명(Argon2id)", () => {
       onTry: (n) => n < 3,
     });
     expect(nonce).toBeNull();
+  });
+});
+
+describe("패스키로 낸 응모권", () => {
+  it("패스키 단언이 서명 자리에 들어가고, 바이트로 바꿨다 되돌려도 확인을 통과한다", async () => {
+    const { signer } = await fakePasskey();
+    const t = await ticketFor(
+      signer,
+      3,
+      [3, 11, 19, 27, 38, 44],
+      fromHex("22".repeat(32)),
+    );
+    expect(t.sig.kind).toBe("webauthn");
+    const back = decodeTicket(encodeTicket(t));
+    expect(back).toEqual(t);
+    expect(await verifyTicketSignature(back)).toBe(true);
+    expect(await verifyTicketSignature({ ...back, round: 4 })).toBe(false);
   });
 });
 

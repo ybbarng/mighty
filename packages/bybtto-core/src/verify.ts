@@ -29,6 +29,7 @@ import {
   type Schedule,
   withChange,
 } from "./schedule";
+import type { WebAuthnPolicy } from "./signature";
 import {
   TICKET_VERSION,
   type Ticket,
@@ -57,6 +58,8 @@ export interface VerifyOptions {
    * TODO: Rekor 포함 증명 확인(서버를 만들 때). 없으면 확인하지 않고 skipped에 남긴다.
    */
   rootLogVerifier?: (record: RoundRecord) => Promise<boolean>;
+  /** 패스키 서명을 받을 사이트·주소. 기본은 game.byb.kr */
+  webauthnPolicy?: WebAuthnPolicy;
 }
 
 export interface Problem {
@@ -128,7 +131,7 @@ export async function verifyLedger(
       if (entrants.has(who))
         fail(`응모권 ${short(id)}: 같은 열쇠가 이 회차에 두 장 냈다`);
       entrants.add(who);
-      if (!(await verifyTicketSignature(t)))
+      if (!(await verifyTicketSignature(t, options.webauthnPolicy)))
         fail(`응모권 ${short(id)}: 서명이 맞지 않는다`);
     }
 
