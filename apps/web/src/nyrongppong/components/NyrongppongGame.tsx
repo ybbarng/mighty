@@ -25,6 +25,7 @@ import { useSettings } from "@/game/settings";
 import { HwatuCardView } from "@/hwatu/components/HwatuCard";
 import { HwatuDeck } from "@/hwatu/components/HwatuLayout";
 import { HwatuFairBar } from "@/hwatu/fair-bar";
+import { useSentLock } from "@/hwatu/sent-lock";
 import { cn } from "@/lib/cn";
 
 import { NYRONGPPONG_LEVELS } from "../settings";
@@ -249,6 +250,8 @@ export function NyrongppongGame({
   const callLeft = useCallLeft(view, viewAt);
   // 방금 뽕한 자리(잠깐 "뽕!"을 띄운다)
   const [shout, setShout] = useState<number | null>(null);
+  /** 보낸 행동의 결과(다음 장면이나 거절)를 기다리는 동안은 결정을 다시 보이지 않는다 */
+  const sent = useSentLock(view, notice);
 
   useEffect(() => {
     if (!notice) return;
@@ -284,15 +287,20 @@ export function NyrongppongGame({
         ? (seatNames?.[seat] ?? `자리 ${seat + 1}`)
         : botName(botNames, (seat - me + n) % n);
   const others = Array.from({ length: n - 1 }, (_, i) => (me + 1 + i) % n);
-  const d = view.decision;
+  // 행동을 보낸 뒤 다음 장면이 오기 전에는 손패·단추를 닫는다(두 번 내기 방지)
+  const d = sent.waiting ? null : view.decision;
   const myDiscard = d?.kind === "discard";
+  /** 행동을 보낸다. 받아들여지면 다음 장면이 올 때까지 화면을 잠근다 */
+  const send = (action: Parameters<typeof submit>[0]) => {
+    if (submit(action).ok) sent.mark();
+  };
   const top = view.pile.at(-1) ?? null;
   const result = view.result;
   const roundOver = view.phase === "roundEnd" || view.phase === "gameOver";
 
   const discard = (card: string) => {
     setSelected(null);
-    submit({ type: "discard", card });
+    send({ type: "discard", card });
   };
   /** 마우스는 누르면 바로 버리고, 터치는 한 번 겨누고 다시 눌러 버린다 */
   const onCard = (card: string) => {
@@ -314,7 +322,8 @@ export function NyrongppongGame({
         : roundWinners(scores).includes(me)
           ? `이번 판 1등! (${scores[me]}점)`
           : `이번 판 ${scores[me]}점`;
-  } else if (d?.kind === "call")
+  } else if (sent.waiting) status = "보내는 중…";
+  else if (d?.kind === "call")
     status = `뽕할 수 있어요! ${Math.ceil(callLeft / 1000)}초`;
   else if (d?.kind === "draw")
     // 암호화방은 뽕한 적이 있으면 늘 묻는다(방장이 손패 합을 모른다). 스톱할 수 없으면 가져오기만.
@@ -474,7 +483,7 @@ export function NyrongppongGame({
           <div className="flex w-full items-center gap-2">
             <button
               type="button"
-              onClick={() => submit({ type: "call" })}
+              onClick={() => send({ type: "call" })}
               className="ppong-button relative flex-1 overflow-hidden rounded-2xl bg-rose-600 py-3 font-black text-3xl shadow-[0_0_24px_rgba(244,63,94,0.7)] hover:bg-rose-500"
             >
               뽕!
@@ -488,7 +497,7 @@ export function NyrongppongGame({
             </button>
             <button
               type="button"
-              onClick={() => submit({ type: "pass" })}
+              onClick={() => send({ type: "pass" })}
               className="rounded-2xl bg-white/10 px-4 py-4 text-sm"
             >
               넘기기
@@ -550,7 +559,7 @@ export function NyrongppongGame({
               {d.canStop && (
                 <button
                   type="button"
-                  onClick={() => submit({ type: "stop" })}
+                  onClick={() => send({ type: "stop" })}
                   className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
                 >
                   스톱
@@ -558,7 +567,7 @@ export function NyrongppongGame({
               )}
               <button
                 type="button"
-                onClick={() => submit({ type: "draw" })}
+                onClick={() => send({ type: "draw" })}
                 className="rounded-xl bg-white/15 px-4 py-2"
               >
                 한 장 가져오기
@@ -568,7 +577,7 @@ export function NyrongppongGame({
           {myDiscard && d.yak && (
             <button
               type="button"
-              onClick={() => submit({ type: "declare" })}
+              onClick={() => send({ type: "declare" })}
               className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
             >
               약 내기: {YAK_NAMES[d.yak.kind]}({d.yak.value}점)
@@ -596,7 +605,7 @@ export function NyrongppongGame({
           {view.phase === "roundEnd" && !view.continued[me] && (
             <button
               type="button"
-              onClick={() => submit({ type: "continue" })}
+              onClick={() => send({ type: "continue" })}
               className="rounded-xl bg-amber-300 px-4 py-2 font-semibold text-black"
             >
               다음 판

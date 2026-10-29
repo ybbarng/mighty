@@ -31,6 +31,7 @@ import {
   HwatuFloor,
 } from "@/hwatu/components/HwatuLayout";
 import { HwatuFairBar } from "@/hwatu/fair-bar";
+import { useSentLock } from "@/hwatu/sent-lock";
 import { cn } from "@/lib/cn";
 
 import { MINHWATU_LEVELS } from "../settings";
@@ -295,6 +296,8 @@ export function MinhwatuTable({
   const [selected, setSelected] = useState<string | null>(null);
   const [needTarget, setNeedTarget] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  /** 보낸 행동의 결과(다음 장면이나 거절)를 기다리는 동안은 결정을 다시 보이지 않는다 */
+  const sent = useSentLock(view, notice);
 
   useEffect(() => {
     if (!notice) return;
@@ -315,8 +318,10 @@ export function MinhwatuTable({
   const me = view.seat;
   const n = view.handCounts.length;
   const online = local === null;
-  const myPlay = view.decision?.kind === "play";
-  const myPick = view.decision?.kind === "pick";
+  // 행동을 보낸 뒤 다음 장면이 오기 전에는 손패·바닥 고르기를 닫는다(두 번 내기 방지)
+  const decision = sent.waiting ? null : view.decision;
+  const myPlay = decision?.kind === "play";
+  const myPick = decision?.kind === "pick";
   const levelName = MINHWATU_LEVELS.find((l) => l.value === level)?.label ?? "";
   const others = Array.from({ length: n - 1 }, (_, i) => (me + 1 + i) % n);
 
@@ -335,6 +340,7 @@ export function MinhwatuTable({
       ...(target ? { target } : {}),
     });
     if (result.ok) {
+      sent.mark();
       setSelected(null);
       setNeedTarget(false);
     }
@@ -360,7 +366,7 @@ export function MinhwatuTable({
 
   const onFloorPick = (target: string) => {
     if (myPick) {
-      submit({ type: "pick", target });
+      if (submit({ type: "pick", target }).ok) sent.mark();
       return;
     }
     if (myPlay && selected && targets.includes(target)) play(selected, target);
@@ -371,7 +377,9 @@ export function MinhwatuTable({
   const over = view.phase === "roundEnd" || gameOver;
 
   let status: string;
-  if (view.phase === "pick")
+  if (sent.waiting && (view.phase === "pick" || view.phase === "play"))
+    status = "보내는 중…";
+  else if (view.phase === "pick")
     status = myPick
       ? `뒤집은 ${cardOf(view.pending?.flipped ?? "01g").name}와 짝: 먹을 바닥 패를 고르세요`
       : `${name(view.turn)}가 먹을 패를 고르는 중`;
