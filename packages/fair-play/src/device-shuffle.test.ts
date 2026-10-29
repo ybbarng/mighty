@@ -1,9 +1,7 @@
-import { deckFor, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
-import { tokenDeal } from "./blind";
 import type { FairDevice } from "./device";
-import { network } from "./device-fixture";
+import { network, TEST_DECK, TEST_OWNERS } from "./device-fixture";
 import { type Party, Party as PartyClass } from "./protocol";
 
 /** 기기가 기다리는 시간(증명 미루기 10초, 응답 30초의 두 배)을 넉넉히 넘긴다 */
@@ -33,7 +31,6 @@ describe("메시지로 하는 멘탈 포커", () => {
         .get(1)
         ?.shuffles.get("0:shuffle");
     async function run(cheater: number | null, hideNonce = false) {
-      const rules = presetRules("standard5");
       // 고친 프로그램이 nonce를 숨기면(남의 nonce를 보고 도전값이 불리하다고 보고 멈춘다) 보내지 않는다.
       const { devices, clock, settle } = network([0, 1, 2], {
         drop: (m, from) =>
@@ -58,13 +55,9 @@ describe("메시지로 하는 멘탈 포커", () => {
         return out;
       };
       try {
-        const owners = new Map<number, number>();
-        tokenDeal(rules).owners.forEach((seat, slot) => {
-          if (seat >= 0) owners.set(slot, seat === 1 || seat === 2 ? seat : 0);
-        });
         for (const d of devices) {
-          d.start(1, [0, 1, 2], deckFor(rules));
-          d.assign(1, owners);
+          d.start(1, [0, 1, 2], TEST_DECK);
+          d.assign(1, TEST_OWNERS);
         }
         // 정직한 기기는 할 수 있는 일(섞기 증명 계산·확인까지)을 모두 마친다.
         await settle();

@@ -41,15 +41,23 @@ const R255 = await loadRistretto255();
 async function dealTable(
   g: SraGroup,
   tamper?: Parameters<typeof shuffleAndDeal>[3],
+  seats: readonly number[] = [0, 1, 2, 3, 4],
+  owners: readonly number[] = OWNERS,
 ) {
-  const parties = [0, 1, 2, 3, 4].map((seat) => new Party(seat, g));
-  const deal = await shuffleAndDeal(g, parties, OWNERS, tamper);
+  const parties = seats.map((seat) => new Party(seat, g));
+  const deal = await shuffleAndDeal(g, parties, owners, tamper);
   return { parties, deal };
 }
 
 describe("보안 체험의 곱셈군(1024)", () => {
   it("나눠 주고 판 끝에 모두 열쇠를 공개하면 53장이 한 번씩 있다", async () => {
-    const { parties, deal } = await dealTable(GROUP_1024);
+    // 이 군에서도 한 판이 끝까지 맞는지만 본다. 섞는 사람 수에 따른 진행은 r255가 다섯 명으로 본다
+    const { parties, deal } = await dealTable(
+      GROUP_1024,
+      undefined,
+      [0, 1],
+      OWNERS.map((o, s) => (o < 0 ? o : s % 2)),
+    );
     const audit = finalAudit(deal, parties);
     expect(audit.ok).toBe(true);
     if (audit.ok) expect(new Set(audit.cards).size).toBe(53);
@@ -60,30 +68,45 @@ describe("게임이 쓰는 군(r255)", () => {
   const g = R255;
   const table = (tamper?: Parameters<typeof shuffleAndDeal>[3]) =>
     dealTable(g, tamper);
+  // 정직하게 나눈 판은 한 번만 계산하고, 시험마다 그 판을 복사해 쓴다(참가자는 snapshot·restore,
+  // 공개 기록은 덱과 열쇠를 옮겨 담는다). 시험끼리 판을 건드리지 않아 순서와 상관없다
+  let honest: ReturnType<typeof table> | undefined;
+  const dealtCopy = async () => {
+    honest ??= table();
+    const { parties, deal } = await honest;
+    const ledger = new PublicLedger(g);
+    ledger.extend(deal.ledger.deck);
+    for (const [slot, keys] of deal.ledger.keys)
+      for (const [party, key] of keys) ledger.publish(slot, party, key);
+    return {
+      parties: parties.map((p) => Party.restore(g, p.snapshot())),
+      deal: { ledger, owners: [...deal.owners] } satisfies DealResult,
+    };
+  };
 
   describe("멘탈 포커 나눠 주기", () => {
     it("각자 자기 10장만 보고, 다 모으면 바닥 카드 3장을 뺀 50장이 겹치지 않는다", async () => {
-      const { parties } = await table();
+      const { parties } = await dealtCopy();
       for (const p of parties) expect(p.hand.size).toBe(10);
       const all = parties.flatMap((p) => [...p.hand.values()]);
       expect(new Set(all).size).toBe(50);
     });
 
     it("방장(0번)을 포함해 누구도 공개 정보만으로는 남의 카드나 바닥 카드를 열 수 없다", async () => {
-      const { deal } = await table();
+      const { deal } = await dealtCopy();
       const seats = [0, 1, 2, 3, 4];
       for (let slot = 0; slot < 53; slot++)
         expect(deal.ledger.open(slot, seats)).toBeNull();
     });
 
     it("자기 자리 열쇠는 카드를 낼 때와 판 끝에만 내준다", async () => {
-      const { parties } = await table();
+      const { parties } = await dealtCopy();
       expect(() => parties[0]?.revealKey(0, "deal")).toThrow();
       expect(() => parties[0]?.revealKey(0, "play")).not.toThrow();
     });
 
     it("바닥 카드는 주공만 열고, 낸 카드는 모두가 같은 카드로 연다", async () => {
-      const { parties, deal } = await table();
+      const { parties, deal } = await dealtCopy();
       const kitty = giveSlots(deal, parties, [50, 51, 52], 2);
       expect(parties[2]?.hand.size).toBe(13);
       expect(
@@ -95,7 +118,7 @@ describe("게임이 쓰는 군(r255)", () => {
     });
 
     it("새로고침해도 남겨 둔 열쇠로 이어서 낸다", async () => {
-      const { parties, deal } = await table();
+      const { parties, deal } = await dealtCopy();
       const before = parties[1] as Party;
       const restored = Party.restore(g, before.snapshot());
       const others = parties.map((p) => (p.id === 1 ? restored : p));
@@ -103,7 +126,7 @@ describe("게임이 쓰는 군(r255)", () => {
     });
 
     it("판 끝에 모두 열쇠를 공개하면 53장이 한 번씩 있다", async () => {
-      const { parties, deal } = await table();
+      const { parties, deal } = await dealtCopy();
       const audit = finalAudit(deal, parties);
       expect(audit.ok).toBe(true);
       if (audit.ok) expect(new Set(audit.cards).size).toBe(53);
@@ -201,7 +224,7 @@ describe("게임이 쓰는 군(r255)", () => {
 
   describe("한 판 전체", () => {
     it("정직한 판: 낸 카드를 프로토콜로 열면 엔진의 카드와 같고, 위반이 없다", async () => {
-      const { parties, deal } = await table();
+      const { parties, deal } = await dealtCopy();
       const { state, opened } = playRound(deal, parties);
       // 모두 포기해 다시 나누는 판이 아니면 50장을 낸다.
       if (state.round.phase === "roundEnd") expect(opened).toBe(50);

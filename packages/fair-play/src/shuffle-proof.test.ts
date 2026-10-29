@@ -26,10 +26,13 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
     stage: "shuffle",
   };
 
-  /** 실제 섞기(Party.lockAndShuffle)와 그때 쓴 섞기 열쇠 */
+  /**
+   * 실제 섞기(Party.lockAndShuffle)와 그때 쓴 섞기 열쇠.
+   * 증명은 덱 길이와 상관없는 계산이라 4장으로 본다(53장 덱은 방 시험이 실제로 돌린다)
+   */
   async function shuffled() {
     const party = new Party(2, g);
-    const input = encodedDeck(g, fullDeck());
+    const input = encodedDeck(g, fullDeck().slice(0, 4));
     const output = await party.lockAndShuffle(input, "shuffle");
     const e = (party as unknown as { pass(name: string): bigint }).pass(
       "shuffle",
@@ -79,7 +82,7 @@ describe.each(TEST_GROUPS)("군 %s", (_name, g) => {
       async function tampered() {
         const { input, output, e } = await shuffled();
         const bad = [...output];
-        bad[5] = bad[9] as bigint;
+        bad[1] = bad[3] as bigint;
         return { input, output: bad, e };
       }
 

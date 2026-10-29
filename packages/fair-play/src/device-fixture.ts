@@ -1,11 +1,29 @@
 /** 멘탈 포커 기기 시험이 같이 쓰는 도우미. 시험이 오래 걸려 파일을 나눠 동시에 돌린다 */
 declare function setTimeout(callback: () => void, ms: number): unknown;
 
+import { deckFor, presetRules } from "@mighty/engine";
+
 import { ManualClock } from "./clock";
 import { FairDevice, type FairWire, prepareGroup } from "./device";
 
 // 실제 방과 같은 타원곡선 군(r255)으로 시험한다.
 await prepareGroup("r255");
+
+/**
+ * 기기 시험 덱: 마이티 덱 앞 8장. 섞기·가리기·열기·증명 규칙은 덱 크기와 상관없어 작게 본다
+ * (53장 실제 판은 방 시험이 돌린다). 자리 0~3은 0번 기기(방장과 컴퓨터), 4·5는 1번, 6·7은 2번.
+ */
+export const TEST_DECK = deckFor(presetRules("standard5")).slice(0, 8);
+export const TEST_OWNERS: ReadonlyMap<number, number> = new Map([
+  [0, 0],
+  [1, 0],
+  [2, 0],
+  [3, 0],
+  [4, 1],
+  [5, 1],
+  [6, 2],
+  [7, 2],
+]);
 
 export interface TestNetwork {
   devices: FairDevice[];

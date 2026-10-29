@@ -1,13 +1,14 @@
-import { deckFor, presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 
-import { tokenDeal } from "./blind";
-import { network } from "./device-fixture";
+import {
+  TEST_DECK as DECK,
+  network,
+  TEST_OWNERS as OWNERS,
+} from "./device-fixture";
 import type { Party, RevealReason } from "./protocol";
 
 describe("메시지로 하는 멘탈 포커", () => {
   it("셋이 섞고 나누면 각자 자기 자리만 열고, 공개한 자리는 모두가 연다", async () => {
-    const rules = presetRules("standard5");
     const { devices, settle } = network([0, 1, 2]);
     // 연결 진단: 판 시작과 무거운 계산마다 걸린 시간을 알린다.
     const timings: string[] = [];
@@ -15,29 +16,22 @@ describe("메시지로 하는 멘탈 포커", () => {
       if (deal === 1 && ms >= 0)
         timings.push(stage ? `${what}:${stage}` : what);
     });
-    const plan = tokenDeal(rules);
-    // 자리 0·3·4는 0번 기기(방장과 컴퓨터), 1·2는 각자
-    const deviceOf = (seat: number) => (seat === 1 || seat === 2 ? seat : 0);
-    const owners = new Map<number, number>();
-    plan.owners.forEach((seat, slot) => {
-      if (seat >= 0) owners.set(slot, deviceOf(seat));
-    });
     for (const d of devices) {
-      d.start(1, [0, 1, 2], deckFor(rules));
-      d.assign(1, owners);
+      d.start(1, [0, 1, 2], DECK);
+      d.assign(1, OWNERS);
     }
     await settle();
-    expect(devices[0]?.myCards(1).size).toBe(30);
-    expect(devices[1]?.myCards(1).size).toBe(10);
-    expect(devices[2]?.myCards(1).size).toBe(10);
+    expect(devices[0]?.myCards(1).size).toBe(4);
+    expect(devices[1]?.myCards(1).size).toBe(2);
+    expect(devices[2]?.myCards(1).size).toBe(2);
     const all = devices.flatMap((d) => [...d.myCards(1).values()]);
-    expect(new Set(all).size).toBe(50);
-    expect(devices[2]?.open(1, 10)).toBeNull();
+    expect(new Set(all).size).toBe(8);
+    expect(devices[2]?.open(1, 4)).toBeNull();
 
-    devices[1]?.reveal(1, [10, 11], "dealMiss");
+    devices[1]?.reveal(1, [4, 5], "dealMiss");
     await settle();
-    expect(devices[0]?.open(1, 10)).toBe(devices[1]?.myCards(1).get(10));
-    expect(devices[2]?.open(1, 11)).toBe(devices[1]?.myCards(1).get(11));
+    expect(devices[0]?.open(1, 4)).toBe(devices[1]?.myCards(1).get(4));
+    expect(devices[2]?.open(1, 5)).toBe(devices[1]?.myCards(1).get(5));
     devices[0]?.reveal(1, [0], "dealMiss");
     await settle();
     expect(devices[0]?.open(1, 0)).toBe(devices[0]?.myCards(1).get(0));
@@ -45,7 +39,7 @@ describe("메시지로 하는 멘탈 포커", () => {
     for (const d of devices) d.revealAll(1);
     await settle();
     const cards = devices[2]?.openAll(1);
-    expect(cards?.size).toBe(53);
+    expect(cards?.size).toBe(8);
     // 섞기 증명은 카드를 연 뒤 따로 이어서 계산한다.
     await settle();
     expect(timings).toEqual(
@@ -55,7 +49,6 @@ describe("메시지로 하는 멘탈 포커", () => {
 
   describe("열쇠 증명: 카드가 열리지 않으면 누가 틀린 열쇠를 냈는지 짚는다", () => {
     async function dealt(cheater: number, reason: RevealReason) {
-      const rules = presetRules("standard5");
       const { devices, settle } = network([0, 1, 2]);
       const problems: { by: number; device: number | null; reason: string }[] =
         [];
@@ -69,18 +62,12 @@ describe("메시지로 하는 멘탈 포커", () => {
           deals: Map<number, { party: Party }>;
         }
       ).deals;
-      const plan = tokenDeal(rules);
-      const deviceOf = (seat: number) => (seat === 1 || seat === 2 ? seat : 0);
-      const owners = new Map<number, number>();
-      plan.owners.forEach((seat, slot) => {
-        if (seat >= 0) owners.set(slot, deviceOf(seat));
-      });
-      for (const d of devices) d.start(1, [0, 1, 2], deckFor(rules));
+      for (const d of devices) d.start(1, [0, 1, 2], DECK);
       const p = party.get(1)?.party as Party;
       const real = p.revealKey.bind(p);
       p.revealKey = (slot, why) =>
         why === reason ? real(slot, why) + 1n : real(slot, why);
-      for (const d of devices) d.assign(1, owners);
+      for (const d of devices) d.assign(1, OWNERS);
       await settle();
       return { devices, problems, settle };
     }
@@ -112,7 +99,7 @@ describe("메시지로 하는 멘탈 포커", () => {
       for (const d of devices) d.revealAll(1);
       await settle();
       expect(problems).toEqual([]);
-      expect(devices[0]?.openAll(1)?.size).toBe(53);
+      expect(devices[0]?.openAll(1)?.size).toBe(8);
     }, 60_000);
   });
 });
