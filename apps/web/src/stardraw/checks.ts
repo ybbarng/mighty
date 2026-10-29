@@ -28,6 +28,14 @@ import type { ConfirmAnswer, ConfirmRelay } from "./confirm-relay";
 
 export const MAX_WRONG_TRIES = 3;
 
+/** 아직 끝나지 않은 묶음: 닫히지 않았고, 응답이나 별 세 개를 기다리는 응모권이 있다 */
+export function isActive(batch: CheckBatch): boolean {
+  return (
+    !batch.closed &&
+    batch.tickets.some((t) => t.status === "waiting" || t.status === "signed")
+  );
+}
+
 export type CheckStatus =
   /** 당첨자의 응답을 기다린다 */
   | "waiting"
@@ -89,11 +97,11 @@ export class Checker {
     return this.store.list();
   }
 
-  /** 그 회차·등수에 열린 묶음(없으면 null) */
+  /** 그 회차·등수에 아직 끝나지 않은 묶음(응답이나 별 세 개를 기다리는 응모권이 있다). 없으면 null */
   async openBatch(round: number, rank: Rank): Promise<CheckBatch | null> {
     return (
       (await this.store.list()).find(
-        (b) => b.round === round && b.rank === rank && !b.closed,
+        (b) => b.round === round && b.rank === rank && isActive(b),
       ) ?? null
     );
   }

@@ -255,9 +255,13 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
       }
     }
 
-    // 고리: 내 별은 금빛, 추첨에서 내 별이 당첨 번호면 두 겹, 보너스는 점선
+    // 고리: 내 별은 금빛(추첨 화면에서는 당첨 별 금빛과 헷갈리지 않게 하늘색),
+    // 추첨에서 내 별이 당첨 번호면 초록 두 겹, 보너스는 점선
     if (mine) {
-      g.strokeStyle = "rgba(244,210,122,0.95)";
+      g.strokeStyle =
+        state.mode === "draw"
+          ? "rgba(147,197,253,0.95)"
+          : "rgba(244,210,122,0.95)";
       g.lineWidth = 1.5 * Math.min(1.2, scale);
       g.beginPath();
       g.arc(x, y, r + 6 * scale, 0, Math.PI * 2);

@@ -17,7 +17,7 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
 
-import type { CheckBatch, CheckTicket } from "../checks";
+import { type CheckBatch, type CheckTicket, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
 import { type Services, useLedger } from "../services";
@@ -572,7 +572,7 @@ function RoundsView({
     () => services.ledger.closed().slice().reverse(),
     [services, version],
   );
-  const openChecks = batches.filter((b) => !b.closed);
+  const openChecks = batches.filter(isActive);
   const waitingStars = openChecks.filter((b) =>
     b.tickets.some((t) => t.status === "signed"),
   ).length;

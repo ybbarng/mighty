@@ -159,6 +159,28 @@ export function DrawView({
             }}
             label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
           />
+          <p className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-white/65 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="size-3 rounded-full border-2 border-amber-200" />
+              당첨 번호
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-3 rounded-full border-2 border-amber-200 border-dashed" />
+              보너스
+            </span>
+            {mine.length > 0 && (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-3 rounded-full border-2 border-sky-300" />
+                  내 별
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-3 rounded-full border-2 border-emerald-300" />
+                  맞은 별
+                </span>
+              </>
+            )}
+          </p>
 
           {done && (
             <div

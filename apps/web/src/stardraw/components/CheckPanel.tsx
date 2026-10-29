@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
-import type { CheckBatch, CheckTicket } from "../checks";
+import { type CheckBatch, type CheckTicket, isActive } from "../checks";
 import type { Services } from "../services";
 import { starOf } from "../sky";
 import { formatTime, RANK_LABEL, shortId } from "./parts";
@@ -235,7 +235,7 @@ export function CheckPanel({
             />
           )}
 
-          {batch.closed && !green && (
+          {!isActive(batch) && !green && (
             <button
               type="button"
               onClick={() => {

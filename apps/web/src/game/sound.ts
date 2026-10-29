@@ -175,9 +175,6 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   strike: 4,
   ball: 8,
   homerun: 8.5,
-  starMix: 0,
-  starBall: 0,
-  starWin: 0,
   go: -1.5,
 };
 

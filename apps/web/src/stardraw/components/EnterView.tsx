@@ -6,7 +6,7 @@ import {
   makeTicket,
   type Ticket,
 } from "@mighty/stardraw-core";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
@@ -26,13 +26,19 @@ export function EnterView({
   status,
   onDone,
   onBack,
+  initialPicked = [],
+  extra,
 }: {
   services: Services;
   status: LedgerStatus;
   onDone: (ticket: Ticket, receivedAt: number) => void;
   onBack: () => void;
+  /** 데모: 미리 골라 둘 번호 */
+  initialPicked?: readonly number[];
+  /** 데모: 번호 칸 위에 더 둘 도구 */
+  extra?: ReactNode;
 }) {
-  const [picked, setPicked] = useState<number[]>([]);
+  const [picked, setPicked] = useState<number[]>([...initialPicked]);
   const [focus, setFocus] = useState<number | null>(null);
   const [step, setStep] = useState<Step>("pick");
   const [work, setWork] = useState("");
@@ -199,6 +205,8 @@ export function EnterView({
           {picked.length}/6
         </span>
       </div>
+
+      {extra}
 
       <NumberSlip
         picked={picked}
