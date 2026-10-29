@@ -827,7 +827,7 @@
       "parent": "next-games",
       "status": "building",
       "size": 2,
-      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core 만듦, 11-5절 순서로 만든다",
+      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core와 화면(/stardraw, 설명 /stardraw/about, 데모 /stardraw/demo)을 기기 안 연습 장부로 만듦(2026-10-29). 당첨자 확인은 회차·등수 묶음 + 별 세 개(임시 ECDH) + 초록불. 남은 것: 서버(apps/stardraw-server), 배포, 터미널 도구, 보안 배우기",
       "found": "2026-10-29",
       "links": [
         {
@@ -837,6 +837,10 @@
         {
           "label": "로또 게임 조사",
           "path": "docs/35-lotto-game.md"
+        },
+        {
+          "label": "화면",
+          "path": "apps/web/src/stardraw"
         }
       ],
       "signs": [
