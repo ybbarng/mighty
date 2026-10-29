@@ -181,12 +181,12 @@ export function BaseballGame({
     secrets,
   } = useBaseball();
   const submit = useBaseball((s) => s.submit);
-  const chooseSecret = useBaseball((s) => s.chooseSecret);
   const undo = useBaseball((s) => s.undo);
   const canUndo = useBaseball((s) => s.canUndo());
   const clearNotice = useBaseball((s) => s.clearNotice);
   const showHints = useBaseballSettings((s) => s.showHints);
-  const [entry, setEntry] = useState("");
+  /** 무르기로 넣던 수를 비울 때 올린다(패드 `key`) */
+  const [padReset, setPadReset] = useState(0);
   const [memo, setMemo] = useState<DigitMemo>({});
   const [tab, setTab] = useState<"mine" | "theirs">("mine");
   const calls = usePitchCalls(view, host?.seat ?? 0);
@@ -197,12 +197,10 @@ export function BaseballGame({
     return () => clearTimeout(id);
   }, [notice, clearNotice]);
 
-  // 판이 바뀌거나 비밀 정하기가 끝나면 넣던 수와 메모를 비운다.
+  // 판이 바뀌거나 비밀 정하기가 끝나면 넣던 수(패드 key)와 메모를 비운다.
   // 상대 차례에도 다음에 물을 수를 미리 넣어 둘 수 있게, 묻기 차례가 바뀌어도 비우지 않는다.
   const round = view?.roundNumber;
   const setup = view?.phase === "setup";
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 판·비밀 정하기가 바뀔 때만 비운다
-  useEffect(() => setEntry(""), [round, setup]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 판이 바뀔 때만 비운다
   useEffect(() => setMemo({}), [round]);
 
@@ -472,48 +470,14 @@ export function BaseballGame({
       {/* 아래(세로)·오른쪽(가로): 타석과 숫자 패드, 상태, 단추 */}
       {showPad && (
         <div className="flex w-full max-w-xl flex-col items-center gap-2 split:col-start-2 split:row-start-2">
-          {decision?.kind === "commit" ? (
-            <>
-              <NumberPad
-                value={entry}
-                onChange={setEntry}
-                onSubmit={() => chooseSecret(entry)}
-                digits={digits}
-                zero={view.rules.zero}
-                submitLabel="이 수로 정하기"
-                disabled={false}
-                extra={
-                  <button
-                    type="button"
-                    onClick={() => setEntry(randomSecret(view.rules))}
-                    className="flex-1 rounded-xl border border-white/10 bg-black/35 py-2 text-sm"
-                  >
-                    무작위
-                  </button>
-                }
-              />
-              <p className="text-center text-white/50 text-xs">
-                비밀 수는 이 기기에만 남고, 상대에게는 잠긴 약속만 갑니다
-              </p>
-            </>
-          ) : (
-            <NumberPad
-              value={entry}
-              onChange={setEntry}
-              onSubmit={() => {
-                if (!myTurn) return;
-                const result = submit({ type: "guess", guess: entry });
-                if (result.ok) setEntry("");
-              }}
-              digits={digits}
-              zero={view.rules.zero}
-              submitLabel={myTurn ? "물어보기" : "상대 차례…"}
-              disabled={false}
-              submitDisabled={!myTurn}
-              memo={memo}
-              onMemo={setMemo}
-            />
-          )}
+          <PadArea
+            key={`${view.roundNumber}:${setup}:${padReset}`}
+            commit={decision?.kind === "commit"}
+            myTurn={myTurn}
+            rules={view.rules}
+            memo={memo}
+            onMemo={setMemo}
+          />
         </div>
       )}
 
@@ -542,7 +506,7 @@ export function BaseballGame({
                 type="button"
                 disabled={!canUndo}
                 onClick={() => {
-                  setEntry("");
+                  setPadReset((n) => n + 1);
                   undo();
                 }}
                 className="rounded-xl border border-white/10 bg-black/35 px-4 py-2 text-sm disabled:opacity-40"
@@ -602,5 +566,73 @@ export function BaseballGame({
         />
       )}
     </main>
+  );
+}
+
+/**
+ * 타석과 숫자 패드. 넣던 수는 여기에만 두어 키를 눌러도 전광판·기록을 다시 그리지 않는다
+ * (긴 판에서 누를 때마다 수백 칸을 다시 그리면 느려진다).
+ * 넣던 수를 비울 때는 부모가 `key`를 바꾼다(판이 바뀜, 비밀 정하기 끝, 무르기)
+ */
+function PadArea({
+  commit,
+  myTurn,
+  rules,
+  memo,
+  onMemo,
+}: {
+  /** 비밀 정하기인가 묻기인가 */
+  commit: boolean;
+  myTurn: boolean;
+  rules: BaseballView["rules"];
+  memo: DigitMemo;
+  onMemo: (memo: DigitMemo) => void;
+}) {
+  const submit = useBaseball((s) => s.submit);
+  const chooseSecret = useBaseball((s) => s.chooseSecret);
+  const [entry, setEntry] = useState("");
+  if (commit)
+    return (
+      <>
+        <NumberPad
+          value={entry}
+          onChange={setEntry}
+          onSubmit={() => chooseSecret(entry)}
+          digits={rules.digits}
+          zero={rules.zero}
+          submitLabel="이 수로 정하기"
+          disabled={false}
+          extra={
+            <button
+              type="button"
+              onClick={() => setEntry(randomSecret(rules))}
+              className="flex-1 rounded-xl border border-white/10 bg-black/35 py-2 text-sm"
+            >
+              무작위
+            </button>
+          }
+        />
+        <p className="text-center text-white/50 text-xs">
+          비밀 수는 이 기기에만 남고, 상대에게는 잠긴 약속만 갑니다
+        </p>
+      </>
+    );
+  return (
+    <NumberPad
+      value={entry}
+      onChange={setEntry}
+      onSubmit={() => {
+        if (!myTurn) return;
+        const result = submit({ type: "guess", guess: entry });
+        if (result.ok) setEntry("");
+      }}
+      digits={rules.digits}
+      zero={rules.zero}
+      submitLabel={myTurn ? "물어보기" : "상대 차례…"}
+      disabled={false}
+      submitDisabled={!myTurn}
+      memo={memo}
+      onMemo={onMemo}
+    />
   );
 }

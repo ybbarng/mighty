@@ -141,7 +141,7 @@ export function Scoreboard({
         <div className="flex min-w-0 flex-col">
           <span
             data-inning={headline}
-            className="flex items-center gap-1 font-black font-mono text-amber-300 text-lg leading-tight tracking-wider drop-shadow-[0_0_6px_rgba(252,211,77,0.6)]"
+            className="flex items-center gap-1 font-black font-mono text-amber-300 text-lg leading-tight tracking-wider [text-shadow:0_0_6px_rgba(252,211,77,0.6)]"
           >
             {inning?.half === "top" && <span className="text-xs">▲</span>}
             {inning?.half === "bottom" && <span className="text-xs">▼</span>}
@@ -374,7 +374,7 @@ export function PitchCall({
             strokeDasharray="1.4 1"
           />
         </svg>
-        <div className="umpire-call flex flex-col items-center rounded-2xl border-2 border-white/15 bg-black/80 px-6 py-2 shadow-[0_10px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+        <div className="umpire-call flex flex-col items-center rounded-2xl border-2 border-white/15 bg-zinc-950/95 px-6 py-2 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
           <span className="text-[11px] text-white/60">
             {call.mine ? "내 물음" : "상대 물음"}{" "}
             <span className="font-mono text-white/85 tracking-widest">
@@ -383,7 +383,7 @@ export function PitchCall({
           </span>
           <span
             className={cn(
-              "font-black text-4xl italic tracking-tight drop-shadow-[0_0_12px_currentColor] sm:text-5xl",
+              "font-black text-4xl italic tracking-tight [text-shadow:0_0_14px_currentColor] sm:text-5xl",
               color,
             )}
           >

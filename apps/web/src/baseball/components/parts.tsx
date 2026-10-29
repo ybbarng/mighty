@@ -1,7 +1,7 @@
 "use client";
 
 import { digitPool, type GuessEntry } from "@mighty/baseball-engine";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { playUiCue } from "@/game/ui-sound";
 import { cn } from "@/lib/cn";
@@ -39,44 +39,58 @@ const DOT_FONT: Record<string, string[]> = {
   "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
 };
 
-const DOTS = Array.from({ length: 35 }, (_, i) => ({
-  x: i % 5,
-  y: Math.floor(i / 5),
-}));
+/**
+ * 숫자마다 켜진 점·꺼진 점을 경로 하나씩으로 미리 만든다. 길이 0인 선에 둥근 끝을 달면 점이 된다.
+ * 점마다 원을 두면 기록이 길어질 때(100회 넘는 판) 화면을 다시 그리는 비용이 커진다
+ */
+function dotPaths(rows: string[] | undefined): { on: string; off: string } {
+  let on = "";
+  let off = "";
+  for (let y = 0; y < 7; y++)
+    for (let x = 0; x < 5; x++) {
+      const dot = `M${x + 0.5} ${y + 0.5}h0`;
+      if (rows?.[y]?.[x] === "1") on += dot;
+      else off += dot;
+    }
+  return { on, off };
+}
+
+const BLANK = dotPaths(undefined);
+const DOT_PATHS: Record<string, { on: string; off: string }> =
+  Object.fromEntries(
+    Object.entries(DOT_FONT).map(([d, rows]) => [d, dotPaths(rows)]),
+  );
 
 /** 숫자 하나를 전광판 점으로. 숫자가 없으면 꺼진 점만 */
-export function DotDigit({
+export const DotDigit = memo(function DotDigit({
   digit,
   className,
 }: {
   digit: string | null;
   className?: string;
 }) {
-  const rows = digit ? DOT_FONT[digit] : undefined;
+  const paths = (digit && DOT_PATHS[digit]) || BLANK;
   return (
-    <svg viewBox="0 0 5 7" aria-hidden="true" className={className}>
-      {DOTS.map(({ x, y }) => {
-        const lit = rows?.[y]?.[x] === "1";
-        return (
-          <circle
-            key={`${x}${y}`}
-            cx={x + 0.5}
-            cy={y + 0.5}
-            r={0.4}
-            fill="currentColor"
-            opacity={lit ? 1 : 0.13}
-          />
-        );
-      })}
+    <svg
+      viewBox="0 0 5 7"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth={0.8}
+    >
+      <path d={paths.off} opacity={0.13} />
+      {paths.on && <path d={paths.on} />}
     </svg>
   );
-}
+});
 
 type Tone = "lit" | "dim" | "hit" | "bad";
 type Size = "sm" | "md" | "lg";
 
 /** 전광판 숫자 칸 */
-export function DigitBox({
+export const DigitBox = memo(function DigitBox({
   digit,
   size = "md",
   tone = "lit",
@@ -112,7 +126,7 @@ export function DigitBox({
       />
     </span>
   );
-}
+});
 
 /** 수 하나를 전광판 칸으로 */
 export function NumberBoxes({
@@ -332,53 +346,76 @@ export function GuessLog({
           ref={list}
           className="flex min-h-0 flex-col gap-0.5 overflow-y-auto"
         >
-          {entries.map(([index, g], k) => {
-            const last = k === entries.length - 1;
-            return (
-              <li
-                key={index}
-                data-guess={g.guess}
-                data-seat={seat}
-                data-last={last || undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-1 py-0.5",
-                  last ? "fresh-row bg-white/10" : "opacity-80",
-                  wrongAt === index && "bg-rose-900/60 ring-1 ring-rose-400",
-                )}
-              >
-                <span className="w-8 shrink-0 whitespace-nowrap text-right font-mono text-[10px] text-white/45 tabular-nums">
-                  {k + 1}회
-                </span>
-                <NumberBoxes
-                  value={g.guess}
-                  digits={digits}
-                  size="sm"
-                  tone={g.strikes === digits ? "hit" : "lit"}
-                />
-                {g.strikes === null || g.balls === null ? (
-                  <span className="truncate text-white/50 text-xs">
-                    답 기다리는 중…
-                  </span>
-                ) : (
-                  <ScoreLights
-                    strikes={g.strikes}
-                    balls={g.balls}
-                    digits={digits}
-                  />
-                )}
-                {wrongAt === index && (
-                  <span className="ml-auto shrink-0 text-rose-200 text-xs">
-                    거짓 답
-                  </span>
-                )}
-              </li>
-            );
-          })}
+          {entries.map(([index, g], k) => (
+            <LogRow
+              key={index}
+              inning={k + 1}
+              guess={g.guess}
+              strikes={g.strikes}
+              balls={g.balls}
+              digits={digits}
+              seat={seat}
+              last={k === entries.length - 1}
+              wrong={wrongAt === index}
+            />
+          ))}
         </ol>
       )}
     </section>
   );
 }
+
+/** 기록 한 줄. 값이 같으면 다시 그리지 않는다(긴 판에서도 가볍게) */
+const LogRow = memo(function LogRow({
+  inning,
+  guess,
+  strikes,
+  balls,
+  digits,
+  seat,
+  last,
+  wrong,
+}: {
+  inning: number;
+  guess: string;
+  strikes: number | null;
+  balls: number | null;
+  digits: number;
+  seat: number;
+  last: boolean;
+  wrong: boolean;
+}) {
+  return (
+    <li
+      data-guess={guess}
+      data-seat={seat}
+      data-last={last || undefined}
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-1 py-0.5",
+        last ? "fresh-row bg-white/10" : "opacity-80",
+        wrong && "bg-rose-900/60 ring-1 ring-rose-400",
+      )}
+    >
+      <span className="w-8 shrink-0 whitespace-nowrap text-right font-mono text-[10px] text-white/45 tabular-nums">
+        {inning}회
+      </span>
+      <NumberBoxes
+        value={guess}
+        digits={digits}
+        size="sm"
+        tone={strikes === digits ? "hit" : "lit"}
+      />
+      {strikes === null || balls === null ? (
+        <span className="truncate text-white/50 text-xs">답 기다리는 중…</span>
+      ) : (
+        <ScoreLights strikes={strikes} balls={balls} digits={digits} />
+      )}
+      {wrong && (
+        <span className="ml-auto shrink-0 text-rose-200 text-xs">거짓 답</span>
+      )}
+    </li>
+  );
+});
 
 /** 숫자 메모: 없다고 지운 숫자, 있다고 표시한 숫자. 화면에만 있고 대국·기록에 들어가지 않는다 */
 export type DigitMemo = Partial<Record<string, "no" | "yes">>;
