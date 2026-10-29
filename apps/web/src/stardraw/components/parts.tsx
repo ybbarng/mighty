@@ -123,3 +123,11 @@ export function formatLeft(seconds: number): string {
   const two = (v: number) => String(v).padStart(2, "0");
   return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
 }
+
+/** 회차 시각 안내. 마감은 늘 추첨 5분 전(docs/36 3절) */
+export function scheduleLine(length: number): string {
+  if (length === 3600) return "매시 정각 추첨 · 55분 마감";
+  const every =
+    length % 3600 === 0 ? `${length / 3600}시간` : `${length / 60}분`;
+  return `${every}마다 추첨 · 추첨 5분 전 마감`;
+}

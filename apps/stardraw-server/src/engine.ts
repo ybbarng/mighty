@@ -3,6 +3,7 @@ import {
   checkNumbers,
   checkPow,
   checkRegistration,
+  closedMessage,
   closeRound,
   decodeRegistration,
   decodeTicket,
@@ -218,13 +219,16 @@ export class StardrawServer {
     }
     const numbersProblem = checkNumbers(ticket.numbers);
     if (numbersProblem) throw new EntryError(numbersProblem);
+    // 마감 직후 도착한 앞 회차 응모권은 늦었다고 분명히 알린다(받은 서버 시각을 함께)
+    if (ticket.round < round)
+      throw new EntryError(closedMessage(receivedAt), 409);
     if (ticket.round !== round)
       throw new EntryError("이번 회차 응모권이 아닙니다");
     const times = roundTimes(schedule, round);
     if (store.recordCount() < round - 1)
       throw new EntryError("앞 회차 추첨이 끝난 뒤에 응모할 수 있습니다", 409);
     if (receivedAt >= times.closesAt || store.seal(round))
-      throw new EntryError("응모가 마감되었습니다", 409);
+      throw new EntryError(closedMessage(receivedAt), 409);
     const who = toHex(entrantId(ticket.pub));
 
     // 3. 등록된 열쇠(새 열쇠면 함께 온 등록을 본다)
@@ -291,7 +295,8 @@ export class StardrawServer {
 
     // 기다리는 사이 봉인했거나 같은 열쇠가 먼저 들어왔을 수 있다. 확인과 넣기를 한 번에(동기) 한다
     store.transaction(() => {
-      if (store.seal(round)) throw new EntryError("응모가 마감되었습니다", 409);
+      if (store.seal(round))
+        throw new EntryError(closedMessage(receivedAt), 409);
       if (store.hasEntry(round, who))
         throw new EntryError("이번 회차에는 이미 응모했습니다", 409);
       if (!known && registration) {

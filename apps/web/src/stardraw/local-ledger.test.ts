@@ -19,8 +19,8 @@ import {
   randomPick,
 } from "./local-ledger";
 
-// 2026-10-29 15:00 KST(정시)
-const START = 1793253600;
+// 2026-10-29 14:55 KST. 1회차 마감 15:55, 추첨 16:00(매시 정각 추첨 · 55분 마감)
+const START = 1793253300;
 const HOUR = 3600;
 /** 마감 5분 뒤에 drand 값이 나오고, quicknet은 3초마다라 넉넉히 */
 const DRAW_AFTER = 5 * 60 + 3;
@@ -90,7 +90,7 @@ async function enter(
 }
 
 describe("연습 장부: 회차 진행", () => {
-  it("처음 연 시각이 든 정시부터 1회차를 받고, 문제 값은 처음 일정표 해시다", () => {
+  it("처음 열면 다음 x:55가 1회차 마감이고, 문제 값은 처음 일정표 해시다", () => {
     const { ledger } = setup();
     const s = ledger.status();
     expect(s.round).toBe(1);
@@ -100,11 +100,13 @@ describe("연습 장부: 회차 진행", () => {
     expect(toHex(ledger.head())).toBe(toHex(genesisHash(ledger.schedule)));
   });
 
-  it("마감 60초 전부터는 화면 마감, 다음 회차는 앞 회차 추첨 뒤에 열린다", async () => {
+  it("마감 5초 전부터는 화면 마감, 다음 회차는 앞 회차 추첨 뒤에 열린다", async () => {
     const { clock, ledger } = setup();
-    clock.advance((HOUR - 60) * 1000);
+    clock.advance((HOUR - 6) * 1000);
+    expect(ledger.status().phase).toBe("open");
+    clock.advance(1000);
     expect(ledger.status().phase).toBe("closing");
-    clock.advance(60 * 1000);
+    clock.advance(5 * 1000);
     await ledger.settle();
     expect(ledger.status()).toMatchObject({ round: 2, phase: "waiting" });
     clock.advance(DRAW_AFTER * 1000);
@@ -185,7 +187,9 @@ describe("연습 장부: 응모 받기", () => {
     );
     if (!ticket) throw new Error("응모권을 만들지 못했다");
     clock.advance(HOUR * 1000);
-    await expect(ledger.submit(ticket)).rejects.toThrow("이번 회차");
+    await expect(ledger.submit(ticket)).rejects.toThrow(
+      "마감됐어요(서버 시각 15:55:00)",
+    );
   });
 });
 

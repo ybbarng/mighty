@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  alignedEpoch,
   checkSchedule,
   checkScheduleChange,
+  closedMessage,
+  isAlignedEpoch,
   roundAt,
   roundTimes,
   SCHEDULE_NOTICE,
@@ -112,5 +115,31 @@ describe("일정 변경은 24시간 뒤부터", () => {
   it("마지막 줄보다 앞 회차는 바꿀 수 없다", () => {
     const changed = withChange(hourly, change(100));
     expect(checkScheduleChange(changed, change(90), 1)).not.toBeNull();
+  });
+});
+
+describe("매시 정각 추첨 · 55분 마감", () => {
+  // EPOCH는 15:00 KST. 15:20에 띄우면 1회차 마감은 15:55, 추첨은 16:00
+  it("띄운 뒤 다음 x:55가 1회차 마감이다", () => {
+    const epoch = alignedEpoch(EPOCH + 20 * 60, HOUR);
+    expect(epoch).toBe(EPOCH - 5 * 60);
+    expect(isAlignedEpoch(epoch, HOUR)).toBe(true);
+    expect(isAlignedEpoch(EPOCH, HOUR)).toBe(false);
+  });
+
+  it("x:55 정각에 띄우면 다음 시간 x:55가 마감이다", () => {
+    expect(alignedEpoch(EPOCH + 55 * 60, HOUR)).toBe(EPOCH + 55 * 60);
+  });
+
+  it("10분 회차는 x:05 마감, x:10 추첨", () => {
+    const epoch = alignedEpoch(EPOCH + 60, 600);
+    expect(epoch + 600).toBe(EPOCH + 5 * 60);
+    expect(alignedEpoch(EPOCH + 6 * 60, 600) + 600).toBe(EPOCH + 15 * 60);
+  });
+
+  it("마감 문구는 서버 시각(한국 시각)을 적는다", () => {
+    expect(closedMessage(EPOCH + 55 * 60 + 2)).toBe(
+      "마감됐어요(서버 시각 15:55:02)",
+    );
   });
 });

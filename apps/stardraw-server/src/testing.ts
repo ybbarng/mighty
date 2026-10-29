@@ -60,8 +60,8 @@ import { Store } from "./store";
 
 export const TEST_POW: PowParams = { memorySize: 8, iterations: 1 };
 export const EASY = 2 ** 31;
-// 2026-10-29 15:00 KST
-export const EPOCH = 1793253600;
+// 2026-10-29 14:55 KST. 1회차 마감 15:55, 추첨 16:00(매시 정각 추첨 · 55분 마감)
+export const EPOCH = 1793253300;
 
 export const SCHEDULE: Schedule = {
   epoch: EPOCH,
@@ -69,7 +69,7 @@ export const SCHEDULE: Schedule = {
     {
       fromRound: 1,
       length: 3600,
-      closeMargin: 60,
+      closeMargin: 5,
       powTarget: EASY,
       registerPowTarget: EASY,
     },

@@ -71,6 +71,13 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     page.getByText("로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?"),
   ).toBeVisible();
   await noSideScroll(page);
+  // 매시 정각 추첨 · 55분 마감, 마감까지와 추첨까지를 따로 센다
+  await expect(page.locator("[data-schedule-line]")).toHaveText(
+    "매시 정각 추첨 · 55분 마감",
+  );
+  await expect(page.locator("[data-countdown='close']")).toBeVisible();
+  await expect(page.locator("[data-countdown='draw']")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("home-countdowns.png") });
 
   await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
   // 칸에서 하나, 하늘에서 하나 고르고 나머지는 자동

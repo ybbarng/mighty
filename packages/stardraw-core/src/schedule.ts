@@ -1,3 +1,5 @@
+import { DRAND_DELAY } from "./drand";
+
 /**
  * 일정표: 회차 시각은 이것만으로 계산된다(docs/36 11-1).
  * 회차 id는 차례 번호(1, 2, 3, …)라 회차 길이가 바뀌어도 이어진다.
@@ -124,6 +126,29 @@ export function roundTimes(schedule: Schedule, round: number): RoundTimes {
     }
   }
   throw new Error("일정표가 비어 있다");
+}
+
+/**
+ * 추첨이 회차 길이의 배수 시각에 오게 맞춘 일정인지(docs/36 3절).
+ * 마감은 추첨 5분 전이라 1시간 회차는 "매시 정각 추첨 · 55분 마감", 10분 회차는 x:05 마감 · x:10 추첨이 된다
+ */
+export function isAlignedEpoch(epoch: number, length: number): boolean {
+  return (epoch + DRAND_DELAY) % length === 0;
+}
+
+/** 시각 now 뒤 첫 맞춘 마감이 1회차 마감이 되는 epoch. 1회차는 이미 열려 있을 수 있다 */
+export function alignedEpoch(now: number, length: number): number {
+  let close = Math.floor((now + DRAND_DELAY) / length) * length - DRAND_DELAY;
+  if (close <= now) close += length;
+  return close - length;
+}
+
+/** 마감 뒤 도착한 응모에 돌려주는 말. 시각은 서버 시계(한국 시각) */
+export function closedMessage(receivedAt: number): string {
+  const kst = new Date((receivedAt + 9 * 3600) * 1000)
+    .toISOString()
+    .slice(11, 19);
+  return `마감됐어요(서버 시각 ${kst})`;
 }
 
 /** 시각 t에 응모받는 회차(opensAt ≤ t < closesAt). 1회차 전이면 null */

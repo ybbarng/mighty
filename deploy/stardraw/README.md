@@ -33,7 +33,7 @@ chmod 600 server-key.pkcs8
 STARDRAW_MODE=trial
 STARDRAW_DATA=data-trial
 STARDRAW_ROUND_SECONDS=600       # 시험 회차 길이(기본 10분, 10분보다 짧을 수 없다)
-# STARDRAW_EPOCH=                 # 비우면 띄운 뒤 다음 정시가 1회차
+# STARDRAW_EPOCH=                 # 비우면 띄운 뒤 첫 맞춘 마감(10분 회차면 다음 x:05·x:15…)이 1회차 마감
 ```
 
 ```sh
@@ -54,9 +54,11 @@ docker compose exec -T stardraw node server.mjs backup /data/backup/trial-final.
 docker compose down
 
 # 2) 정식 장부를 만든다(빈 data-live 폴더에, 정식 1회차 시작 시각은 지금보다 뒤)
+#    매시 정각 추첨 · 55분 마감: 1회차 시작은 x:55여야 한다(아니면 거절).
+#    예: 08:55 시작 → 1회차 마감 09:55, 추첨 10:00
 mkdir -p data-live && cp data-trial/backup/trial-final.sqlite data-live/
 STARDRAW_DATA=data-live docker compose run --rm -e STARDRAW_MODE=live stardraw \
-  node server.mjs start-live --epoch 2026-11-02T09:00:00+09:00 \
+  node server.mjs start-live --epoch 2026-11-02T08:55:00+09:00 \
   --carry-registrations /data/trial-final.sqlite
 #   → "정식 장부를 만들었다: 1회차 …, 패스키 등록 N개를 옮김, genesis …"
 
@@ -85,13 +87,13 @@ curl -s https://game.byb.kr/stardraw-api/ledger/genesis.json   # carried: 옮긴
 docker compose exec -T stardraw node server.mjs backup /data/backup/stardraw-$(date +%F-%H%M).sqlite
 ```
 
-- 정시 직후(마감·봉인)는 피해서 하루 한 번이면 된다. `backup/`을 서버 밖으로 옮기는 것은 다른 앱의 백업과 같은 방식으로.
+- x:55~x:01(마감·봉인·추첨)은 피해서 하루 한 번이면 된다. `backup/`을 서버 밖으로 옮기는 것은 다른 앱의 백업과 같은 방식으로.
 - 되살리기: 컨테이너를 멈추고 `stardraw.sqlite`를 백업본으로 바꾼 뒤 띄운다. 장부 파일이 DB보다 앞서 있으면(백업 뒤 닫힌 회차) 그 회차들은 DB에 다시 넣어야 하니, 백업은 회차 기록이 닫힌 직후가 좋다.
 
 ## 사용자가 정할 것
 
 1. 시험 운영을 언제 시작할지, 시험 회차 길이(기본 10분)
-2. 정식 1회차 시작 시각(`start-live --epoch`). 처음 정하면 장부에 묶여 바꿀 수 없다
+2. 정식 1회차 시작 시각(`start-live --epoch`, x:55). 처음 정하면 장부에 묶여 바꿀 수 없다
 3. 투명성 로그: Sigstore Rekor 공용 로그를 쓸지(회차마다 항목 하나, 공개된다)
 4. 앵커 저장소 이름과 토큰(예: `ybbarng/stardraw-ledger`, 공개)
 5. 서명 열쇠 보관(서버의 파일 + 비밀번호 관리 앱 백업)

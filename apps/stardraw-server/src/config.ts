@@ -1,4 +1,5 @@
 import {
+  alignedEpoch,
   POW_PARAMS,
   type PowParams,
   powTargetForTries,
@@ -69,7 +70,7 @@ const int = (name: string, fallback: number): number => {
 };
 
 /**
- * 기본 일정표: 화면 마감 여유 60초. 응모는 휴대폰 3초 안팎, 열쇠 등록은 1분 안팎.
+ * 기본 일정표: 마감은 추첨 5분 전(epoch를 alignedEpoch로 맞춘다), 화면 마감 여유 5초(시계 차이만 덮는다). 응모는 휴대폰 3초 안팎, 열쇠 등록은 1분 안팎.
  * 회차 길이는 정식 1시간, 시험 10분(최소 10분 규칙은 규칙 패키지가 지킨다)
  */
 export function defaultSchedule(
@@ -83,7 +84,7 @@ export function defaultSchedule(
       {
         fromRound: 1,
         length,
-        closeMargin: 60,
+        closeMargin: 5,
         powTarget: powTargetForTries(30),
         registerPowTarget: powTargetForTries(600),
       },
@@ -98,7 +99,8 @@ export function loadConfig(): ServerConfig {
   if (mode !== "trial" && mode !== "live")
     throw new Error(`STARDRAW_MODE는 trial이나 live여야 한다: ${mode}`);
   const epoch = env("STARDRAW_EPOCH");
-  const length = env("STARDRAW_ROUND_SECONDS");
+  const lengthEnv = env("STARDRAW_ROUND_SECONDS");
+  const length = lengthEnv ? Number(lengthEnv) : mode === "trial" ? 600 : 3600;
   // 시험 운영은 바깥 기록(Rekor·GitHub 앵커)을 남기지 않는다
   const rekorUrl = mode === "trial" ? undefined : env("STARDRAW_REKOR_URL");
   const ghRepo = mode === "trial" ? undefined : env("STARDRAW_ANCHOR_REPO");
@@ -113,10 +115,12 @@ export function loadConfig(): ServerConfig {
       env("STARDRAW_SERVER_KEY_FILE") ?? `${dataDir}/server-key.pkcs8`,
     generateServerKey: env("STARDRAW_GENERATE_SERVER_KEY") === "1",
     schedule: defaultSchedule(
-      // 정해 두지 않으면 다음 정시(개발·시험용). 정식은 start-live 명령이 정한다
-      epoch ? Number(epoch) : Math.ceil(Date.now() / 1000 / 3600) * 3600,
+      // 정해 두지 않으면 띄운 뒤 첫 맞춘 마감이 1회차 마감(시험). 정식은 start-live 명령이 정한다
+      epoch
+        ? Number(epoch)
+        : alignedEpoch(Math.floor(Date.now() / 1000), length),
       mode,
-      length ? Number(length) : undefined,
+      length,
     ),
     pow: POW_PARAMS,
     policy: {

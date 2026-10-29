@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DRAND_DELAY,
   encodeClaim,
   generateSasKey,
   generateSigner,
@@ -128,7 +129,7 @@ export function StardrawDemo() {
             </span>
             <span className="text-sm text-white/65">
               {status.phase === "open"
-                ? `응모 받는 중 · 마감까지 ${formatLeft(status.times.entryDeadline - status.now)}`
+                ? `응모 받는 중 · 마감까지 ${formatLeft(status.times.entryDeadline - status.now)} · 추첨까지 ${formatLeft(status.times.closesAt + DRAND_DELAY - status.now)}`
                 : status.phase === "closing"
                   ? "곧 마감"
                   : "앞 회차 추첨을 기다리는 중"}

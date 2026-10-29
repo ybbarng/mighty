@@ -201,6 +201,10 @@ describe("정식 시작(start-live)", () => {
       now: EPOCH + 3600,
     };
     expect(() => startLive({ ...base, epoch: EPOCH })).toThrow("지금보다 뒤");
+    // 정각(x:00) 시작은 마감이 정각이 되어 받지 않는다. x:55 시작이어야 정각 추첨
+    expect(() => startLive({ ...base, epoch: EPOCH + 86400 + 300 })).toThrow(
+      "배수 시각",
+    );
     startLive({ ...base, epoch: EPOCH + 86400 });
     expect(() => startLive({ ...base, epoch: EPOCH + 2 * 86400 })).toThrow(
       "이미 장부",
@@ -228,12 +232,12 @@ describe("정식 시작(start-live)", () => {
     expect(
       parseStartLiveArgs([
         "--epoch",
-        "2026-11-02T09:00:00+09:00",
+        "2026-11-02T08:55:00+09:00",
         "--carry-registrations",
         "/data/b.sqlite",
       ]),
     ).toEqual({
-      epoch: Date.parse("2026-11-02T00:00:00Z") / 1000,
+      epoch: Date.parse("2026-11-01T23:55:00Z") / 1000,
       trialExport: "/data/b.sqlite",
     });
     expect(() => parseStartLiveArgs(["--epoch", "어제"])).toThrow();

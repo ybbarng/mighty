@@ -47,8 +47,8 @@ export default function StardrawAbout() {
           <h1 className="font-black text-3xl">하늘의 별 따기 설명</h1>
           <p className="text-white/75">
             로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요? 서울 하늘에서 가장
-            밝은 별 45개 가운데 6개를 고르는 정시 추첨입니다. 상품은 없고,
-            누구나 결과를 처음부터 다시 계산해 볼 수 있습니다.
+            밝은 별 45개 가운데 6개를 고르는 매시 정각 추첨입니다(55분 마감).
+            상품은 없고, 누구나 결과를 처음부터 다시 계산해 볼 수 있습니다.
           </p>
           <a
             href="/stardraw/demo"

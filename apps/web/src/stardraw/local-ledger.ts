@@ -1,8 +1,10 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  alignedEpoch,
   ByteWriter,
   checkPow,
   checkRegistration,
+  closedMessage,
   closeRound,
   concat,
   type DrandBeacon,
@@ -67,14 +69,17 @@ export const PRACTICE_BOTS = 24;
 /** 지금 회차에서 이만큼 앞 회차까지만 연습 참가자가 응모한다(오래 비운 뒤 따라잡기를 가볍게) */
 const BOT_ROUNDS = 3;
 
+/** 연습 장부 회차 길이: 매시 정각 추첨 · 55분 마감 */
+const PRACTICE_LENGTH = 3600;
+
 export function practiceSchedule(epoch: number): Schedule {
   return {
     epoch,
     entries: [
       {
         fromRound: 1,
-        length: 3600,
-        closeMargin: 60,
+        length: PRACTICE_LENGTH,
+        closeMargin: 5,
         powTarget: powTargetForTries(4),
         registerPowTarget: powTargetForTries(12),
       },
@@ -168,9 +173,10 @@ export class LocalLedger implements Ledger {
       options.random ?? ((n) => crypto.getRandomValues(new Uint8Array(n)));
     this.bots = options.bots ?? PRACTICE_BOTS;
     const saved = this.read();
-    // 처음 열면 지금 시각이 든 정시부터 1회차
+    // 처음 열면 다음 x:55가 1회차 마감(매시 정각 추첨)
     const epoch =
-      saved?.epoch ?? Math.floor(this.clock.now() / 1000 / 3600) * 3600;
+      saved?.epoch ??
+      alignedEpoch(Math.floor(this.clock.now() / 1000), PRACTICE_LENGTH);
     this.schedule = practiceSchedule(epoch);
     this.skipped = saved?.skipped ?? 0;
     this.secret = saved?.secret ? dec(saved.secret) : this.random(32);
@@ -328,12 +334,14 @@ export class LocalLedger implements Ledger {
     await this.settle();
     const now = this.now();
     const round = roundAt(this.schedule, now);
+    if (round !== null && ticket.round < round)
+      throw new Error(closedMessage(now));
     if (round === null || ticket.round !== round)
       throw new Error("이번 회차 응모권이 아닙니다");
     const times = roundTimes(this.schedule, round);
     if (this.records.length < round - 1)
       throw new Error("앞 회차 추첨이 끝난 뒤에 응모할 수 있습니다");
-    if (now >= times.closesAt) throw new Error("응모가 마감되었습니다");
+    if (now >= times.closesAt) throw new Error(closedMessage(now));
     if (this.pending.round !== round)
       this.pending = { round, tickets: [], registrations: [] };
     const who = toHex(entrantId(ticket.pub));

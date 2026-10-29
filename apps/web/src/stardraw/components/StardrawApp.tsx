@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DRAND_DELAY,
   equalBytes,
   RANKS,
   type Rank,
@@ -34,6 +35,7 @@ import {
   formatTime,
   LottoBall,
   RANK_LABEL,
+  scheduleLine,
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
@@ -224,10 +226,11 @@ function Home({
         services.ledger.record(m.ticket.round) && !opened.has(m.ticket.round),
     )
     .sort((a, b) => b.ticket.round - a.ticket.round);
-  const left =
-    status.phase === "waiting"
-      ? status.nextDrawAt - status.now
-      : status.times.entryDeadline - status.now;
+  // 이번 회차 추첨은 마감 5분 뒤(drand). 앞 회차 추첨을 기다리는 동안은 그쪽을 센다
+  const drawAt =
+    status.phase === "waiting" && status.nextDrawRound < status.round
+      ? status.nextDrawAt
+      : status.times.closesAt + DRAND_DELAY;
 
   return (
     <>
@@ -255,29 +258,40 @@ function Home({
           <span className="font-bold text-xl tabular-nums">
             제 {status.round}회
           </span>
-          <span className="text-sm text-white/60">
-            추첨{" "}
-            {formatTime(
-              status.nextDrawRound === status.round
-                ? status.nextDrawAt
-                : status.times.closesAt + 300,
-            )}
+          <span className="text-sm text-white/60" data-schedule-line>
+            {scheduleLine(status.times.entry.length)}
           </span>
         </div>
-        <div className="flex flex-col items-center gap-1 py-1">
-          <span className="text-sm text-white/60">
-            {status.phase === "open"
-              ? "응모 마감까지"
-              : status.phase === "closing"
-                ? "응모가 곧 마감됩니다"
-                : "앞 회차 추첨까지"}
-          </span>
-          <span
-            className="font-mono font-bold text-5xl tabular-nums tracking-tight"
-            data-countdown
-          >
-            {formatLeft(left)}
-          </span>
+        <div className="grid grid-cols-2 gap-3 py-1 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-sm text-white/60">
+              {status.phase === "closing" ? "곧 마감" : "마감까지"}
+            </span>
+            <span
+              className="font-mono font-bold text-4xl tabular-nums tracking-tight"
+              data-countdown="close"
+            >
+              {formatLeft(status.times.entryDeadline - status.now)}
+            </span>
+            <span className="text-white/45 text-xs">
+              {formatTime(status.times.closesAt)}
+            </span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-sm text-white/60">
+              {drawAt === status.nextDrawAt &&
+              status.nextDrawRound < status.round
+                ? "앞 회차 추첨까지"
+                : "추첨까지"}
+            </span>
+            <span
+              className="font-mono font-bold text-4xl text-amber-100 tabular-nums tracking-tight"
+              data-countdown="draw"
+            >
+              {formatLeft(drawAt - status.now)}
+            </span>
+            <span className="text-white/45 text-xs">{formatTime(drawAt)}</span>
+          </div>
         </div>
         {current ? (
           <button

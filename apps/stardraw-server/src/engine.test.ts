@@ -269,7 +269,7 @@ describe("응모 받기: 싼 확인부터, 규칙에 어긋나면 거절", () =>
     await rig.at(roundTimes(SCHEDULE, 1).closesAt);
     await rejects(
       rig.engine.submit({ ticket: encodeTicket(late.ticket), ip: "1.2.3.4" }),
-      "이번 회차 응모권이 아닙니다",
+      "마감됐어요(서버 시각 15:55:00)",
     );
   });
 

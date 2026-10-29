@@ -6,6 +6,7 @@ import {
   checkSchedule,
   entrantId,
   genesisHash,
+  isAlignedEpoch,
   type Schedule,
   toHex,
 } from "@mighty/stardraw-core";
@@ -57,6 +58,11 @@ export function startLive(input: StartLiveInput): StartLiveResult {
   );
   const skipped = exported.registrations.length - passkeys.length;
   const base = defaultSchedule(input.epoch, "live", input.roundSeconds);
+  const length = base.entries[0]?.length ?? 3600;
+  if (!isAlignedEpoch(input.epoch, length))
+    throw new Error(
+      "1회차 시작은 추첨이 회차 길이의 배수 시각에 오게 맞춰야 한다(1시간 회차면 x:55 시작 → 다음 x:55 마감, 정각 추첨)",
+    );
   const { registrations, carried } = carryRegistrations(passkeys);
   const schedule: Schedule =
     registrations.length > 0 ? { ...base, carried } : base;
@@ -100,7 +106,7 @@ export function parseStartLiveArgs(args: readonly string[]): {
   const trialExport = get("--carry-registrations");
   if (!iso || !trialExport)
     throw new Error(
-      "쓰는 법: start-live --epoch 2026-11-02T09:00:00+09:00 --carry-registrations <시험 장부 백업>",
+      "쓰는 법: start-live --epoch 2026-11-02T08:55:00+09:00 --carry-registrations <시험 장부 백업>",
     );
   const ms = Date.parse(iso);
   if (Number.isNaN(ms) || ms % 1000 !== 0)
