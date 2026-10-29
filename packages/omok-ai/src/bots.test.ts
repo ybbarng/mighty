@@ -81,18 +81,9 @@ describe("오목 컴퓨터: 끝까지 두기", () => {
     },
   );
 
-  it("고수는 입문을 이긴다", () => {
-    let wins = 0;
-    for (let seed = 1; seed <= 4; seed++) {
-      // 흑백을 번갈아 쥐게 자리를 바꾼다.
-      const expertSeat = seed % 2;
-      const bots: [OmokBot, OmokBot] =
-        expertSeat === 0
-          ? [omokExpertBot, omokBeginnerBot]
-          : [omokBeginnerBot, omokExpertBot];
-      const end = playGame(bots, STANDARD, seed);
-      if (end.wins[expertSeat] === 1) wins++;
-    }
-    expect(wins).toBe(4);
+  // 이기는지(세기)는 bots.strength(pnpm bench)의 "단계가 높을수록 이긴다"가 잰다
+  it("고수도 금지 수 없이 끝까지 둔다", () => {
+    const end = playGame([omokExpertBot, omokBeginnerBot], STANDARD, 1);
+    expect(end.phase).toBe("gameOver");
   }, 60_000);
 });

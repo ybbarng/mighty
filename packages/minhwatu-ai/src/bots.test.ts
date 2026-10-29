@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  createMinhwatuExpertBot,
   minhwatuBeginnerBot,
   minhwatuExpertBot,
   minhwatuIntermediateBot,
@@ -18,22 +19,27 @@ import { playGame } from "./simulate";
 const BOTS = [minhwatuBeginnerBot, minhwatuIntermediateBot, minhwatuExpertBot];
 
 describe("민화투 컴퓨터", () => {
-  it.each(BOTS.map((b) => [b.name, b] as const))(
-    "%s: 합법 수로 게임을 끝까지 둔다(2~4인)",
-    (_name, bot) => {
-      for (const players of [2, 3, 4] as const) {
-        const rules = { ...STANDARD_RULES, players, rounds: 1 };
-        const end = playGame(
-          Array.from({ length: players }, (_, i) =>
-            i === 0 ? bot : minhwatuBeginnerBot,
-          ),
-          rules,
-          players * 11,
-        );
-        expect(end.phase).toBe("gameOver");
-      }
-    },
-  );
+  // 끝까지 두기는 고수와 같은 길(무작위로 채워 보고 판 끝까지 두기)을 둬 보는 양만 줄여 돈다.
+  // 합법 수만 두는지는 둬 보는 양과 상관없다
+  it.each(
+    [
+      minhwatuBeginnerBot,
+      minhwatuIntermediateBot,
+      createMinhwatuExpertBot(40, 4),
+    ].map((b) => [b.name, b] as const),
+  )("%s: 합법 수로 게임을 끝까지 둔다(2~4인)", (_name, bot) => {
+    for (const players of [2, 3, 4] as const) {
+      const rules = { ...STANDARD_RULES, players, rounds: 1 };
+      const end = playGame(
+        Array.from({ length: players }, (_, i) =>
+          i === 0 ? bot : minhwatuBeginnerBot,
+        ),
+        rules,
+        players * 11,
+      );
+      expect(end.phase).toBe("gameOver");
+    }
+  });
 
   it("같은 화면과 같은 난수면 같은 수를 둔다(온라인 검증)", () => {
     const state = createMinhwatuScenario({

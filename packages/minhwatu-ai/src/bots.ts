@@ -251,38 +251,50 @@ const MIN_SAMPLES = 40;
 
 /**
  * 고수: 모르는 카드(남의 손패·더미)를 여러 번 무작위로 채워 보고, 후보마다 판 끝까지 둬 본 평균 점수로 고른다.
- * 같은 채우기를 모든 후보에 써서 운의 차이를 줄인다
+ * 같은 채우기를 모든 후보에 써서 운의 차이를 줄인다. 둬 보는 양만 다르게 만들 수 있다(시험은 적게)
  */
-export const minhwatuExpertBot: MinhwatuBot = {
-  name: "고수",
-  decide(view, rng) {
-    const actions = candidateActions(view);
-    if (actions.length === 0) throw new Error("할 일이 없다");
-    if (actions.length === 1) return actions[0] as Action;
-    const samples = Math.max(
-      MIN_SAMPLES,
-      Math.floor(ROLLOUT_BUDGET / actions.length),
-    );
-    const totals = new Array<number>(actions.length).fill(0);
-    for (let k = 0; k < samples; k++) {
-      const world = sampleState(view, rng);
-      const seed = nextInt(rng, 2 ** 31);
-      for (const [i, action] of actions.entries()) {
-        const r = step(world, view.seat, action);
-        if (!r.ok) throw new Error(r.error);
-        totals[i] = (totals[i] ?? 0) + rollout(r.state, view.seat, { seed });
-      }
+export function createMinhwatuExpertBot(
+  budget = ROLLOUT_BUDGET,
+  minSamples = MIN_SAMPLES,
+): MinhwatuBot {
+  return {
+    name: budget === ROLLOUT_BUDGET ? "고수" : `고수-${budget}`,
+    decide(view, rng) {
+      return expertDecide(view, rng, budget, minSamples);
+    },
+  };
+}
+
+function expertDecide(
+  view: MinhwatuView,
+  rng: RngState,
+  budget: number,
+  minSamples: number,
+): Action {
+  const actions = candidateActions(view);
+  if (actions.length === 0) throw new Error("할 일이 없다");
+  if (actions.length === 1) return actions[0] as Action;
+  const samples = Math.max(minSamples, Math.floor(budget / actions.length));
+  const totals = new Array<number>(actions.length).fill(0);
+  for (let k = 0; k < samples; k++) {
+    const world = sampleState(view, rng);
+    const seed = nextInt(rng, 2 ** 31);
+    for (const [i, action] of actions.entries()) {
+      const r = step(world, view.seat, action);
+      if (!r.ok) throw new Error(r.error);
+      totals[i] = (totals[i] ?? 0) + rollout(r.state, view.seat, { seed });
     }
-    // 평균이 같으면 지금 먹는 값이 큰 쪽
-    return pickBest(
-      actions,
-      (a) =>
-        (totals[actions.indexOf(a)] ?? 0) / samples +
-        greedyValue(view, a) * 1e-3,
-      rng,
-    );
-  },
-};
+  }
+  // 평균이 같으면 지금 먹는 값이 큰 쪽
+  return pickBest(
+    actions,
+    (a) =>
+      (totals[actions.indexOf(a)] ?? 0) / samples + greedyValue(view, a) * 1e-3,
+    rng,
+  );
+}
+
+export const minhwatuExpertBot: MinhwatuBot = createMinhwatuExpertBot();
 
 export type MinhwatuLevel = 0 | 1 | 2;
 

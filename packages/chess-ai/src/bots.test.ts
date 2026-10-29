@@ -47,7 +47,8 @@ describe("체스 컴퓨터", () => {
     (_name, bot) => {
       let { state } = createMatch(STANDARD_RULES, 4);
       const rng = createRng(1);
-      for (let i = 0; i < 12 && state.phase === "play"; i++) {
+      // 규칙에 맞는 수인지만 보므로 여섯 수(흑백 세 수씩)면 된다
+      for (let i = 0; i < 6 && state.phase === "play"; i++) {
         const seat =
           state.position.turn === "w" ? state.whiteSeat : 1 - state.whiteSeat;
         const result = step(state, seat, bot.decide(viewOf(state, seat), rng));
