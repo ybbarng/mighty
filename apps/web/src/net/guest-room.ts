@@ -116,6 +116,11 @@ export class RemoteMatch<
 
   /** 보낸 행동의 결과를 기다리는 중 */
   private inFlight = false;
+
+  /** 보낸 행동의 결과를 기다리는 중인가(화면이 "처리하는 중"을 보이거나 시험이 다시 낼지 정할 때) */
+  awaiting(): boolean {
+    return this.inFlight;
+  }
   /** 결과를 기다리는 행동을 방장 연결이 없어(방장 새로고침 중) 아예 보내지 못했다 */
   private undelivered = false;
 

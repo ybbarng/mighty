@@ -159,7 +159,13 @@ export async function playRounds(
         view.killFailed,
         view.handCounts,
       ]);
-      if (submitted.get(key) === stamp) return;
+      // 같은 화면이면 다시 내지 않는다. 다만 낸 행동이 더는 결과를 기다리지 않는데 화면이 그대로면
+      // (끊긴 사이에 사라진 행동) 사람처럼 다시 낸다.
+      const waiting =
+        key === "host"
+          ? false
+          : (guests[Number(key.slice(1))]?.match?.awaiting() ?? false);
+      if (submitted.get(key) === stamp && (key === "host" || waiting)) return;
       submitted.set(key, stamp);
       const forced = cheat ? cheat(view, key) : null;
       submit((forced ?? heuristicBot.decide(view, { seed: 7 })) as never);
