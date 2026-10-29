@@ -4,5 +4,8 @@ export * from "./draw";
 export * from "./keys";
 export * from "./merkle";
 export * from "./pow";
+export * from "./record";
+export * from "./round";
 export * from "./schedule";
 export * from "./ticket";
+export * from "./verify";

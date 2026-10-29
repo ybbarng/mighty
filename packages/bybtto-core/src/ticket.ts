@@ -5,7 +5,7 @@ import {
   type Signer,
   verifySignature,
 } from "./keys";
-import { type PowParams, type SolveOptions, solvePow } from "./pow";
+import { type SolveOptions, solvePow } from "./pow";
 
 /**
  * 응모권(docs/36 4절). 고정 바이너리 형식:
@@ -100,25 +100,41 @@ export async function verifyTicketSignature(t: Ticket): Promise<boolean> {
   }
 }
 
-export interface MakeTicketOptions extends SolveOptions {
-  params?: PowParams;
+export function unsignedTicket(
+  signer: Signer,
+  round: number,
+  numbers: readonly number[],
+): UnsignedTicket {
+  return {
+    v: TICKET_VERSION,
+    round,
+    numbers: [...numbers].sort((a, b) => a - b),
+    pub: signer.publicKey,
+  };
+}
+
+/** 작업 증명을 따로(예: 웹 워커에서) 푼 뒤 서명만 한다 */
+export async function signTicket(
+  signer: Signer,
+  unsigned: UnsignedTicket,
+  nonce: number,
+): Promise<Ticket> {
+  const sig = await signer.sign(
+    signMessage(ticketBody({ ...unsigned, nonce })),
+  );
+  return { ...unsigned, nonce, sig };
 }
 
 /** 작업 증명을 풀고 서명해 응모권을 만든다. 취소되면 null */
 export async function makeTicket(
   signer: Signer,
   round: number,
-  numbers: number[],
+  numbers: readonly number[],
   challenge: Uint8Array,
   powTarget: number,
-  options: MakeTicketOptions = {},
+  options: SolveOptions = {},
 ): Promise<Ticket | null> {
-  const unsigned: UnsignedTicket = {
-    v: TICKET_VERSION,
-    round,
-    numbers: [...numbers].sort((a, b) => a - b),
-    pub: signer.publicKey,
-  };
+  const unsigned = unsignedTicket(signer, round, numbers);
   const nonce = await solvePow(
     challenge,
     ticketContent(unsigned),
@@ -126,8 +142,5 @@ export async function makeTicket(
     options,
   );
   if (nonce === null) return null;
-  const sig = await signer.sign(
-    signMessage(ticketBody({ ...unsigned, nonce })),
-  );
-  return { ...unsigned, nonce, sig };
+  return signTicket(signer, unsigned, nonce);
 }
