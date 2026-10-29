@@ -433,10 +433,30 @@ describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) �
       () => (fresh.match?.current().hand.length ?? 0) > 0,
       "새로고침한 참가자 화면",
     );
-    // 방장 새로고침
-    await play(() => (current.match?.actionLog().length ?? 0) >= 16);
+    // 방장 새로고침: 참가자 차례가 온 때 끊고, 방장 연결이 없는 사이에 참가자가 행동을 낸다.
+    // 그 행동은 어디에도 가지 않았다. 새로고침한 참가자의 보낸 행동 목록은 새로고침 뒤 것뿐이라
+    // 기록 수(`mine`)로는 잃은 것을 알 수 없어, "못 보냈다" 표시로 다시 보내야 한다(예전에 30번에 1번 멈춤).
+    const guestView = () =>
+      fresh.match?.current() as { decision?: unknown } | undefined;
+    await play(
+      () =>
+        (current.match?.actionLog().length ?? 0) >= 16 &&
+        !!guestView()?.decision,
+    );
+    const states: string[] = [];
+    fresh.on("connection", (s) => states.push(s as string));
     net.disconnect("host");
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await until(() => states.includes("reconnecting"), "방장 끊김");
+    const pendingView = guestView();
+    if (!pendingView?.decision) throw new Error("참가자 차례가 아니다");
+    expect(
+      fresh.match?.submit(
+        nyrongppongBeginnerBot.decide(pendingView as never, { seed: 99 }),
+      ),
+    ).toEqual({ ok: true });
+    const mineBefore = (current.match?.actionLog() ?? []).filter(
+      (e) => e.seat === fresh.seat,
+    ).length;
     const restore = store?.load();
     current = new HostRoom({
       transport: net.join("host1"),
@@ -447,6 +467,12 @@ describe("화투 암호화방: 나이롱뽕(가져온 카드는 그 사람만) �
     await until(
       () => current.lobby().seats.every((s) => s.connected),
       "참가자 다시 연결",
+    );
+    await until(
+      () =>
+        (current.match?.actionLog() ?? []).filter((e) => e.seat === fresh.seat)
+          .length > mineBefore,
+      "못 보낸 행동을 다시 보냄",
     );
     await play(
       () =>

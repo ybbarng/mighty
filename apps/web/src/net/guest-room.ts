@@ -72,7 +72,8 @@ export class RemoteMatch<
   constructor(
     readonly seat: number,
     first: Snapshot<View, Event>,
-    private readonly sendAction: (action: ActionT) => void,
+    /** 행동을 방장에게 보낸다. 방장 연결이 없어 보내지 못했으면 false */
+    private readonly sendAction: (action: ActionT) => boolean,
     /** 보내기 전에 행동을 바꾼다(멘탈 포커: 낼 카드 열쇠 공개, 버릴 카드를 자리 표로). null이면 못 보낸다 */
     private readonly transform?: (action: ActionT) => ActionT | null,
     /** 내 차례가 아니어도 보낼 수 있는 행동(`GameKit.offTurn`) */
@@ -104,7 +105,7 @@ export class RemoteMatch<
       return { ok: false, error: "지금은 할 수 없습니다(섞고 나누는 중)" };
     this.sent.push(JSON.stringify(outgoing));
     this.inFlight = true;
-    this.sendAction(outgoing);
+    this.undelivered = !this.sendAction(outgoing);
     return { ok: true };
   }
 
@@ -115,6 +116,8 @@ export class RemoteMatch<
 
   /** 보낸 행동의 결과를 기다리는 중 */
   private inFlight = false;
+  /** 결과를 기다리는 행동을 방장 연결이 없어(방장 새로고침 중) 아예 보내지 못했다 */
+  private undelivered = false;
 
   /** 보낸 행동이 거절됐다 */
   rejected(): void {
@@ -127,6 +130,14 @@ export class RemoteMatch<
    * 그 행동을 그대로 다시 보낸다(카드 열쇠는 이미 공개했다)
    */
   resendLost(mine: number): void {
+    // 방장 연결이 없을 때 누른 행동은 어디에도 가지 않았다. 기록 수와 상관없이 다시 보낸다.
+    // (보낸 행동 목록은 내가 새로고침한 뒤 것만 있을 수 있어 `mine`과 견줄 수 없다)
+    if (this.inFlight && this.undelivered) {
+      this.undelivered = false;
+      this.resent = true;
+      this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
+      return;
+    }
     if (!this.inFlight || this.sent.length !== mine + 1) return;
     this.resent = true;
     this.sendAction(JSON.parse(this.sent.at(-1) as string) as ActionT);
@@ -137,7 +148,10 @@ export class RemoteMatch<
 
   receive(snapshot: Snapshot<View, Event>): void {
     if (this.resent) this.resent = false;
-    else this.inFlight = false;
+    else {
+      this.inFlight = false;
+      this.undelivered = false;
+    }
     this.last = snapshot.view;
     this.seen.push(JSON.stringify(snapshot.view));
     if (this.listeners.size === 0) this.pending.push(snapshot);
@@ -667,8 +681,10 @@ export class GuestRoom<
       this.seat,
       snapshot,
       (action) => {
+        const delivered = this.hostId !== null;
         if (this.hostId) this.send({ t: "action", action }, this.hostId);
         this.persistFair();
+        return delivered;
       },
       this.fair
         ? (action) =>
