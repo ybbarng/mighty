@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { type Action, createScenario, type GameEvent } from "@mighty/engine";
 import { describe, expect, it } from "vitest";
 

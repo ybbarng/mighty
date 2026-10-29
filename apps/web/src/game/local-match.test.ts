@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot } from "@mighty/ai";
 import { presetRules } from "@mighty/engine";
 import { describe, expect, it } from "vitest";

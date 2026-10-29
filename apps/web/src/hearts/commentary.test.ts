@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heartsNormalBot } from "@mighty/hearts-ai";
 import {
   createMatch,

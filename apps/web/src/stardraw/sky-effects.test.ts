@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createRng, nextFloat } from "@mighty/engine";
 import { ManualClock } from "@mighty/fair-play";
 import { describe, expect, it } from "vitest";

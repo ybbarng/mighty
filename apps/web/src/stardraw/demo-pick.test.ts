@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { RANKS, rankOf } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 

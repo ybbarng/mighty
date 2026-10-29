@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createRng } from "@mighty/engine";
 import { ManualClock } from "@mighty/fair-play";
 import { yutBotFor } from "@mighty/yut-ai";

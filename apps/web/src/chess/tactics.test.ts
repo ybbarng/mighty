@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { evaluate, MATE, negamax, newContext } from "@mighty/chess-ai";
 import {
   applyMove,

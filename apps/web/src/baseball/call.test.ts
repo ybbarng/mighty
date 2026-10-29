@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { GuessEntry } from "@mighty/baseball-engine";
 import { describe, expect, it } from "vitest";
 

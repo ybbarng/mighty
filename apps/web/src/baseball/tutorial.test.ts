@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { baseballBeginnerBot } from "@mighty/baseball-ai";
 import {
   type Action,

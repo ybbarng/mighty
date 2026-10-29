@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { omokBeginnerBot } from "@mighty/omok-ai";
 import {
   type Action,

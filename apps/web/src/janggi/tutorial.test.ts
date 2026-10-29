@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { janggiBeginnerBot } from "@mighty/janggi-ai";
 import {
   type Action,

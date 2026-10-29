@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import { SKY_LINES, SKY_STARS, starOf, tempColor } from "./sky";

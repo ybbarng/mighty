@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { GameEvent, PlayerView } from "@mighty/hearts-engine";
 import { describe, expect, it } from "vitest";
 

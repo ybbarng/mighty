@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { minhwatuBeginnerBot } from "@mighty/minhwatu-ai";
 import {
   type Action,

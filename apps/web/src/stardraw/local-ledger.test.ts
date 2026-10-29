@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { ManualClock } from "@mighty/fair-play";
 import {
   DEFAULT_WEBAUTHN_POLICY,

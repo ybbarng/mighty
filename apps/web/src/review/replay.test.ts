@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot } from "@mighty/ai";
 import { type MatchState, mightyOf, presetRules } from "@mighty/engine";
 import { heartsNormalBot } from "@mighty/hearts-ai";

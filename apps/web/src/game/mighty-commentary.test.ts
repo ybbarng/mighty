@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heuristicBot } from "@mighty/ai";
 import {
   type Card,

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { ManualClock } from "@mighty/fair-play";
 import { omokBotFor } from "@mighty/omok-ai";
 import { type OmokRules, pointAt } from "@mighty/omok-engine";

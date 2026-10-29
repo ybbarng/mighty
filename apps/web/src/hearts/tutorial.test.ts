@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { heartsBeginnerBot } from "@mighty/hearts-ai";
 import {
   type Action,

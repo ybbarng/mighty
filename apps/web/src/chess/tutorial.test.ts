@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { chessBeginnerBot } from "@mighty/chess-ai";
 import {
   type Action,

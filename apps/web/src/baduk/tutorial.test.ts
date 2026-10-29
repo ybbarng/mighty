@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { badukBeginnerBot } from "@mighty/baduk-ai";
 import {
   type Action,

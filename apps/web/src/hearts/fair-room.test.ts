@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { ManualClock, Party, prepareGroup } from "@mighty/fair-play";
 import { heartsIntermediateBot, heartsNormalBot } from "@mighty/hearts-ai";
 import { WINDOWS_RULES } from "@mighty/hearts-engine";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { yutBeginnerBot } from "@mighty/yut-ai";
 import {
   type Action,

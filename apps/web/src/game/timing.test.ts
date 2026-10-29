@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import { dealPackets, dealPlan, FLIGHT_MS } from "./timing";

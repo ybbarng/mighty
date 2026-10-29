@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import { computeLayout, type Rect, rectsOverlap } from "./compute-layout";

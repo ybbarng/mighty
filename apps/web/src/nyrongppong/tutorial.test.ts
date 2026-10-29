@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { ManualClock } from "@mighty/fair-play";
 import { nyrongppongBeginnerBot } from "@mighty/nyrongppong-ai";
 import {

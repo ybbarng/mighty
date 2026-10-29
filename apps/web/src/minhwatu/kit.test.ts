@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { minhwatuBeginnerBot, playGame } from "@mighty/minhwatu-ai";
 import {
   createMatch,
