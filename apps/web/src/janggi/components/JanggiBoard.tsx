@@ -61,6 +61,8 @@ const HANJA_FONT: Record<Side, string> = {
   c: '"JanggiCho", serif',
   h: '"JanggiHan", serif',
 };
+/** 알 두께(반지름에 대한 비율). 옆면이 이만큼 아래로 보여 입체감이 난다 */
+const PIECE_DEPTH = 0.24;
 /** 초서는 획이 가늘고 흘러 조금 크게 쓴다 */
 const HANJA_SCALE: Record<Side, number> = { c: 1.6, h: 1.15 };
 /** 초서 획을 같은 색 테두리로 조금 굵혀 작은 판에서도 또렷하게 한다(글자 크기에 대한 비율) */
@@ -211,6 +213,11 @@ export function JanggiBoard({
           <stop offset="0.6" stopColor="#f1e2c0" />
           <stop offset="1" stopColor="#c9ad78" />
         </radialGradient>
+        {/* 알 옆면(두께): 위가 밝고 아래로 어두워지는 나무색 */}
+        <linearGradient id={`${id}-side`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#c9a46a" />
+          <stop offset="1" stopColor="#7a5a2c" />
+        </linearGradient>
       </defs>
 
       {Array.from({ length: WIDTH }, (_, x) => (
@@ -282,16 +289,32 @@ export function JanggiBoard({
             data-point={pointName(i)}
             className={movable.has(i) ? "cursor-pointer" : undefined}
           >
+            {/* 입체감: 판에 진 그림자 → 알 옆면(두께) → 윗면 → 윗면 안쪽 모서리 빛 */}
             <polygon
-              points={octagon(cx + 0.05, cy + 0.07, r)}
+              points={octagon(cx + 0.05, cy + 0.1, r)}
               fill="#000000"
-              opacity={0.3}
+              opacity={0.32}
+            />
+            <polygon
+              points={octagon(
+                cx,
+                cy + PIECE_DEPTH * r - (chosen ? 0.06 : 0),
+                r,
+              )}
+              fill={`url(#${id}-side)`}
             />
             <polygon
               points={octagon(cx, cy - (chosen ? 0.06 : 0), r)}
               fill={`url(#${id}-face)`}
               stroke={chosen ? "#f59e0b" : SIDE_COLOR[side]}
               strokeWidth={chosen ? 0.07 : 0.035}
+            />
+            <polygon
+              points={octagon(cx, cy - (chosen ? 0.06 : 0), r * 0.86)}
+              fill="none"
+              stroke="#ffffff"
+              strokeOpacity={0.45}
+              strokeWidth={0.02}
             />
             <text
               x={cx}
