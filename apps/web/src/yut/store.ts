@@ -12,6 +12,7 @@ import { create } from "zustand";
 import { browserPace } from "@/game/bots";
 import type { MatchHost, Snapshot, SubmitResult } from "@/game/host";
 import { LocalMatch, type SavedMatch } from "@/game/local-match";
+import { paced } from "@/game/settings";
 import { playUiCue } from "@/game/ui-sound";
 import { ArchiveRecorder, type ArchiveTarget } from "@/review/recorder";
 import { StatsRecorder, type StatsTarget } from "@/stats/recorder";
@@ -210,7 +211,7 @@ export const useYut = create<YutStore>((set, get) => {
       autoAct();
       advance();
     };
-    if (byBot) timer = setTimeout(show, BOT_DELAY_MS);
+    if (byBot) timer = setTimeout(show, paced(BOT_DELAY_MS));
     else show();
   };
 

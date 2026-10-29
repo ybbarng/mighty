@@ -181,6 +181,14 @@ export function useCardTheme(): CardTheme {
   }, [id, backId, faceStyle]);
 }
 
+/**
+ * 컴퓨터·상대 수를 보여 주기 전 기다림을 공통 진행 속도(`speed`)로 나눈다. 기본 속도(1)면 그대로다.
+ * 마이티·하트는 저장소의 wait가 같은 일을 한다. 화면 시험은 속도를 크게 둬 기다림을 줄인다
+ */
+export function paced(ms: number): number {
+  return ms / (useSettings.getState().speed || 1);
+}
+
 /** 고른 규칙. 문자열이 깨졌으면 표준 5마 */
 export function chosenRules(code: string): RuleSet {
   const decoded = decodeRuleString(code);

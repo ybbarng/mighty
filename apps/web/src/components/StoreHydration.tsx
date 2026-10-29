@@ -30,25 +30,31 @@ import { useYutSettings } from "@/yut/settings";
  */
 export function StoreHydration() {
   useEffect(() => {
-    void useSettings.persist.rehydrate();
-    void useTutorialProgress.persist.rehydrate();
-    void useHeartsSettings.persist.rehydrate();
-    void useHeartsTutorialProgress.persist.rehydrate();
-    void useOmokSettings.persist.rehydrate();
-    void useOmokTutorialProgress.persist.rehydrate();
-    void useJanggiSettings.persist.rehydrate();
-    void useJanggiTutorialProgress.persist.rehydrate();
-    void useJanggiStudyProgress.persist.rehydrate();
-    void useNyrongppongSettings.persist.rehydrate();
-    void useNyrongppongTutorialProgress.persist.rehydrate();
-    void useGostopSettings.persist.rehydrate();
-    void useGostopTutorialProgress.persist.rehydrate();
-    void useMinhwatuSettings.persist.rehydrate();
-    void useMinhwatuTutorialProgress.persist.rehydrate();
-    void useBaseballSettings.persist.rehydrate();
-    void useBaseballTutorialProgress.persist.rehydrate();
-    void useYutSettings.persist.rehydrate();
-    void useYutTutorialProgress.persist.rehydrate();
+    void Promise.all([
+      useSettings.persist.rehydrate(),
+      useTutorialProgress.persist.rehydrate(),
+      useHeartsSettings.persist.rehydrate(),
+      useHeartsTutorialProgress.persist.rehydrate(),
+      useOmokSettings.persist.rehydrate(),
+      useOmokTutorialProgress.persist.rehydrate(),
+      useJanggiSettings.persist.rehydrate(),
+      useJanggiTutorialProgress.persist.rehydrate(),
+      useJanggiStudyProgress.persist.rehydrate(),
+      useNyrongppongSettings.persist.rehydrate(),
+      useNyrongppongTutorialProgress.persist.rehydrate(),
+      useGostopSettings.persist.rehydrate(),
+      useGostopTutorialProgress.persist.rehydrate(),
+      useMinhwatuSettings.persist.rehydrate(),
+      useMinhwatuTutorialProgress.persist.rehydrate(),
+      useBaseballSettings.persist.rehydrate(),
+      useBaseballTutorialProgress.persist.rehydrate(),
+      useYutSettings.persist.rehydrate(),
+      useYutTutorialProgress.persist.rehydrate(),
+    ]).then(() => {
+      // 화면이 단추에 동작을 붙이고 저장값까지 읽었다는 표시. 화면 시험이 누르기 전에 기다린다
+      // (그 전에 누르면 누름이 사라지거나, 늦게 읽힌 저장값이 고른 것을 덮어쓴다)
+      document.documentElement.dataset.hydrated = "";
+    });
   }, []);
   return null;
 }
