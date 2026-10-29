@@ -805,12 +805,32 @@
     },
     {
       "id": "next-yut",
-      "title": "윷놀이",
+      "title": "윷놀이(/yut)",
       "parent": "next-games",
-      "status": "fog",
+      "status": "done",
       "size": 2,
-      "summary": "윷 결과를 함께 정하는 난수로 만들어 방장이 고르지 못하게",
-      "found": "2026-10-29"
+      "summary": "docs/37. 엔진·컴퓨터 셋·온라인(던지기는 참가자마다 해시 사슬을 약속해 두고 매번 함께 공개해 정한다, 방장도 못 고름)·튜토리얼 7단원·효과음. 지역마다 다른 규칙은 설정",
+      "found": "2026-10-29",
+      "links": [
+        {
+          "label": "윷놀이 설계",
+          "path": "docs/37-yut.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "yut-rule-defaults",
+          "type": "fork",
+          "title": "윷놀이 규칙 기본값(빽도, 던지기 확률, 참먹이에 서면 나는지, 인원)",
+          "owner": "me",
+          "options": [
+            "지금 기본값(빽도 있음, 평평한 면 0.6, 지나야 남, 1:1)",
+            "하나씩 바꾸기"
+          ],
+          "recommend": "지금 기본값",
+          "status": "open"
+        }
+      ]
     },
     {
       "id": "next-mafia",
