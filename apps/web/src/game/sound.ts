@@ -76,7 +76,9 @@ export type Cue =
   /** 고스톱: "고!" */
   | "go"
   /** 나이롱뽕: "뽕!" */
-  | "ppong";
+  | "ppong"
+  /** 숫자야구: 스트라이크가 나온 답(공이 미트에 꽂히는 "팡") */
+  | "strike";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
 export const CUE_LABELS: Record<Cue, string> = {
@@ -116,6 +118,7 @@ export const CUE_LABELS: Record<Cue, string> = {
   yak: "화투: 약",
   go: "고스톱: 고",
   ppong: "나이롱뽕: 뽕",
+  strike: "숫자야구: 스트라이크",
 };
 
 /**
@@ -154,6 +157,7 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   hwatuSlap: 8.7,
   hwatuFlip: 6,
   ppong: 6.5,
+  strike: 4,
   go: -1.5,
 };
 
@@ -938,6 +942,23 @@ function render(cue: Cue, v: Voice): void {
         attack: 0.001,
       });
       thump(v, 0.02, 150, 90, 0.1, 0.22);
+      break;
+    case "strike":
+      // 공이 가죽 미트에 꽂히는 짧고 묵직한 "팡"과 뒤따르는 밝은 "딱"
+      noise(v, 0, 0.05, {
+        filter: "bandpass",
+        freq: 900,
+        q: 1,
+        gain: 0.9,
+        attack: 0.001,
+      });
+      thump(v, 0, 130, 70, 0.12, 0.28);
+      tone(v, 1320, 0.03, 0.1, {
+        type: "triangle",
+        gain: 0.06,
+        endFreq: 1100,
+        attack: 0.002,
+      });
       break;
     case "roundEnd":
       // 점수표를 펼치는 "사락"과 "띵동"

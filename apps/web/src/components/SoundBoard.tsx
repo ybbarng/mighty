@@ -114,6 +114,19 @@ const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
       { cue: "ppong", when: "나이롱뽕: 뽕을 부름" },
     ],
   },
+  {
+    title: "숫자야구",
+    cues: [
+      { cue: "strike", when: "스트라이크가 하나라도 나온 답(나·상대 모두)" },
+      { cue: "beep", when: "볼만 나온 답" },
+      { cue: "pass", when: "아웃(하나도 없음)" },
+      { cue: "click", when: "숫자 패드 누르기" },
+      { cue: "invalid", when: "물을 수 없는 수(이미 물음 등)" },
+      { cue: "win", when: "먼저 맞힘·상대 거짓 답이 드러남" },
+      { cue: "lose", when: "상대가 먼저 맞힘·기권" },
+      { cue: "roundEnd", when: "비김" },
+    ],
+  },
 ];
 
 interface Level {
