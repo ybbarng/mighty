@@ -37,21 +37,24 @@ function Rule({
   children,
 }: {
   title: string;
-  file: string;
+  /** 규칙 코드 파일. 아직 코드가 없으면 비워 둔다 */
+  file?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="font-semibold text-white/90">
         {title}{" "}
-        <a
-          href={`${SOURCE}/${file}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono font-normal text-amber-100/70 text-xs underline underline-offset-2"
-        >
-          {file}
-        </a>
+        {file && (
+          <a
+            href={`${SOURCE}/${file}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono font-normal text-amber-100/70 text-xs underline underline-offset-2"
+          >
+            {file}
+          </a>
+        )}
       </h3>
       {children}
     </div>
@@ -134,8 +137,8 @@ export default function StardrawVerify() {
                   </td>
                   <td className="text-white/75">
                     마감 직후의 봉인: 응모 수·머클 루트, 등록 수·루트,{" "}
-                    <code>digest</code>(봉인 값), <code>loggedAt</code>, 투명성
-                    로그 증거 <code>log</code>. drand 값보다 먼저 나옵니다
+                    <code>digest</code>(봉인 값), <code>loggedAt</code>, 바깥
+                    시각 증거 <code>log</code>. drand 값보다 먼저 나옵니다
                   </td>
                 </tr>
                 <tr>
@@ -254,7 +257,13 @@ h 앞 4바이트(u32) < 목표값 이면 통과
               <code>
                 taggedHash(&quot;stardraw/sample/v1&quot;, drand 난수)
               </code>
-              입니다.
+              (무효 회차는 머클 루트 ‖ 앞 기록 해시)이고, n장 가운데 j번째로
+              고르는 자리는{" "}
+              <code>
+                taggedHash(&quot;stardraw/sample-pick/v1&quot;, seed ‖ j(u32))
+              </code>{" "}
+              앞 4바이트(u32) mod n 입니다. 같은 자리가 나오면 다음 j로
+              넘어갑니다.
             </p>
           </Rule>
 
@@ -301,10 +310,28 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
 무효 회차: rootLoggedAt = 0, 또는 rootLoggedAt < closesAt,
           또는 rootLoggedAt ≥ drand 회차 시각`}</Code>
             <p className="text-white/80">
-              무효 회차는 당첨 번호와 당첨자 없이 기록만 남습니다. 봉인 값은
-              마감 직후 투명성 로그에 올려, drand 값이 나오기 전에 응모권과 등록
-              목록이 고정됐음을 보입니다.
+              무효 회차는 당첨 번호와 당첨자 없이 기록만 남습니다.
             </p>
+          </Rule>
+
+          <Rule title="봉인이 추첨보다 먼저였다는 증거">
+            <p className="text-white/80">
+              마감 직후 봉인 값으로 공개 시각 인증 기관(RFC 3161 TSA) 여러
+              곳에서 시각 인증 토큰을 받습니다. 토큰마다 다음을 확인합니다.
+            </p>
+            <ul className={li}>
+              <li>
+                <code>messageImprint</code>가 SHA-256이고 값이 봉인
+                값(sealDigest)과 같다
+              </li>
+              <li>
+                <code>genTime</code> &lt; drand 회차 시각
+              </li>
+              <li>
+                토큰 서명이 미리 정해 둔 TSA 인증서로 확인된다(인증서를 고정해
+                둠)
+              </li>
+            </ul>
           </Rule>
 
           <Rule title="당첨 번호와 등수" file="draw.ts">
@@ -367,9 +394,12 @@ seed     = taggedHash("stardraw/sas/v1", 공유 비밀 ‖ 요청 id(u16 길이 
           </p>
           <LedgerCheck />
           <p className="text-white/80">브라우저 콘솔에서도 부를 수 있습니다.</p>
-          <Code>{`await stardraw.verify()                       // 장부 전체 검사
-await stardraw.verify({ powSample: Infinity }) // 작업 증명까지 전부
-await stardraw.vectors()                      // 시험 값 다시 계산`}</Code>
+          <Code>{`// 장부 전체 검사
+await stardraw.verify()
+// 작업 증명까지 전부
+await stardraw.verify({ powSample: Infinity })
+// 시험 값 다시 계산
+await stardraw.vectors()`}</Code>
         </Section>
 
         <Section title="믿는 것과 안 믿는 것" id="trust">
@@ -398,9 +428,9 @@ await stardraw.vectors()                      // 시험 값 다시 계산`}</Cod
         <Section title="지금의 한계" id="limits">
           <ul className={li}>
             <li>
-              시험 운영 중이라 봉인 값을 투명성 로그(Rekor)와 GitHub 앵커에
-              올리지 않습니다. 그래서 봉인이 drand 값보다 먼저였다는 것을 서버
-              밖에서 증명할 수 없습니다. 장부 전체 검사도 이 항목을 건너뜁니다.
+              시험 운영 중이라 봉인 값의 시각 인증(TSA)을 받지 않습니다. 그래서
+              봉인이 drand 값보다 먼저였다는 것을 서버 밖에서 증명할 수
+              없습니다. 장부 전체 검사도 이 항목을 건너뜁니다.
             </li>
             <li>
               이 페이지와 화면 코드는 운영자가 내줍니다. 코드 해시 공개, 재현

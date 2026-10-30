@@ -218,13 +218,13 @@ export async function checkServerLedger(
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
     {
-      id: "rekor",
-      label: "봉인이 drand보다 먼저였다는 바깥 증명(Rekor)",
+      id: "timestamp",
+      label: "봉인이 drand보다 먼저였다는 바깥 증명(공개 시각 인증)",
       status: "skip",
       detail:
         genesis.schedule.ledger === "trial"
-          ? "시험 운영이라 투명성 로그에 올리지 않습니다"
-          : "이 페이지는 아직 Rekor 포함 증명을 확인하지 않습니다",
+          ? "시험 운영이라 시각 인증을 받지 않습니다"
+          : "이 페이지는 아직 시각 인증 토큰을 확인하지 않습니다",
     },
   ];
   return result(
@@ -252,8 +252,8 @@ export async function checkPracticeLedger(ledger: {
       report.problems,
       [
         {
-          id: "rekor",
-          label: "봉인이 drand보다 먼저였다는 바깥 증명(Rekor)",
+          id: "timestamp",
+          label: "봉인이 drand보다 먼저였다는 바깥 증명(공개 시각 인증)",
           status: "skip",
           detail: "연습 장부는 이 기기 안에서만 돕니다",
         },

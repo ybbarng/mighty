@@ -77,7 +77,7 @@ const statusOf = (items: { id: string; status: string }[]) =>
   Object.fromEntries(items.map((i) => [i.id, i.status]));
 
 describe("장부 전체 검사(서버 공개 파일)", () => {
-  it("정직한 장부는 모든 항목이 통과하고, 바깥 증명(Rekor)만 건너뜀이다", async () => {
+  it("정직한 장부는 모든 항목이 통과하고, 바깥 시각 증명만 건너뜀이다", async () => {
     const result = await checkServerLedger({
       base: "",
       fetch: files(),
@@ -86,10 +86,12 @@ describe("장부 전체 검사(서버 공개 파일)", () => {
     expect(result.problems).toEqual([]);
     expect(result.mode).toBe("trial");
     const status = statusOf(result.items);
-    expect(status.rekor).toBe("skip");
+    expect(status.timestamp).toBe("skip");
     expect(
-      result.items.filter((i) => i.id !== "rekor").map((i) => i.status),
-    ).toEqual(result.items.filter((i) => i.id !== "rekor").map(() => "pass"));
+      result.items.filter((i) => i.id !== "timestamp").map((i) => i.status),
+    ).toEqual(
+      result.items.filter((i) => i.id !== "timestamp").map(() => "pass"),
+    );
   });
 
   it("drand 서명이 맞지 않으면 그 항목이 실패한다", async () => {
