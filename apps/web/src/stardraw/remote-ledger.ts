@@ -22,6 +22,7 @@ import {
   type PowParams,
   phaseOf,
   politeFetch,
+  type QualInfo,
   type RoundRecord,
   roundAt,
   roundTimes,
@@ -410,6 +411,32 @@ export class RemoteLedger implements Ledger {
 
   ticketsOf(round: number): readonly Ticket[] {
     return this.tickets[round - 1] ?? [];
+  }
+
+  async qualInfo(): Promise<QualInfo> {
+    return this.get<QualInfo>("/api/qual");
+  }
+
+  async issueStamp(
+    periodId: string,
+    credential: string,
+    blinded: Uint8Array,
+  ): Promise<Uint8Array> {
+    const res = await this.f(`${this.o.base}/api/qual/${periodId}/blind`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idToken: credential,
+        blinded: toBase64Url(blinded),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      blindStamp?: string;
+    };
+    if (!res.ok || !body.blindStamp)
+      throw new Error(body.error ?? `자격을 받지 못했습니다(${res.status})`);
+    return fromBase64Url(body.blindStamp);
   }
 
   verify(mine: readonly Uint8Array[] = []): Promise<VerifyReport> {

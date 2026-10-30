@@ -25,7 +25,7 @@ import { type CheckSession, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
 import { ensureRegistered } from "../registrar";
-import { myRank, RANK_RULE, winnerCounts } from "../results";
+import { myRank, prizeEligible, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
 import { GAME_NS, type Services, useLedger } from "../services";
 import type { KeyInfo, MyTicket } from "../wallet";
@@ -420,6 +420,7 @@ export function Home({
           ["설명", "/stardraw/about"],
           ["배우기", "/stardraw/learn"],
           ["검증", "/stardraw/verify"],
+          ["상품 자격", "/stardraw/qualify"],
           ["데모", "/stardraw/demo"],
         ].map(([label, href]) => (
           <a
@@ -1131,6 +1132,16 @@ function RoundDetail({
   if (!record) return null;
   const counts = winnerCounts(record);
   const myIds = new Set(mine.map((m) => toHex(ticketId(m.ticket))));
+  const prize = prizeEligible(services.ledger.ticketsOf(round));
+  const myExcluded = mine.some(
+    (m) =>
+      m.ticket.round === round &&
+      m.ticket.qual &&
+      !prize.eligible.has(toHex(ticketId(m.ticket))),
+  );
+  const prizeWinners = RANKS.flatMap((r) =>
+    record.winners[r].filter((id) => prize.eligible.has(toHex(id))),
+  ).length;
 
   return (
     <section
@@ -1169,6 +1180,27 @@ function RoundDetail({
         응모 {record.count}장 · 마감 {formatTime(closesOf(services, round))}
       </p>
 
+      {prize.any && (
+        <p
+          className="break-keep text-center text-amber-100/90 text-sm"
+          data-prize-summary
+        >
+          상품 대상 당첨자 {prizeWinners}명
+          {prize.excluded > 0 &&
+            ` · 같은 자격으로 낸 ${prize.excluded}장은 상품 대상에서 빠졌습니다`}
+        </p>
+      )}
+      {myExcluded && (
+        <p
+          role="alert"
+          className="break-keep rounded-lg bg-rose-500/15 px-3 py-2 text-rose-100 text-sm"
+          data-prize-mine-excluded
+        >
+          이 회차에 내 자격 증서가 다른 곳에서도 쓰였습니다. 복구 코드가 새
+          나갔을 수 있습니다. 다음 자격 기간에 새로 받아 주세요.
+        </p>
+      )}
+
       <ul className="flex flex-col gap-2" aria-label="등수별 당첨">
         {RANKS.map((rank) => (
           <li
@@ -1199,6 +1231,14 @@ function RoundDetail({
                   </span>
                   <span className="text-white/80">
                     {myIds.has(hex) ? "내 응모권" : (nickname ?? "익명")}
+                    {prize.eligible.has(hex) && (
+                      <span
+                        className="ml-1.5 rounded bg-amber-200/15 px-1.5 py-0.5 text-amber-100 text-xs"
+                        data-prize-eligible
+                      >
+                        상품 대상
+                      </span>
+                    )}
                   </span>
                   {done && (
                     <span

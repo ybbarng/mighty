@@ -5,8 +5,16 @@ import { useMemo } from "react";
 
 const MARGIN = 2;
 
-/** 초대 링크 QR 코드. 옆에 있는 친구는 휴대폰 카메라로 바로 들어온다 */
-export function InviteQr({ url, size = 168 }: { url: string; size?: number }) {
+/** 초대 링크 QR 코드. 옆에 있는 친구는 휴대폰 카메라로 바로 들어온다. label은 읽어 주는 이름 */
+export function InviteQr({
+  url,
+  size = 168,
+  label = "초대 링크 QR 코드",
+}: {
+  url: string;
+  size?: number;
+  label?: string;
+}) {
   const { path, count } = useMemo(() => {
     const qr = qrcode(0, "M");
     qr.addData(url);
@@ -23,7 +31,7 @@ export function InviteQr({ url, size = 168 }: { url: string; size?: number }) {
   return (
     <svg
       role="img"
-      aria-label="초대 링크 QR 코드"
+      aria-label={label}
       viewBox={`0 0 ${view} ${view}`}
       width={size}
       height={size}

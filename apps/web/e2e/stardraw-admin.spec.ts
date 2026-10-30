@@ -157,6 +157,7 @@ function serverState() {
           until: null,
         },
       ],
+      periods: [] as Record<string, unknown>[],
       schedulePending: false,
     },
     submitted: [] as Record<string, unknown>[],
@@ -186,6 +187,10 @@ test("관리 화면: 국장 패스키를 만들어 설정 값을 보이고, 장�
   const sent: string[] = [];
   await page.route("**/stardraw-api/api/director/state", (route) =>
     route.fulfill({ json: state }),
+  );
+  // 자격 기간 열기 전에 서버가 만드는 새 도장 열쇠(공개 열쇠 96바이트)
+  await page.route("**/stardraw-api/api/director/qual-key", (route) =>
+    route.fulfill({ json: { issuerKey: "q".repeat(128) } }),
   );
   await page.route("**/stardraw-api/api/director/ops", async (route) => {
     const body = route.request().postDataJSON() as { op: string };
@@ -245,6 +250,14 @@ test("관리 화면: 국장 패스키를 만들어 설정 값을 보이고, 장�
     .click();
   await expect(message(page)).toContainText("받았습니다");
   expect(sent).toHaveLength(1);
+  // 상품 자격(docs/36 11-13): 효력이 생긴 소속에 1년 자격 기간을 연다(서버가 만든 도장 열쇠를 넣어 서명)
+  await console
+    .locator("[data-director-affiliations] li")
+    .filter({ hasText: "시험 성단" })
+    .getByRole("button", { name: "자격 기간 열기(1년)" })
+    .click();
+  await expect(message(page)).toContainText("받았습니다");
+  expect(sent).toHaveLength(2);
   await expect(
     console.locator("[data-live-start] option").first(),
   ).toContainText("시작 · 사슬");

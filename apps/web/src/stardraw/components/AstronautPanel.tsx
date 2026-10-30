@@ -1,11 +1,12 @@
 "use client";
 
-import { roundTimes } from "@mighty/stardraw-core";
+import { roundTimes, toHex } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { AstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { checkOwner } from "../astronaut/owner-check";
+import { checkHolding, loadHoldings } from "../qual-store";
 import type { Services } from "../services";
 import { sitePolicy } from "../wallet";
 
@@ -68,6 +69,7 @@ export function AstronautPanel({
 }) {
   const a = useMemo(() => astronautOf(pub), [pub]);
   const issued = useIssued(services, pub);
+  const affiliation = useAffiliation(services, pub);
   const [copied, setCopied] = useState(false);
   // 앞면 주인 확인과 뒷면 열쇠 꺼내 보기가 같은 본인 확인을 쓴다(그 등록증의 패스키, 기기 안에서 확인)
   const confirmOwner = async () =>
@@ -111,6 +113,7 @@ export function AstronautPanel({
         onCheck={confirmOwner}
         pub={pub}
         onReveal={confirmOwner}
+        affiliation={affiliation}
       />
       {children}
       <button
@@ -125,4 +128,46 @@ export function AstronautPanel({
       </p>
     </section>
   );
+}
+
+/**
+ * 이 기기에 있는 상품 자격 증서 중 장부의 기간 열쇠로 도장이 확인되는 것의 소속(배지, docs/36 11-13).
+ * 증서는 우주인 열쇠와 묶이지 않으니 이 기기의 내 등록증에만 보인다
+ */
+function useAffiliation(
+  services: Services,
+  pub: Uint8Array,
+): { name: string; method: string } | null {
+  const [found, setFound] = useState<{ name: string; method: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    let alive = true;
+    const mine = services.wallet.loadKey()?.pub;
+    if (!mine || toHex(mine) !== toHex(pub)) {
+      setFound(null);
+      return;
+    }
+    services.ledger
+      .qualInfo()
+      .then((info) => {
+        const holdings = loadHoldings(services.ns, services.ledger.id());
+        const period = info.periods.find((p) =>
+          holdings.some(
+            (h) => toHex(h.periodId) === p.id && checkHolding(p, h),
+          ),
+        );
+        if (alive)
+          setFound(
+            period
+              ? { name: period.affiliationName, method: period.method }
+              : null,
+          );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [services, pub]);
+  return found;
 }

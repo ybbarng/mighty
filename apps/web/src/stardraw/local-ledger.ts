@@ -1,10 +1,14 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  type AffiliationFields,
+  activeDirector,
   alignedEpoch,
   applyRecordOps,
   ByteWriter,
   checkPow,
   checkRegistration,
+  checkTicketQualification,
+  cloneOpsState,
   closedMessage,
   closeRound,
   concat,
@@ -14,6 +18,7 @@ import {
   decodeRecord,
   decodeRegistration,
   decodeTicket,
+  directorKeyConfig,
   drandRandomness,
   drandRoundForClose,
   drandTime,
@@ -31,8 +36,12 @@ import {
   type KeyRegistration,
   makeRegistration,
   makeTicket,
+  matureOps,
+  newIssuerKey,
   newOpsState,
   OP_NAMES,
+  OP_VERSION,
+  type OpBody,
   type Operation,
   type OpsContext,
   type OpsState,
@@ -41,6 +50,8 @@ import {
   type PowParams,
   parseDirectorKeys,
   powTargetForTries,
+  type QualInfo,
+  qualInfoOf,
   type RoundRecord,
   type RoundTimes,
   recordHash,
@@ -50,9 +61,12 @@ import {
   type Schedule,
   type SignatureData,
   type Signer,
+  STAMP_SCHEME_BLS,
   sealDesignations,
   selectOperations,
+  signAsDirector,
   signAsSeal,
+  signBlinded,
   signerFromKeyPair,
   softPasskeySigner,
   sortRegistrations,
@@ -65,6 +79,7 @@ import {
   type VerifyReport,
   verifyLedger,
   verifyRegistrationProof,
+  verifyStamp,
   verifyTicketSignature,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
@@ -146,7 +161,21 @@ interface Saved {
   directorKeys?: string[];
   /** 받아 두고 다음 기록에 실을 국장 운영 기록 */
   directorOps?: string[];
+  /** 데모 도장 열쇠(공개 열쇠 hex → 비밀 base64url)와 기간마다 찍은 도장 수(docs/36 11-13) */
+  qualKeys?: Record<string, string>;
+  qualIssued?: Record<string, number>;
+  /** 데모 상품 자격을 차릴 때 쓰는 데모 국장(이 기기 안 흉내 패스키, JWK) */
+  demoDirector?: { priv: JsonWebKey; pub: JsonWebKey };
 }
+
+/** 데모 소속: 데모 기관 계정으로 상품 자격을 받는 성단 */
+export const DEMO_AFFILIATION: AffiliationFields = {
+  name: "벌집 성단",
+  badge: 2,
+  method: "데모 기관 계정",
+  issuerKey: new Uint8Array(),
+  issued: 0,
+};
 
 const OP_NAME = OP_NAMES;
 
@@ -206,6 +235,9 @@ export class LocalLedger implements Ledger {
   private seal: Saved["seal"];
   private directorKeys: string[];
   private directorOps: Operation[];
+  private qualKeys: Record<string, string>;
+  private qualIssued: Record<string, number>;
+  private demoDirectorKey: Saved["demoDirector"];
   private busy: Promise<unknown> = Promise.resolve();
   private readonly clock: Clock;
   private readonly store: LedgerStore | undefined;
@@ -251,6 +283,9 @@ export class LocalLedger implements Ledger {
     this.directorOps = (saved?.directorOps ?? []).map((o) =>
       decodeOperation(dec(o)),
     );
+    this.qualKeys = saved?.qualKeys ?? {};
+    this.qualIssued = saved?.qualIssued ?? {};
+    this.demoDirectorKey = saved?.demoDirector;
   }
 
   id(): string {
@@ -514,6 +549,21 @@ export class LocalLedger implements Ledger {
       throw new Error("응모 계산이 맞지 않습니다");
     if (!(await verifyTicketSignature(ticket, this.policy)))
       throw new Error("응모권 서명이 맞지 않습니다");
+    if (ticket.qual) {
+      const state = cloneOpsState(await this.opsState());
+      matureOps(state, round);
+      const problem = checkTicketQualification(state, ticket, times.closesAt);
+      if (problem) throw new Error(`상품 자격 증서: ${problem}`);
+      const cert = ticket.qual.cert;
+      const period = state.periods.find(
+        (p) => toHex(p.id) === toHex(cert.periodId),
+      );
+      if (
+        !period ||
+        !verifyStamp(period.issuerKey, cert.periodId, cert.qualPub, cert.stamp)
+      )
+        throw new Error("상품 자격 증서: 도장이 맞지 않습니다");
+    }
     this.pending.tickets.push(ticket);
     if (registration && !this.keys.has(who)) {
       this.pending.registrations.push(registration);
@@ -639,6 +689,7 @@ export class LocalLedger implements Ledger {
     if (
       this.directorKeys.length === 0 &&
       this.directorOps.length === 0 &&
+      Object.keys(this.qualIssued).length === 0 &&
       !this.ops?.ops.length
     )
       return [];
@@ -660,10 +711,28 @@ export class LocalLedger implements Ledger {
       parseDirectorKeys(this.directorKeys.join(",")),
       ctx,
     );
-    const seal =
-      designations.bodies.length > 0 ? await this.sealSigner() : null;
+    // 발급 수(kind 9): 서버처럼, 찍은 도장 수가 장부의 수보다 많으면 관인으로 싣는다
+    const matured = cloneOpsState(state);
+    matureOps(matured, round);
+    const issuedBodies = matured.periods.flatMap((p) => {
+      const count = this.qualIssued[toHex(p.id)] ?? 0;
+      return count > p.issued
+        ? [
+            {
+              v: OP_VERSION,
+              kind: "qual-issued" as const,
+              after: prev,
+              effectiveRound: 0,
+              period: p.id,
+              issued: count,
+            },
+          ]
+        : [];
+    });
+    const bodies = [...designations.bodies, ...issuedBodies];
+    const seal = bodies.length > 0 ? await this.sealSigner() : null;
     const sealOps = seal
-      ? await Promise.all(designations.bodies.map((b) => signAsSeal(b, seal)))
+      ? await Promise.all(bodies.map((b) => signAsSeal(b, seal)))
       : [];
     const { accepted } = await selectOperations(
       state,
@@ -673,6 +742,129 @@ export class LocalLedger implements Ledger {
       ctx,
     );
     return accepted;
+  }
+
+  // ── 상품 자격(데모 기관 계정, docs/36 11-13) ──
+
+  /** 효력이 생긴 자격 기간. 연습 장부는 데모 기관 계정으로 받는다 */
+  async qualInfo(): Promise<QualInfo> {
+    await this.settle();
+    const now = this.now();
+    const round = roundAt(this.schedule, now) ?? 1;
+    const state = cloneOpsState(await this.opsState());
+    matureOps(state, round);
+    return qualInfoOf(state, round, now, () => "demo");
+  }
+
+  /** 데모 발급: 신원 확인 없이(데모 기관 계정) 가린 값에 데모 도장 열쇠로 찍는다 */
+  async issueStamp(
+    periodId: string,
+    _credential: string,
+    blinded: Uint8Array,
+  ): Promise<Uint8Array> {
+    const info = (await this.qualInfo()).periods.find((p) => p.id === periodId);
+    if (!info?.open) throw new Error("지금 받을 수 없는 자격입니다");
+    const secret = this.qualKeys[toHex(fromBase64Url(info.issuerKey))];
+    if (!secret) throw new Error("이 기간의 도장 열쇠가 이 기기에 없습니다");
+    const stamp = signBlinded(dec(secret), blinded);
+    this.qualIssued[periodId] = (this.qualIssued[periodId] ?? 0) + 1;
+    this.write();
+    return stamp;
+  }
+
+  /** 서버 POST /api/director/qual-key처럼 새 도장 열쇠를 만들어 비밀은 이 기기에 두고 공개 열쇠를 준다 */
+  createIssuerKey(): Uint8Array {
+    const key = newIssuerKey();
+    this.qualKeys[toHex(key.publicKey)] = enc(key.secretKey);
+    this.write();
+    return key.publicKey;
+  }
+
+  private async demoDirector() {
+    const algorithm = { name: "ECDSA", namedCurve: "P-256" };
+    if (!this.demoDirectorKey) {
+      const pair = await crypto.subtle.generateKey(algorithm, true, [
+        "sign",
+        "verify",
+      ]);
+      this.demoDirectorKey = {
+        priv: await crypto.subtle.exportKey("jwk", pair.privateKey),
+        pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
+      };
+      this.write();
+    }
+    const signer = await signerFromKeyPair({
+      privateKey: await crypto.subtle.importKey(
+        "jwk",
+        this.demoDirectorKey.priv,
+        algorithm,
+        false,
+        ["sign"],
+      ),
+      publicKey: await crypto.subtle.importKey(
+        "jwk",
+        this.demoDirectorKey.pub,
+        algorithm,
+        true,
+        ["verify"],
+      ),
+    });
+    return softPasskeySigner(signer, { policy: this.policy });
+  }
+
+  /**
+   * 데모: 데모 국장 지정 → 데모 소속(벌집 성단) 추가 → 1년 자격 기간 열기를 차례로 하고, 예고(3회차)마다
+   * 시간을 건너뛴다. 이미 받을 수 있는 기간이 있으면 아무것도 하지 않는다. 실제 장부에서는 국장이 관리 화면에서 한다
+   */
+  async prepareDemoQualification(): Promise<void> {
+    if ((await this.qualInfo()).periods.some((p) => p.open)) return;
+    const director = await this.demoDirector();
+    const next = () => this.records.length + 1;
+    const directorActive = async () =>
+      !!activeDirector(await this.opsState(), director.publicKey, next());
+    if (!(await directorActive())) {
+      this.designateDirector(
+        directorKeyConfig(director.credentialId, director.publicKey),
+      );
+      for (let i = 0; i < 3 && !(await directorActive()); i++)
+        await this.skipRounds(5);
+    }
+    const sign = async (body: OpBody) =>
+      this.submitOperation(await signAsDirector(body, director));
+    const affiliation = async () =>
+      (await this.opsState()).affiliations.find(
+        (a) => a.fields.name === DEMO_AFFILIATION.name && a.until === null,
+      );
+    if (!(await affiliation())) {
+      await sign({
+        v: OP_VERSION,
+        kind: "affiliation-add",
+        after: this.head(),
+        effectiveRound: next() + 4,
+        fields: DEMO_AFFILIATION,
+      });
+      await this.skipRounds(5);
+    }
+    const a = await affiliation();
+    if (!a) throw new Error("데모 소속을 차리지 못했습니다");
+    const issuerKey = this.createIssuerKey();
+    const startsAt = this.now();
+    await sign({
+      v: OP_VERSION,
+      kind: "qual-period",
+      after: this.head(),
+      effectiveRound: next() + 4,
+      affiliation: a.id,
+      number:
+        (await this.opsState()).periods.filter(
+          (p) => toHex(p.affiliation) === toHex(a.id),
+        ).length + 1,
+      startsAt,
+      endsAt: startsAt + 365 * 24 * 3600,
+      scheme: STAMP_SCHEME_BLS,
+      issuerKey,
+    });
+    await this.skipRounds(5);
   }
 
   /** 데모의 "서버 설정에 넣기": 다음 기록에 데모 관인이 국장 열쇠 지정을 싣는다 */
@@ -798,6 +990,13 @@ export class LocalLedger implements Ledger {
       ...(this.directorOps.length > 0
         ? { directorOps: this.directorOps.map((o) => enc(encodeOperation(o))) }
         : {}),
+      ...(Object.keys(this.qualKeys).length > 0
+        ? { qualKeys: this.qualKeys }
+        : {}),
+      ...(Object.keys(this.qualIssued).length > 0
+        ? { qualIssued: this.qualIssued }
+        : {}),
+      ...(this.demoDirectorKey ? { demoDirector: this.demoDirectorKey } : {}),
     };
     this.store?.save(JSON.stringify(saved));
   }

@@ -38,6 +38,8 @@ export interface SubmitResult {
 export interface DirectorBackend {
   state(): Promise<DirectorState>;
   submit(op: Operation): Promise<SubmitResult>;
+  /** 자격 기간 열기 전에: 새 도장 열쇠를 만들게 하고 공개 열쇠를 받는다(비밀은 서버에, docs/36 11-13) */
+  issuerKey(): Promise<Uint8Array>;
 }
 
 /** 서버 API(같은 출처 /stardraw-api) */
@@ -71,6 +73,11 @@ export function remoteDirectorBackend(
       });
       return (await read(res)) as unknown as SubmitResult;
     },
+    async issuerKey() {
+      const res = await f(`${base}/api/director/qual-key`, { method: "POST" });
+      const body = await read(res);
+      return fromBase64Url(String(body.issuerKey));
+    },
   };
 }
 
@@ -79,6 +86,7 @@ export function practiceDirectorBackend(ledger: LocalLedger): DirectorBackend {
   return {
     state: () => ledger.directorState(),
     submit: (op) => ledger.submitOperation(op),
+    issuerKey: async () => ledger.createIssuerKey(),
   };
 }
 

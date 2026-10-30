@@ -1,6 +1,7 @@
 import type {
   KeyRegistration,
   PowParams,
+  QualInfo,
   RoundRecord,
   Schedule,
   SignatureData,
@@ -56,6 +57,17 @@ export interface Ledger {
   ticketsOf(round: number): readonly Ticket[];
   /** 장부 전체를 처음부터 다시 계산한다 */
   verify(mine?: readonly Uint8Array[]): Promise<VerifyReport>;
+  /** 상품 자격(docs/36 11-13): 효력이 생긴 자격 기간과 여기서 받을 수 있는지 */
+  qualInfo(): Promise<QualInfo>;
+  /**
+   * 도장 받기: 신원 확인 값(구글 ID 토큰, 데모는 "demo")과 가린 값을 보내 가린 도장을 받는다.
+   * 장부(우주국)는 무엇에 찍었는지 모른다
+   */
+  issueStamp(
+    periodId: string,
+    credential: string,
+    blinded: Uint8Array,
+  ): Promise<Uint8Array>;
 }
 
 /** 등록을 지금 받을 수 없다(마감 뒤이거나 회차가 바뀌었다). 다음 회차가 열리면 다시 계산해 보낸다 */

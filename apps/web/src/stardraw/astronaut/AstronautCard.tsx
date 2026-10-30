@@ -133,6 +133,7 @@ export function AstronautCard({
   forced,
   pub,
   onReveal,
+  affiliation,
 }: {
   astronaut: Astronaut;
   /** 발급일 "2026. 10. 30."(읽는 중이면 null) */
@@ -145,6 +146,11 @@ export function AstronautCard({
   pub?: Uint8Array | undefined;
   /** 뒷면 공개 열쇠를 꺼내기 전 본인 확인 */
   onReveal?: (() => Promise<boolean>) | undefined;
+  /**
+   * 소속 배지(docs/36 11-13): 이 기기에 있는 상품 자격 증서의 도장을 장부의 기간 열쇠로 확인했을 때만,
+   * 내 기기의 내 등록증에만 그린다. 꾸밈이고 남에게 보이는 증명이 아니다
+   */
+  affiliation?: { name: string; method: string } | null | undefined;
 }) {
   /** 돌림판(앞뒷면과 옆면 층을 함께 돌린다) */
   const turn = useRef<HTMLDivElement>(null);
@@ -179,6 +185,7 @@ export function AstronautCard({
   const [now, setNow] = useState(() => clock.now());
   const [fullAddress, setFullAddress] = useState(false);
   const [aboutMark, setAboutMark] = useState(false);
+  const [aboutBadge, setAboutBadge] = useState(false);
   const reduce = useRef(false);
 
   useEffect(() => {
@@ -423,6 +430,23 @@ export function AstronautCard({
               <span className="font-black text-[6cqw] leading-none tracking-[0.06em]">
                 우주인 등록증
               </span>
+              {affiliation && (
+                <button
+                  type="button"
+                  aria-label={`${affiliation.name} 소속: 무엇인가요?`}
+                  aria-expanded={aboutBadge}
+                  data-affiliation-badge={affiliation.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAboutBadge((v) => !v);
+                    setAboutMark(false);
+                  }}
+                  className="ml-auto mr-[1.6cqw] flex items-center gap-[1cqw] rounded-full border border-amber-200/45 bg-amber-200/15 px-[2cqw] py-[0.8cqw] text-[2.4cqw] text-amber-50"
+                >
+                  <ClusterMark className="size-[3.6cqw]" />
+                  {affiliation.name} 소속
+                </button>
+              )}
               <button
                 type="button"
                 aria-label="패스키 표시: 무엇인가요?"
@@ -690,6 +714,16 @@ export function AstronautCard({
                 : ""}
       </p>
 
+      {!flipped && aboutBadge && affiliation && (
+        <p className="break-keep text-center text-amber-100/85 text-xs">
+          {affiliation.method}으로 받은 상품 자격이 이 기기에 있습니다. 우주국도
+          누구의 자격인지 모릅니다 ·{" "}
+          <a href="/stardraw/qualify" className="underline underline-offset-2">
+            자세히
+          </a>
+        </p>
+      )}
+
       {!flipped && (aboutMark || (owner === "ok" && !forced)) && (
         <p className="break-keep text-center text-sky-100/85 text-xs">
           {owner === "ok"
@@ -719,5 +753,24 @@ export function AstronautCard({
         </p>
       )}
     </div>
+  );
+}
+
+/** 산개 성단(벌집 성단 M44) 무늬: 별 몇 개를 모아 그린다 */
+function ClusterMark({ className }: { className?: string }) {
+  const stars: [number, number, number][] = [
+    [8, 6, 1.6],
+    [13, 9, 1.2],
+    [5, 11, 1.1],
+    [10, 13, 1.5],
+    [15, 14, 0.9],
+    [6, 16, 0.9],
+  ];
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true">
+      {stars.map(([x, y, r]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="currentColor" />
+      ))}
+    </svg>
   );
 }

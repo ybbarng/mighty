@@ -18,6 +18,7 @@ import {
   passkeyProblem,
   platformUnlock,
 } from "../passkey-env";
+import { usableHolding } from "../qual-store";
 import { ensureRegistered, registering, signProof } from "../registrar";
 import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
@@ -76,10 +77,34 @@ export function EnterView({
     kind: "new" | "found";
     key: KeyInfo;
   } | null>(null);
+  /** 이 회차에 붙일 수 있는 상품 자격(docs/36 11-13)과 붙일지 */
+  const [qual, setQual] = useState<ReturnType<typeof usableHolding>>(null);
+  const [useQual, setUseQual] = useState(true);
   const full = picked.length === 6;
   const open = status.phase === "open";
   // 데모는 실제 패스키 대신 화면 안 흉내 시트를 쓴다: 패스키를 못 쓰는 환경 안내로 막지 않는다
   const demo = services.ns === DEMO_NS;
+
+  useEffect(() => {
+    let alive = true;
+    services.ledger
+      .qualInfo()
+      .then((info) => {
+        if (alive)
+          setQual(
+            usableHolding(
+              services.ns,
+              services.ledger.id(),
+              info,
+              status.round,
+            ),
+          );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [services, status.round]);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -168,6 +193,7 @@ export function EnterView({
         challenge,
         entry.powTarget,
         { params: ledger.powParams },
+        qual && useQual ? qual.holding : null,
       );
       if (!ticket || registration === null)
         throw new Error("응모권을 만들지 못했습니다");
@@ -351,6 +377,24 @@ export function EnterView({
           지우기
         </button>
       </div>
+
+      {qual && (
+        <label
+          className="flex items-center gap-2 rounded-xl border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-sm"
+          data-qual-toggle={useQual ? "on" : "off"}
+        >
+          <input
+            type="checkbox"
+            checked={useQual}
+            disabled={step !== "pick"}
+            onChange={(e) => setUseQual(e.target.checked)}
+            className="size-4 accent-amber-300"
+          />
+          <span className="font-semibold text-amber-50">
+            {qual.period.affiliationName} 상품 대상
+          </span>
+        </label>
+      )}
 
       {error && <ErrorBox error={error} />}
 

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { ManualClock } from "@mighty/fair-play";
 import {
+  blindStampRequest,
   DEFAULT_WEBAUTHN_POLICY,
   directorKeyConfig,
   type EntrantSigner,
@@ -9,14 +10,18 @@ import {
   genesisHash,
   makeRegistration,
   makeTicket,
+  newQualSeed,
   OP_VERSION,
   type OpBody,
+  type QualHolding,
+  qualKeyFromSeed,
   rankOf,
   signAsDirector,
   softCredentialId,
   softPasskeySigner,
   ticketId,
   toHex,
+  unblindStamp,
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
@@ -72,6 +77,7 @@ async function enter(
   signer: EntrantSigner,
   numbers: number[],
   register = true,
+  qual: QualHolding | null = null,
 ) {
   const round = ledger.status().round;
   const entry = ledger.schedule.entries[0];
@@ -84,6 +90,7 @@ async function enter(
     challenge,
     entry.powTarget,
     { params: PRACTICE_POW },
+    qual,
   );
   const reg = register
     ? await makeRegistration(
@@ -356,4 +363,59 @@ describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
     const report = await ledger.verify();
     expect(report.problems).toEqual([]);
   }, 20_000);
+});
+
+describe("연습 장부: 데모 상품 자격(docs/36 11-13)", () => {
+  it("데모 국장·소속·기간을 차리고, 데모 기관 계정으로 받은 증서를 붙여 응모하면 상품 대상이 된다", async () => {
+    const { ledger, store } = setup();
+    await ledger.prepareDemoQualification();
+    const info = await ledger.qualInfo();
+    expect(info.periods).toMatchObject([
+      {
+        affiliationName: "벌집 성단",
+        method: "데모 기관 계정",
+        open: true,
+        verify: "demo",
+      },
+    ]);
+    const period = info.periods[0];
+    if (!period) throw new Error("기간이 없다");
+    // 기기: 자격 열쇠를 만들어 가리고, 받은 도장을 벗긴다
+    const seed = newQualSeed();
+    const periodId = fromHex(period.id);
+    const request = blindStampRequest(
+      periodId,
+      qualKeyFromSeed(seed).publicKey,
+    );
+    const blindStamp = await ledger.issueStamp(
+      period.id,
+      "demo",
+      request.blinded,
+    );
+    const holding = {
+      periodId,
+      seed,
+      stamp: unblindStamp(blindStamp, request.factor),
+    };
+    const mine = await enter(
+      ledger,
+      await passkey(),
+      [1, 2, 3, 4, 5, 6],
+      true,
+      holding,
+    );
+    expect(mine.v).toBe(2);
+    await ledger.skipToNextDraw();
+    const report = await ledger.verify();
+    expect(report.problems).toEqual([]);
+    const judged = report.qualification.rounds.find(
+      (r) => r.round === mine.round,
+    );
+    expect(judged?.eligible.map(toHex)).toEqual([toHex(ticketId(mine))]);
+    expect((await ledger.qualInfo()).periods[0]?.issued).toBe(1);
+    // 다시 불러도 그대로(이미 받을 수 있는 기간이 있으면 아무것도 하지 않는다)
+    const records = ledger.closed().length;
+    await setup(store).ledger.prepareDemoQualification();
+    expect(setup(store).ledger.closed().length).toBe(records);
+  }, 60_000);
 });

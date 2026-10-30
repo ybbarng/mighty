@@ -12,6 +12,7 @@ import {
   type Operation,
   type OperationView,
   roundTimes,
+  STAMP_SCHEME_BLS,
 } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useState } from "react";
 
@@ -61,6 +62,14 @@ export interface DirectorConsoleProps {
   onSkipNotice?: () => Promise<void>;
   /** 장부가 바뀌면 오른다(데모의 다른 단추가 시간을 옮겼을 때 다시 읽게) */
   version?: number;
+}
+
+/** 자격 기간 길이: 1년(2026-10-31 사용자, docs/36 11-13) */
+const QUAL_PERIOD_SECONDS = 365 * 24 * 3600;
+
+function day(seconds: number): string {
+  const d = new Date(seconds * 1000);
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 }
 
 export function DirectorConsole({
@@ -388,20 +397,75 @@ export function DirectorConsole({
             className="flex flex-col gap-2 text-sm"
             data-director-affiliations
           >
-            {view.affiliations.map((a) => (
-              <li
-                key={a.id}
-                className="flex flex-wrap gap-2 rounded-xl border border-white/10 px-3 py-2"
-              >
-                <b>{a.name}</b>
-                <span className="text-white/60">
-                  {a.badgeName} · {a.method} · 발급 {a.issued} ·{" "}
-                  {a.until === null
-                    ? `${roundShort(schedule, a.from)}부터`
-                    : `${roundShort(schedule, a.until)}에 끝남`}
-                </span>
-              </li>
-            ))}
+            {view.affiliations.map((a) => {
+              const periods = (view.periods ?? []).filter(
+                (p) => p.affiliation === a.id,
+              );
+              const pendingPeriod = view.operations.some(
+                (o) =>
+                  o.kind === "qual-period" &&
+                  o.status === "pending" &&
+                  o.target === a.id,
+              );
+              const lastEnd = Math.max(0, ...periods.map((p) => p.endsAt));
+              const open = periods.some((p) => p.endsAt > state.now);
+              return (
+                <li
+                  key={a.id}
+                  className="flex flex-col gap-1 rounded-xl border border-white/10 px-3 py-2"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <b>{a.name}</b>
+                    <span className="text-white/60">
+                      {a.badgeName} · {a.method} ·{" "}
+                      {a.until === null
+                        ? `${roundShort(schedule, a.from)}부터`
+                        : `${roundShort(schedule, a.until)}에 끝남`}
+                    </span>
+                  </div>
+                  {periods.map((p) => (
+                    <span
+                      key={p.id}
+                      className="text-white/60"
+                      data-director-period
+                    >
+                      {`자격 ${p.number}기 · ${day(p.startsAt)}~${day(p.endsAt)} · 발급 ${p.issued}`}
+                    </span>
+                  ))}
+                  {a.until === null && !open && !pendingPeriod && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void act(async () => {
+                          const issuerKey = await backend.issuerKey();
+                          return sendBody((s) => {
+                            const startsAt = Math.max(
+                              lastEnd,
+                              s.view.next.earliestEffectiveAt,
+                            );
+                            return {
+                              kind: "qual-period",
+                              effectiveRound:
+                                s.view.next.earliestEffectiveRound,
+                              affiliation: fromHex(a.id),
+                              number: periods.length + 1,
+                              startsAt,
+                              endsAt: startsAt + QUAL_PERIOD_SECONDS,
+                              scheme: STAMP_SCHEME_BLS,
+                              issuerKey,
+                            };
+                          });
+                        })
+                      }
+                      className="self-start rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      자격 기간 열기(1년)
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Section>
@@ -541,8 +605,8 @@ function AffiliationForm({
     <Section title="시험 소속 추가">
       <p className="break-keep text-sm text-white/70">
         소속은 별·성단 이름과 배지, 신원 확인 방법 이름만 장부에 남깁니다. 실제
-        확인 값(기관 주소 등)은 장부에 넣지 않습니다. 자격 열쇠와 발급 수는
-        나중에 채웁니다.
+        확인 값(기관 주소 등)은 장부에 넣지 않습니다. 상품 자격은 소속이 효력을
+        얻은 뒤 아래 「소속」에서 자격 기간을 열어 줍니다.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">

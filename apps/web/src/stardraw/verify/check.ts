@@ -5,6 +5,7 @@ import {
   checkPublicLedger,
   directorHistory,
   operationsView,
+  qualificationSummary,
   type RoundRecord,
   STARDRAW_ANCHOR_REPO,
   TIMESTAMP_LABEL,
@@ -13,6 +14,7 @@ import {
   toHex,
   type VerifyReport,
   withPowDetail,
+  withQualDetail,
 } from "@mighty/stardraw-core";
 
 export type {
@@ -70,23 +72,28 @@ export async function checkPracticeLedger(ledger: {
   await ledger.settle();
   const report = await ledger.verify();
   const closed = ledger.closed();
-  const items = withPowDetail(
-    checkItemsFrom(
-      report.problems,
-      [
+  const qualification = qualificationSummary(report, closed.length);
+  const items = withQualDetail(
+    withPowDetail(
+      checkItemsFrom(
+        report.problems,
+        [
+          {
+            id: "timestamp",
+            label: TIMESTAMP_LABEL,
+            status: "skip",
+            detail: "연습 장부는 이 기기 안에서만 돕니다",
+          },
+        ],
         {
-          id: "timestamp",
-          label: TIMESTAMP_LABEL,
-          status: "skip",
-          detail: "연습 장부는 이 기기 안에서만 돕니다",
+          drand:
+            "연습 장부는 기기 안에서 만든 가짜 난수라 drand 서명이 없습니다",
+          anchor: "연습 장부는 이 기기 안에서만 돌아 앵커를 남기지 않습니다",
         },
-      ],
-      {
-        drand: "연습 장부는 기기 안에서 만든 가짜 난수라 drand 서명이 없습니다",
-        anchor: "연습 장부는 이 기기 안에서만 돌아 앵커를 남기지 않습니다",
-      },
+      ),
+      report,
     ),
-    report,
+    qualification,
   );
   return {
     source: "practice",
@@ -101,5 +108,6 @@ export async function checkPracticeLedger(ledger: {
     skipped: report.skipped,
     directors: directorHistory(report.operations),
     operations: operationsView(report.operations, closed.length, report.head),
+    qualification,
   };
 }

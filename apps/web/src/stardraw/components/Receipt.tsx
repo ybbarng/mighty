@@ -4,6 +4,7 @@ import {
   displayRound,
   drandRoundForClose,
   drandTime,
+  qualDisplayId,
   type Rank,
   type RoundRecord,
   roundTimes,
@@ -83,6 +84,18 @@ export function Receipt({
         <dd className="text-right" data-ticket-id>
           {shortId(id)}
         </dd>
+        {ticket.qual && (
+          <>
+            <dt className="text-slate-400">상품</dt>
+            <dd className="text-right text-amber-100" data-receipt-qual>
+              상품 대상 ·{" "}
+              {qualDisplayId(
+                ticket.qual.cert.periodId,
+                ticket.qual.cert.qualPub,
+              )}
+            </dd>
+          </>
+        )}
         {ticket.sig.kind === "webauthn" && (
           <>
             <dt className="text-slate-400">서명</dt>
