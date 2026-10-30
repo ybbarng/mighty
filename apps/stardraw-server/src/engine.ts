@@ -149,6 +149,8 @@ export interface ServerState {
   sealed: number;
   /** 마감이 지났는데 아직 닫지 못한 회차 수. 마감부터 추첨까지는 1, 봉인·추첨이 멈추면 다음 마감에 2가 된다(서버 감시가 본다) */
   behind: number;
+  /** 장부에 실렸고 아직 효력이 생기지 않은(예고 중인) 운영 기록 수. 0이 아니면 서버 감시가 국장에게 알린다 */
+  pending: number;
   /** 다음 회차 문제 값 */
   head: string;
   /** 이번 회차에 들어온 응모 수 */
@@ -272,6 +274,9 @@ export class StardrawServer {
       records,
       sealed: this.o.store.lastSealed(),
       behind: Math.max(0, round - 1 - records),
+      pending: this.ops.ops.filter(
+        (e) => e.status === "pending" && e.op.effectiveRound > round,
+      ).length,
       head: toHex(this.head()),
       entries: round > 0 ? this.o.store.entryCount(round) : 0,
       serverKey: toBase64Url(this.o.serverKey.publicKey),
@@ -688,7 +693,7 @@ export class StardrawServer {
 
   /**
    * 예약해 둔 일정 바꾸기(`schedule-live`)를 이번 기록에 실을 수 있으면 싣는다.
-   * 그사이 24시간 규칙에 늦어졌으면 싣지 않고 지운 뒤 기록을 남긴다(다시 예약해야 한다)
+   * 그사이 예고 규칙에 늦어졌으면 싣지 않고 지운 뒤 기록을 남긴다(다시 예약해야 한다)
    */
   private dueChanges(schedule: Schedule, round: number): ScheduleEntry[] {
     const pending = this.o.store.pendingChange();

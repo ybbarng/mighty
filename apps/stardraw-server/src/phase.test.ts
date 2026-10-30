@@ -46,27 +46,27 @@ describe("시험 → 정식: 이어지는 장부", () => {
       ),
     });
     await rig.finish(1);
-    // 2회차 기록에 실린다: 2회차 마감 + 24시간 = 27회차가 열리는 시각
-    expect(() => scheduleLive(rig?.store as never, opensAt(26))).toThrow(
-      /24시간 뒤에 시작하는 회차부터\(2회차 기록에 실린다\)/,
+    // 2회차 기록에 실린다: 3·4·5회차 동안 예고, 6회차부터
+    expect(() => scheduleLive(rig?.store as never, opensAt(5))).toThrow(
+      /3회차 예고 뒤\(6회차\)부터\(2회차 기록에 실린다\)/,
     );
-    expect(scheduleLive(rig.store, opensAt(27))).toMatchObject({
-      change: { fromRound: 27, length: 3600, phase: "live" },
+    expect(scheduleLive(rig.store, opensAt(6))).toMatchObject({
+      change: { fromRound: 6, length: 3600, phase: "live" },
       decidedIn: 2,
     });
-    expect(() => scheduleLive(rig?.store as never, opensAt(28))).toThrow(
+    expect(() => scheduleLive(rig?.store as never, opensAt(7))).toThrow(
       /이미 예약한/,
     );
     expect(rig.engine.state().mode).toBe("trial");
 
-    for (let round = 2; round <= 27; round++) await rig.finish(round);
+    for (let round = 2; round <= 6; round++) await rig.finish(round);
     expect(rig.store.pendingChange()).toBeNull();
     expect(rig.store.record(2)?.scheduleChanges[0]?.phase).toBe("live");
-    expect(rig.engine.state().liveFrom).toBe(27);
-    await rig.at(opensAt(28) + 10);
+    expect(rig.engine.state().liveFrom).toBe(6);
+    await rig.at(opensAt(7) + 10);
     expect(rig.engine.state().mode).toBe("live");
     expect(() => scheduleLive(rig?.store as never, opensAt(60))).toThrow(
-      /이미 27회차부터 정식 단계다/,
+      /이미 6회차부터 정식 단계다/,
     );
 
     const ledger = readLedger(rig.dir);
@@ -78,30 +78,30 @@ describe("시험 → 정식: 이어지는 장부", () => {
       { beaconVerifier: () => true, powParams: TEST_POW },
     );
     expect(report.problems).toEqual([]);
-    expect(displayRound(report.schedule, 26).label).toBe("시험 26회");
-    expect(displayRound(report.schedule, 27).label).toBe("정식 1회");
+    expect(displayRound(report.schedule, 5).label).toBe("시험 5회");
+    expect(displayRound(report.schedule, 6).label).toBe("정식 1회");
 
     // 앵커: 처음 일정표는 main, 시험 회차는 trial, 정식 회차는 main
     await rig.engine.anchorIdle();
     const id = ledgerId(rig.engine.genesis);
     expect(gh.text("main", "genesis.txt")).toContain(`ledger ${id}`);
-    expect(gh.text("trial", anchorPath(id, 26))).toBeDefined();
-    expect(gh.text("main", anchorPath(id, 26))).toBeUndefined();
+    expect(gh.text("trial", anchorPath(id, 5))).toBeDefined();
+    expect(gh.text("main", anchorPath(id, 5))).toBeUndefined();
     expect(
-      parseAnchorFile(gh.text("main", anchorPath(id, 27)) ?? "")?.round,
-    ).toBe(27);
+      parseAnchorFile(gh.text("main", anchorPath(id, 6)) ?? "")?.round,
+    ).toBe(6);
 
     // 장부 사본: 시험 회차는 trial에, 정식 첫 회차 앞에서 지난 시험 회차까지 main에 채워 main 하나로 전체를 받는다
     const head = (branch: string) =>
       JSON.parse(gh.text(branch, ledgerMirrorPath(id, "head.json")) ?? "{}")
         .rounds;
-    expect(head("trial")).toBe(26);
-    expect(head("main")).toBe(27);
+    expect(head("trial")).toBe(5);
+    expect(head("main")).toBe(6);
     expect(gh.text("main", ledgerMirrorPath(id, "rounds/000001.json"))).toBe(
       gh.text("trial", ledgerMirrorPath(id, "rounds/000001.json")),
     );
     expect(
-      gh.text("trial", ledgerMirrorPath(id, "rounds/000027.json")),
+      gh.text("trial", ledgerMirrorPath(id, "rounds/000006.json")),
     ).toBeUndefined();
   });
 
@@ -116,12 +116,12 @@ describe("시험 → 정식: 이어지는 장부", () => {
     expect(rig.store.pendingChange()).toBeNull();
   });
 
-  it("예약한 뒤 기록이 늦게 닫혀 24시간 규칙에 늦으면 싣지 않고 지운다", async () => {
+  it("예약한 뒤 기록이 늦게 닫혀 예고 규칙에 늦으면 싣지 않고 지운다", async () => {
     rig = await makeRig({ schedule: TRIAL });
     await rig.finish(1);
     rig.store.setPendingChange({
       ...(TRIAL.entries[0] as Schedule["entries"][0]),
-      fromRound: 10,
+      fromRound: 5,
       phase: "live",
     });
     await rig.finish(2);

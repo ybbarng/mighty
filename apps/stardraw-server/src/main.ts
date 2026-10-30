@@ -127,7 +127,7 @@ async function backupTo(target: string): Promise<void> {
 
 /**
  * `node server.mjs schedule-live --from <ISO>`: 정식 단계를 예약한다(docs/36 11-6).
- * 돌고 있는 서버가 다음에 닫는 회차 기록에 일정 바꾸기 한 줄로 싣는다(24시간 예고)
+ * 돌고 있는 서버가 다음에 닫는 회차 기록에 일정 바꾸기 한 줄로 싣는다(3회차 예고)
  */
 function scheduleLiveCommand(args: readonly string[]): void {
   const config = loadConfig();

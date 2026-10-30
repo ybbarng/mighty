@@ -9,6 +9,7 @@ import {
   type OpBody,
   type Operation,
   opId,
+  roundTimes,
   type Schedule,
   type SoftPasskey,
   signAsDirector,
@@ -34,8 +35,8 @@ import {
 } from "./testing";
 
 /**
- * 국장 요청(docs/36 11-12). 시험 장부는 1시간 회차라 회차 k 기록의 가장 이른 효력 회차는 k + 25다.
- * 설정의 국장 열쇠는 1회차 기록에 관인 지정으로 실려 26회차부터 쓴다
+ * 국장 요청(docs/36 11-12). 회차 k 기록의 가장 이른 효력 회차는 k + 4다(3회차 예고). 시험들은 더 늦은 효력 회차도 쓴다.
+ * 설정의 국장 열쇠는 1회차 기록에 관인 지정으로 실려 5회차부터 쓴다
  */
 
 const TRIAL: Schedule = {
@@ -95,7 +96,7 @@ async function finishThrough(r: Rig, round: number): Promise<void> {
 }
 
 describe("국장 열쇠 지정(서버 설정 → 관인 기록)", () => {
-  it("설정의 국장 열쇠는 지문을 기록에 찍고, 다음 기록에 관인 지정(24시간 예고)으로 싣는다. 그 전에는 국장 요청을 거절한다", async () => {
+  it("설정의 국장 열쇠는 지문을 기록에 찍고, 다음 기록에 관인 지정(3회차 예고)으로 싣는다. 그 전에는 국장 요청을 거절한다", async () => {
     const r = await directorRig();
     const fp = directorFingerprint(director.publicKey);
     expect(r.logs).toContain(
@@ -105,11 +106,11 @@ describe("국장 열쇠 지정(서버 설정 → 관인 기록)", () => {
     const op = r.store.record(1)?.operations?.[0];
     expect(op).toMatchObject({
       kind: "director-add",
-      effectiveRound: 26,
+      effectiveRound: 5,
       signer: { role: "seal" },
     });
     expect(r.logs.join("\n")).toContain(
-      `국장 열쇠 지정 ${fp}(서명 관인, 26회차부터)`,
+      `국장 열쇠 지정 ${fp}(서명 관인, 5회차부터)`,
     );
     // 아직 효력 전: 국장 요청은 403
     await expect(
@@ -135,6 +136,12 @@ describe("국장 열쇠 지정(서버 설정 → 관인 기록)", () => {
     // 같은 열쇠를 두 번 싣지 않는다
     await r.finish(2);
     expect(r.store.record(2)?.operations).toBeUndefined();
+    // 예고 중인 운영 기록 수(서버 감시가 국장에게 알린다). 효력 회차(5회차)가 열리면 0
+    expect(r.engine.state().pending).toBe(1);
+    await r.finish(3);
+    await r.finish(4);
+    await r.at(roundTimes(r.engine.schedule(), 5).opensAt + 10);
+    expect(r.engine.state().pending).toBe(0);
   });
 });
 
@@ -164,7 +171,7 @@ describe("국장 열쇠를 설정에서 빼기", () => {
 });
 
 describe("국장 요청", () => {
-  it("소속 추가 → 다음 기록에 실림 → 24시간 뒤 적용, 장부 검사를 통과한다", async () => {
+  it("소속 추가 → 다음 기록에 실림 → 예고 뒤 적용, 장부 검사를 통과한다", async () => {
     const r = await directorRig();
     await finishThrough(r, 25);
     const op = await affiliation(r, director);
@@ -233,7 +240,7 @@ describe("국장 요청", () => {
     await expect(submit(r, tampered)).rejects.toThrow(/서명이 맞지 않는다/);
     await expect(
       submit(r, await affiliation(r, director, next(r) + 1)),
-    ).rejects.toThrow(/24시간 예고가 모자란다/);
+    ).rejects.toThrow(/예고가 모자란다\(3회차 예고/);
     // 관인 열쇠인 척 원시 서명으로 보내도 국장 요청 길로는 받지 않는다
     const asSeal = await signAsSeal(good, await generateSigner());
     await expect(submit(r, asSeal)).rejects.toMatchObject({ status: 403 });
@@ -296,7 +303,7 @@ describe("HTTP 국장 경로", () => {
       const state = await (await fetch(`${base}/api/director/state`)).json();
       expect(state.view.next).toMatchObject({
         round: 1,
-        earliestEffectiveRound: 26,
+        earliestEffectiveRound: 5,
       });
       const op = await affiliation(r, stranger);
       const res = await fetch(`${base}/api/director/ops`, {
