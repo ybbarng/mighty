@@ -319,9 +319,12 @@ export const useNyrongppong = create<NyrongppongStore>((set, get) => {
 
     canUndo() {
       const { local, view } = get();
-      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다.
+      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다. 판 끝은 화면에 보이기 전에 기록되므로
+      // 보이는 화면이 아니라 대국의 최신 상태로 본다. 내가 버린 뒤 남들이 뽕할지 고르는 동안(call)에도 무른다
       if (!local || !view || get().practice) return false;
-      if (view.phase !== "discard" && view.phase !== "draw") return false;
+      const phase = local.current().phase;
+      if (phase !== "discard" && phase !== "draw" && phase !== "call")
+        return false;
       return local
         .actionLog()
         .some((entry) => entry.seat === local.seat && isTurn(entry.action));
