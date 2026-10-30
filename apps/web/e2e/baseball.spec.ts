@@ -155,6 +155,17 @@ test("숫자야구: 게임 목록에서 들어가 입문 컴퓨터와 서로 맞
   page,
 }, info) => {
   const touch = info.project.name.startsWith("phone");
+  // 판을 늘 같게 둔다. 무작위면 504판에 한 판은 컴퓨터 비밀이 123이라 첫 물음(123)에 판이 끝나
+  // 무르기를 확인하지 못한다(2026-10-30 CI에서 두 번)
+  await page.addInitScript(() => {
+    let s = 1;
+    Math.random = () => {
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+    };
+  });
   await page.goto("/");
   await page
     .getByRole("link", { name: /숫자야구/ })
