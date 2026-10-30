@@ -150,7 +150,7 @@ describe("공개 시각 인증(가짜 기관)", () => {
     // 늦은 쪽 토큰만 남기면 봉인 시각이 기록과 달라진다
     const later = { ...proof, tokens: proof.tokens.slice(1) };
     expect((await check(later, 1)).problems.map((p) => p.message)).toContain(
-      "머클 루트의 투명성 로그 기록을 확인할 수 없다",
+      "봉인 시각 증거(기관 토큰)가 이 봉인 값을 담고 있지 않다",
     );
   });
 
@@ -245,7 +245,7 @@ describe("Rekor 투명성 로그(꺼 둔 선택지, 가짜 Rekor)", () => {
     expect((await check(proof)).problems).toEqual([]);
     const moved = { ...proof, integratedTime: proof.integratedTime - 1 };
     expect((await check(moved)).problems.map((p) => p.message)).toContain(
-      "머클 루트의 투명성 로그 기록을 확인할 수 없다",
+      "봉인 시각 증거(기관 토큰)가 이 봉인 값을 담고 있지 않다",
     );
   });
 

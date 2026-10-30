@@ -201,7 +201,7 @@ describe("공격해 보기", () => {
     const world = await buildWorld();
     const attack = ATTACKS.find((a) => a.id === "op-insert");
     const result = await attack?.run(world);
-    expect(result?.caught.join("\n")).toMatch(/투명성 로그|봉인/);
+    expect(result?.caught.join("\n")).toMatch(/봉인 시각 증거/);
     expect(result?.caught.join("\n")).not.toMatch(/이어지지 않는다/);
   });
 });

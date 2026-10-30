@@ -253,13 +253,9 @@ export async function checkLedger(l: MiniLedger): Promise<CheckOutcome> {
     if (equalBytes(head, l.rememberedHead)) kept = true;
   }
   return {
-    problems: report.problems.map((p) => {
-      const message = p.message.replace(
-        "머클 루트의 투명성 로그 기록을 확인할 수 없다",
-        "봉인 시각 증거(기관 토큰)가 이 봉인 값을 담고 있지 않다",
-      );
-      return p.round === 0 ? message : `${p.round}회차: ${message}`;
-    }),
+    problems: report.problems.map((p) =>
+      p.round === 0 ? p.message : `${p.round}회차: ${p.message}`,
+    ),
     headKept: kept,
   };
 }

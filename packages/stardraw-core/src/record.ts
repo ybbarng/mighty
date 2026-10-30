@@ -29,7 +29,7 @@ export interface RoundRecord {
   /** 이 회차에 들어간 열쇠 등록 수와 등록 id 머클 루트(registration.ts) */
   registrationCount: number;
   registrationRoot: Uint8Array;
-  /** 머클 루트가 투명성 로그(Rekor)에 들어간 시각. 0이면 올리지 못함 */
+  /** 머클 루트가 봉인 시각 증거(TSA 토큰, 꺼 둔 선택지는 Rekor)의 시각. 0이면 올리지 못함 */
   rootLoggedAt: number;
   /** 루트가 drand보다 늦게 기록돼 당첨 없이 끝난 회차(docs/36 11-1) */
   void: boolean;

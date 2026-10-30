@@ -1122,7 +1122,7 @@ function RoundDetail({
               </ul>
             )}
             <p className="mt-1 text-white/50 text-xs">
-              연습 장부라 drand 서명과 투명성 로그 기록은 확인하지 않습니다.
+              연습 장부라 drand 서명과 봉인 시각 증거는 확인하지 않습니다.
             </p>
           </div>
         )}

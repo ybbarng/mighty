@@ -65,8 +65,8 @@ export interface VerifyOptions {
   /** 늘 전부 검사할 내 응모권 id */
   mine?: readonly Uint8Array[];
   /**
-   * 봉인 값(round.ts `sealDigest`)이 그 시각(rootLoggedAt)에 투명성 로그에 들어갔는지 확인.
-   * Rekor 항목 확인은 rekor.ts `rekorRootLogVerifier`. 없으면 확인하지 않고 skipped에 남긴다.
+   * 봉인 값(round.ts `sealDigest`)이 그 시각(rootLoggedAt) 전에 있었다는 증거(TSA 토큰)를 확인.
+   * TSA는 tsa.ts `tsaRootLogVerifier`, 꺼 둔 Rekor는 rekor.ts `rekorRootLogVerifier`. 없으면 확인하지 않고 skipped에 남긴다.
    */
   rootLogVerifier?: (record: RoundRecord) => Promise<boolean>;
   /**
@@ -251,7 +251,7 @@ export async function verifyLedger(
     }
     if (options.rootLogVerifier) {
       if (!(await options.rootLogVerifier(record)))
-        fail("머클 루트의 투명성 로그 기록을 확인할 수 없다");
+        fail("봉인 시각 증거(기관 토큰)가 이 봉인 값을 담고 있지 않다");
     } else {
       skipped.push(`${round}회차: 머클 루트 로그 시각(확인 수단 없음)`);
     }
