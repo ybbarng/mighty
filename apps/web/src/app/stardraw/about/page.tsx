@@ -224,6 +224,13 @@ export default function StardrawAbout() {
           </ul>
         </Section>
 
+        <a
+          href="/stardraw/verify"
+          className="self-start text-sm text-amber-100/90 underline underline-offset-2"
+        >
+          직접 검증하려면: 장부 파일, 계산 규칙, 시험 값, 장부 전체 검사
+        </a>
+
         <footer className="text-center text-[11px] text-white/40">
           <MadeWith />
         </footer>
