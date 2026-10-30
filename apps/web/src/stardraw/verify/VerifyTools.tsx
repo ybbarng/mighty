@@ -219,6 +219,32 @@ export function LedgerCheck() {
               </li>
             ))}
           </ul>
+          <div className="flex flex-col gap-1" data-director-history>
+            <p className="font-semibold text-sm text-white/80">
+              국장 열쇠 내력
+            </p>
+            {result.directors.length === 0 ? (
+              <p className="text-white/55 text-xs">
+                국장 열쇠 지정 기록이 없습니다(운영 기록을 낼 수 있는 국장이
+                없음)
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-0.5 text-white/65 text-xs">
+                {result.directors.map((d) => (
+                  <li key={`${d.round}-${d.fingerprint}-${d.action}`}>
+                    사슬 {d.round} 기록 · {d.action}{" "}
+                    <code className="text-amber-100/90">{d.fingerprint}</code> ·
+                    서명 {d.signedBy} · {d.effectiveRound}회차부터 ·{" "}
+                    {d.status === "pending"
+                      ? "예고 중"
+                      : d.status === "applied"
+                        ? "효력"
+                        : `취소됨(사슬 ${d.cancelledIn})`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <p className="break-all font-mono text-[11px] text-white/45">
             장부 끝 해시 {result.head}
           </p>

@@ -15,6 +15,8 @@ import {
   makeRegistration,
   makeTicket,
   newInviteToken,
+  OP_VERSION,
+  type Operation,
   type PowParams,
   powTargetForTries,
   type RoundRecord,
@@ -23,6 +25,8 @@ import {
   type SoftPasskey,
   sealDigest,
   sealImprint,
+  signAsDirector,
+  signAsSeal,
   signInvite,
   signTicket,
   softPasskeySigner,
@@ -347,6 +351,30 @@ function myTicket(w: World): Ticket {
   return t;
 }
 
+/**
+ * 2회차 기록에 운영 기록 하나를 넣고 사슬과 앵커를 다시 쓴다(운영자가 할 수 있는 만큼 감춘다).
+ * 운영 기록은 서명할 때의 장부 끝 해시(1회차 기록 해시) 자리에 묶인다
+ */
+async function withOperation(
+  w: World,
+  make: (after: Uint8Array) => Promise<Operation>,
+): Promise<MiniLedger> {
+  const l = cloneLedger(w);
+  const r1 = l.records[0] as RoundRecord;
+  const r2 = l.records[1] as RoundRecord;
+  l.records[1] = { ...r2, v: 2, operations: [await make(recordHash(r1))] };
+  coverUp(l);
+  return l;
+}
+
+const TEST_AFFILIATION = {
+  name: "시험 성단",
+  badge: 2 as const,
+  method: "초대 코드",
+  issuerKey: new Uint8Array(),
+  issued: 0,
+};
+
 export const ATTACKS: readonly Attack[] = [
   {
     id: "op-numbers",
@@ -482,6 +510,55 @@ export const ATTACKS: readonly Attack[] = [
         caught: problems.map((p) => `확인하는 분 기기: ${p}`),
         why: "확인하는 분 기기는 장부에 있는 그 응모권의 공개 열쇠로만 서명을 받는다",
       };
+    },
+  },
+  {
+    id: "op-director-forge",
+    role: "operator",
+    title: "국장 열쇠 없이 소속 추가",
+    how: "장부에 지정되지 않은 내 패스키로 '소속 추가' 운영 기록에 서명해 2회차 기록에 넣고, 앵커까지 고쳐 쓴다",
+    run: async (w) => {
+      const l = await withOperation(w, (after) =>
+        signAsDirector(
+          {
+            v: OP_VERSION,
+            kind: "affiliation-add",
+            after,
+            effectiveRound: 27,
+            fields: TEST_AFFILIATION,
+          },
+          w.operator,
+        ),
+      );
+      return ledgerAttack(
+        l,
+        "운영 기록은 장부에 지정되고 24시간이 지난 국장 열쇠의 서명만 받는다. 국장 열쇠 지정도 장부에 남아 누구나 내력을 본다",
+      );
+    },
+  },
+  {
+    id: "op-director-now",
+    role: "operator",
+    title: "서버 열쇠로 내 열쇠를 바로 국장에",
+    how: "서버 서명 열쇠(관인)로 내 패스키를 국장 열쇠로 지정하면서 예고 없이 다음 회차부터 효력을 준다",
+    run: async (w) => {
+      const l = await withOperation(w, async (after) =>
+        signAsSeal(
+          {
+            v: OP_VERSION,
+            kind: "director-add",
+            after,
+            effectiveRound: 3,
+            credentialId: w.operator.credentialId,
+            pub: w.operator.publicKey,
+          },
+          await generateSigner(),
+        ),
+      );
+      return ledgerAttack(
+        l,
+        "운영 기록은 실린 회차 마감 + 24시간 뒤에 열리는 회차부터 효력이 생긴다. 그사이 장부에 보이고 진짜 국장이 취소할 수 있다",
+      );
     },
   },
   {

@@ -189,6 +189,21 @@ export default function StardrawAbout() {
           </p>
         </Section>
 
+        <Section title="우주국장도 장부로만 일합니다" id="director">
+          <p className="text-white/85">
+            소속을 더하거나 정식 시작을 예약하는 운영 일은 우주국장이 국장
+            패스키로 서명한 기록으로만 합니다. 그 기록은 공개 장부에 실리고
+            24시간 뒤에야 효력이 생겨, 그사이 누구나 볼 수 있습니다. 서버
+            데이터를 몰래 고치는 길은 없습니다. 국장 열쇠가 언제 지정되고
+            바뀌었는지도 장부에 남아{" "}
+            <a href="/stardraw/verify#check" className="underline">
+              검증하기
+            </a>
+            에서 볼 수 있습니다. 국장 패스키는 응모용 패스키와 따로라,
+            우주국장의 응모도 장부에서 남과 구별되지 않습니다.
+          </p>
+        </Section>
+
         <Section title="패스키와 보안" id="passkey">
           <p className="text-white/85">
             하늘의 별 따기는 패스키로만 응모합니다. 비밀번호보다 안전하고 쓰기도

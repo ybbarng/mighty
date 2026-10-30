@@ -232,6 +232,22 @@ describe("공격해 보기", () => {
     expect(result?.caught.join("\n")).toMatch(/봉인 시각 증거/);
     expect(result?.caught.join("\n")).not.toMatch(/이어지지 않는다/);
   });
+
+  it("국장 기록 위조는 사슬·앵커를 감춰도 운영 기록 규칙에서 걸린다", async () => {
+    const world = await buildWorld();
+    const run = (id: string) =>
+      ATTACKS.find((a) => a.id === id)?.run(world) as ReturnType<
+        (typeof ATTACKS)[number]["run"]
+      >;
+    const forged = (await run("op-director-forge")).caught;
+    expect(forged).toContainEqual(
+      expect.stringMatching(/^2회차: 운영 기록 .*국장 열쇠가 아니다/),
+    );
+    const now = (await run("op-director-now")).caught;
+    expect(now).toContainEqual(
+      expect.stringMatching(/^2회차: 운영 기록 .*24시간 예고가 모자란다/),
+    );
+  });
 });
 
 it("서명: 번호를 바꾸면 확인이 실패한다", async () => {

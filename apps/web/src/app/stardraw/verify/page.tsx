@@ -393,12 +393,13 @@ rootLoggedAt = 맞는 토큰 가운데 가장 이른 genTime(초, 소수점 아�
           </Rule>
 
           <Rule title="회차 기록과 사슬" file="record.ts">
-            <Code>{`기록 = v(u8=1) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
+            <Code>{`기록 = v(u8: 1, 운영 기록이 있으면 2) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
      ‖ registrationCount(u32) ‖ registrationRoot(32) ‖ rootLoggedAt(u64) ‖ void(u8)
      ‖ drandRound(u64) ‖ drandSig(u16 길이 + 바이트) ‖ numbers(6) ‖ bonus(u8)
      ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
      ‖ 일정 변경 [개수(u16) ‖ 줄 × 개수]
      ‖ 별명 [개수(u16) ‖ …]
+     (v2만) ‖ 운영 기록 [개수(u16, 1 이상) ‖ (운영 기록 u16 길이 + 바이트) × 개수]
 기록 해시 = taggedHash("stardraw/record/v1", 기록)      다음 회차의 prev이자 문제 값
 줄           = fromRound, length, closeMargin, powTarget, registerPowTarget(u32 × 5) ‖ phase(u8: 0 없음, 1 시험, 2 정식)
 genesis 해시 = taggedHash("stardraw/genesis/v1", epoch(u64) ‖ 줄 수(u16) ‖ 줄 × 줄 수)`}</Code>
@@ -428,6 +429,44 @@ genesis 해시 = taggedHash("stardraw/genesis/v1", epoch(u64) ‖ 줄 수(u16) �
               <li>
                 앵커 저장소는 운영자가 고칠 수 있는 보조 기록입니다(커밋 기록이
                 남습니다). 봉인 시각은 공개 시각 인증 토큰이 맡습니다.
+              </li>
+            </ul>
+          </Rule>
+
+          <Rule
+            title="운영 기록: 국장도 장부에 남는 기록으로만 일한다"
+            file="operations.ts"
+          >
+            <p className="text-white/80">
+              소속 추가·정식 시작 예약 같은 운영 일은 서버 DB를 고치지 않고,
+              우주국장이 국장 패스키로 서명한 운영 기록으로만 합니다. 운영
+              기록은 회차 기록에 실리고 그 회차 마감 + 24시간 뒤에 열리는
+              회차부터 효력이 생기며, 그사이 국장은 취소할 수 있습니다.
+            </p>
+            <Code>{`본문    = v(u8=1) ‖ kind(u8) ‖ after(32) ‖ effectiveRound(u32) ‖ 내용
+          kind 1 국장 열쇠 지정, 2 빼기, 3 소속 추가, 4 소속 바꾸기, 5 소속 끝내기, 6 예고 취소, 7 일정 바꾸기
+운영 기록 = 본문 ‖ 서명자(u8: 1 관인, 2 국장) ‖ pub(65) ‖ 서명(관인 r‖s 64, 국장 패스키 서명)
+서명 대상 = "stardraw/op-sig/v1" ‖ 0x00 ‖ 본문      id = taggedHash("stardraw/op/v1", 본문)
+지문    = "국장-" + Crockford base32(taggedHash("stardraw/director-fp/v1", pub) 앞 60비트)`}</Code>
+            <ul className={li}>
+              <li>
+                after는 서명할 때의 장부 끝 해시입니다. prev가 그 값인 기록에만
+                실릴 수 있어, 예전 서명을 다른 회차에 다시 쓸 수 없습니다.
+              </li>
+              <li>
+                국장 열쇠는 관인(서버 서명 열쇠, 영수증과 같은 열쇠)이나 이미
+                쓰는 국장이 지정하고, 그것도 24시간 예고입니다. 관인은 장부에
+                처음 실린 열쇠로 고정되고 head.json의 서버 공개 열쇠와 같아야
+                합니다. 장부 전체 검사가 "국장 열쇠 내력"을 함께 보여 줍니다.
+              </li>
+              <li>
+                국장 열쇠와 우주인 열쇠는 섞지 않습니다. 등록된 우주인을
+                국장으로 지정할 수 없고, 국장 열쇠로는 우주인 등록을 할 수
+                없습니다.
+              </li>
+              <li>
+                소속에는 이름·배지·신원 확인 방법 이름만 싣습니다. 실제 확인
+                값(기관 주소 등)은 장부에 넣지 않습니다.
               </li>
             </ul>
           </Rule>
@@ -552,6 +591,10 @@ pnpm stardraw-verify site https://game.byb.kr --build apps/web/out`}</Code>
             <li>응모권 끼워 넣기·빼기, 번호 바꾸기(머클 루트, 봉인 파일)</li>
             <li>당첨 번호·등수 속이기, 다른 drand 회차 쓰기(다시 계산)</li>
             <li>영수증을 받은 응모권 빼기(서버 서명 영수증이 증거가 됨)</li>
+            <li>
+              국장 열쇠를 몰래 바꾸거나 운영 일을 몰래 하기(운영 기록은 장부에
+              24시간 예고로만 효력, 국장 열쇠 내력)
+            </li>
           </ul>
           <h3 className="font-semibold text-white/90">막지 못하는 일</h3>
           <ul className={li}>

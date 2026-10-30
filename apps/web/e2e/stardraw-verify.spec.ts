@@ -39,6 +39,10 @@ test("검증하기: 시험 값 다시 계산과 장부 전체 검사가 통과�
   await expect(
     result.locator("[data-check-item='timestamp'][data-status='skip']"),
   ).toBeVisible();
+  // 국장 열쇠 내력(운영 기록, docs/36 11-12)
+  await expect(result.locator("[data-director-history]")).toContainText(
+    "국장 열쇠 지정 기록이 없습니다",
+  );
 
   // 콘솔 함수도 같은 검사를 부른다
   const viaConsole = await page.evaluate(async () => {
