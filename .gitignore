@@ -149,3 +149,6 @@ apps/web/public/cards-local/
 # 원작 효과음은 라이선스가 없어 공개 저장소에 넣지 않는다(비공개 ybbarng/mighty-archive에 있다, docs/16)
 assets/original-sounds/
 .claude/worktrees/
+
+# 임시 확인 스크립트(작업 중 잠깐 두는 Playwright 등). git·lint 대상이 아니다
+*.tmp.mjs
