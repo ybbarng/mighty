@@ -17,7 +17,11 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp
-    env_file: .env # STARDRAW_MODE(trial|live), 시험 회차 길이, 정식의 앵커·Rekor 설정(README)
+    env_file:
+      - .env # STARDRAW_MODE(trial|live), 시험 회차 길이 등(README)
+      # GitHub 앵커 토큰(STARDRAW_ANCHOR_TOKEN=...). 저장소 밖 비밀 폴더, chmod 600. 없으면 앵커만 꺼지고 서버는 뜬다
+      - path: /home/ybbarng/secrets/stardraw-anchor.env
+        required: false
     environment:
       # 시험 운영(trial)이 기본. 정식은 start-live로 장부를 만든 뒤 .env에서 live로 바꾼다
       STARDRAW_MODE: ${STARDRAW_MODE:-trial}
@@ -27,6 +31,11 @@ services:
       STARDRAW_ORIGINS: https://game.byb.kr,http://localhost:3456,http://localhost:4173
       STARDRAW_DEV_ORIGINS: http://localhost:3456,http://localhost:4173
       STARDRAW_TRUST_PROXY: "1"
+      # 봉인 시각 증명: 공개 시각 인증 기관(기본 digicert,sectigo 중 1곳 이상). 시험 운영도 켠다
+      STARDRAW_TSA: ${STARDRAW_TSA:-digicert,sectigo}
+      STARDRAW_TSA_MIN: ${STARDRAW_TSA_MIN:-1}
+      # GitHub 앵커 저장소(토큰은 위 env_file). 브랜치 기본은 시험 trial, 정식 main
+      STARDRAW_ANCHOR_REPO: ybbarng/stardraw-ledger
     volumes:
       # SQLite(stardraw.sqlite)와 공개 장부 파일(ledger/). 백업 대상.
       # 시험(data-trial)과 정식(data-live)은 폴더를 나눈다. 서버는 폴더의 장부 종류와 STARDRAW_MODE가 다르면 뜨지 않는다

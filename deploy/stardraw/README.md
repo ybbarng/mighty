@@ -26,7 +26,7 @@ chmod 600 server-key.pkcs8
 
 ## 1. 시험 운영
 
-시험 장부는 처음 일정표에 시험 표시가 있어 genesis 해시(꼬리표 `stardraw/genesis-trial/v1`)가 정식과 다르다. 그래서 시험 응모권·등록·증명은 정식 장부에 섞일 수 없다. Rekor·GitHub 앵커는 설정이 있어도 늘 꺼진다. 화면 위에는 "시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다" 띠가 뜬다(서버가 알려 주는 모드로).
+시험 장부는 처음 일정표에 시험 표시가 있어 genesis 해시(꼬리표 `stardraw/genesis-trial/v1`)가 정식과 다르다. 그래서 시험 응모권·등록·증명은 정식 장부에 섞일 수 없다. 봉인 시각 인증은 정식과 같게 받고, GitHub 앵커는 `trial` 브랜치에 남긴다(아래 "시각 인증과 앵커"). 화면 위에는 "시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다" 띠가 뜬다(서버가 알려 주는 모드로).
 
 ```sh
 # .env
@@ -65,9 +65,7 @@ STARDRAW_DATA=data-live docker compose run --rm -e STARDRAW_MODE=live stardraw \
 # 3) .env를 정식으로 바꿔 띄운다
 #    STARDRAW_MODE=live
 #    STARDRAW_DATA=data-live
-#    STARDRAW_REKOR_URL=https://rekor.sigstore.dev
-#    STARDRAW_ANCHOR_REPO=ybbarng/stardraw-ledger
-#    STARDRAW_ANCHOR_TOKEN=...      # 그 저장소 contents 쓰기만 되는 fine-grained 토큰
+#    (시각 인증·앵커는 compose 기본값 그대로. 앵커 브랜치는 정식이면 main)
 docker compose up -d
 curl -s https://game.byb.kr/stardraw-api/api/state   # "mode":"live"
 curl -s https://game.byb.kr/stardraw-api/ledger/genesis.json   # carried: 옮긴 등록 목록
@@ -77,6 +75,21 @@ curl -s https://game.byb.kr/stardraw-api/ledger/genesis.json   # carried: 옮긴
 - 정식 회차 길이는 1시간이다(`--round-seconds`로 바꿀 수 있다).
 - 화면은 장부를 처음부터 다시 받는다. 시험 때 기기에 남은 내 응모권 목록은 정식 장부에 없는 회차라 결과가 나오지 않는다(화면에서 정리할지는 따로 정한다).
 - `data-trial/`은 지워도 되지만, 정식이 자리 잡을 때까지 서버 밖에 하나 보관해 둔다.
+
+## 시각 인증과 앵커
+
+- **봉인 시각 인증**(docs/36 11-7): 마감 직후 봉인 값의 시각 인증 토큰을 공개 기관에서 받는다. 기본 `STARDRAW_TSA=digicert,sectigo`, `STARDRAW_TSA_MIN=1`(한 곳 이상). 서버가 바깥(80·443)으로 나갈 수 있어야 한다. 시작 기록에 `시각 인증: digicert, sectigo 중 1곳 이상`이 찍힌다. 마감 3분 뒤까지 한 곳도 못 받으면 그 회차는 무효다. 개발용으로 끄려면 `STARDRAW_TSA=off`(서버 시계를 적는다, 시각 증명 없음).
+- **GitHub 앵커**: 회차마다 `ybbarng/stardraw-ledger`에 `ledgers/<장부 id>/<회차>.txt`를 커밋한다. 브랜치는 시험 `trial`, 정식 `main`(`STARDRAW_ANCHOR_BRANCH`로 바꿀 수 있다). 시작 기록에 `앵커: ybbarng/stardraw-ledger(trial 브랜치)`가 찍힌다.
+- 앵커 토큰은 저장소 밖 파일에만 둔다. 이 저장소 Contents 읽기·쓰기만 되는 fine-grained 토큰:
+
+```sh
+# 서버에서 한 번(값은 어디에도 붙여 넣거나 찍지 않는다)
+install -m 600 /dev/null /home/ybbarng/secrets/stardraw-anchor.env
+${EDITOR:-vi} /home/ybbarng/secrets/stardraw-anchor.env   # STARDRAW_ANCHOR_TOKEN=github_pat_...
+```
+
+- compose의 `env_file`이 이 파일을 `required: false`로 읽는다. 파일이 없으면 앵커만 꺼지고(`앵커 저장소 설정이 없어 …`) 서버는 뜬다. 앵커가 실패하면 1분 뒤 그 회차부터 다시 보내고, 회차 진행은 멈추지 않는다.
+- Rekor는 꺼 둔 선택지다(`STARDRAW_TSA=off` + `STARDRAW_REKOR_URL`일 때만).
 
 ## 백업
 
@@ -94,7 +107,7 @@ docker compose exec -T stardraw node server.mjs backup /data/backup/stardraw-$(d
 
 1. 시험 운영을 언제 시작할지, 시험 회차 길이(기본 10분)
 2. 정식 1회차 시작 시각(`start-live --epoch`, x:55). 처음 정하면 장부에 묶여 바꿀 수 없다
-3. 투명성 로그: Sigstore Rekor 공용 로그를 쓸지(회차마다 항목 하나, 공개된다)
-4. 앵커 저장소 이름과 토큰(예: `ybbarng/stardraw-ledger`, 공개)
+3. 봉인 시각 인증: 공개 기관 DigiCert·Sectigo, 한 곳 이상으로 정함(2026-10-30). 더 엄격히 하려면 `STARDRAW_TSA_MIN=2`
+4. 앵커 저장소: `ybbarng/stardraw-ledger`(공개)로 정함. 토큰은 `/home/ybbarng/secrets/stardraw-anchor.env`
 5. 서명 열쇠 보관(서버의 파일 + 비밀번호 관리 앱 백업)
 6. 저장소 변수 `STARDRAW_SERVER_IMAGE=true`로 이미지 빌드를 켤 때, 화면 빌드에 `NEXT_PUBLIC_STARDRAW_API`를 넣을 때
