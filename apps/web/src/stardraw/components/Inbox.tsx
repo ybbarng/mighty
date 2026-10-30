@@ -140,7 +140,7 @@ export function Inbox({
     } catch (err) {
       setError(
         err instanceof DOMException && err.name === "NotAllowedError"
-          ? "패스키 서명을 취소했습니다"
+          ? "등록증 확인을 취소했습니다"
           : err instanceof Error
             ? err.message
             : String(err),

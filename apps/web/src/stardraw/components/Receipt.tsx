@@ -109,7 +109,7 @@ export function Receipt({
               data-passkey-mark
             >
               <KeyIcon className="size-3.5" />
-              패스키
+              우주인 등록증
             </dd>
           </>
         )}
@@ -174,6 +174,9 @@ export function Receipt({
           추첨을 기다리고 있습니다
         </p>
       )}
+      <p className="mt-4 text-center text-[10px] text-slate-500 tracking-wider">
+        발행 · 카노푸스 우주국
+      </p>
     </article>
   );
 }

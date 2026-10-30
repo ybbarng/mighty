@@ -1,7 +1,12 @@
 // @vitest-environment node
-import { generateSigner, sha256, utf8 } from "@mighty/stardraw-core";
+import {
+  fromBase64Url,
+  generateSigner,
+  sha256,
+  utf8,
+} from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
-
+import { TOUR_EGG_PUBS } from "../demo-tour";
 import {
   type AstronautLists,
   astronautFromHash,
@@ -118,6 +123,11 @@ describe("드문 사진", () => {
     expect(at(0, 1)).toBe("prince");
     expect(at(0, 2)).toBe("rabbit");
     expect(at(EGG_ROLL)).toBeNull();
+  });
+
+  it("화면 둘러보기에 둔 공개 열쇠 셋은 각각 그 사진이 나온다", () => {
+    for (const [egg, pub] of Object.entries(TOUR_EGG_PUBS))
+      expect(astronautOf(fromBase64Url(pub)).egg).toBe(egg);
   });
 });
 

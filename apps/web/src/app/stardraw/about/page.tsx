@@ -50,6 +50,24 @@ export default function StardrawAbout() {
             ← 하늘의 별 따기
           </a>
           <h1 className="font-black text-3xl">하늘의 별 따기 설명</h1>
+          <p className="text-amber-100/90" data-agency>
+            하늘의 별 따기는 카노푸스 우주국이 정해진 시각마다 여는
+            추첨입니다(지어낸 기관입니다). 우주국장은 운영자지만, 당첨 번호를
+            고르거나 지난 기록을 고치거나 남의 등록증으로 응모할 수 없게
+            만들었습니다.
+          </p>
+          <details className="text-sm text-white/70">
+            <summary className="cursor-pointer text-white/80">
+              왜 카노푸스인가요?
+            </summary>
+            <p className="mt-2">
+              카노푸스는 밤하늘에서 두 번째로 밝은 별이지만, 서울에서는 지평선
+              위로 오르지 않아 우리 별 45개 목록에 없습니다. 우리나라에서는
+              노인성이라 불렀고, 이 별을 보면 오래 산다고 여겼습니다. 제주 남쪽
+              하늘에서나 아주 낮게 보이는 귀한 별입니다. 매리너 4호와 보이저
+              같은 탐사선은 방향을 잡는 기준 별로 카노푸스를 썼습니다.
+            </p>
+          </details>
           <p className="text-white/75">
             로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요? 서울 하늘에서 가장
             밝은 별 45개 가운데 6개를 고르는 매시 정각 추첨입니다(55분 마감).
@@ -175,6 +193,28 @@ export default function StardrawAbout() {
           </p>
           <KeyHoldingExplained />
           <PasskeyFaq />
+        </Section>
+
+        <Section title="우리가 저장하는 것" id="privacy">
+          <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm text-white/85">
+            <li>
+              저장하는 것: 공개 열쇠, 패스키 번호, 등록 회차. 응모권은 공개
+              장부에 남습니다.
+            </li>
+            <li>받지 않는 것: 이름, 이메일, 전화번호.</li>
+            <li>
+              응모 수 제한에 쓰는 IP는 앞부분(IPv4는 앞 세 칸, IPv6는 앞 세
+              묶음)만 메모리에서 세고 저장하지 않습니다.
+            </li>
+            <li>
+              장부는 고칠 수 없어 지울 수도 없습니다. 대신 장부에는 이름 없이
+              공개 열쇠만 남습니다.
+            </li>
+            <li>
+              응모가 서로 이어져 보이는 게 싫으면 새 우주인으로 다시 등록하세요.
+              그때부터 낸 응모는 앞의 것과 이어지지 않습니다.
+            </li>
+          </ul>
         </Section>
 
         <Section title="별 45개">

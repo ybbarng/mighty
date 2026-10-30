@@ -21,12 +21,13 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
+import { astronautOf } from "../astronaut/identity";
 import { type CheckBatch, type CheckTicket, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
-import { type Services, useLedger } from "../services";
+import { GAME_NS, type Services, useLedger } from "../services";
 import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckPanel } from "./CheckPanel";
 import { DrawView } from "./DrawView";
@@ -343,6 +344,12 @@ export function Home({
   onSkip: (() => Promise<void>) | null;
 }) {
   const [skipping, setSkipping] = useState(false);
+  // 등록증 링크는 이 기기에 등록증이 있을 때만(첫 그리기 뒤에 읽는다)
+  const [hasKey, setHasKey] = useState(false);
+  useEffect(
+    () => setHasKey(services.ns === GAME_NS && !!services.wallet.loadKey()),
+    [services],
+  );
   const current = mine.find((m) => m.ticket.round === status.round);
   // 결과 봉투: 추첨이 끝났는데 아직 열어 보지 않은 내 응모권
   const envelopes = mine
@@ -362,12 +369,23 @@ export function Home({
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <BackToGames />
-          <a
-            href="/stardraw/about"
-            className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
-          >
-            설명
-          </a>
+          <span className="flex items-center gap-4">
+            {hasKey && (
+              <a
+                href="/stardraw/id"
+                data-my-id
+                className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
+              >
+                내 등록증
+              </a>
+            )}
+            <a
+              href="/stardraw/about"
+              className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
+            >
+              설명
+            </a>
+          </span>
         </div>
         <div className="sd-title flex flex-col gap-1 pt-2 text-center">
           <h1 className="font-black text-4xl tracking-tight">하늘의 별 따기</h1>
@@ -710,6 +728,25 @@ export function MineView({
         <h2 className="font-bold text-lg">내 응모</h2>
         <span className="w-16" />
       </div>
+      {key && (
+        <a
+          href={services.ns === GAME_NS ? "/stardraw/id" : undefined}
+          data-my-name
+          className="sd-glass flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
+        >
+          <span className="flex flex-col">
+            <span className="font-semibold">
+              {astronautOf(key.pub).name} 우주인
+            </span>
+            <span className="font-mono text-white/55 text-xs tabular-nums">
+              {astronautOf(key.pub).number}
+            </span>
+          </span>
+          {services.ns === GAME_NS && (
+            <span className="text-sm text-white/70">등록증 보기 →</span>
+          )}
+        </a>
+      )}
       <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
       {sorted.length === 0 ? (
         <p className="py-10 text-center text-white/60">
@@ -818,8 +855,8 @@ function RecoverKey({
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
       <p className="break-keep text-white/80">
-        이 기기에는 아직 패스키가 없어요. 다른 기기에서 응모했다면, 따라온
-        패스키로 내 응모권을 찾을 수 있어요.
+        이 기기에는 아직 우주인 등록증이 없어요. 다른 기기에서 응모했다면, 그
+        등록증으로 내 응모권을 찾을 수 있어요.
       </p>
       <button
         type="button"
@@ -827,16 +864,16 @@ function RecoverKey({
         onClick={() => void find()}
         className="self-start rounded-lg border border-white/25 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
       >
-        {state === "working" ? "찾고 있습니다" : "다른 기기에서 내 응모권 찾기"}
+        {state === "working" ? "찾고 있습니다" : "등록증으로 내 응모권 찾기"}
       </button>
       {state === "missing" && (
         <p className="break-keep text-amber-100/85 text-xs">
-          장부에서 이 패스키를 찾지 못했어요.
+          장부에서 이 등록증을 찾지 못했어요.
           {services.practice && " 연습 장부는 기기마다 따로예요."}
         </p>
       )}
       {state === "cancelled" && (
-        <p className="text-amber-100/85 text-xs">패스키 확인을 취소했어요.</p>
+        <p className="text-amber-100/85 text-xs">확인을 취소했어요.</p>
       )}
       {state === "error" && (
         <p className="text-rose-200 text-xs">

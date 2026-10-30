@@ -1,9 +1,10 @@
 "use client";
 
-import type { Rank } from "@mighty/stardraw-core";
+import { fromBase64Url, type Rank } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { buildTour, type TourState } from "../demo-tour";
+import { buildTour, TOUR_EGG_PUBS, type TourState } from "../demo-tour";
+import { AstronautPanel } from "./AstronautPanel";
 import { CheckPanel } from "./CheckPanel";
 import { DemoUnlockPrompt } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
@@ -30,8 +31,14 @@ export const TOUR_ITEMS = [
   { id: "checker", label: "확인하는 사람" },
   { id: "check-ok", label: "확인 성공" },
   { id: "check-fail", label: "확인 실패" },
+  { id: "register", label: "우주인 등록" },
+  { id: "id-card", label: "등록증" },
+  { id: "id-laika", label: "등록증: 우주견" },
+  { id: "id-prince", label: "등록증: 작은 별의 아이" },
+  { id: "id-rabbit", label: "등록증: 달토끼" },
   { id: "sheet-create", label: "패스키 만들기 시트" },
   { id: "sheet-sign", label: "패스키 서명 시트" },
+  { id: "sheet-check", label: "본인 확인 시트" },
   { id: "in-app", label: "앱 안 브라우저" },
   { id: "no-passkey", label: "패스키 미지원" },
   { id: "trial", label: "시험 운영 띠" },
@@ -232,13 +239,44 @@ function Screen({
           }
         />
       );
+    case "register":
+      return (
+        <KeySetup
+          demo
+          env={null}
+          working={null}
+          note={null}
+          error={null}
+          onCreate={noop}
+          onRecover={noop}
+        />
+      );
+    case "id-card":
+      return <AstronautPanel services={services} pub={drawn.ticket.pub} />;
+    case "id-laika":
+    case "id-prince":
+    case "id-rabbit":
+      return (
+        <AstronautPanel
+          services={services}
+          pub={fromBase64Url(
+            TOUR_EGG_PUBS[id.slice(3) as keyof typeof TOUR_EGG_PUBS],
+          )}
+        />
+      );
     case "sheet-create":
     case "sheet-sign":
+    case "sheet-check":
       return (
         <DemoUnlockPrompt
           ask={{
             id: 0,
-            purpose: id === "sheet-create" ? "create" : "sign",
+            purpose:
+              id === "sheet-create"
+                ? "create"
+                : id === "sheet-sign"
+                  ? "sign"
+                  : "check",
             answer: onBack,
           }}
         />

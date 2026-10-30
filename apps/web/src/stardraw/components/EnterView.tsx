@@ -9,6 +9,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
+import { astronautOf, residentPhrase } from "../astronaut/identity";
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -21,6 +22,7 @@ import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
+import { AstronautPanel } from "./AstronautPanel";
 import { KeyIcon } from "./PasskeyHelp";
 import { LottoBall, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
@@ -68,6 +70,11 @@ export function EnterView({
   );
   const [keyWork, setKeyWork] = useState<null | "create" | "recover">(null);
   const [keyNote, setKeyNote] = useState<string | null>(null);
+  /** 방금 등록했거나 찾은 등록증(별을 고르기 전에 한 번 보여 준다) */
+  const [issued, setIssued] = useState<{
+    kind: "new" | "found";
+    key: KeyInfo;
+  } | null>(null);
   const full = picked.length === 6;
   const open = status.phase === "open";
   // 데모는 실제 패스키 대신 화면 안 흉내 시트를 쓴다: 패스키를 못 쓰는 환경 안내로 막지 않는다
@@ -92,9 +99,9 @@ export function EnterView({
       kind,
       text:
         kind === "cancelled"
-          ? `${what}. 패스키 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요.`
+          ? `${what}. 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요.`
           : kind === "unsupported"
-            ? "이 기기에서는 패스키를 만들 수 없어요. 다시 누른 뒤 '다른 기기 사용'(휴대폰)을 고르고, 화면의 QR을 휴대폰 카메라로 찍어 주세요."
+            ? "이 기기에서는 등록증을 만들 수 없어요. 다시 누른 뒤 '다른 기기 사용'(휴대폰)을 고르고, 화면의 QR을 휴대폰 카메라로 찍어 주세요."
             : err instanceof Error
               ? err.message
               : String(err),
@@ -149,7 +156,7 @@ export function EnterView({
           { params: ledger.powParams },
         );
       }
-      setWork("응모권을 계산하고, 패스키로 서명합니다");
+      setWork("응모권을 계산하고, 등록증으로 서명합니다");
       const ticket = await makeTicket(
         signer,
         status.round,
@@ -171,20 +178,22 @@ export function EnterView({
     }
   };
 
-  /** 응모 단추: 고른 별로 응모권을 만들고 패스키로 서명한다(확인 한 번) */
+  /** 응모 단추: 고른 별로 응모권을 만들고 등록증(패스키)으로 서명한다(확인 한 번) */
   const start = async () => {
     if (key) await submit(key);
   };
 
-  /** 패스키 만들기(등록만, 확인 한 번). 서명은 별을 고른 뒤 응모할 때 한다 */
+  /** 우주인 등록 = 패스키 만들기(확인 한 번). 서명은 별을 고른 뒤 응모할 때 한다 */
   const createKey = async () => {
     setKeyWork("create");
     setKeyNote(null);
     setError(null);
     try {
-      setKey(await services.wallet.createPasskey());
+      const made = await services.wallet.createPasskey();
+      setIssued({ kind: "new", key: made });
+      setKey(made);
     } catch (err) {
-      fail(err, "패스키를 만들지 않았어요");
+      fail(err, "등록하지 않았어요");
     } finally {
       setKeyWork(null);
     }
@@ -199,17 +208,62 @@ export function EnterView({
       const found = await services.wallet.recoverPasskey((id) =>
         services.ledger.passkeyPub(id),
       );
-      if (found) setKey(found);
-      else
+      if (found) {
+        setIssued({ kind: "found", key: found });
+        setKey(found);
+      } else
         setKeyNote(
-          "이 패스키로 응모한 기록이 없어요. 처음이면 「패스키 만들기」를 눌러 주세요.",
+          "이 등록증으로 응모한 기록이 없어요. 처음이면 「우주인 등록」을 눌러 주세요.",
         );
     } catch (err) {
-      fail(err, "패스키를 찾지 못했어요");
+      fail(err, "등록증을 찾지 못했어요");
     } finally {
       setKeyWork(null);
     }
   };
+
+  if (issued) {
+    const phrase = residentPhrase(astronautOf(issued.key.pub));
+    return (
+      <section className="flex flex-col gap-4" aria-label="우주인 등록증 발급">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm text-white/70 hover:text-white"
+          >
+            ← 처음으로
+          </button>
+          <span className="text-sm text-white/60 tabular-nums">
+            {roundShort(services.ledger.schedule, status.round)} 응모
+          </span>
+        </div>
+        <AstronautPanel
+          services={services}
+          pub={issued.key.pub}
+          greeting={
+            <p
+              role="status"
+              data-issued={issued.kind}
+              className="break-keep text-center font-semibold text-amber-100"
+            >
+              {issued.kind === "new"
+                ? `${phrase} 님, 우주인으로 등록되었습니다`
+                : `${phrase} 님, 다시 만나 반갑습니다`}
+            </p>
+          }
+        >
+          <button
+            type="button"
+            onClick={() => setIssued(null)}
+            className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950"
+          >
+            별 6개 고르러 가기
+          </button>
+        </AstronautPanel>
+      </section>
+    );
+  }
 
   if (!key)
     return (
@@ -367,7 +421,7 @@ function ErrorBox({ error }: { error: Failure }) {
           href="/stardraw/about#passkey"
           className="self-start text-rose-100 underline underline-offset-2"
         >
-          패스키가 뭐예요?
+          자세히
         </a>
       )}
     </div>
@@ -375,8 +429,9 @@ function ErrorBox({ error }: { error: Failure }) {
 }
 
 /**
- * 응모하려면 패스키가 필요하다: 별을 고르기 전에 먼저 만든다(등록만, 확인 한 번).
- * 다른 기기에서 만든 패스키가 따라왔으면 「이미 패스키가 있어요」로 찾는다.
+ * 우주인 등록(docs/36 11-9): 응모하려면 등록증(= 이 기기의 패스키)이 필요하다. 별을 고르기 전에 먼저 만든다(확인 한 번).
+ * 다른 기기에서 만든 패스키가 따라왔으면 「이미 우주인 등록증이 있어요」로 찾는다.
+ * 게임 흐름에서는 우주인 말로 부르고, "패스키"는 등록 단계 한 줄에만 둔다(기술 설명은 /stardraw/about#passkey).
  * 패스키를 못 쓰는 환경(앱 안 브라우저·미지원)은 한두 줄로 안내한다. 데모는 흉내라 막지 않는다
  */
 export function KeySetup({
@@ -403,7 +458,10 @@ export function KeySetup({
       data-key-setup
     >
       <KeyIcon className="size-9 text-amber-100" />
-      <h2 className="font-bold text-xl">응모하려면 패스키가 필요해요</h2>
+      <h2 className="font-bold text-xl">우주인 등록</h2>
+      <p className="break-keep text-sm text-white/80">
+        하늘의 별 따기는 등록한 우주인만 응모할 수 있습니다.
+      </p>
       {blocked ? (
         env?.inApp ? (
           <InAppNotice app={env.inApp} />
@@ -421,9 +479,7 @@ export function KeySetup({
             onClick={onCreate}
             className="sd-cta w-full max-w-xs rounded-2xl py-3 font-bold text-slate-950 disabled:opacity-40"
           >
-            {working === "create"
-              ? "패스키를 만들고 있습니다"
-              : "패스키 만들기"}
+            {working === "create" ? "등록하고 있습니다" : "우주인 등록"}
           </button>
           {!demo && env && !env.platform && (
             <p className="break-keep text-white/55 text-xs">
@@ -437,19 +493,24 @@ export function KeySetup({
               onClick={onRecover}
               className="text-sm text-white/75 underline underline-offset-2 disabled:opacity-40"
             >
-              {working === "recover" ? "찾고 있습니다" : "이미 패스키가 있어요"}
+              {working === "recover"
+                ? "찾고 있습니다"
+                : "이미 우주인 등록증이 있어요"}
             </button>
           )}
         </>
       )}
       {note && <p className="break-keep text-amber-100/85 text-xs">{note}</p>}
       {error && <ErrorBox error={error} />}
-      <a
-        href="/stardraw/about#passkey"
-        className="text-sky-200 text-xs underline underline-offset-2"
-      >
-        패스키가 뭐예요?
-      </a>
+      <p className="break-keep text-white/55 text-xs" data-passkey-line>
+        우주인 등록증은 이 기기의 패스키로 만들어집니다 ·{" "}
+        <a
+          href="/stardraw/about#passkey"
+          className="text-sky-200 underline underline-offset-2"
+        >
+          자세히
+        </a>
+      </p>
     </div>
   );
 }

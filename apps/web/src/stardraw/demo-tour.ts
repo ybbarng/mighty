@@ -24,6 +24,16 @@ import { createDemoWallet, type MyTicket, sitePolicy } from "./wallet";
  */
 export const TOUR_NS = "stardraw-tour";
 
+/** 화면 둘러보기의 드문 사진 등록증(공개 열쇠 모양 값, 해시에서 그 사진이 나오도록 찾아 둔 것) */
+export const TOUR_EGG_PUBS = {
+  laika:
+    "BL3UWS4OYjmKBKyAKxL6XjXj_XbfcqTyLtoGCclVMJhetYpciRRBzyNx37IzXClOLAUCSK8nicUg78X9qiZI4Hs",
+  prince:
+    "BC3leY9-NqapJKb2EHG1zpSAI9aBU-Pyn0BQq3JTZyxotAl_ESlBuaP7Y800sh5p0Im6zCzYz2feXm3QiTOvgT0",
+  rabbit:
+    "BJLkECD-zokJb7FxUXWny0vzNc8NfkzI-qbqoXL7jSUmJjzayGftd7ynu_AhMRHODE01HxAGJAo3EvAJTfCfipE",
+} as const;
+
 export interface TourState {
   services: Services;
   /** 내 1회 응모권(1등, 추첨 끝)과 2회 응모권(추첨 전) */

@@ -5,7 +5,8 @@
  * 사용자가 [확인]이나 [취소]를 누를 때 답이 돌아온다. 한 번에 하나만 묻는다.
  */
 
-export type UnlockPurpose = "create" | "sign";
+/** create 만들기, sign 응모·확인 서명, check 등록증 주인 확인 */
+export type UnlockPurpose = "create" | "sign" | "check";
 
 export interface UnlockAsk {
   /** 요청마다 새 번호(시트를 요청마다 새로 그린다) */

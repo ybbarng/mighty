@@ -37,8 +37,14 @@ async function showDrawResult(page: Page) {
 
 /** 응모 단추(패스키로 서명, 확인 한 번) */
 const ENTER = "이 별 6개로 응모하기";
+/** 우주인 등록 단추(패스키 만들기) */
+const REGISTER = { name: "우주인 등록", exact: true } as const;
+/** 등록증에서 누를 자리(제목 부분. 가운데는 주소 단추라 피한다) */
+const CARD_TAP = { x: 40, y: 30 } as const;
+/** 등록증을 받은 뒤 별 고르기로 */
+const TO_PICK = "별 6개 고르러 가기";
 
-/** 응모 화면까지 간다. 패스키가 없으면 먼저 "패스키 만들기" 단계가 나온다 */
+/** 응모 화면까지 간다. 등록증(패스키)이 없으면 먼저 "우주인 등록" 단계가 나온다 */
 async function toEntry(page: Page) {
   await page.goto("/stardraw");
   await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
@@ -116,7 +122,11 @@ async function tapStar(page: Page, canvas: string, n: number) {
 const isPhone = (name: string) => name.startsWith("phone");
 
 /** 데모: 실제 패스키 창 대신 뜨는 흉내 시트에서 확인(또는 취소)한다 */
-async function demoUnlock(page: Page, purpose: "create" | "sign", ok = true) {
+async function demoUnlock(
+  page: Page,
+  purpose: "create" | "sign" | "check",
+  ok = true,
+) {
   const sheet = page.locator(`[data-demo-unlock='${purpose}']`);
   await expect(sheet).toBeVisible({ timeout: 30_000 });
   await sheet.getByRole("button", { name: ok ? "확인" : "취소" }).click();
@@ -173,16 +183,52 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.screenshot({ path: info.outputPath("home-countdowns.png") });
 
   await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
-  // 처음엔 별을 고르기 전에 패스키부터 만든다(등록만, 인증기 한 번)
+  // 처음엔 별을 고르기 전에 우주인 등록(= 패스키 만들기, 인증기 한 번)
   const setup = page.locator("[data-key-setup]");
-  await expect(setup).toContainText("응모하려면 패스키가 필요해요");
-  await expect(
-    setup.getByRole("link", { name: "패스키가 뭐예요?" }),
-  ).toHaveAttribute("href", "/stardraw/about#passkey");
+  await expect(setup).toContainText(
+    "하늘의 별 따기는 등록한 우주인만 응모할 수 있습니다.",
+  );
+  await expect(setup.locator("[data-passkey-line]")).toContainText(
+    "이 기기의 패스키로 만들어집니다",
+  );
+  await expect(setup.getByRole("link", { name: "자세히" })).toHaveAttribute(
+    "href",
+    "/stardraw/about#passkey",
+  );
+  await noSideScroll(page);
   await page.screenshot({ path: info.outputPath("stardraw-key-setup.png") });
-  await setup.getByRole("button", { name: "패스키 만들기" }).click();
+  await setup.getByRole("button", REGISTER).click();
   await expect(setup).toHaveCount(0);
   expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
+  // 등록 직후 등록증을 발급해 보여 준다. 아직 응모 전이라 등록일은 비어 있다
+  await expect(page.locator("[data-issued='new']")).toContainText(
+    /^.+에 거주하는 .+ 님, 우주인으로 등록되었습니다$/,
+  );
+  const card = page.locator("[data-idcard]");
+  await expect(card).toBeVisible();
+  const number = (await card.getAttribute("data-idcard")) as string;
+  expect(number).toMatch(/^SD-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  await expect(card.locator("[data-registered]")).toHaveText("첫 응모 때 기록");
+  await expect(page.locator("[data-public-key]")).toHaveText(
+    /^04[0-9a-f]{128}$/,
+  );
+  // 주소는 줄여 보이고, 누르면 전체(우리 우주부터)
+  await card.getByRole("button", { name: /^주소:/ }).click();
+  await expect(page.locator("[data-full-address]")).toContainText(
+    /^우리 우주 › 라니아케아 초은하단 › 처녀자리 초은하단 › /,
+  );
+  // 패스키 마크를 누르면 짧은 설명
+  await card.locator("[data-passkey-badge]").click();
+  await expect(
+    page.getByText("이 등록증은 이 기기의 패스키로 지켜집니다"),
+  ).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({
+    path: info.outputPath("stardraw-id-issued.png"),
+    fullPage: true,
+  });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
+  await page.getByRole("button", { name: TO_PICK }).click();
   // 칸에서 하나, 하늘에서 하나 고르고 나머지는 자동
   await page.getByRole("button", { name: "7 베텔게우스" }).click();
   await expect(page.locator("[data-star-info='7']")).toContainText(
@@ -269,6 +315,34 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.reload();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
 
+  // 내 응모 머리에 이름, 누르면 내 등록증. 같은 공개 열쇠라 같은 등록증이고, 이제 등록일이 있다
+  await page.locator("[data-my-name]").click();
+  await expect(page).toHaveURL(/\/stardraw\/id$/);
+  const myCard = page.locator(`[data-idcard="${number}"]`);
+  await expect(myCard).toBeVisible();
+  await expect(myCard.locator("[data-registered]")).toHaveText(
+    /^\d{4}\. \d{1,2}\. \d{1,2}\. · 1회$/,
+  );
+  // 누르면 주인 확인: 패스키로 새 문제 값에 서명하고 이 기기에서 확인한다. 시각이 초 단위로 흐른다
+  await myCard.click({ position: CARD_TAP });
+  await expect(myCard.locator("[data-owner-ok]")).toBeVisible();
+  await expect(myCard.locator("[data-owner-time]")).toHaveText(
+    /^\d{2}:\d{2}:\d{2}$/,
+  );
+  // 새로 연 페이지라 호출 수는 처음부터 센다: 주인 확인 한 번
+  expect(await passkeyCalls(page)).toEqual({ create: 0, get: 1 });
+  await noSideScroll(page);
+  await page.screenshot({
+    path: info.outputPath("stardraw-id-owner.png"),
+    fullPage: true,
+  });
+  // 등록증 공유: "끝 천체에 거주하는 이름"과 첫 화면 주소(남의 화면이 등록증을 그리지 않게 공개 열쇠는 넣지 않는다)
+  await page.getByRole("button", { name: "등록증 공유" }).click();
+  await expect
+    .poll(async () => ((await shared()) as { text: string }).text)
+    .toMatch(/^.+에 거주하는 .+, 하늘의 별 따기 우주인으로 등록했어요\.$/);
+  expect(((await shared()) as { url: string }).url).toMatch(/\/stardraw$/);
+
   // 추첨 뒤 공유 링크는 장부에서 찾아 결과까지 보여 준다
   await page.goto(url);
   const shown = page.locator(`[data-receipt="${id}"]`);
@@ -285,13 +359,15 @@ test("패스키 만들기를 취소하면 만들어지지 않았다고 알리고
   await virtualAuthenticator(page, false);
   await toEntry(page);
   const setup = page.locator("[data-key-setup]");
-  await setup.getByRole("button", { name: "패스키 만들기" }).click();
+  await setup.getByRole("button", REGISTER).click();
   // Next.js 경로 안내용 빈 alert가 따로 있어 문구로 고른다
   const alert = setup.getByRole("alert").filter({ hasText: "취소" });
   await expect(alert).toBeVisible({ timeout: 30_000 });
-  await expect(
-    alert.getByRole("link", { name: "패스키가 뭐예요?" }),
-  ).toHaveAttribute("href", "/stardraw/about#passkey");
+  await expect(alert).toContainText("등록하지 않았어요");
+  await expect(alert.getByRole("link", { name: "자세히" })).toHaveAttribute(
+    "href",
+    "/stardraw/about#passkey",
+  );
   // 별 고르기로 넘어가지 않는다
   await expect(setup).toBeVisible();
   await expect(page.getByRole("button", { name: ENTER })).toHaveCount(0);
@@ -311,9 +387,7 @@ test("패스키를 못 쓰는 브라우저와 앱 안 브라우저는 응모 대
   await expect(page.getByRole("note")).toContainText(
     "이 브라우저는 패스키를 지원하지 않아요",
   );
-  await expect(page.getByRole("button", { name: "패스키 만들기" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("button", REGISTER)).toHaveCount(0);
 
   // 카카오톡 안 브라우저
   const kakao = await browser.newContext({
@@ -383,6 +457,10 @@ test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
   await expect(page.getByText("서버(공개 장부)가 가진 것")).toBeVisible();
   await expect(page.getByText("얼굴·지문이 서버로 가나요?")).toBeVisible();
   await expect(page.getByText(/솔직한 한계/)).toBeVisible();
+  await expect(page.locator("[data-agency]")).toContainText("카노푸스 우주국");
+  await expect(
+    page.getByRole("heading", { name: "우리가 저장하는 것" }),
+  ).toBeVisible();
   await noSideScroll(page);
 });
 
@@ -394,20 +472,27 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   await page.goto("/stardraw/demo");
   await expect(page.getByRole("note")).toContainText("데모 · 실제 게임과 따로");
 
-  // 처음엔 별을 고르기 전에 패스키부터 만든다(흉내 시트 한 번). 먼저 취소해 본다
+  // 처음엔 별을 고르기 전에 우주인 등록(흉내 시트 한 번). 먼저 취소해 본다
   const setup = page.locator("[data-key-setup]");
-  await setup.getByRole("button", { name: "패스키 만들기" }).click();
+  await setup.getByRole("button", REGISTER).click();
   await expect(page.locator("[data-demo-unlock='create']")).toBeVisible();
   await page.screenshot({
     path: info.outputPath("stardraw-demo-sheet.png"),
   });
   await demoUnlock(page, "create", false);
   await expect(
-    setup.getByRole("alert").filter({ hasText: "패스키를 만들지 않았어요" }),
+    setup.getByRole("alert").filter({ hasText: "등록하지 않았어요" }),
   ).toBeVisible();
-  await setup.getByRole("button", { name: "패스키 만들기" }).click();
+  await setup.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
   await expect(setup).toHaveCount(0);
+  // 등록증을 누르면 흉내 시트로 주인 확인
+  const demoCard = page.locator("[data-idcard]");
+  await expect(demoCard).toBeVisible();
+  await demoCard.click({ position: CARD_TAP });
+  await demoUnlock(page, "check");
+  await expect(demoCard.locator("[data-owner-ok]")).toBeVisible();
+  await page.getByRole("button", { name: TO_PICK }).click();
   const afterCreate = await demoUnlocks(page);
 
   // 응모: 이번 회차 1등이 되게 채우고 낸다. 서명 시트 한 번
@@ -531,8 +616,9 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   test.skip(isPhone(info.project.name), "저장된 상태와 회차 흐름은 한 크기로");
   await page.goto("/stardraw/demo");
   // 이미 해 본 기기: 한 회차 응모·추첨을 거쳐 열쇠와 장부가 저장된 상태(「데모 처음부터」를 누르지 않는다)
-  await page.getByRole("button", { name: "패스키 만들기" }).click();
+  await page.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
+  await page.getByRole("button", { name: TO_PICK }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", { name: ENTER }).click();
   await demoUnlock(page, "sign");
@@ -610,8 +696,14 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["checker", (s) => s.getByText("당첨자의 응답을 기다리고 있습니다")],
     ["check-ok", (s) => s.locator("[data-verdict='ok']")],
     ["check-fail", (s) => s.locator("[data-verdict='fail']")],
+    ["register", (s) => s.getByRole("button", REGISTER)],
+    ["id-card", (s) => s.locator("[data-idcard]")],
+    ["id-laika", (s) => s.locator("[data-egg='laika']")],
+    ["id-prince", (s) => s.locator("[data-egg='prince']")],
+    ["id-rabbit", (s) => s.locator("[data-egg='rabbit']")],
     ["sheet-create", () => page.locator("[data-demo-unlock='create']")],
     ["sheet-sign", () => page.locator("[data-demo-unlock='sign']")],
+    ["sheet-check", () => page.locator("[data-demo-unlock='check']")],
     ["in-app", (s) => s.getByText(/카카오톡 안에서는 패스키를 쓸 수 없어요/)],
     ["no-passkey", (s) => s.getByText(/패스키를 지원하지 않아요/)],
     ["trial", (s) => s.locator("[data-trial-banner]")],
@@ -628,4 +720,20 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
       fullPage: true,
     });
   }
+  // 남의 등록증(드문 사진 견본)은 이 기기의 열쇠로 서명해도 맞지 않아 조용히 실패한다
+  await page.evaluate(() => {
+    window.location.hash = "#tour-id-laika";
+  });
+  const egg = screen.locator("[data-idcard]");
+  await expect(egg).toBeVisible();
+  await egg.click({ position: CARD_TAP });
+  await expect(screen.getByText("확인하지 못했습니다")).toBeVisible();
+  await expect(egg.locator("[data-owner-ok]")).toHaveCount(0);
+  // 내 것(데모 열쇠)은 통과
+  await page.evaluate(() => {
+    window.location.hash = "#tour-id-card";
+  });
+  const own = screen.locator("[data-idcard]");
+  await own.click({ position: CARD_TAP });
+  await expect(own.locator("[data-owner-ok]")).toBeVisible();
 });

@@ -774,7 +774,85 @@ button {
   }
 }
 
+/* 우주인 등록증: 실제 신분증 같은 카드. 바탕에 보안 무늬, 위에 홀로그램 빛(기울기·주인 확인 때 움직인다) */
+.sd-idcard {
+  container-type: inline-size;
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      rgba(120, 160, 255, 0.18),
+      transparent 55%
+    ),
+    repeating-radial-gradient(
+      circle at 12% 110%,
+      rgba(190, 210, 255, 0.07) 0 1px,
+      transparent 1px 7px
+    ),
+    linear-gradient(135deg, #1b2b55 0%, #101a36 55%, #1d1440 100%);
+  border: 1px solid rgba(205, 220, 255, 0.28);
+  box-shadow:
+    0 22px 44px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transform-style: preserve-3d;
+  transition:
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.3s;
+  touch-action: pan-y;
+}
+.sd-idcard[data-tilting] {
+  transition: box-shadow 0.3s;
+}
+.sd-idcard[data-owner="ok"] {
+  box-shadow:
+    0 0 0 2px rgba(110, 231, 183, 0.75),
+    0 22px 44px rgba(0, 0, 0, 0.5),
+    0 0 36px rgba(110, 231, 183, 0.3);
+}
+.sd-idcard-holo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 22%,
+    rgba(255, 120, 210, 0.3) 36%,
+    rgba(120, 225, 255, 0.34) 46%,
+    rgba(255, 238, 140, 0.3) 56%,
+    transparent 70%
+  );
+  background-size: 260% 260%;
+  background-position: var(--hx, 30%) var(--hy, 50%);
+  mix-blend-mode: color-dodge;
+  opacity: 0.5;
+}
+.sd-idcard-sweep .sd-idcard-holo {
+  animation: sd-holo-sweep 1.6s ease-out 0.2s both;
+}
+.sd-idcard[data-owner="ok"] .sd-idcard-holo {
+  animation: sd-holo-run 2.2s linear infinite;
+  opacity: 0.75;
+}
+@keyframes sd-holo-sweep {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0% 50%;
+  }
+}
+@keyframes sd-holo-run {
+  from {
+    background-position: 100% 30%;
+  }
+  to {
+    background-position: 0% 70%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .sd-idcard-sweep .sd-idcard-holo,
+  .sd-idcard[data-owner="ok"] .sd-idcard-holo,
   .sd-fold,
   .sd-print,
   .sd-unlock-in,

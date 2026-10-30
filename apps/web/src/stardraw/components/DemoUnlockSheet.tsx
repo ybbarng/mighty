@@ -35,6 +35,7 @@ function methodOf(ua: string): {
 const TITLE: Record<UnlockPurpose, string> = {
   create: "패스키를 만들까요?",
   sign: "패스키로 서명할까요?",
+  check: "패스키로 본인 확인할까요?",
 };
 
 /**

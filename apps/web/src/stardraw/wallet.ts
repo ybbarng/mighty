@@ -2,6 +2,7 @@ import {
   decodeTicket,
   type EntrantSigner,
   encodeTicket,
+  equalBytes,
   fromBase64Url,
   passkeySigner,
   rawPublicKeyFromSpki,
@@ -74,6 +75,11 @@ export interface Wallet {
     lookup: (credentialId: Uint8Array) => Promise<Uint8Array | null>,
   ): Promise<KeyInfo | null>;
   signerFor(key: KeyInfo): Promise<EntrantSigner>;
+  /**
+   * 등록증 주인 확인용 서명자. 이 기기의 내 등록증이면 그 패스키를 지정하고,
+   * 남의 등록증이면 이 기기의 아무 패스키로 서명하게 해 공개 열쇠가 맞지 않아 실패한다
+   */
+  ownerSigner(pub: Uint8Array): Promise<EntrantSigner>;
   loadTickets(): MyTicket[];
   addTicket(mine: MyTicket): void;
   /** 결과 봉투를 연 회차 */
@@ -114,21 +120,23 @@ export function createWallet(
 
   const ticketIds = () => new Set(readTickets().map((s) => s.t));
 
+  const loadKey = (): KeyInfo | null => {
+    const saved = readJson<{
+      kind: string;
+      credentialId?: string;
+      pub: string;
+    }>(KEY);
+    // 예전 판의 "이 기기에만 둔 열쇠"(raw)는 더 쓰지 않는다
+    if (saved?.kind !== "passkey" || !saved.credentialId) return null;
+    return {
+      kind: "passkey",
+      credentialId: fromBase64Url(saved.credentialId),
+      pub: fromBase64Url(saved.pub),
+    };
+  };
+
   return {
-    loadKey() {
-      const saved = readJson<{
-        kind: string;
-        credentialId?: string;
-        pub: string;
-      }>(KEY);
-      // 예전 판의 "이 기기에만 둔 열쇠"(raw)는 더 쓰지 않는다
-      if (saved?.kind !== "passkey" || !saved.credentialId) return null;
-      return {
-        kind: "passkey",
-        credentialId: fromBase64Url(saved.credentialId),
-        pub: fromBase64Url(saved.pub),
-      };
-    },
+    loadKey,
 
     async createPasskey() {
       const credential = (await navigator.credentials.create({
@@ -191,6 +199,14 @@ export function createWallet(
     async signerFor(key) {
       return passkeySigner(key.pub, (challenge) =>
         passkeyAssertion(key.credentialId, challenge),
+      );
+    },
+
+    async ownerSigner(pub) {
+      const mine = loadKey();
+      const own = mine && equalBytes(mine.pub, pub) ? mine.credentialId : null;
+      return passkeySigner(pub, (challenge) =>
+        passkeyAssertion(own, challenge),
       );
     },
 
@@ -348,6 +364,20 @@ export function createDemoWallet(
       };
     },
 
+    async ownerSigner(pub) {
+      const pair = await loadPair();
+      const signer = pair ? await signerFromKeyPair(pair) : null;
+      return {
+        publicKey: pub,
+        sign: async (message) => {
+          await confirm("check");
+          if (!signer)
+            throw new DOMException("데모 열쇠가 없습니다", "NotAllowedError");
+          return signer.sign(message);
+        },
+      };
+    },
+
     async clear() {
       await base.clear();
       for (const k of [DEMO_KEY, `${DEMO_KEY}-pub`]) {
@@ -361,17 +391,22 @@ export function createDemoWallet(
   };
 }
 
+/** 패스키 서명. 패스키 번호가 없으면 이 기기의 아무 패스키나 고르게 한다(남의 등록증 주인 확인) */
 async function passkeyAssertion(
-  credentialId: Uint8Array,
+  credentialId: Uint8Array | null,
   challenge: Uint8Array,
 ): Promise<WebAuthnAssertion> {
   const credential = (await navigator.credentials.get({
     publicKey: {
       challenge: new Uint8Array(challenge),
       rpId: location.hostname,
-      allowCredentials: [
-        { type: "public-key", id: new Uint8Array(credentialId) },
-      ],
+      ...(credentialId
+        ? {
+            allowCredentials: [
+              { type: "public-key" as const, id: new Uint8Array(credentialId) },
+            ],
+          }
+        : {}),
       userVerification: "required",
     },
   })) as PublicKeyCredential | null;
