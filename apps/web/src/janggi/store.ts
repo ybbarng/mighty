@@ -344,15 +344,10 @@ export const useJanggi = create<JanggiStore>((set, get) => {
     },
 
     canUndo() {
-      const { local, view, queue } = get();
-      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다.
-      if (
-        !local ||
-        !view ||
-        get().practice ||
-        queue.length > 0 ||
-        view.phase !== "play"
-      )
+      const { local, view } = get();
+      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다. 판 끝은 화면에 보이기 전에 기록되므로
+      // 보이는 화면이 아니라 대국의 최신 상태로 본다(컴퓨터 수를 보이는 중에도 무를 수 있다)
+      if (!local || !view || get().practice || local.current().phase !== "play")
         return false;
       return local
         .actionLog()

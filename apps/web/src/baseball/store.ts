@@ -409,18 +409,14 @@ export const useBaseball = create<BaseballStore>((set, get) => {
     },
 
     canUndo() {
-      const { local, view, queue } = get();
-      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다.
-      if (
-        !local ||
-        !view ||
-        get().practice ||
-        queue.length > 0 ||
-        view.phase !== "play" ||
-        view.decision?.kind !== "guess"
-      )
+      const { local, view } = get();
+      // 튜토리얼 장면은 기록으로 다시 만들 수 없어 무르지 않는다. 판 끝은 화면에 보이기 전에 기록되므로
+      // 보이는 화면이 아니라 대국의 최신 상태로 본다(컴퓨터 답을 보이는 중에도 무를 수 있다)
+      if (!local || !view || get().practice) return false;
+      const latest = local.current();
+      if (latest.phase !== "play" || latest.decision?.kind !== "guess")
         return false;
-      return view.guesses.some((g) => g.seat === local.seat);
+      return latest.guesses.some((g) => g.seat === local.seat);
     },
 
     undo() {

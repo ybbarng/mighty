@@ -316,9 +316,12 @@ export const useMinhwatu = create<MinhwatuStore>((set, get) => {
     },
 
     canUndo() {
-      const { local, view, queue, practice } = get();
-      if (!local || !view || practice || queue.length > 0) return false;
-      if (view.phase !== "play" && view.phase !== "pick") return false;
+      const { local, view, practice } = get();
+      if (!local || !view || practice) return false;
+      // 판 끝은 화면에 보이기 전에 기록되므로 보이는 화면이 아니라 대국의 최신 상태로 본다
+      // (컴퓨터 수를 보이는 중에도 무를 수 있다)
+      const latest = local.current();
+      if (latest.phase !== "play" && latest.phase !== "pick") return false;
       // 이번 판에 내가 낸 패가 있어야 한다(지난 판으로는 되돌리지 않는다).
       const log = local.actionLog();
       for (let i = log.length - 1; i >= 0; i--) {
