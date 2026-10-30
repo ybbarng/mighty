@@ -1,3 +1,5 @@
+import type { PlayerClock } from "@mighty/engine";
+
 import type { Position } from "./board";
 import type { Sticks } from "./chain";
 import type { ThrowValue, YutRules } from "./rules";
@@ -31,7 +33,9 @@ export type GameResult =
   /** 기권(`seat`이 기권한 자리) */
   | { kind: "resign"; side: number | null; seat: number }
   /** 공개·약속을 기다리던 사람이 하나뿐인데 끝냈다(그 사람의 편이 진다) */
-  | { kind: "forfeit"; side: number | null; seat: number };
+  | { kind: "forfeit"; side: number | null; seat: number }
+  /** 개인 시간을 다 썼다(`seat`이 시간을 다 쓴 자리, 그 사람의 편이 진다) */
+  | { kind: "time"; side: number | null; seat: number };
 
 /** 직전 던지기(화면 연출용) */
 export interface LastThrow {
@@ -65,6 +69,8 @@ export interface YutState {
   result: GameResult | null;
   /** 끊긴 사람을 기다리지 않기로 해 중간에 끝났다 */
   retired?: boolean;
+  /** 자리마다 개인 시간(docs/37 4절). 시간 규칙이 없으면 null */
+  clocks: PlayerClock[] | null;
   /** 자리마다 사슬 재료(시드에서 만든다). 화면에는 그 자리 것만 보인다(`botKey`) */
   keys: string[];
 }
@@ -72,16 +78,18 @@ export interface YutState {
 export type Action =
   /** 사슬 약속(x_0, 16진수 64자) */
   | { type: "commit"; hash: string }
-  /** 던질 차례인 사람이 던진다 */
-  | { type: "throw" }
+  /** 던질 차례인 사람이 던진다. `spent`는 던지기까지 쓴 시간(ms, 시간 규칙이 있을 때 방장 시계가 적는다) */
+  | { type: "throw"; spent?: number }
   /** 이번 던지기에 내 사슬 다음 고리를 공개한다 */
   | { type: "reveal"; link: string }
   /**
    * 모아 둔 결과 하나(`value`)로 말을 움직인다. `from`은 움직일 말이 있는 점, 새 말은 HOME(-1).
    * 그 점의 내 말(업힌 말)이 함께 움직인다
    */
-  | { type: "move"; value: ThrowValue; from: number }
+  | { type: "move"; value: ThrowValue; from: number; spent?: number }
   | { type: "resign" }
+  /** 차례인 사람이 시간을 다 썼다(방장 시계가 낸다, `spent`는 이번 결정에 쓴 시간) */
+  | { type: "timeout"; spent: number }
   /** 게임을 중간에 끝낸다(끊긴 사람을 더 기다리지 않을 때) */
   | { type: "retire" };
 

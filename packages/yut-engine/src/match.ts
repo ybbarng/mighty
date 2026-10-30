@@ -1,4 +1,12 @@
-import { createRng, nextInt } from "@mighty/engine";
+import {
+  createRng,
+  nextInt,
+  type PlayerClock,
+  spendTime,
+  startClock,
+  TIME_PRESETS,
+  type TimeControl,
+} from "@mighty/engine";
 
 import { DONE, HOME, travel } from "./board";
 import {
@@ -57,9 +65,40 @@ export function createMatch(
     reveals: seats.map(() => null),
     lastThrow: null,
     result: null,
+    clocks: startClocks(rules),
     keys: seats.map((s) => seatKey(seed, s)),
   };
   return { state, events: [{ type: "gameStarted", turn }] };
+}
+
+/** 이 규칙의 개인 시간(없으면 null) */
+export function timeControlOf(rules: YutRules): TimeControl | null {
+  return rules.time && rules.time !== "none" ? TIME_PRESETS[rules.time] : null;
+}
+
+/** 자리마다 시계. 편 놀이도 사람마다 따로 잰다 */
+function startClocks(rules: YutRules): PlayerClock[] | null {
+  const control = timeControlOf(rules);
+  return control
+    ? Array.from({ length: rules.players }, () => startClock(control))
+    : null;
+}
+
+/**
+ * 지금 시계가 가는 자리와 그 사람이 쓸 수 있는 남은 시간(ms).
+ * 던지기와 말 움직이기 때만 간다. 약속·공개(모두가 고리를 내는 때)는 그 사람이 기다리는 시간이라 재지 않는다(docs/37 4절)
+ */
+export function clockTurn(
+  state: YutState,
+): { seat: number; left: number } | null {
+  const control = timeControlOf(state.rules);
+  const clock = state.clocks?.[state.turn];
+  if (!control || !clock) return null;
+  if (state.phase !== "throw" && state.phase !== "move") return null;
+  return {
+    seat: state.turn,
+    left: clock.main + clock.periods * control.byoyomi,
+  };
 }
 
 /** 지금 결정해야 하는 자리들 */
@@ -142,6 +181,7 @@ function clone(state: YutState): YutState {
     lastThrow: state.lastThrow
       ? { ...state.lastThrow, sticks: [...state.lastThrow.sticks] as Sticks }
       : null,
+    clocks: state.clocks ? state.clocks.map((c) => ({ ...c })) : null,
     keys: [...state.keys],
   };
 }
@@ -169,6 +209,43 @@ function endGame(
     result,
     ...(retired ? { retired: true } : {}),
   });
+}
+
+/** 시간을 다 써서 진다(그 사람의 편이 진다) */
+function loseOnTime(
+  state: YutState,
+  seat: number,
+  clock: PlayerClock,
+  events: GameEvent[],
+): void {
+  (state.clocks as PlayerClock[])[seat] = clock;
+  endGame(
+    state,
+    { kind: "time", seat, side: otherSide(state, sideOf(state.rules, seat)) },
+    events,
+  );
+}
+
+/**
+ * 던지기·움직이기 하나에 쓴 시간을 깎는다. 시간을 넘겼으면 그 행동은 하지 않고 시간패로 끝내고 true.
+ * 시간 규칙이 없으면 아무것도 하지 않는다
+ */
+function charge(
+  next: YutState,
+  seat: number,
+  spent: number | undefined,
+  events: GameEvent[],
+): boolean {
+  const control = timeControlOf(next.rules);
+  const clock = next.clocks?.[seat];
+  if (!control || !clock) return false;
+  const result = spendTime(clock, spent ?? 0, control);
+  if (result.flagged) {
+    loseOnTime(next, seat, result.clock, events);
+    return true;
+  }
+  (next.clocks as PlayerClock[])[seat] = result.clock;
+  return false;
 }
 
 /** 던지기 전에: 사슬을 다 쓴 자리가 있으면 모두 다시 약속한다 */
@@ -296,6 +373,19 @@ export function step(
       );
       return { ok: true, state: next, events };
     }
+    case "timeout": {
+      if (clockTurn(state)?.seat !== seat)
+        return fail("시계가 가는 차례가 아니다");
+      const control = timeControlOf(state.rules) as TimeControl;
+      const clock = (state.clocks as PlayerClock[])[seat] as PlayerClock;
+      if (!spendTime(clock, action.spent, control).flagged)
+        return fail("아직 시간이 남았다");
+      const next = clone(state);
+      const events: GameEvent[] = [];
+      // 시간을 다 쓴 사람의 시계는 0으로 보인다.
+      loseOnTime(next, seat, { main: 0, periods: 0 }, events);
+      return { ok: true, state: next, events };
+    }
     case "commit": {
       if (state.phase !== "commit") return fail("약속할 때가 아니다");
       const chain = state.chains[seat];
@@ -312,9 +402,13 @@ export function step(
       if (state.phase !== "throw") return fail("던질 때가 아니다");
       if (state.turn !== seat) return fail("차례가 아니다");
       const next = clone(state);
+      const events: GameEvent[] = [];
+      if (charge(next, seat, action.spent, events))
+        return { ok: true, state: next, events };
       next.phase = "reveal";
       next.reveals = next.reveals.map(() => null);
-      return { ok: true, state: next, events: [{ type: "thrown", seat }] };
+      events.push({ type: "thrown", seat });
+      return { ok: true, state: next, events };
     }
     case "reveal": {
       if (state.phase !== "reveal") return fail("공개할 때가 아니다");
@@ -344,6 +438,10 @@ export function step(
       );
       if (!option) return fail("그 말로 그 결과를 쓸 수 없다");
       const next = clone(state);
+      // 시간을 넘겨 고른 수는 두지 않고 시간패로 끝낸다.
+      const timeEvents: GameEvent[] = [];
+      if (charge(next, seat, action.spent, timeEvents))
+        return { ok: true, state: next, events: timeEvents };
       const side = sideOf(state.rules, seat);
       const group = piecesOfSide(next, side).filter(
         (p) => p.piece.point === action.from,
