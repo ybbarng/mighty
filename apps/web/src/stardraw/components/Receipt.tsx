@@ -89,8 +89,7 @@ export function Receipt({
         </dd>
         {aboutId && (
           <p className="col-span-2 break-keep font-sans text-[11px] text-slate-400 leading-snug">
-            공개 장부에서 내 응모권을 찾는 번호예요. 남에게 보여 줘도 당첨을
-            가져갈 수는 없어요.
+            공개 장부에서 내 응모권을 찾는 번호예요.
           </p>
         )}
         {ticket.sig.kind === "webauthn" && (
