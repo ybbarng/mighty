@@ -50,11 +50,18 @@ COPY . .
 ARG NEXT_PUBLIC_SITE_URL=https://game.byb.kr
 ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID=
 ARG NEXT_PUBLIC_STARDRAW_API=
+# 빌드한 커밋(.git 은 빌드 문맥에 없다). 빌드 id와 화면 코드 해시 목록 build-hashes.json 에 들어간다(docs/36 11-8 재현 빌드)
+ARG SOURCE_COMMIT=
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_UMAMI_WEBSITE_ID=$NEXT_PUBLIC_UMAMI_WEBSITE_ID \
     NEXT_PUBLIC_STARDRAW_API=$NEXT_PUBLIC_STARDRAW_API \
+    SOURCE_COMMIT=$SOURCE_COMMIT \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @mighty/web build
+
+# 화면 코드 해시 목록만 꺼내는 단계(Image 워크플로가 --output 으로 받아 기록에 남긴다)
+FROM scratch AS hashes
+COPY --from=build /app/apps/web/out/build-hashes.json /
 
 # 실행 — 서버의 static 앱과 같은 nginx 판. 서버 compose 에서 read_only + tmpfs 로 띄운다
 FROM nginx:1.31.8-alpine AS runner
