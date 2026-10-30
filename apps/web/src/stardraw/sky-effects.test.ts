@@ -79,3 +79,34 @@ describe("하늘 효과 시간표", () => {
     fx.stop();
   });
 });
+
+describe("영수증 하늘: 내 별끼리만 겹쳐 반짝인다", () => {
+  it("반짝임은 목록 안의 별에서만 나오고, 여러 개가 동시에 빛나며, 별똥별은 없다", () => {
+    const clock = new ManualClock();
+    const rng = createRng(11);
+    const mine = [3, 9, 21, 27, 33, 41];
+    const fx = startSkyEffects({
+      clock,
+      stars: 0,
+      faints: 0,
+      pool: mine,
+      starMeanMs: 450,
+      starDuration: [700, 1500],
+      meteors: false,
+      random: () => nextFloat(rng),
+    });
+    let most = 0;
+    for (let t = 0; t < 60_000; t += 50) {
+      clock.advance(50);
+      const now = fx.twinkles();
+      for (const tw of now) {
+        expect(tw.kind).toBe("star");
+        expect(mine).toContain(tw.index);
+      }
+      most = Math.max(most, now.length);
+      expect(fx.meteor()).toBeNull();
+    }
+    expect(most).toBeGreaterThanOrEqual(3);
+    fx.stop();
+  });
+});

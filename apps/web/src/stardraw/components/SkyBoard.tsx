@@ -68,7 +68,9 @@ export function SkyBoard({
     const reduce =
       typeof matchMedia === "function" &&
       matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animate = !reduce && stateRef.current.mode === "pick";
+    const mode = stateRef.current.mode;
+    // 영수증도 움직인다: 내 별 6개끼리 무작위로, 여러 개가 겹쳐 반짝인다
+    const animate = !reduce && (mode === "pick" || mode === "receipt");
 
     const resize = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -99,11 +101,22 @@ export function SkyBoard({
     };
     const start = () => {
       if (!animate || effectsRef.current) return;
-      effectsRef.current = startSkyEffects({
-        clock,
-        stars: SKY_STARS.length,
-        faints: FAINT_STARS.length,
-      });
+      effectsRef.current =
+        mode === "receipt"
+          ? startSkyEffects({
+              clock,
+              stars: 0,
+              faints: 0,
+              pool: stateRef.current.picked,
+              starMeanMs: 450,
+              starDuration: [700, 1500],
+              meteors: false,
+            })
+          : startSkyEffects({
+              clock,
+              stars: SKY_STARS.length,
+              faints: FAINT_STARS.length,
+            });
       if (!raf) raf = requestAnimationFrame(frame);
     };
     const stop = () => {

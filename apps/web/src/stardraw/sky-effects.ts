@@ -42,6 +42,14 @@ export interface SkyEffectsOptions {
   random?: () => number;
   /** 새 효과가 생겼을 때 */
   onEffect?: () => void;
+  /** 반짝일 번호 별을 이 목록에서만 고른다(영수증: 내 별 6개) */
+  pool?: readonly number[];
+  /** 번호 별 반짝임 사이 평균 간격(ms). 짧고 길이가 길면 여러 별이 겹쳐 빛난다 */
+  starMeanMs?: number;
+  /** 번호 별 반짝임 길이(ms) 범위 */
+  starDuration?: readonly [number, number];
+  /** 별똥별(기본 켬) */
+  meteors?: boolean;
 }
 
 export interface SkyEffects {
@@ -90,13 +98,18 @@ export function startSkyEffects(options: SkyEffectsOptions): SkyEffects {
     schedule();
   };
 
-  if (options.stars > 0)
-    loop(STAR_TWINKLE_MEAN_MS, () =>
+  const pool = options.pool ?? [];
+  const [shortest, longest] = options.starDuration ?? [250, 700];
+  if (options.stars > 0 || pool.length > 0)
+    loop(options.starMeanMs ?? STAR_TWINKLE_MEAN_MS, () =>
       add({
         kind: "star",
-        index: 1 + Math.floor(random() * options.stars),
+        index:
+          pool.length > 0
+            ? (pool[Math.floor(random() * pool.length)] as number)
+            : 1 + Math.floor(random() * options.stars),
         start: clock.now(),
-        duration: rand(250, 700),
+        duration: rand(shortest, longest),
       }),
     );
   if (options.faints > 0)
@@ -129,7 +142,7 @@ export function startSkyEffects(options: SkyEffectsOptions): SkyEffects {
       }),
     );
   };
-  nextMeteor(2500);
+  if (options.meteors ?? true) nextMeteor(2500);
 
   return {
     twinkles: () => {

@@ -11,7 +11,7 @@ import { type Meteor, type Twinkle, twinkleLevel } from "./sky-effects";
  *   가끔 무작위 별 하나에 십자 빛줄기가 잠깐 서고(sky-effects), 가장 밝은 별 넷은 아주 가는 빛줄기를 늘 두고 미세하게 깜빡인다
  * - 영수증(receipt): 내 별 6개만 밝게, 나머지 별과 별자리 선은 더 흐리게
  * - 추첨(draw): 모든 별의 빛을 끈 하늘에서 룰렛 불빛(cursor)이 돌고, 멈춘 당첨 별만 켜진 채 남는다.
- *   보너스는 하늘빛, 내 별과 겹치면 고리가 초록으로 바뀌고 빛이 맥동한다. 반짝임·유성은 돌지 않는다
+ *   보너스는 하늘빛, 내 별(파란 고리)이 당첨 번호면 고리 안의 별빛이 맥동한다. 반짝임·유성은 돌지 않는다
  *
  * 휴대폰 비용: 상태가 같으면 바탕 층(먼지·선·별)과 위 층(고리·번호 공)을 미리 그려 두고,
  * 프레임마다 두 층을 붙이며 그 사이에 움직이는 빛(반짝임·빛줄기·강조)만 그린다.
@@ -345,15 +345,14 @@ function paintTop(g: Ctx, sc: Scene) {
 
   for (const st of sc.stars) {
     const { x, y, r, s } = st;
-    // 고리: 내 별은 금빛(추첨 화면에서는 당첨 별 금빛과 헷갈리지 않게 하늘색),
-    // 추첨에서 내 별이 당첨 번호(보너스 포함)면 초록으로 바뀐다
+    // 고리: 내 별은 금빛(추첨 화면에서는 당첨 별 금빛과 헷갈리지 않게 하늘색).
+    // 맞았는지는 고리 색이 아니라 고리 안의 별이 켜져 빛나는 것으로 알린다(파란 고리 + 빛)
     if (st.mine) {
-      g.strokeStyle = st.hit
-        ? "rgba(134,239,172,0.95)"
-        : state.mode === "draw"
+      g.strokeStyle =
+        state.mode === "draw"
           ? "rgba(147,197,253,0.95)"
           : "rgba(244,210,122,0.95)";
-      g.lineWidth = (st.hit ? 2 : 1.5) * Math.min(1.2, scale);
+      g.lineWidth = 1.5 * Math.min(1.2, scale);
       g.beginPath();
       g.arc(x, y, r + 6 * scale, 0, TAU);
       g.stroke();
@@ -404,7 +403,8 @@ function paintLive(g: Ctx, sc: Scene, f: FrameInput) {
   const { W, scale, receipt, dark } = sc;
   const { now } = f;
   const still = !!f.still;
-  const twinkles = dark || receipt ? [] : f.twinkles;
+  // 영수증은 내 별 6개끼리만 반짝인다(반짝임 목록이 내 별에서만 나온다)
+  const twinkles = dark ? [] : f.twinkles;
   const lw = Math.max(0.5, 0.7 * Math.min(1.2, scale));
 
   if (twinkles.length)
@@ -439,7 +439,8 @@ function paintLive(g: Ctx, sc: Scene, f: FrameInput) {
     // 반짝임: 무작위 별 하나에 십자 빛줄기가 잠깐 섰다가 사라진다(star.byb.kr과 같은 결)
     const a = twinkles.length ? twinkleLevel(twinkles, "star", s.n, now) : 0;
     if (a > 0.01) {
-      cross(g, x, y, c, a * (7 + 9 * look.b) * scale, a, lw);
+      const reach = receipt ? 12 + 12 * look.b : 7 + 9 * look.b;
+      cross(g, x, y, c, a * reach * scale, a, lw);
       halo(g, x, y, look.core * 5, whiter(c, 0.6), 0.5 * a);
       g.fillStyle = rgba("255,255,255", 0.9 * a);
       g.beginPath();
