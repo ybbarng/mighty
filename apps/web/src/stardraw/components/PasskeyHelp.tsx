@@ -87,7 +87,7 @@ export function PasskeyFaq({ className }: { className?: string }) {
         <p className="font-semibold text-sm">연습: 다른 기기에서 열어 보기</p>
         <p>
           다른 기기나 브라우저에서 game.byb.kr/stardraw를 열고 「내 응모」의
-          「다른 기기에서 내 응모권 찾기」를 누르세요. 패스키로 한 번 확인해 내
+          「이미 우주인 등록증이 있어요」를 누르세요. 패스키로 한 번 확인해 내
           응모 이력이 보이면, 패스키가 잘 따라온 거예요.
         </p>
       </div>
