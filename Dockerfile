@@ -39,6 +39,7 @@ COPY packages/baseball-ai/package.json packages/baseball-ai/
 COPY packages/yut-engine/package.json packages/yut-engine/
 COPY packages/yut-ai/package.json packages/yut-ai/
 COPY packages/stardraw-core/package.json packages/stardraw-core/
+COPY packages/stardraw-cli/package.json packages/stardraw-cli/
 # lefthook 같은 개발용 설치 스크립트는 돌리지 않는다
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

@@ -105,6 +105,8 @@ export interface PublicCheckOptions {
   mine?: readonly Uint8Array[];
   /** 회차 파일을 받을 때마다 부른다(터미널 진행 표시) */
   onProgress?: (done: number, total: number) => void;
+  /** 이미 받아 둔 장부(`loadPublicLedger`). 주면 다시 받지 않는다 */
+  ledger?: PublicLedger;
 }
 
 const pad = (n: number) => String(n).padStart(6, "0");
@@ -230,7 +232,9 @@ export async function checkPublicLedger(
     options.anchorRepo === undefined
       ? STARDRAW_ANCHOR_REPO
       : options.anchorRepo;
-  const ledger = await loadPublicLedger(options.base, f, options.onProgress);
+  const ledger =
+    options.ledger ??
+    (await loadPublicLedger(options.base, f, options.onProgress));
   const { genesis, head, records, tickets, registrations, seals } = ledger;
 
   const report = await verifyLedger(genesis, records, tickets, registrations, {
@@ -306,7 +310,8 @@ export async function checkPublicLedger(
     head: toHex(report.head),
     items: withPowDetail(checkItemsFrom(report.problems, extra, skips), report),
     problems: report.problems,
-    skipped: report.skipped,
+    // 봉인 시각은 아래 「바깥 증명」 항목(timestampItem)이 seals의 토큰으로 따로 본다
+    skipped: report.skipped.filter((s) => !s.includes("머클 루트 로그 시각")),
     ledger,
   };
 }

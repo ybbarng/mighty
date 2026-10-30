@@ -1,0 +1,29 @@
+{
+  "name": "@mighty/stardraw-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "하늘의 별 따기(Stardraw) 독립 검사기 — 서버나 화면을 거치지 않고 공개 장부 전체와 사이트 화면 코드 해시를 내 컴퓨터에서 검사한다(docs/36 11-8)",
+  "license": "MIT",
+  "bin": {
+    "stardraw-verify": "dist/stardraw-verify.mjs"
+  },
+  "files": [
+    "dist/stardraw-verify.mjs"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "rolldown -c rolldown.config.mjs",
+    "verify": "rolldown -c rolldown.config.mjs > /dev/null && node dist/stardraw-verify.mjs"
+  },
+  "dependencies": {
+    "@mighty/stardraw-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "rolldown": "1.2.14"
+  }
+}

@@ -532,6 +532,19 @@ importers:
         specifier: workspace:*
         version: link:../engine
 
+  packages/stardraw-cli:
+    dependencies:
+      '@mighty/stardraw-core':
+        specifier: workspace:*
+        version: link:../stardraw-core
+    devDependencies:
+      '@types/node':
+        specifier: 26.6.5
+        version: 26.6.5
+      rolldown:
+        specifier: 1.2.14
+        version: 1.2.14
+
   packages/stardraw-core:
     dependencies:
       '@noble/curves':
