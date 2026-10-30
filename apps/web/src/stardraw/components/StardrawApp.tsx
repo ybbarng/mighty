@@ -12,6 +12,7 @@ import {
   toHex,
   type VerifyReport,
 } from "@mighty/stardraw-core";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { BackToGames } from "@/components/BackToGames";
@@ -42,33 +43,129 @@ import { Receipt } from "./Receipt";
 type View =
   | { name: "home" }
   | { name: "enter" }
-  | { name: "receipt"; mine: MyTicket; printing?: boolean | undefined }
+  | { name: "receipt"; id: string }
   | { name: "draw"; round: number }
   | { name: "mine" }
   | { name: "rounds" }
   | { name: "round"; round: number }
   | { name: "check"; round: number; rank: Rank };
 
+/** 화면마다 자기 주소(정적 내보내기라 실제 경로 페이지). 경로 안의 작은 화면은 # 조각으로 */
+export type StardrawPage = "home" | "enter" | "mine" | "rounds";
+
+const PATH: Record<StardrawPage, string> = {
+  home: "/stardraw",
+  enter: "/stardraw/enter",
+  mine: "/stardraw/mine",
+  rounds: "/stardraw/rounds",
+};
+
+/** 화면 → 주소. 뒤로가기·새로고침이 그 화면으로 돌아오게 브라우저 기록에 남긴다 */
+function urlOf(v: View): string {
+  switch (v.name) {
+    case "home":
+      return PATH.home;
+    case "enter":
+      return PATH.enter;
+    case "mine":
+      return PATH.mine;
+    case "receipt":
+      return `${PATH.mine}#t-${v.id}`;
+    case "rounds":
+      return PATH.rounds;
+    case "round":
+      return `${PATH.rounds}#${v.round}`;
+    case "draw":
+      return `${PATH.rounds}#draw-${v.round}`;
+    case "check":
+      return `${PATH.rounds}#check-${v.round}-${v.rank}`;
+  }
+}
+
+/** 주소 → 화면 */
+function viewOf(page: StardrawPage, hash: string): View {
+  const h = hash.replace(/^#/, "");
+  if (page === "enter") return { name: "enter" };
+  if (page === "mine") {
+    const t = /^t-([0-9a-f]{64})$/.exec(h);
+    return t ? { name: "receipt", id: t[1] as string } : { name: "mine" };
+  }
+  if (page === "rounds") {
+    let m = /^draw-(\d+)$/.exec(h);
+    if (m) return { name: "draw", round: Number(m[1]) };
+    m = /^check-(\d+)-([1-5])$/.exec(h);
+    if (m)
+      return { name: "check", round: Number(m[1]), rank: Number(m[2]) as Rank };
+    m = /^(\d+)$/.exec(h);
+    if (m) return { name: "round", round: Number(m[1]) };
+    return { name: "rounds" };
+  }
+  return { name: "home" };
+}
+
+/** 막 응모해 영수증이 인쇄되어 나오는 중인 응모권(한 번만 연출한다) */
+let printingId: string | null = null;
+/** 이번 방문에서 별 따기 화면 사이를 옮겨 다녔는지(아니면 "돌아가기"가 사이트 밖으로 나가지 않게 정한 화면으로) */
+let navigated = false;
+
 export const TAGLINE = "로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?";
 
-/** 하늘의 별 따기(docs/36 11절). 지금은 이 기기 안 연습 장부로 돈다 */
-export function StardrawApp() {
+/** 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다 */
+export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const { services, status, version, refresh } = useLedger();
-  const [view, setView] = useState<View>({ name: "home" });
+  const router = useRouter();
+  const [view, setView] = useState<View>(() =>
+    typeof window === "undefined"
+      ? viewOf(page, "")
+      : viewOf(page, window.location.hash),
+  );
   const [mine, setMine] = useState<MyTicket[]>([]);
+  /** 지갑을 한 번 읽었는지(그 전에는 영수증을 "찾을 수 없어요"로 보이지 않는다) */
+  const [loaded, setLoaded] = useState(false);
   const [opened, setOpened] = useState<Set<number>>(new Set());
+  // 응모 화면에서 영수증 주소로 옮겨 오며 넘긴 "인쇄 중" 표시는 이 페이지가 열릴 때 한 번만 받는다
+  const [printing] = useState(() => {
+    const id = printingId;
+    printingId = null;
+    return id;
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 읽는다
   useEffect(() => {
     if (!services) return;
     setMine(services.wallet.loadTickets());
+    setLoaded(true);
     setOpened(services.wallet.openedRounds());
   }, [version, services]);
 
-  const go = (v: View) => {
-    setView(v);
+  // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
+  useEffect(() => {
+    const sync = () => setView(viewOf(page, window.location.hash));
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, [page]);
+
+  /** 다른 화면으로: 주소를 바꿔 기록에 남긴다(replace면 지금 기록을 바꾼다) */
+  const go = (v: View, replace = false) => {
+    const url = urlOf(v);
+    navigated = true;
+    if (replace) router.replace(url);
+    else router.push(url);
+    if (url.split("#")[0] === PATH[page]) setView(v);
     window.scrollTo({ top: 0 });
   };
+  /** 화면의 "돌아가기": 옮겨 왔으면 바로 전 화면, 주소로 바로 열었으면 정한 화면으로 */
+  const back = (fallback: View) => {
+    if (navigated) router.back();
+    else go(fallback, true);
+  };
+  const receiptOf = (id: string) =>
+    mine.find((m) => toHex(ticketId(m.ticket)) === id);
 
   return (
     <main
@@ -93,24 +190,39 @@ export function StardrawApp() {
           <EnterView
             services={services}
             status={status}
-            onBack={() => go({ name: "home" })}
+            onBack={() => back({ name: "home" })}
             onDone={(ticket, receivedAt) => {
               const m = { ticket, receivedAt };
               services.wallet.addTicket(m);
               setMine(services.wallet.loadTickets());
               track("game-start", { game: "stardraw", mode: "solo" });
               void refresh();
-              go({ name: "receipt", mine: m, printing: true });
+              // 응모 화면 기록을 영수증으로 바꾼다: 뒤로가기는 응모 전 화면으로
+              const id = toHex(ticketId(ticket));
+              printingId = id;
+              go({ name: "receipt", id }, true);
             }}
           />
         ) : view.name === "receipt" ? (
-          <ReceiptView
-            services={services}
-            mine={view.mine}
-            printing={view.printing}
-            onBack={() => go({ name: "home" })}
-            onDraw={(round) => go({ name: "draw", round })}
-          />
+          (() => {
+            const m = receiptOf(view.id);
+            if (!loaded) return null;
+            if (!m)
+              return (
+                <p className="py-10 text-center text-white/60">
+                  이 기기에서 이 응모권을 찾을 수 없어요
+                </p>
+              );
+            return (
+              <ReceiptView
+                services={services}
+                mine={m}
+                printing={printing === view.id}
+                onBack={() => back({ name: "home" })}
+                onDraw={(round) => go({ name: "draw", round })}
+              />
+            );
+          })()
         ) : view.name === "draw" ? (
           <DrawFor
             services={services}
@@ -119,22 +231,24 @@ export function StardrawApp() {
             onClose={() => {
               services.wallet.markOpened(view.round);
               setOpened(services.wallet.openedRounds());
-              go({ name: "home" });
+              back({ name: "home" });
             }}
           />
         ) : view.name === "mine" ? (
           <MineView
             services={services}
             mine={mine}
-            onBack={() => go({ name: "home" })}
-            onOpen={(m) => go({ name: "receipt", mine: m })}
+            onBack={() => back({ name: "home" })}
+            onOpen={(m) =>
+              go({ name: "receipt", id: toHex(ticketId(m.ticket)) })
+            }
             onRecovered={() => setMine(services.wallet.loadTickets())}
           />
         ) : view.name === "rounds" ? (
           <RoundsView
             services={services}
             version={version}
-            onBack={() => go({ name: "home" })}
+            onBack={() => back({ name: "home" })}
             onOpen={(round) => go({ name: "round", round })}
           />
         ) : view.name === "round" ? (
@@ -142,7 +256,7 @@ export function StardrawApp() {
             services={services}
             round={view.round}
             mine={mine}
-            onBack={() => go({ name: "rounds" })}
+            onBack={() => back({ name: "rounds" })}
             onCheck={(rank) => go({ name: "check", round: view.round, rank })}
             onDraw={() => go({ name: "draw", round: view.round })}
           />
@@ -152,7 +266,7 @@ export function StardrawApp() {
             round={view.round}
             rank={view.rank}
             tickets={winnersOf(services, view.round, view.rank)}
-            onClose={() => go({ name: "round", round: view.round })}
+            onClose={() => back({ name: "round", round: view.round })}
           />
         ) : (
           <Home
@@ -161,7 +275,9 @@ export function StardrawApp() {
             mine={mine}
             opened={opened}
             onEnter={() => go({ name: "enter" })}
-            onReceipt={(m) => go({ name: "receipt", mine: m })}
+            onReceipt={(m) =>
+              go({ name: "receipt", id: toHex(ticketId(m.ticket)) })
+            }
             onDraw={(round) => go({ name: "draw", round })}
             onMine={() => go({ name: "mine" })}
             onRounds={() => go({ name: "rounds" })}
@@ -411,7 +527,9 @@ function Odds() {
       className="sd-glass grid grid-cols-2 gap-px overflow-hidden rounded-2xl"
     >
       <div className="flex flex-col gap-1 p-4">
-        <span className="text-white/60 text-xs">눈에 보이는 별 하나 맞히기</span>
+        <span className="text-white/60 text-xs">
+          눈에 보이는 별 하나 맞히기
+        </span>
         <span className="font-mono font-bold text-2xl tabular-nums">
           1/9,000
         </span>

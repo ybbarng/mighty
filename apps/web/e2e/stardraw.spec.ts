@@ -235,9 +235,9 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-mine.png"),
     fullPage: true,
   });
-  // 다시 열어도 응모권이 남는다
+  // 새로고침해도 내 응모 화면에 머물고 응모권이 남는다
+  await expect(page).toHaveURL(/\/stardraw\/mine$/);
   await page.reload();
-  await page.getByRole("button", { name: /내 응모/ }).click();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
 });
 
@@ -289,6 +289,34 @@ test("패스키를 못 쓰는 브라우저와 앱 안 브라우저는 응모 대
   );
   await expect(inApp.getByRole("button", { name: "주소 복사" })).toBeVisible();
   await kakao.close();
+});
+
+test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고침은 그 화면에 머문다", async ({
+  page,
+}, info) => {
+  test.skip(isPhone(info.project.name), "주소·기록은 한 크기로");
+  await page.goto("/stardraw");
+  await page.getByRole("button", { name: /지난 회차/ }).click();
+  await expect(page).toHaveURL(/\/stardraw\/rounds$/);
+  await expect(page.getByRole("region", { name: "지난 회차" })).toBeVisible();
+  // 새로고침해도 지난 회차
+  await page.reload();
+  await expect(page.getByRole("region", { name: "지난 회차" })).toBeVisible();
+  // 뒤로가기는 게임 목록이 아니라 별 따기 첫 화면
+  await page.goBack();
+  await expect(page).toHaveURL(/\/stardraw$/);
+  await expect(
+    page.getByRole("button", { name: "별 6개 고르러 가기" }),
+  ).toBeVisible();
+  // 내 응모도 같다. 화면 안 「돌아가기」도 바로 전 화면으로
+  await page.getByRole("button", { name: /내 응모/ }).click();
+  await expect(page).toHaveURL(/\/stardraw\/mine$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/stardraw$/);
+  // 주소로 바로 연 화면의 「처음으로」는 사이트 밖이 아니라 첫 화면으로
+  await page.goto("/stardraw/rounds");
+  await page.getByRole("button", { name: /처음으로/ }).click();
+  await expect(page).toHaveURL(/\/stardraw$/);
 });
 
 test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
