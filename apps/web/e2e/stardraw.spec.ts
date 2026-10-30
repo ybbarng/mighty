@@ -954,6 +954,80 @@ test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제�
   await expect(stage.locator("[data-owner-ok]")).toBeVisible();
 });
 
+test("당첨 축하: 맞은 내 별로 나만의 별자리, 1~3등은 당첨 직인, 5등은 가볍게", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === "phone-landscape", "데스크톱·휴대폰 세로로");
+  // 움직임 줄이기(화면 시험 기본): 별자리와 직인이 처음부터 다 보이고 별똥별은 없다
+  const cases = [
+    { rank: 1, stars: 6, seal: true },
+    { rank: 3, stars: 5, seal: true },
+    { rank: 5, stars: 3, seal: false },
+  ] as const;
+  for (const c of cases) {
+    await page.goto(`/stardraw/demo#tour-rank-${c.rank}`);
+    const screen = page.locator("[data-tour-screen][data-tour-ready]");
+    await expect(screen.getByText(`${c.rank}등 당첨`)).toBeVisible({
+      timeout: 30_000,
+    });
+    const party = screen.locator(`[data-celebration='${c.rank}']`);
+    await expect(party).toBeAttached();
+    await expect(party.locator(".sd-cel-star")).toHaveCount(c.stars);
+    await expect(party.locator(".sd-cel-line")).toHaveCount(c.stars - 1);
+    await expect(party.locator(".sd-cel-meteor").first()).toBeHidden();
+    await expect(screen.locator("[data-win-seal]")).toHaveCount(c.seal ? 1 : 0);
+    if (c.seal)
+      await expect(
+        screen.getByRole("img", { name: "카노푸스 우주국 당첨 직인" }),
+      ).toBeVisible();
+    await noSideScroll(page);
+    await page.screenshot({
+      path: info.outputPath(`stardraw-win-${c.rank}.png`),
+      fullPage: true,
+    });
+  }
+  // 낙첨은 축하가 없다
+  await page.evaluate(() => {
+    window.location.hash = "#tour-lose";
+  });
+  await expect(page.getByText("아쉽게도 당첨되지 않았습니다")).toBeVisible();
+  await expect(page.locator("[data-celebration]")).toHaveCount(0);
+});
+
+test("당첨 축하 연출: 1등은 별똥별 비, 직인이 찍히는 순간 짧게 떨린다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱 한 크기로");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.addInitScript(() => {
+    const w = window as unknown as { __vibrated: unknown[] };
+    w.__vibrated = [];
+    Object.defineProperty(navigator, "vibrate", {
+      configurable: true,
+      value: (p: unknown) => {
+        w.__vibrated.push(p);
+        return true;
+      },
+    });
+  });
+  await page.goto("/stardraw/demo#tour-rank-1");
+  const party = page.locator("[data-celebration='1']");
+  await expect(party).toBeAttached({ timeout: 30_000 });
+  await expect(party.locator(".sd-cel-meteor")).toHaveCount(18);
+  // 직인이 찍힌 뒤에 한 번 떨린다(시각은 연출 계산에서 정해진다)
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window as unknown as { __vibrated: unknown[] }).__vibrated,
+        ),
+      { timeout: 20_000 },
+    )
+    .toEqual([[40, 60, 80]]);
+  await expect(page.locator("[data-win-seal]")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("stardraw-win-1-motion.png") });
+});
+
 test("HDR 별빛: HDR 화면에서만 맞은 내 별과 가장 밝은 별 셋 위에 HDR 그림을 겹친다", async ({
   page,
 }, info) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { type Clock, realClock } from "@mighty/fair-play";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -23,6 +23,7 @@ export function SkyBoard({
   className,
   clock = realClock,
   hdr = [],
+  overlay,
 }: {
   state: SkyState;
   /** 응모: 별을 누르면 그 번호 */
@@ -32,6 +33,8 @@ export function SkyBoard({
   clock?: Clock | undefined;
   /** HDR 화면에서 빛 그림을 겹칠 별 */
   hdr?: readonly HdrGlow[] | undefined;
+  /** 하늘 위에 겹칠 그림(당첨 축하의 별자리·별똥별). 누르기를 막지 않는다 */
+  overlay?: ReactNode;
 }) {
   const hdrScreen = useHdrScreen();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -161,10 +164,15 @@ export function SkyBoard({
           data-hdr-glows={hdr.length}
         >
           {hdr.map((g, i) => (
-            <HdrGlowSprite key={`${g.kind}-${g.n}`} glow={g} index={i} />
+            <HdrGlowSprite
+              key={`${g.kind}-${g.n}-${g.delay ?? 0}`}
+              glow={g}
+              index={i}
+            />
           ))}
         </div>
       )}
+      {overlay}
     </div>
   );
 }
@@ -206,7 +214,9 @@ function HdrGlowSprite({ glow, index }: { glow: HdrGlow; index: number }) {
         style={
           glow.kind === "calm"
             ? { animationDelay: `${-index * 2.1}s` }
-            : undefined
+            : glow.delay
+              ? { animationDelay: `${glow.delay}ms` }
+              : undefined
         }
       />
     </span>

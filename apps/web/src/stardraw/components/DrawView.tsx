@@ -7,10 +7,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
+import { celebrationPlan } from "../celebrate";
 import { drawGlows } from "../hdr-glow";
 import { drawOrder, myRank } from "../results";
 import { planRoulette, type RouletteFrame, rouletteAt } from "../roulette";
 import { starOf } from "../sky";
+import { SkyCelebration, WinSeal } from "./Celebration";
 import { LottoBall, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -120,6 +122,38 @@ export function DrawView({
   const bonus = frame.fixed.length >= 7 ? (frame.fixed[6] ?? null) : null;
   const mine = ticket?.numbers ?? [];
 
+  // 당첨 축하: 결과가 나오면 맞은 내 별(보너스 포함)로 나만의 별자리, 3등부터 별똥별, 1~3등은 당첨 직인
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 결과·응모권이 정해지면 바뀌지 않는다
+  const party = useMemo(
+    () =>
+      done && rank && ticket
+        ? celebrationPlan(
+            rank,
+            ticket.numbers.filter(
+              (n) =>
+                order.slice(0, 6).includes(n) || (rank === 2 && order[6] === n),
+            ),
+          )
+        : null,
+    [done, rank, ticket, record.round],
+  );
+  /** 움직임 줄이기면 별자리·직인이 바로 보인다(HDR 번쩍임·떨림도 없다) */
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    setReduce(matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, []);
+  // 안드로이드: 직인이 찍히는 순간 짧게 떨린다(지원하지 않는 기기는 없는 일로)
+  useEffect(() => {
+    if (!party || party.sealAt === null || reduce) return;
+    return clock.after(party.sealAt + 350, () => {
+      try {
+        navigator.vibrate?.(party.rank === 1 ? [40, 60, 80] : 40);
+      } catch {
+        // 떨림을 못 하면 그냥 넘어간다
+      }
+    });
+  }, [party, reduce, clock]);
+
   return (
     <section
       className="flex flex-col gap-4"
@@ -168,7 +202,20 @@ export function DrawView({
               cursor: frame.cursor,
             }}
             clock={clock}
-            hdr={drawGlows({ fixed: frame.fixed, mine, done, animated })}
+            hdr={drawGlows({
+              fixed: frame.fixed,
+              mine,
+              done,
+              animated,
+              lights:
+                party && !reduce
+                  ? party.order.map((n, i) => ({
+                      n,
+                      at: party.starAt[i] ?? 0,
+                    }))
+                  : [],
+            })}
+            overlay={party && <SkyCelebration plan={party} />}
             label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
           />
 
@@ -229,7 +276,7 @@ export function DrawView({
           {done && (
             <div
               className={cn(
-                "sd-rise flex flex-col items-center gap-1 rounded-2xl border p-4 text-center",
+                "sd-rise relative flex flex-col items-center gap-1 rounded-2xl border p-4 text-center",
                 rank
                   ? "border-amber-200/50 bg-amber-200/10"
                   : "border-white/10 bg-white/5",
@@ -247,6 +294,7 @@ export function DrawView({
                       맞은 별 {mine.filter((n) => main.includes(n)).length}개
                       {rank === 2 ? " + 보너스" : ""}
                     </span>
+                    {party?.sealAt != null && <WinSeal at={party.sealAt} />}
                   </>
                 ) : (
                   <>

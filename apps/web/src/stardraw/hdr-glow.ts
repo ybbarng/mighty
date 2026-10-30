@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
  *  - flash: 추첨 룰렛이 멈춰 뽑힌 별이 켜지는 순간 한 번 번쩍이고 사라진다
  *  - hit:   추첨 결과에서 내가 고른 별이 맞은 별(보너스 포함)을 은은하게 맥동
  *  - calm:  응모 하늘에서 가장 밝은 별 셋(1 시리우스·2 아크투루스·3 직녀성)을 아주 은은하게
+ *  당첨 축하에서 나만의 별자리 별이 하나씩 켜질 때도 flash를 그 순간(delay)에 한 번 쓴다
  * 강도는 CSS 변수 `--sd-hdr-strength`(globals.css)로 한 번에 바꾼다.
  */
 
@@ -18,6 +19,8 @@ export type HdrGlowKind = "flash" | "hit" | "calm";
 export interface HdrGlow {
   n: number;
   kind: HdrGlowKind;
+  /** 번쩍임을 늦출 시간(ms). 당첨 축하에서 별자리 별이 켜지는 순간에 맞춘다 */
+  delay?: number;
 }
 
 /** 응모 하늘에서 은은하게 빛나는 가장 밝은 별(번호는 밝은 순서) */
@@ -40,14 +43,19 @@ export function drawGlows({
   mine,
   done,
   animated,
+  lights = [],
 }: {
   fixed: readonly number[];
   mine: readonly number[];
   done: boolean;
   animated: boolean;
+  /** 당첨 축하: 별자리 별이 켜지는 차례와 시각(ms, 움직임 줄이기면 빈 목록) */
+  lights?: readonly { n: number; at: number }[];
 }): HdrGlow[] {
   const glows: HdrGlow[] = [];
   if (animated) for (const n of fixed) glows.push({ n, kind: "flash" });
+  if (done)
+    for (const l of lights) glows.push({ n: l.n, kind: "flash", delay: l.at });
   if (done) {
     const own = new Set(mine);
     for (const n of fixed) if (own.has(n)) glows.push({ n, kind: "hit" });

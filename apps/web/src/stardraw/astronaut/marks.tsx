@@ -6,7 +6,16 @@ import { useId } from "react";
  * 발급 기관 직인: 용골자리(카노푸스가 속한 별자리)의 별과 선으로 이룬 붉은 네모 인장(전각 느낌으로 가장자리를 거칠게).
  * 지어낸 기관 "카노푸스 우주국장"의 것이다. 별 자리는 실제 적경·적위를 동쪽이 왼쪽이 되게 펴서 인장 위쪽에 맞췄다.
  */
-export function Seal({ className }: { className?: string }) {
+export function Seal({
+  className,
+  text = "우주국장",
+  label = "카노푸스 우주국장 직인",
+}: {
+  className?: string;
+  /** 아래 글자(등록증은 "우주국장", 당첨 직인은 "당첨") */
+  text?: string;
+  label?: string;
+}) {
   const id = useId().replace(/:/g, "");
   // 용골자리 밝은 별(동쪽이 왼쪽): 카노푸스 α, χ, ε(아비오르), ι(아스피디스케), q, p, θ, ω, β(미아플라키두스), υ
   const at = {
@@ -34,7 +43,7 @@ export function Seal({ className }: { className?: string }) {
       viewBox="0 0 100 100"
       className={className}
       role="img"
-      aria-label="카노푸스 우주국장 직인"
+      aria-label={label}
       data-seal
     >
       <defs>
@@ -98,15 +107,15 @@ export function Seal({ className }: { className?: string }) {
         ))}
         <text
           x="50"
-          y="77"
+          y={text.length <= 2 ? 80 : 77}
           textAnchor="middle"
           fontFamily="'Nanum Myeongjo','Noto Serif KR','AppleMyungjo','Batang',serif"
           fontWeight="900"
-          fontSize="16"
-          letterSpacing="0.5"
+          fontSize={text.length <= 2 ? 22 : 16}
+          letterSpacing={text.length <= 2 ? 4 : 0.5}
           stroke="none"
         >
-          우주국장
+          {text}
         </text>
       </g>
     </svg>
