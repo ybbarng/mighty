@@ -1,8 +1,10 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  anchorBranch,
   checkNumbers,
   checkPow,
   checkRegistration,
+  checkScheduleChange,
   closedMessage,
   closeRound,
   decodeRegistration,
@@ -15,7 +17,9 @@ import {
   isVoidRound,
   type KeyRegistration,
   ledgerId,
+  liveStart,
   type PowParams,
+  phaseOf,
   type Receipt,
   type RoundRecord,
   recordHash,
@@ -24,6 +28,7 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  type ScheduleEntry,
   sealDigest,
   sealLogId,
   sealRoot,
@@ -107,8 +112,10 @@ export interface ServerState {
   /** 이번 회차에 들어온 응모 수 */
   entries: number;
   serverKey: string;
-  /** 시험 운영(trial)인지 정식(live)인지. 화면이 시험 띠를 띄운다 */
+  /** 지금 회차의 단계(시험 trial, 정식 live). 화면이 시험 띠를 띄운다 */
   mode: "trial" | "live";
+  /** 정식 단계 첫 회차(사슬 회차 번호). 아직 예고되지 않았으면 null */
+  liveFrom: number | null;
 }
 
 export class StardrawServer {
@@ -132,14 +139,15 @@ export class StardrawServer {
       options.limits.argonConcurrency,
       options.limits.argonQueue,
     );
-    // 시험 장부에서 옮겨 온 등록(0회차로 저장)은 genesis 파일에 함께 공개한다
-    options.publisher.genesis(this.genesis, options.store.registrations(0));
+    options.publisher.genesis(this.genesis);
     this.publishHead();
   }
 
-  /** 장부 종류: 처음 일정표의 시험 표시로 정해진다(설정이 아니라 장부가 기준) */
+  /** 지금 회차의 단계: 설정이 아니라 장부(일정표)가 정한다. 단계가 없는 일정표면 정식으로 본다 */
   get mode(): "trial" | "live" {
-    return this.genesis.ledger === "trial" ? "trial" : "live";
+    const schedule = this.schedule();
+    const round = roundAt(schedule, this.now()) ?? 1;
+    return phaseOf(schedule, round) === "trial" ? "trial" : "live";
   }
 
   private applyChanges(record: RoundRecord | null): void {
@@ -175,6 +183,7 @@ export class StardrawServer {
       entries: round > 0 ? this.o.store.entryCount(round) : 0,
       serverKey: toBase64Url(this.o.serverKey.publicKey),
       mode: this.mode,
+      liveFrom: liveStart(this.schedule()),
     };
   }
 
@@ -402,6 +411,7 @@ export class StardrawServer {
       this.waitingDrand.delete(round);
       const tickets = store.entries(round);
       const registrations = store.registrations(round);
+      const scheduleChanges = this.dueChanges(schedule, round);
       const record = closeRound({
         schedule,
         round,
@@ -410,11 +420,18 @@ export class StardrawServer {
         registrations,
         rootLoggedAt: seal.loggedAt,
         beacon,
+        scheduleChanges,
       });
       // 봉인 뒤에는 목록이 바뀌지 않으므로 기록의 루트가 봉인 값과 같아야 한다
       if (!equalBytes(sealDigest(record), seal.digest))
         throw new Error(`${round}회차 기록이 봉인 값과 다르다`);
       store.addRecord(record);
+      if (scheduleChanges.length > 0) {
+        store.setPendingChange(null);
+        this.o.log?.(
+          `${round}회차 기록에 일정 바꾸기를 실었다: ${scheduleChanges.map(describeEntry).join(", ")}`,
+        );
+      }
       this.applyChanges(record);
       this.o.publisher.round(record, tickets, registrations);
       this.publishHead();
@@ -422,7 +439,23 @@ export class StardrawServer {
   }
 
   /**
-   * 앵커: 닫힌 회차를 차례대로 바깥에 남긴다. 회차 진행(봉인 기한)을 막지 않게 tick과 따로 돈다.
+   * 예약해 둔 일정 바꾸기(`schedule-live`)를 이번 기록에 실을 수 있으면 싣는다.
+   * 그사이 24시간 규칙에 늦어졌으면 싣지 않고 지운 뒤 기록을 남긴다(다시 예약해야 한다)
+   */
+  private dueChanges(schedule: Schedule, round: number): ScheduleEntry[] {
+    const pending = this.o.store.pendingChange();
+    if (!pending) return [];
+    const problem = checkScheduleChange(schedule, pending, round);
+    if (!problem) return [pending];
+    this.o.store.setPendingChange(null);
+    this.o.log?.(
+      `예약한 일정 바꾸기를 ${round}회차 기록에 싣지 못해 지웠다(${problem}): ${describeEntry(pending)}`,
+    );
+    return [];
+  }
+
+  /**
+   * 앵커: 장부를 처음 만들 때 처음 일정표를 main에 한 번 남기고, 닫힌 회차를 차례대로 바깥에 남긴다. 회차 진행(봉인 기한)을 막지 않게 tick과 따로 돈다.
    * 한 번에 하나만 돌고, 실패하면 1분 쉰 뒤 그 회차부터 다시 보낸다(재시작해도 저장소의 표시로 이어진다)
    */
   private anchoring: Promise<void> | null = null;
@@ -430,7 +463,11 @@ export class StardrawServer {
 
   private startAnchoring(): void {
     if (this.anchoring || this.now() < this.nextAnchorTry) return;
-    if (this.o.store.anchored() >= this.o.store.recordCount()) return;
+    if (
+      this.o.store.genesisAnchored() &&
+      this.o.store.anchored() >= this.o.store.recordCount()
+    )
+      return;
     this.anchoring = this.anchorDue().finally(() => {
       this.anchoring = null;
     });
@@ -439,6 +476,18 @@ export class StardrawServer {
   private async anchorDue(): Promise<void> {
     const { store } = this.o;
     const ledger = ledgerId(this.genesis);
+    if (!store.genesisAnchored()) {
+      try {
+        await this.o.anchor.anchorGenesis(this.genesis);
+        store.setGenesisAnchored();
+      } catch (err) {
+        this.nextAnchorTry = this.now() + 60;
+        this.o.log?.(
+          `처음 일정표 앵커를 남기지 못해 1분 뒤 다시 시도한다: ${String(err)}`,
+        );
+        return;
+      }
+    }
     for (
       let round = store.anchored() + 1;
       round <= store.recordCount();
@@ -447,12 +496,15 @@ export class StardrawServer {
       const record = store.record(round);
       if (!record) return;
       try {
-        await this.o.anchor.anchor({
-          ledger,
-          round,
-          record: toHex(recordHash(record)),
-          seal: sealLogId(store.seal(round)?.log),
-        });
+        await this.o.anchor.anchor(
+          {
+            ledger,
+            round,
+            record: toHex(recordHash(record)),
+            seal: sealLogId(store.seal(round)?.log),
+          },
+          anchorBranch(this.schedule(), round),
+        );
         store.setAnchored(round);
       } catch (err) {
         this.nextAnchorTry = this.now() + 60;
@@ -493,4 +545,8 @@ export class StardrawServer {
       serverKey: toBase64Url(this.o.serverKey.publicKey),
     });
   }
+}
+
+function describeEntry(e: ScheduleEntry): string {
+  return `${e.fromRound}회차부터 ${e.phase === "live" ? "정식" : e.phase === "trial" ? "시험" : ""} ${e.length / 60}분 회차`;
 }

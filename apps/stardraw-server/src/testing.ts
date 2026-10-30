@@ -137,7 +137,7 @@ export async function makeRig(
     registrationsPerPrefixPerDay?: number;
     /** 처음 일정표(기본 SCHEDULE). 데이터 폴더에 장부가 있으면 그것이 우선이다 */
     schedule?: Schedule;
-    /** 이미 있는 데이터 폴더(start-live로 만든 정식 장부 등). 없으면 새 임시 폴더 */
+    /** 이미 있는 데이터 폴더(서버를 다시 띄우는 시험). 없으면 새 임시 폴더 */
     dir?: string;
     /** 시계를 놓을 시각(초, 기본 EPOCH) */
     at?: number;
@@ -282,9 +282,6 @@ export function readLedger(dir: string) {
     readFileSync(join(ledger, "genesis.json"), "utf8"),
   ) as GenesisFile;
   const genesis = genesisFile.schedule;
-  const carried = genesisFile.carried.map((x) =>
-    decodeRegistration(fromBase64Url(x)),
-  );
   const head = JSON.parse(
     readFileSync(join(ledger, "head.json"), "utf8"),
   ) as HeadFile;
@@ -302,7 +299,7 @@ export function readLedger(dir: string) {
     );
   }
   const seals = readdirSync(join(ledger, "seals")).length;
-  return { genesis, carried, head, records, tickets, registrations, seals };
+  return { genesis, head, records, tickets, registrations, seals };
 }
 
 /** 장부 seals/N 파일의 로그 증거(Rekor 항목 등) */
@@ -414,6 +411,7 @@ export class FakeRekor {
 
 /** 가짜 GitHub Contents API(앵커): 경로 → base64 내용. `failures`번은 500으로 실패한다 */
 export class FakeGitHub {
+  /** 키: "브랜치/경로" */
   files = new Map<string, string>();
   failures = 0;
   puts = 0;
@@ -436,22 +434,28 @@ export class FakeGitHub {
         this.failures--;
         return new Response("오류", { status: 500 });
       }
-      if (this.files.has(path))
+      const body = JSON.parse(String(init.body)) as {
+        content: string;
+        branch: string;
+      };
+      const key = `${body.branch}/${path}`;
+      if (this.files.has(key))
         return new Response(JSON.stringify({ message: "sha" }), {
           status: 422,
         });
-      const body = JSON.parse(String(init.body)) as { content: string };
-      this.files.set(path, body.content);
+      this.files.set(key, body.content);
       return new Response("{}", { status: 201 });
     }
-    const content = this.files.get(path);
+    const content = this.files.get(
+      `${url.searchParams.get("ref") ?? "main"}/${path}`,
+    );
     return content === undefined
       ? new Response("not found", { status: 404 })
       : new Response(JSON.stringify({ content }), { status: 200 });
   }) as typeof fetch;
 
-  text(path: string): string | undefined {
-    const c = this.files.get(path);
+  text(branch: string, path: string): string | undefined {
+    const c = this.files.get(`${branch}/${path}`);
     return c === undefined ? undefined : Buffer.from(c, "base64").toString();
   }
 }

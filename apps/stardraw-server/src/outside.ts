@@ -6,12 +6,17 @@ import {
   type BeaconVerifier,
   type DrandBeacon,
   fromHex,
+  GENESIS_ANCHOR_BRANCH,
+  GENESIS_ANCHOR_PATH,
+  genesisAnchorCommitMessage,
+  genesisAnchorFile,
   hashedRekordRequest,
   QUICKNET,
   type RekorLog,
   randomnessMatches,
   rekorLogFor,
   rekorProofFromResponse,
+  type Schedule,
   type Signer,
   sealImprint,
   type TsaAuthority,
@@ -246,11 +251,19 @@ export class TsaRootLog implements RootLog {
 // ── 앵커 ──
 
 export interface Anchor {
-  /** 회차 기록 해시를 바깥에 남긴다. 실패하면 던진다(엔진이 나중에 다시 시도하고, 회차 진행은 멈추지 않는다) */
-  anchor(entry: AnchorEntry): Promise<void>;
+  /**
+   * 회차 기록 해시를 바깥에 남긴다(브랜치는 회차의 단계로: 시험 trial, 정식 main).
+   * 실패하면 던진다(엔진이 나중에 다시 시도하고, 회차 진행은 멈추지 않는다)
+   */
+  anchor(entry: AnchorEntry, branch: string): Promise<void>;
+  /** 장부를 처음 만들 때 처음 일정표를 main의 genesis.txt로 남긴다. 다른 장부가 이미 있으면 던진다 */
+  anchorGenesis(genesis: Schedule): Promise<void>;
 }
 
-export const noAnchor: Anchor = { anchor: async () => undefined };
+export const noAnchor: Anchor = {
+  anchor: async () => undefined,
+  anchorGenesis: async () => undefined,
+};
 
 /**
  * GitHub 앵커 저장소에 회차마다 파일 하나를 커밋한다(Contents API, core anchor.ts 형식).
@@ -260,27 +273,47 @@ export const noAnchor: Anchor = { anchor: async () => undefined };
 export class GitHubAnchor implements Anchor {
   constructor(
     private readonly repo: string,
-    private readonly branch: string,
     private readonly token: string,
     private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
-  async anchor(entry: AnchorEntry): Promise<void> {
-    const path = anchorPath(entry.ledger, entry.round);
+  async anchor(entry: AnchorEntry, branch: string): Promise<void> {
+    await this.put(
+      anchorPath(entry.ledger, entry.round),
+      branch,
+      anchorFile(entry),
+      anchorCommitMessage(entry),
+    );
+  }
+
+  async anchorGenesis(genesis: Schedule): Promise<void> {
+    await this.put(
+      GENESIS_ANCHOR_PATH,
+      GENESIS_ANCHOR_BRANCH,
+      genesisAnchorFile(genesis),
+      genesisAnchorCommitMessage(genesis),
+    );
+  }
+
+  private async put(
+    path: string,
+    branch: string,
+    text: string,
+    message: string,
+  ): Promise<void> {
     const url = `https://api.github.com/repos/${this.repo}/contents/${path}`;
     const headers = {
       authorization: `Bearer ${this.token}`,
       accept: "application/vnd.github+json",
       "x-github-api-version": "2022-11-28",
     };
-    const text = anchorFile(entry);
     const res = await this.fetchFn(url, {
       method: "PUT",
       headers,
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
-        message: anchorCommitMessage(entry),
-        branch: this.branch,
+        message,
+        branch,
         content: Buffer.from(text).toString("base64"),
       }),
     });
@@ -288,14 +321,16 @@ export class GitHubAnchor implements Anchor {
     // 이미 있으면 422(sha 없이 덮어쓰려 함). 내용을 읽어 같으면 성공
     if (res.status === 422 || res.status === 409) {
       const got = await this.fetchFn(
-        `${url}?ref=${encodeURIComponent(this.branch)}`,
+        `${url}?ref=${encodeURIComponent(branch)}`,
         { headers, signal: AbortSignal.timeout(10000) },
       );
       if (got.ok) {
         const body = (await got.json()) as { content?: string };
         const existing = Buffer.from(body.content ?? "", "base64").toString();
         if (existing === text) return;
-        throw new Error(`앵커 파일이 이미 다른 내용으로 있다: ${path}`);
+        throw new Error(
+          `앵커 파일이 이미 다른 내용으로 있다: ${branch}/${path}`,
+        );
       }
     }
     throw new Error(`앵커 실패: HTTP ${res.status}`);

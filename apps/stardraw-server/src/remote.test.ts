@@ -1,9 +1,11 @@
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import {
+  displayRound,
   generateSasKey,
   makeRegistration,
   makeTicket,
+  roundTimes,
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
@@ -15,6 +17,7 @@ import type { ConfirmAnswer } from "../../web/src/stardraw/confirm-relay";
 import { RemoteLedger } from "../../web/src/stardraw/remote-ledger";
 import { RemoteConfirmRelay } from "../../web/src/stardraw/remote-relay";
 import { createHttpServer } from "./http";
+import { scheduleLive } from "./schedule-live";
 import {
   drawOf,
   EASY,
@@ -178,8 +181,16 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     expect(outcome).toEqual({ ok: true });
   });
 
-  it("시험 운영 서버면 화면의 장부가 시험 모드를 안다(화면이 띠를 띄운다)", async () => {
-    const base = await serve({ schedule: { ...SCHEDULE, ledger: "trial" } });
+  it("시험 단계 회차면 화면의 장부가 시험 모드를 안다(화면이 띠를 띄운다)", async () => {
+    const base = await serve({
+      schedule: {
+        ...SCHEDULE,
+        entries: SCHEDULE.entries.map((e) => ({
+          ...e,
+          phase: "trial" as const,
+        })),
+      },
+    });
     await rig.at(EPOCH + 10);
     const ledger = new RemoteLedger({
       base,
@@ -189,6 +200,17 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     });
     await ledger.settle();
     expect(ledger.mode).toBe("trial");
-    expect(ledger.schedule.ledger).toBe("trial");
+    expect(ledger.schedule.entries[0]?.phase).toBe("trial");
+
+    // 정식 예약이 기록에 실리면 화면의 일정표에도 반영된다(회차 시각·보이는 번호)
+    await rig.finish(1);
+    scheduleLive(rig.store, roundTimes(SCHEDULE, 27).opensAt);
+    await rig.finish(2);
+    await ledger.settle(true);
+    expect(ledger.schedule.entries.map((e) => e.phase)).toEqual([
+      "trial",
+      "live",
+    ]);
+    expect(displayRound(ledger.schedule, 27).label).toBe("정식 1회");
   });
 });

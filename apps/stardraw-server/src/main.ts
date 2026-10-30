@@ -6,7 +6,6 @@ import { realClock } from "@mighty/fair-play";
 import { loadConfig } from "./config";
 import { StardrawServer } from "./engine";
 import { createHttpServer } from "./http";
-import { parseStartLiveArgs, startLive } from "./live";
 import {
   type Anchor,
   GitHubAnchor,
@@ -19,6 +18,7 @@ import {
 } from "./outside";
 import { Publisher } from "./publish";
 import { Relay } from "./relay";
+import { parseScheduleLiveArgs, scheduleLive } from "./schedule-live";
 import { loadServerKey } from "./server-key";
 import { Store } from "./store";
 
@@ -28,16 +28,6 @@ async function main(): Promise<void> {
   mkdirSync(config.dataDir, { recursive: true });
   const clock = realClock;
   const store = new Store(join(config.dataDir, "stardraw.sqlite"));
-  // 설정의 모드와 데이터 폴더의 장부 종류가 같아야 띄운다(시험 데이터로 정식을, 정식 데이터로 시험을 띄우지 않게)
-  const stored = store.storedGenesis();
-  if (config.mode === "live" && !stored)
-    throw new Error(
-      "정식 장부가 없다. 먼저 `start-live`로 만든다(deploy/stardraw/README.md)",
-    );
-  if (stored && (stored.ledger === "trial") !== (config.mode === "trial"))
-    throw new Error(
-      `데이터 폴더는 ${stored.ledger === "trial" ? "시험" : "정식"} 장부인데 STARDRAW_MODE=${config.mode}다`,
-    );
   const serverKey = await loadServerKey(
     config.serverKeyFile,
     config.generateServerKey,
@@ -51,13 +41,8 @@ async function main(): Promise<void> {
       ? new RekorRootLog(config.rekor.url, serverKey, fetch, log)
       : new LocalRootLog(() => Math.floor(clock.now() / 1000));
   const anchor: Anchor = config.github
-    ? new GitHubAnchor(
-        config.github.repo,
-        config.github.branch,
-        config.github.token,
-      )
+    ? new GitHubAnchor(config.github.repo, config.github.token)
     : noAnchor;
-  if (config.mode === "trial") log("시험 운영: 장부는 정식 시작 때 버린다");
   log(
     config.tsa
       ? `시각 인증: ${config.tsa.authorities.map((a) => a.name).join(", ")} 중 ${config.tsa.minValid}곳 이상`
@@ -67,7 +52,7 @@ async function main(): Promise<void> {
   );
   log(
     config.github
-      ? `앵커: ${config.github.repo}(${config.github.branch} 브랜치)`
+      ? `앵커: ${config.github.repo}(시험 단계 trial, 정식 단계 main 브랜치)`
       : "앵커 저장소 설정이 없어 앵커를 남기지 않는다",
   );
 
@@ -135,30 +120,35 @@ async function backupTo(target: string): Promise<void> {
   console.log(`[stardraw] ${target}에 ${pages}쪽을 떠 두었다`);
 }
 
-/** `node server.mjs start-live --epoch <ISO> --carry-registrations <시험 장부 백업>`: 정식 장부를 만든다 */
-async function startLiveCommand(args: readonly string[]): Promise<void> {
+/**
+ * `node server.mjs schedule-live --from <ISO>`: 정식 단계를 예약한다(docs/36 11-6).
+ * 돌고 있는 서버가 다음에 닫는 회차 기록에 일정 바꾸기 한 줄로 싣는다(24시간 예고)
+ */
+function scheduleLiveCommand(args: readonly string[]): void {
   const config = loadConfig();
-  const parsed = parseStartLiveArgs(args);
-  const result = startLive({
-    dataDir: config.dataDir,
-    ledgerDir: config.ledgerDir,
-    epoch: parsed.epoch,
-    ...(parsed.roundSeconds ? { roundSeconds: parsed.roundSeconds } : {}),
-    trialExport: parsed.trialExport,
-    now: Math.floor(Date.now() / 1000),
-  });
-  console.log(
-    `[stardraw] 정식 장부를 만들었다: 1회차 ${new Date(result.schedule.epoch * 1000).toISOString()}, ` +
-      `패스키 등록 ${result.carried}개를 옮김(원시 열쇠 ${result.skipped}개는 옮기지 않음), genesis ${result.genesis}`,
-  );
+  const parsed = parseScheduleLiveArgs(args);
+  const store = new Store(join(config.dataDir, "stardraw.sqlite"));
+  try {
+    const { change, decidedIn } = scheduleLive(
+      store,
+      parsed.from,
+      parsed.roundSeconds,
+    );
+    console.log(
+      `[stardraw] 정식 단계를 예약했다: 사슬 ${change.fromRound}회차(${new Date(parsed.from * 1000).toISOString()} 시작)가 정식 1회, ` +
+        `${change.length / 60}분 회차. ${decidedIn}회차 기록에 실린다`,
+    );
+  } finally {
+    store.close();
+  }
 }
 
 const [command, ...rest] = process.argv.slice(2);
 void (
   command === "backup" && rest[0]
     ? backupTo(rest[0])
-    : command === "start-live"
-      ? startLiveCommand(rest)
+    : command === "schedule-live"
+      ? Promise.resolve().then(() => scheduleLiveCommand(rest))
       : main()
 ).catch((err) => {
   console.error(err instanceof Error ? err.message : err);

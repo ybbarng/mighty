@@ -1,5 +1,6 @@
 import {
   anchorPath,
+  genesisAnchorFile,
   ledgerId,
   parseAnchorFile,
   type RekorEntryProof,
@@ -28,6 +29,7 @@ import {
   type Rig,
   readLedger,
   readSealLog,
+  SCHEDULE,
   TEST_POW,
 } from "./testing";
 
@@ -50,92 +52,57 @@ const fetchBy =
 const env = (values: Record<string, string>) => (name: string) => values[name];
 
 describe("바깥 기록 설정(outsideConfig)", () => {
-  it("Rekor(꺼 둔 선택지): 시각 인증을 끈 때만, 시험 운영은 시험용 로그만, 정식은 실제 로그만", () => {
-    expect(
-      outsideConfig(
-        "trial",
-        env({
-          STARDRAW_TSA: "off",
-          STARDRAW_REKOR_URL: "https://rekor.sigstage.dev",
-        }),
-      ).rekor,
-    ).toEqual({ url: "https://rekor.sigstage.dev" });
-    expect(() =>
-      outsideConfig(
-        "trial",
-        env({
-          STARDRAW_TSA: "off",
-          STARDRAW_REKOR_URL: "https://rekor.sigstore.dev",
-        }),
-      ),
-    ).toThrow();
-    expect(() =>
-      outsideConfig(
-        "live",
-        env({
-          STARDRAW_TSA: "off",
-          STARDRAW_REKOR_URL: "https://rekor.sigstage.dev",
-        }),
-      ),
-    ).toThrow();
-    expect(() =>
-      outsideConfig(
-        "live",
-        env({
-          STARDRAW_TSA: "off",
-          STARDRAW_REKOR_URL: "https://rekor.example",
-        }),
-      ),
-    ).toThrow();
-    expect(outsideConfig("live", env({})).rekor).toBeNull();
-    expect(() =>
-      outsideConfig(
-        "trial",
-        env({ STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" }),
-      ),
-    ).toThrow(/STARDRAW_TSA=off/);
-  });
-
-  it("시각 인증: 기본은 DigiCert·Sectigo 중 1곳 이상, 시험 운영도 켠다", () => {
-    for (const mode of ["trial", "live"] as const) {
-      const tsa = outsideConfig(mode, env({})).tsa;
-      expect(tsa?.authorities.map((a) => a.name)).toEqual([
-        "digicert",
-        "sectigo",
-      ]);
-      expect(tsa?.minValid).toBe(1);
-    }
+  it("시각 인증: 기본은 DigiCert·Sectigo 중 1곳 이상, 단계와 상관없이 켠다", () => {
+    const tsa = outsideConfig(env({})).tsa;
+    expect(tsa?.authorities.map((a) => a.name)).toEqual([
+      "digicert",
+      "sectigo",
+    ]);
+    expect(tsa?.minValid).toBe(1);
     const three = outsideConfig(
-      "live",
       env({ STARDRAW_TSA: "digicert,sectigo,freetsa", STARDRAW_TSA_MIN: "2" }),
     ).tsa;
     expect(three?.authorities.length).toBe(3);
     expect(three?.minValid).toBe(2);
-    expect(outsideConfig("trial", env({ STARDRAW_TSA: "off" })).tsa).toBeNull();
+    expect(outsideConfig(env({ STARDRAW_TSA: "off" })).tsa).toBeNull();
     expect(() =>
-      outsideConfig("live", env({ STARDRAW_TSA: "digicert,example" })),
+      outsideConfig(env({ STARDRAW_TSA: "digicert,example" })),
     ).toThrow(/example/);
-    expect(() => outsideConfig("live", env({ STARDRAW_TSA_MIN: "3" }))).toThrow(
+    expect(() => outsideConfig(env({ STARDRAW_TSA_MIN: "3" }))).toThrow(
       /STARDRAW_TSA_MIN/,
     );
   });
 
-  it("앵커: 저장소와 토큰이 둘 다 있을 때만, 브랜치 기본은 시험 trial·정식 main", () => {
-    const both = {
-      STARDRAW_ANCHOR_REPO: "ybbarng/stardraw-ledger",
-      STARDRAW_ANCHOR_TOKEN: "t",
-    };
-    expect(outsideConfig("trial", env(both)).github?.branch).toBe("trial");
-    expect(outsideConfig("live", env(both)).github?.branch).toBe("main");
-    expect(
-      outsideConfig("live", env({ ...both, STARDRAW_ANCHOR_BRANCH: "x" }))
-        .github?.branch,
-    ).toBe("x");
+  it("Rekor(꺼 둔 선택지): 시각 인증을 끈 때만, 열쇠를 고정한 로그만", () => {
+    const off = { STARDRAW_TSA: "off" };
     expect(
       outsideConfig(
-        "trial",
-        env({ STARDRAW_ANCHOR_REPO: "ybbarng/stardraw-ledger" }),
+        env({ ...off, STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" }),
+      ).rekor,
+    ).toEqual({ url: "https://rekor.sigstage.dev" });
+    expect(() =>
+      outsideConfig(
+        env({ ...off, STARDRAW_REKOR_URL: "https://rekor.example" }),
+      ),
+    ).toThrow();
+    expect(() =>
+      outsideConfig(env({ STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" })),
+    ).toThrow(/STARDRAW_TSA=off/);
+    expect(outsideConfig(env({})).rekor).toBeNull();
+  });
+
+  it("앵커: 저장소와 토큰이 둘 다 있을 때만", () => {
+    expect(
+      outsideConfig(
+        env({
+          STARDRAW_ANCHOR_REPO: "ybbarng/stardraw-ledger",
+          STARDRAW_ANCHOR_TOKEN: "t",
+        }),
       ).github,
+    ).toEqual({ repo: "ybbarng/stardraw-ledger", token: "t" });
+    expect(
+      outsideConfig(env({ STARDRAW_ANCHOR_REPO: "ybbarng/stardraw-ledger" }))
+        .github,
     ).toBeNull();
   });
 });
@@ -311,49 +278,58 @@ describe("GitHub 앵커(가짜 GitHub)", () => {
     record: "ab".repeat(32),
     seal: "-",
   };
+  const anchorOf = (gh: FakeGitHub) =>
+    new GitHubAnchor("ybbarng/stardraw-ledger", "test-token", gh.fetch);
 
-  it("회차 파일을 커밋하고, 이미 같은 내용이 있으면 성공으로 본다", async () => {
+  it("회차 파일을 그 브랜치에 커밋하고, 이미 같은 내용이 있으면 성공으로 본다", async () => {
     const gh = new FakeGitHub();
-    const anchor = new GitHubAnchor(
-      "ybbarng/stardraw-ledger",
-      "trial",
-      "test-token",
-      gh.fetch,
-    );
-    await anchor.anchor(entry);
-    expect(parseAnchorFile(gh.text(anchorPath(entry.ledger, 3)) ?? "")).toEqual(
-      entry,
-    );
+    const anchor = anchorOf(gh);
+    await anchor.anchor(entry, "trial");
+    const path = anchorPath(entry.ledger, 3);
+    expect(parseAnchorFile(gh.text("trial", path) ?? "")).toEqual(entry);
+    expect(gh.text("main", path)).toBeUndefined();
     expect(gh.sawAuth).toBe(true);
-    await anchor.anchor(entry); // 응답을 잃고 다시 보낸 경우
+    await anchor.anchor(entry, "trial"); // 응답을 잃고 다시 보낸 경우
     await expect(
-      anchor.anchor({ ...entry, record: "cd".repeat(32) }),
+      anchor.anchor({ ...entry, record: "cd".repeat(32) }, "trial"),
     ).rejects.toThrow(/다른 내용/);
   });
 
-  it("서버는 닫힌 회차를 차례로 남기고, 실패하면 1분 뒤 그 회차부터 다시 보낸다(회차 진행은 막지 않는다)", async () => {
+  it("처음 일정표는 main의 genesis.txt에 한 번, 다른 장부가 있으면 거절(다시 시작하지 않는다)", async () => {
     const gh = new FakeGitHub();
-    gh.failures = 1;
-    rig = await makeRig({
-      anchor: new GitHubAnchor(
-        "ybbarng/stardraw-ledger",
-        "trial",
-        "test-token",
-        gh.fetch,
-      ),
-    });
+    const anchor = anchorOf(gh);
+    const genesis = {
+      ...SCHEDULE,
+      entries: SCHEDULE.entries.map((e) => ({ ...e, phase: "trial" as const })),
+    };
+    await anchor.anchorGenesis(genesis);
+    expect(gh.text("main", "genesis.txt")).toBe(genesisAnchorFile(genesis));
+    await anchor.anchorGenesis(genesis);
+    await expect(
+      anchor.anchorGenesis({ ...genesis, epoch: genesis.epoch + 3600 }),
+    ).rejects.toThrow(/다른 내용/);
+  });
+
+  it("서버는 처음 일정표와 닫힌 회차를 차례로 남기고, 실패하면 1분 뒤 그 회차부터 다시 보낸다(회차 진행은 막지 않는다)", async () => {
+    const gh = new FakeGitHub();
+    gh.failures = Number.POSITIVE_INFINITY; // GitHub가 멈춰 있다
+    rig = await makeRig({ anchor: anchorOf(gh) });
     await rig.finish(1);
     await rig.engine.anchorIdle();
+    expect(rig.store.genesisAnchored()).toBe(false);
     expect(rig.store.anchored()).toBe(0);
     await rig.finish(2); // 앵커 실패와 상관없이 다음 회차도 닫힌다
     expect(rig.engine.state().records).toBe(2);
+    gh.failures = 0; // 되살아났다
     await rig.at(rig.engine.now() + 61);
     await rig.engine.anchorIdle();
+    expect(rig.store.genesisAnchored()).toBe(true);
     expect(rig.store.anchored()).toBe(2);
     const id = ledgerId(rig.engine.genesis);
     const record2 = rig.store.record(2);
-    expect(parseAnchorFile(gh.text(anchorPath(id, 2)) ?? "")?.record).toBe(
-      toHex(recordHash(record2 as never)),
-    );
+    // 단계가 없는 일정표의 회차는 main
+    expect(
+      parseAnchorFile(gh.text("main", anchorPath(id, 2)) ?? "")?.record,
+    ).toBe(toHex(recordHash(record2 as never)));
   });
 });

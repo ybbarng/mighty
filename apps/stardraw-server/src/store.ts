@@ -10,6 +10,7 @@ import {
   type RoundRecord,
   recordHash,
   type Schedule,
+  type ScheduleEntry,
   type Ticket,
 } from "@mighty/stardraw-core";
 
@@ -105,46 +106,26 @@ export class Store {
   }
 
   /**
-   * 정식 장부를 처음 만든다(start-live): 처음 일정표와, 시험 장부에서 옮겨 온 등록(0회차)을 한 거래로.
-   * 이미 장부가 있으면 거절한다
+   * 장부에 넣을 일정 바꾸기(정식 단계 예약 등, `schedule-live` 명령이 넣는다).
+   * 엔진이 다음에 닫는 회차 기록에 싣고 지운다. 없으면 null
    */
-  initLedger(
-    schedule: Schedule,
-    carried: readonly {
-      entrantHex: string;
-      credentialHex: string | null;
-      reg: KeyRegistration;
-    }[],
-  ): void {
-    this.transaction(() => {
-      if (this.storedGenesis())
-        throw new Error("이미 장부가 있는 데이터 폴더다");
-      this.db
-        .prepare("INSERT INTO meta (k, v) VALUES ('genesis', ?)")
-        .run(JSON.stringify(schedule));
-      for (const c of carried)
-        this.addRegistration(0, c.entrantHex, c.credentialHex, c.reg);
-    });
+  pendingChange(): ScheduleEntry | null {
+    const row = this.db
+      .prepare("SELECT v FROM meta WHERE k = 'pendingChange'")
+      .get();
+    return row ? (JSON.parse(String(row.v)) as ScheduleEntry) : null;
   }
 
-  /** 다른 SQLite 파일(시험 장부 백업)을 읽기 전용으로 열어 처음 일정표와 모든 등록을 꺼낸다 */
-  static readExport(path: string): {
-    genesis: Schedule | null;
-    registrations: KeyRegistration[];
-  } {
-    const db = new DatabaseSync(path, { readOnly: true });
-    try {
-      const row = db.prepare("SELECT v FROM meta WHERE k = 'genesis'").get();
-      return {
-        genesis: row ? (JSON.parse(String(row.v)) as Schedule) : null,
-        registrations: db
-          .prepare("SELECT reg FROM registrations ORDER BY round, entrant")
-          .all()
-          .map((r) => decodeRegistration(bytes(r.reg))),
-      };
-    } finally {
-      db.close();
+  setPendingChange(change: ScheduleEntry | null): void {
+    if (!change) {
+      this.db.prepare("DELETE FROM meta WHERE k = 'pendingChange'").run();
+      return;
     }
+    this.db
+      .prepare(
+        "INSERT INTO meta (k, v) VALUES ('pendingChange', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+      )
+      .run(JSON.stringify(change));
   }
 
   // ── 응모권 ──
@@ -246,6 +227,21 @@ export class Store {
       .prepare("SELECT v FROM meta WHERE k = 'anchored'")
       .get();
     return row ? Number(row.v) : 0;
+  }
+
+  /** 처음 일정표를 앵커(main의 genesis.txt)에 남겼는지 */
+  genesisAnchored(): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM meta WHERE k = 'genesisAnchored'")
+      .get();
+  }
+
+  setGenesisAnchored(): void {
+    this.db
+      .prepare(
+        "INSERT INTO meta (k, v) VALUES ('genesisAnchored', '1') ON CONFLICT(k) DO NOTHING",
+      )
+      .run();
   }
 
   setAnchored(round: number): void {

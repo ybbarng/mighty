@@ -2,13 +2,13 @@ import {
   alignedEpoch,
   DEFAULT_TSA_MIN,
   DEFAULT_TSA_NAMES,
+  type Phase,
   POW_PARAMS,
   type PowParams,
   powTargetForTries,
-  REKOR_PRODUCTION,
-  REKOR_STAGING,
   rekorLogFor,
   type Schedule,
+  type ScheduleEntry,
   type TsaAuthority,
   tsaByName,
   type WebAuthnPolicy,
@@ -21,15 +21,10 @@ import {
  */
 
 /**
- * 운영 모드(docs/36 11-6).
- * - trial: 시험 운영. 장부 genesis에 시험 표시(꼬리표가 달라 정식 장부와 섞이지 않는다), 시각 인증은 정식과 같게 받고,
- *   GitHub 앵커는 `trial` 브랜치, 화면 위에 "시험 운영 중" 띠. 회차 길이 기본 10분
- * - live: 정식 운영. `start-live` 명령으로 만든 장부로만 띄운다
+ * 운영 단계는 설정이 아니라 장부가 정한다(docs/36 11-6). 새 장부는 시험 단계로 시작하고,
+ * `schedule-live` 명령이 일정 바꾸기 한 줄로 정식 단계를 예약한다. 사슬은 끝까지 하나다.
  */
-export type ServerMode = "trial" | "live";
-
 export interface ServerConfig {
-  mode: ServerMode;
   port: number;
   /** 주소 앞머리(Traefik PathPrefix와 같게) */
   basePath: string;
@@ -63,7 +58,8 @@ export interface ServerConfig {
   tsa: { authorities: TsaAuthority[]; minValid: number } | null;
   /** 꺼 둔 선택지: Rekor(시각 인증을 끈 때만) */
   rekor: { url: string } | null;
-  github: { repo: string; branch: string; token: string } | null;
+  /** GitHub 앵커. 브랜치는 회차의 단계로 정한다(시험 trial, 정식 main) */
+  github: { repo: string; token: string } | null;
 }
 
 const env = (name: string): string | undefined => {
@@ -79,41 +75,39 @@ const int = (name: string, fallback: number): number => {
   return n;
 };
 
+/** 정식 단계 회차 길이: 1시간(매시 정각 추첨 · 55분 마감) */
+export const LIVE_ROUND_SECONDS = 3600;
+
 /**
- * 기본 일정표: 마감은 추첨 5분 전(epoch를 alignedEpoch로 맞춘다), 화면 마감 여유 5초(시계 차이만 덮는다). 응모는 휴대폰 3초 안팎, 열쇠 등록은 1분 안팎.
- * 회차 길이는 정식 1시간, 시험 10분(최소 10분 규칙은 규칙 패키지가 지킨다)
+ * 일정표 한 줄: 화면 마감 여유 5초(시계 차이만 덮는다). 응모는 휴대폰 3초 안팎, 열쇠 등록은 1분 안팎.
+ * 회차 길이는 정식 1시간, 시험 기본 10분(최소 10분 규칙은 규칙 패키지가 지킨다)
  */
-export function defaultSchedule(
-  epoch: number,
-  mode: ServerMode = "live",
-  length = mode === "trial" ? 600 : 3600,
-): Schedule {
+export function scheduleEntry(
+  fromRound: number,
+  phase: Phase,
+  length = phase === "trial" ? 600 : LIVE_ROUND_SECONDS,
+): ScheduleEntry {
   return {
-    epoch,
-    entries: [
-      {
-        fromRound: 1,
-        length,
-        closeMargin: 5,
-        powTarget: powTargetForTries(30),
-        registerPowTarget: powTargetForTries(600),
-      },
-    ],
-    ...(mode === "trial" ? { ledger: "trial" as const } : {}),
+    fromRound,
+    length,
+    closeMargin: 5,
+    powTarget: powTargetForTries(30),
+    registerPowTarget: powTargetForTries(600),
+    phase,
   };
+}
+
+/** 새 장부의 처음 일정표: 시험 단계로 시작. 마감은 추첨 5분 전(epoch를 alignedEpoch로 맞춘다) */
+export function defaultSchedule(epoch: number, length = 600): Schedule {
+  return { epoch, entries: [scheduleEntry(1, "trial", length)] };
 }
 
 export function loadConfig(): ServerConfig {
   const dataDir = env("STARDRAW_DATA_DIR") ?? "./data";
-  const mode = env("STARDRAW_MODE") ?? "trial";
-  if (mode !== "trial" && mode !== "live")
-    throw new Error(`STARDRAW_MODE는 trial이나 live여야 한다: ${mode}`);
   const epoch = env("STARDRAW_EPOCH");
-  const lengthEnv = env("STARDRAW_ROUND_SECONDS");
-  const length = lengthEnv ? Number(lengthEnv) : mode === "trial" ? 600 : 3600;
-  const outside = outsideConfig(mode, env);
+  const length = int("STARDRAW_ROUND_SECONDS", 600);
+  const outside = outsideConfig(env);
   return {
-    mode,
     port: int("PORT", 8080),
     basePath: env("STARDRAW_BASE_PATH") ?? "/stardraw-api",
     dataDir,
@@ -121,12 +115,11 @@ export function loadConfig(): ServerConfig {
     serverKeyFile:
       env("STARDRAW_SERVER_KEY_FILE") ?? `${dataDir}/server-key.pkcs8`,
     generateServerKey: env("STARDRAW_GENERATE_SERVER_KEY") === "1",
+    // 새 장부일 때만 쓴다. 정해 두지 않으면 띄운 뒤 첫 맞춘 마감이 1회차 마감
     schedule: defaultSchedule(
-      // 정해 두지 않으면 띄운 뒤 첫 맞춘 마감이 1회차 마감(시험). 정식은 start-live 명령이 정한다
       epoch
         ? Number(epoch)
         : alignedEpoch(Math.floor(Date.now() / 1000), length),
-      mode,
       length,
     ),
     pow: POW_PARAMS,
@@ -152,15 +145,13 @@ export function loadConfig(): ServerConfig {
 /**
  * 바깥 기록 설정(docs/36 11-1, 11-6).
  * - 시각 인증(`STARDRAW_TSA`): 기관 이름을 쉼표로(기본 digicert,sectigo, core tsa.ts에 열쇠를 고정한 기관만).
- *   `off`면 끈다(개발용). `STARDRAW_TSA_MIN`(기본 1)곳 이상 맞는 토큰을 받아야 봉인 성공. 시험 운영도 같게 받는다
- * - Rekor(꺼 둔 선택지, `STARDRAW_TSA=off`일 때만)(`STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만. 시험 운영은 시험용(rekor.sigstage.dev)만,
- *   정식은 실제(rekor.sigstore.dev)만 받는다. 시험 기록을 영구 공개 로그에 남기지 않고, 정식 장부의 시각 증명을
- *   시험용 로그로 대신하지 못하게 하려는 것이다. 맞지 않는 주소면 서버를 띄우지 않는다.
+ *   `off`면 끈다(개발용). `STARDRAW_TSA_MIN`(기본 1)곳 이상 맞는 토큰을 받아야 봉인 성공. 단계와 상관없이 켠다
+ * - Rekor(꺼 둔 선택지, `STARDRAW_TSA=off`일 때만, `STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만
+ *   (rekor.sigstage.dev, rekor.sigstore.dev). 맞지 않는 주소면 서버를 띄우지 않는다.
  * - GitHub 앵커(`STARDRAW_ANCHOR_REPO`, `STARDRAW_ANCHOR_TOKEN`): 저장소와 토큰이 둘 다 있을 때만.
- *   브랜치(`STARDRAW_ANCHOR_BRANCH`) 기본은 시험 운영 `trial`, 정식 `main`
+ *   브랜치는 회차의 단계로(시험 `trial`, 정식 `main`), 처음 일정표 파일은 늘 `main`
  */
 export function outsideConfig(
-  mode: ServerMode,
   get: (name: string) => string | undefined,
 ): Pick<ServerConfig, "tsa" | "rekor" | "github"> {
   const tsaNames = get("STARDRAW_TSA") ?? DEFAULT_TSA_NAMES.join(",");
@@ -189,24 +180,11 @@ export function outsideConfig(
   let rekor: ServerConfig["rekor"] = null;
   if (rekorUrl) {
     const log = rekorLogFor(rekorUrl);
-    const allowed = mode === "trial" ? REKOR_STAGING : REKOR_PRODUCTION;
-    if (log !== allowed)
-      throw new Error(
-        `${mode === "trial" ? "시험 운영" : "정식 운영"}의 Rekor는 ${allowed.url}만 쓸 수 있다: ${rekorUrl}`,
-      );
+    if (!log)
+      throw new Error(`공개 열쇠를 고정해 두지 않은 Rekor 주소: ${rekorUrl}`);
     rekor = { url: log.url };
   }
   const repo = get("STARDRAW_ANCHOR_REPO");
   const token = get("STARDRAW_ANCHOR_TOKEN");
-  const github =
-    repo && token
-      ? {
-          repo,
-          branch:
-            get("STARDRAW_ANCHOR_BRANCH") ??
-            (mode === "trial" ? "trial" : "main"),
-          token,
-        }
-      : null;
-  return { tsa, rekor, github };
+  return { tsa, rekor, github: repo && token ? { repo, token } : null };
 }

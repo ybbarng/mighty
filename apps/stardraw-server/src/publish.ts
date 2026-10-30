@@ -46,8 +46,6 @@ export interface RoundFile {
 export interface GenesisFile {
   v: 1;
   schedule: Schedule;
-  /** 시험 장부에서 옮겨 온 등록(encodeRegistration base64url, id 순). 처음 일정표의 carried와 맞는다 */
-  carried: string[];
 }
 
 export interface HeadFile {
@@ -71,15 +69,9 @@ export class Publisher {
     renameSync(tmp, full);
   }
 
-  /** 처음 일정표와, 시험 장부에서 옮겨 온 등록 목록(id 순, 없으면 빈 목록) */
-  genesis(schedule: Schedule, carried: readonly KeyRegistration[] = []): void {
-    this.write("genesis.json", {
-      v: 1,
-      schedule,
-      carried: sortRegistrations(carried).map((r) =>
-        toBase64Url(encodeRegistration(r)),
-      ),
-    } satisfies GenesisFile);
+  /** 처음 일정표 */
+  genesis(schedule: Schedule): void {
+    this.write("genesis.json", { v: 1, schedule } satisfies GenesisFile);
   }
 
   head(h: Omit<HeadFile, "v">): void {
