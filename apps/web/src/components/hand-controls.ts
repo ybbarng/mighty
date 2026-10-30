@@ -37,6 +37,9 @@ export function useHandControls() {
     x: number;
     y: number;
     moved: boolean;
+    /** 처음 움직임이 위쪽이었다(들어 올리기). 손패가 두 줄로 겹치면 아래 줄 카드를 올리는 손가락이
+     * 위 줄 카드를 지나가므로, 이때는 훑어 고르기를 하지 않는다 */
+    lift: boolean;
     /** 처음 짚은 카드 */
     card: Card;
     /** 지금 들고 있는 카드. 화면이 다시 그려지기 전에 손을 떼도 이 카드를 낸다 */
@@ -82,6 +85,7 @@ export function useHandControls() {
         x: e.clientX,
         y: e.clientY,
         moved: false,
+        lift: false,
         card,
         held: null,
       };
@@ -90,8 +94,11 @@ export function useHandControls() {
       const g = gesture.current;
       const s = state.current;
       if (!g || !s) return;
-      if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < 10) return;
-      g.moved = true;
+      if (!g.moved) {
+        if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < 10) return;
+        g.moved = true;
+        g.lift = g.y - e.clientY > Math.abs(e.clientX - g.x);
+      }
       // 고른 카드 없이 바로 끌면 처음 짚은 카드를 낸다.
       const held =
         g.held ?? s.selected ?? (s.playable?.has(g.card) ? g.card : null);
@@ -101,7 +108,7 @@ export function useHandControls() {
       // 손패 위쪽 끝보다 카드 반 장 넘게 올라가면 낼 준비
       const up = e.clientY - top < s.handTop - s.cardHeight * 0.5;
       setDragArmed(up && held !== null);
-      if (up) return;
+      if (up || g.lift) return;
       // 손패 위를 훑으면 손가락 아래의 낼 수 있는 카드를 고른다.
       const under = cardAt(s, e.clientX, e.clientY);
       if (under && s.playable?.has(under) && under !== held) {
