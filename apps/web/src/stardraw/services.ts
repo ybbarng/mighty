@@ -100,8 +100,8 @@ export function getServices(ns: string = GAME_NS): Services {
     // 응모권에는 장부 표시를 함께 둔다(다시 시작한 장부의 같은 회차 번호와 섞이지 않게)
     wallet:
       ns === DEMO_NS
-        ? createDemoWallet(ns, undefined, ledgerId)
-        : createWallet(ns, ledgerId),
+        ? createDemoWallet(ns, undefined, ledgerId, () => clock.now())
+        : createWallet(ns, ledgerId, () => clock.now()),
     checker: new Checker(
       relay,
       browserCheckStore(`${ns}-checks`),

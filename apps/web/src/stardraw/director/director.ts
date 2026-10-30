@@ -85,6 +85,8 @@ export function practiceDirectorBackend(ledger: LocalLedger): DirectorBackend {
 export interface DirectorKey {
   credentialId: Uint8Array;
   pub: Uint8Array;
+  /** 이 기기에서 만든 시각(ms). 예전에 저장한 열쇠에는 없다 */
+  createdAt?: number;
 }
 
 /** 고른 패스키가 장부의 국장 열쇠가 아닐 때 */
@@ -110,10 +112,12 @@ function readKeys(key: string): DirectorKey[] {
     const list = JSON.parse(localStorage.getItem(key) ?? "[]") as {
       c: string;
       p: string;
+      t?: number;
     }[];
     return list.map((k) => ({
       credentialId: fromBase64Url(k.c),
       pub: fromBase64Url(k.p),
+      ...(typeof k.t === "number" ? { createdAt: k.t } : {}),
     }));
   } catch {
     return [];
@@ -128,6 +132,7 @@ function writeKeys(key: string, keys: readonly DirectorKey[]): void {
         keys.map((k) => ({
           c: toBase64Url(k.credentialId),
           p: toBase64Url(k.pub),
+          ...(k.createdAt === undefined ? {} : { t: k.createdAt }),
         })),
       ),
     );
@@ -182,6 +187,7 @@ export function passkeyKeyring(
       const key = {
         credentialId: new Uint8Array(credential.rawId),
         pub: rawPublicKeyFromSpki(new Uint8Array(spki)),
+        createdAt: Date.now(),
       };
       writeKeys(storageKey, [...readKeys(storageKey), key]);
       return key;
@@ -297,7 +303,11 @@ export function demoKeyring(
       } catch {
         // 저장하지 못하면 이번 방문 동안만
       }
-      const key = { credentialId: softCredentialId(pub), pub };
+      const key = {
+        credentialId: softCredentialId(pub),
+        pub,
+        createdAt: Date.now(),
+      };
       writeKeys(`${KEY}-pub`, [key]);
       return key;
     },

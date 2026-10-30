@@ -37,6 +37,8 @@ export interface KeyInfo {
   /** 패스키 번호(데모 열쇠는 공개 열쇠에서 정한 값, `softCredentialId`) */
   credentialId: Uint8Array;
   pub: Uint8Array;
+  /** 이 기기에서 열쇠를 만들거나(패스키 만들기) 처음 기억한 시각(ms). 예전에 저장한 열쇠에는 없다 */
+  createdAt?: number;
 }
 
 export interface MyTicket {
@@ -84,6 +86,11 @@ export interface Wallet {
    * 남의 등록증이면 이 기기의 아무 패스키로 서명하게 해 공개 열쇠가 맞지 않아 실패한다
    */
   ownerSigner(pub: Uint8Array): Promise<EntrantSigner>;
+  /**
+   * 이 기기의 내 열쇠(`pub`)를 만든 시각(ms). 시각이 없는 예전 열쇠면 지금 시각을 한 번 저장해 돌려준다.
+   * 이 기기의 열쇠가 아니면 null
+   */
+  issuedAt(pub: Uint8Array): number | null;
   loadTickets(): MyTicket[];
   addTicket(mine: MyTicket): void;
   /** 결과 봉투를 연 회차 */
@@ -100,6 +107,7 @@ export interface Wallet {
 export function createWallet(
   ns: string,
   ledgerId: () => string | null = () => null,
+  now: () => number = () => Date.now(),
 ): Wallet {
   const KEY = `${ns}-key`;
   const TICKETS = `${ns}-tickets`;
@@ -110,6 +118,7 @@ export function createWallet(
       kind: key.kind,
       pub: toBase64Url(key.pub),
       credentialId: toBase64Url(key.credentialId),
+      ...(key.createdAt === undefined ? {} : { at: key.createdAt }),
     });
 
   const readTickets = () =>
@@ -129,6 +138,7 @@ export function createWallet(
       kind: string;
       credentialId?: string;
       pub: string;
+      at?: number;
     }>(KEY);
     // 예전 판의 "이 기기에만 둔 열쇠"(raw)는 더 쓰지 않는다
     if (saved?.kind !== "passkey" || !saved.credentialId) return null;
@@ -136,6 +146,7 @@ export function createWallet(
       kind: "passkey",
       credentialId: fromBase64Url(saved.credentialId),
       pub: fromBase64Url(saved.pub),
+      ...(typeof saved.at === "number" ? { createdAt: saved.at } : {}),
     };
   };
 
@@ -186,6 +197,7 @@ export function createWallet(
         kind: "passkey",
         credentialId: new Uint8Array(credential.rawId),
         pub: rawPublicKeyFromSpki(new Uint8Array(spki)),
+        createdAt: now(),
       };
       saveKey(key);
       return key;
@@ -203,7 +215,12 @@ export function createWallet(
       const credentialId = new Uint8Array(credential.rawId);
       const pub = await lookup(credentialId);
       if (!pub) return null;
-      const key: KeyInfo = { kind: "passkey", credentialId, pub };
+      const key: KeyInfo = {
+        kind: "passkey",
+        credentialId,
+        pub,
+        createdAt: now(),
+      };
       saveKey(key);
       return key;
     },
@@ -220,6 +237,15 @@ export function createWallet(
       return passkeySigner(pub, (challenge) =>
         passkeyAssertion(own, challenge),
       );
+    },
+
+    issuedAt(pub) {
+      const mine = loadKey();
+      if (!mine || !equalBytes(mine.pub, pub)) return null;
+      if (mine.createdAt !== undefined) return mine.createdAt;
+      const at = now();
+      saveKey({ ...mine, createdAt: at });
+      return at;
     },
 
     loadTickets() {
@@ -287,8 +313,9 @@ export function createDemoWallet(
   ns: string,
   unlock: (purpose: UnlockPurpose) => Promise<boolean> = requestUnlock,
   ledgerId: () => string | null = () => null,
+  now: () => number = () => Date.now(),
 ): Wallet {
-  const base = createWallet(ns, ledgerId);
+  const base = createWallet(ns, ledgerId, now);
   const DEMO_KEY = `${ns}-demo-key`;
 
   const confirm = async (purpose: UnlockPurpose) => {
@@ -323,18 +350,30 @@ export function createDemoWallet(
     }
   };
 
+  const loadKey = (): KeyInfo | null => {
+    const saved = readJson<{ raw: string; at?: number }>(`${DEMO_KEY}-pub`);
+    return saved
+      ? {
+          kind: "demo",
+          credentialId: softCredentialId(fromBase64Url(saved.raw)),
+          pub: fromBase64Url(saved.raw),
+          ...(typeof saved.at === "number" ? { createdAt: saved.at } : {}),
+        }
+      : null;
+  };
+
   return {
     ...base,
 
-    loadKey() {
-      const saved = readJson<{ raw: string }>(`${DEMO_KEY}-pub`);
-      return saved
-        ? {
-            kind: "demo",
-            credentialId: softCredentialId(fromBase64Url(saved.raw)),
-            pub: fromBase64Url(saved.raw),
-          }
-        : null;
+    loadKey,
+
+    issuedAt(pub) {
+      const mine = loadKey();
+      if (!mine || !equalBytes(mine.pub, pub)) return null;
+      if (mine.createdAt !== undefined) return mine.createdAt;
+      const at = now();
+      writeJson(`${DEMO_KEY}-pub`, { raw: toBase64Url(mine.pub), at });
+      return at;
     },
 
     async createPasskey() {
@@ -352,8 +391,14 @@ export function createDemoWallet(
         priv: await crypto.subtle.exportKey("jwk", pair.privateKey),
         pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
       });
-      writeJson(`${DEMO_KEY}-pub`, { raw: toBase64Url(pub) });
-      return { kind: "demo", credentialId: softCredentialId(pub), pub };
+      const createdAt = now();
+      writeJson(`${DEMO_KEY}-pub`, { raw: toBase64Url(pub), at: createdAt });
+      return {
+        kind: "demo",
+        credentialId: softCredentialId(pub),
+        pub,
+        createdAt,
+      };
     },
 
     async recoverPasskey() {

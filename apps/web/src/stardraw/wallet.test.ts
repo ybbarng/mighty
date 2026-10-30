@@ -140,6 +140,54 @@ describe("응모권은 그 장부의 것으로만 센다", () => {
   });
 });
 
+describe("등록증 발급 시각", () => {
+  it("열쇠를 만든 시각을 저장해 발급 시각으로 쓰고, 이 기기 열쇠가 아니면 null", async () => {
+    let now = 1_000;
+    const wallet = createDemoWallet(
+      "test-demo",
+      async () => true,
+      () => null,
+      () => now,
+    );
+    const key = await wallet.createPasskey();
+    expect(key.createdAt).toBe(1_000);
+    now = 9_000;
+    expect(wallet.issuedAt(key.pub)).toBe(1_000);
+    expect(wallet.loadKey()?.createdAt).toBe(1_000);
+    expect(wallet.issuedAt(new Uint8Array(65))).toBeNull();
+  });
+
+  it("시각 없이 저장된 예전 열쇠는 처음 볼 때의 시각을 한 번 저장해 계속 쓴다", () => {
+    const pub = new Uint8Array(65).fill(4);
+    localStorage.setItem(
+      "test-game-key",
+      JSON.stringify({
+        kind: "passkey",
+        pub: toBase64Url(pub),
+        credentialId: toBase64Url(new Uint8Array([1, 2, 3])),
+      }),
+    );
+    let now = 5_000;
+    const wallet = createWallet(
+      "test-game",
+      () => null,
+      () => now,
+    );
+    expect(wallet.loadKey()?.createdAt).toBeUndefined();
+    expect(wallet.issuedAt(pub)).toBe(5_000);
+    now = 7_000;
+    expect(wallet.issuedAt(pub)).toBe(5_000);
+    // 다시 열어도 같은 시각이고 패스키 번호는 그대로
+    const again = createWallet(
+      "test-game",
+      () => null,
+      () => now,
+    );
+    expect(again.loadKey()?.createdAt).toBe(5_000);
+    expect(again.loadKey()?.credentialId).toEqual(new Uint8Array([1, 2, 3]));
+  });
+});
+
 describe("패스키 만들기: 본인 확인(UV) 표시", () => {
   const authData = (flags: number) => {
     const out = new Uint8Array(37);

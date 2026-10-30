@@ -78,6 +78,7 @@ export async function buildTour(): Promise<TourState> {
     TOUR_NS,
     async () => true,
     () => ledger.id(),
+    () => clock.now(),
   );
   const relay = new LocalConfirmRelay(
     clock,
