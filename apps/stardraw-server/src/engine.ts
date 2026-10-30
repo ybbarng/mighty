@@ -198,6 +198,17 @@ export class StardrawServer {
   private readonly counters = new Counters();
   private readonly gate: Gate;
   private ticking: Promise<void> = Promise.resolve();
+  /**
+   * 봉인 값을 계산하기 시작한 가장 늦은 회차. 응모 목록을 읽은 뒤 바깥 로그(시각 인증) 응답을 기다리는 동안
+   * 들어온 응모·등록이 봉인 값과 기록을 어긋나게 해 회차가 멈추지 않도록, 이 회차까지는 넣지 않는다.
+   * 서버를 다시 띄우면 0부터지만 그때는 봉인이 목록을 처음부터 다시 읽는다
+   */
+  private sealingFrom = 0;
+
+  /** 이 회차는 더 받지 않는다(봉인했거나 봉인 값을 계산하는 중) */
+  private closedFor(round: number): boolean {
+    return round <= this.sealingFrom || !!this.o.store.seal(round);
+  }
   /** 기록에 붙은 일정 변경을 모두 반영한 일정표(기록이 붙을 때마다 고친다) */
   private current: Schedule;
   /** drand 값을 기다리기 시작한 시각과 마지막 알림 시각 */
@@ -413,7 +424,7 @@ export class StardrawServer {
     if (
       store.recordCount() < round - 1 ||
       receivedAt >= times.closesAt ||
-      store.seal(round)
+      this.closedFor(round)
     )
       throw new EntryError("다음 회차가 열리면 등록됩니다", 409);
     if (input.head !== toHex(this.head()))
@@ -450,7 +461,7 @@ export class StardrawServer {
 
     let at = round;
     store.transaction(() => {
-      if (store.seal(round))
+      if (this.closedFor(round))
         throw new EntryError("다음 회차가 열리면 등록됩니다", 409);
       const again = store.registrationRound(who);
       if (again !== null) {
@@ -510,7 +521,7 @@ export class StardrawServer {
     const times = roundTimes(schedule, round);
     if (store.recordCount() < round - 1)
       throw new EntryError("앞 회차 추첨이 끝난 뒤에 응모할 수 있습니다", 409);
-    if (receivedAt >= times.closesAt || store.seal(round))
+    if (receivedAt >= times.closesAt || this.closedFor(round))
       throw new EntryError(closedMessage(receivedAt), 409);
     const who = toHex(entrantId(ticket.pub));
 
@@ -595,9 +606,9 @@ export class StardrawServer {
       });
     if (powOk) throw new EntryError(powOk);
 
-    // 기다리는 사이 봉인했거나 같은 열쇠가 먼저 들어왔을 수 있다. 확인과 넣기를 한 번에(동기) 한다
+    // 기다리는 사이 봉인(또는 봉인 값 계산)이 시작됐거나 같은 열쇠가 먼저 들어왔을 수 있다. 확인과 넣기를 한 번에(동기) 한다
     store.transaction(() => {
-      if (store.seal(round))
+      if (this.closedFor(round))
         throw new EntryError(closedMessage(receivedAt), 409);
       if (store.hasEntry(round, who))
         throw new EntryError("이번 회차에는 이미 응모했습니다", 409);
@@ -649,6 +660,8 @@ export class StardrawServer {
       const { closesAt } = roundTimes(schedule, round);
       const now = this.now();
       if (now < closesAt) return;
+      // 목록을 읽기 전에 이 회차를 닫는다(아래 await 사이에 들어오는 응모를 막는다)
+      this.sealingFrom = Math.max(this.sealingFrom, round);
       const tickets = store.entries(round);
       const registrations = store.registrations(round);
       const parts = {

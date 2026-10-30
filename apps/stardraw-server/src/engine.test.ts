@@ -23,6 +23,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 import { EntryError } from "./engine";
+import { LocalRootLog } from "./outside";
 import {
   drawOf,
   drawTimeOf,
@@ -377,5 +378,63 @@ describe("응모 받기: 싼 확인부터, 규칙에 어긋나면 거절", () =>
     expect(rig.engine.state()).toMatchObject({ round: 2, records: 0 });
     const a = await player();
     await rejects(enter(rig, a, [1, 2, 3, 4, 5, 6]), "앞 회차 추첨");
+  });
+});
+
+describe("마감 직전 응모와 봉인", () => {
+  it("봉인 값을 계산하는 동안 끝난 응모는 받지 않아 봉인 값과 기록이 어긋나지 않는다", async () => {
+    // 봉인 값을 바깥 로그에 올리는 동안(시각 인증 기관 응답 대기)을 붙잡아 둔다
+    let release = () => {};
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    rig = await makeRig({
+      rootLog: (_key, clock) => {
+        const inner = new LocalRootLog(() => Math.floor(clock.now() / 1000));
+        return {
+          async log(digest) {
+            await held;
+            return inner.log(digest);
+          },
+        };
+      },
+    });
+    const { closesAt } = roundTimes(SCHEDULE, 1);
+    await rig.at(closesAt - 1);
+    const p = await player();
+    const { ticket, registration } = await entryFor(
+      p,
+      1,
+      [1, 2, 3, 4, 5, 6],
+      rig.engine.head(),
+    );
+    // 받은 시각은 마감 1초 전. 작업 증명을 확인하는 사이 마감이 되어 봉인이 시작된다
+    const submitted = rig.engine
+      .submit({
+        ticket: encodeTicket(ticket),
+        ...(registration
+          ? { registration: encodeRegistration(registration) }
+          : {}),
+        ip: "203.0.113.7",
+      })
+      .then(
+        () => null,
+        (err: unknown) => err,
+      );
+    rig.clock.advance(1000);
+    const sealing = rig.engine.tick();
+    const err = await submitted;
+    release();
+    await sealing;
+    expect(err).toBeInstanceOf(EntryError);
+    expect((err as EntryError).status).toBe(409);
+
+    await rig.at(drawTimeOf(1));
+    expect(rig.engine.state()).toMatchObject({
+      sealed: 1,
+      records: 1,
+      behind: 0,
+    });
+    expect(messages(await check(readLedger(rig.dir)))).toEqual([]);
   });
 });
