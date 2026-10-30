@@ -924,3 +924,60 @@ test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제�
   await stage.locator("[data-idcard]").click({ position: CARD_TAP });
   await expect(stage.locator("[data-owner-ok]")).toBeVisible();
 });
+
+test("HDR 별빛: HDR 화면에서만 맞은 내 별과 가장 밝은 별 셋 위에 HDR 그림을 겹친다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "데스크톱 한 크기로");
+  const glows = page.locator("[data-tour-screen] img[data-hdr-glow]");
+  // SDR 화면(헤드리스 기본): 그림을 겹치지도 받지도 않는다
+  await page.goto("/stardraw/demo#tour-rank-1");
+  await expect(page.getByText("1등 당첨")).toBeVisible({ timeout: 30_000 });
+  await expect(glows).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("stardraw-hdr-sdr.png") });
+
+  // HDR 화면 흉내: dynamic-range: high 질의만 참으로 답한다
+  await page.addInitScript(() => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (q: string) =>
+      q.includes("dynamic-range: high")
+        ? ({
+            matches: true,
+            media: q,
+            onchange: null,
+            addEventListener() {},
+            removeEventListener() {},
+            addListener() {},
+            removeListener() {},
+            dispatchEvent: () => false,
+          } as MediaQueryList)
+        : original(q);
+  });
+  await page.reload();
+  await expect(page.getByText("1등 당첨")).toBeVisible({ timeout: 30_000 });
+  // 1등: 맞은 별 6개만 은은하게(움직임 줄이기라 번쩍임은 없다)
+  await expect(page.locator("img[data-hdr-glow='hit']")).toHaveCount(6);
+  await expect(page.locator("img[data-hdr-glow='flash']")).toHaveCount(0);
+  // 그림이 실제로 풀린다(AVIF 160px)
+  await expect
+    .poll(() =>
+      page
+        .locator("img[data-hdr-glow]")
+        .first()
+        .evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth),
+    )
+    .toBe(160);
+  await page.screenshot({ path: info.outputPath("stardraw-hdr-hit.png") });
+
+  // 응모 하늘: 가장 밝은 별 1·2·3
+  await page.evaluate(() => {
+    window.location.hash = "#tour-enter";
+  });
+  await expect(page.locator("[data-tour-screen='enter']")).toBeVisible();
+  await expect(page.locator("img[data-hdr-glow='calm']")).toHaveCount(3);
+  expect(
+    await page
+      .locator("img[data-hdr-glow='calm']")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-hdr-star"))),
+  ).toEqual(["1", "2", "3"]);
+});

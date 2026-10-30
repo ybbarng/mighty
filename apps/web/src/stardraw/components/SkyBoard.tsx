@@ -5,7 +5,8 @@ import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/cn";
 
-import { SKY_STARS } from "../sky";
+import { HDR_GLOW_SRC, type HdrGlow, useHdrScreen } from "../hdr-glow";
+import { SKY_STARS, starOf } from "../sky";
 import { drawSky, FAINT_STARS, type SkyState, starAt } from "../sky-draw";
 import { type SkyEffects, startSkyEffects } from "../sky-effects";
 
@@ -13,6 +14,7 @@ import { type SkyEffects, startSkyEffects } from "../sky-effects";
  * 네모 하늘 하나(응모·영수증·추첨이 같이 쓴다). 크기·누르기·강조만 다르다.
  * 반짝임·유성은 움직임 줄이기 설정이 아니고 응모 하늘일 때만 돈다(영수증은 고요하게, 추첨은 하늘의 빛을 끈다).
  * 탭이 안 보이면 멈춘다.
+ * `hdr`의 별은 HDR 화면에서만 흰색보다 밝은 빛 그림을 위에 겹친다(hdr-glow.ts).
  */
 export function SkyBoard({
   state,
@@ -20,6 +22,7 @@ export function SkyBoard({
   label,
   className,
   clock = realClock,
+  hdr = [],
 }: {
   state: SkyState;
   /** 응모: 별을 누르면 그 번호 */
@@ -27,7 +30,10 @@ export function SkyBoard({
   label: string;
   className?: string | undefined;
   clock?: Clock | undefined;
+  /** HDR 화면에서 빛 그림을 겹칠 별 */
+  hdr?: readonly HdrGlow[] | undefined;
 }) {
+  const hdrScreen = useHdrScreen();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -127,26 +133,82 @@ export function SkyBoard({
   }, [state]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label={label}
-      data-sky={state.mode}
-      className={cn(
-        "block aspect-square w-full max-w-full rounded-xl border border-white/10 bg-[#070d19]",
-        onPick && "cursor-pointer touch-manipulation",
-        className,
+    <div className={cn("relative w-full max-w-full", className)}>
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={label}
+        data-sky={state.mode}
+        className={cn(
+          "block aspect-square w-full max-w-full rounded-xl border border-white/10 bg-[#070d19]",
+          onPick && "cursor-pointer touch-manipulation",
+        )}
+        onClick={(e) => {
+          if (!onPick) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const n = starAt(
+            e.clientX - rect.left,
+            e.clientY - rect.top,
+            rect.width,
+          );
+          if (n !== null) onPick(n);
+        }}
+      />
+      {hdrScreen && hdr.length > 0 && (
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
+          aria-hidden="true"
+          data-hdr-glows={hdr.length}
+        >
+          {hdr.map((g, i) => (
+            <HdrGlowSprite key={`${g.kind}-${g.n}`} glow={g} index={i} />
+          ))}
+        </div>
       )}
-      onClick={(e) => {
-        if (!onPick) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const n = starAt(
-          e.clientX - rect.left,
-          e.clientY - rect.top,
-          rect.width,
-        );
-        if (n !== null) onPick(n);
+    </div>
+  );
+}
+
+/** 빛 그림 크기(판 너비에 대한 %) */
+const GLOW_SIZE: Record<HdrGlow["kind"], number> = {
+  flash: 20,
+  hit: 17,
+  calm: 9,
+};
+
+/**
+ * 빛 그림 하나. Safari 26.0은 position·transform이 걸린 img의 HDR을 SDR로 그린 적이 있어(WebKit 301398)
+ * img에는 위치를 걸지 않고 감싸는 칸을 백분율 여백으로 별 가운데에 놓는다(판은 정사각형이라 여백 %도 너비 기준이다).
+ */
+function HdrGlowSprite({ glow, index }: { glow: HdrGlow; index: number }) {
+  const s = starOf(glow.n);
+  const size = GLOW_SIZE[glow.kind];
+  return (
+    <span
+      className="absolute block"
+      style={{
+        left: `${s.x * 100}%`,
+        top: `${s.y * 100}%`,
+        width: `${size}%`,
+        marginLeft: `${-size / 2}%`,
+        marginTop: `${-size / 2}%`,
       }}
-    />
+    >
+      {/* biome-ignore lint/performance/noImgElement: 정적 내보내기의 작은 HDR 그림이라 next/image가 필요 없다 */}
+      <img
+        src={HDR_GLOW_SRC}
+        alt=""
+        draggable={false}
+        decoding="async"
+        data-hdr-glow={glow.kind}
+        data-hdr-star={glow.n}
+        className={`sd-hdr sd-hdr-${glow.kind} block h-auto w-full`}
+        style={
+          glow.kind === "calm"
+            ? { animationDelay: `${-index * 2.1}s` }
+            : undefined
+        }
+      />
+    </span>
   );
 }

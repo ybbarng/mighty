@@ -723,6 +723,71 @@ button {
   }
 }
 
+/*
+ * HDR 별빛(stardraw/hdr-glow.ts): HDR 화면에서만 겹치는 흰색보다 밝은 빛 그림.
+ * --sd-hdr-strength: 전체 강도. 1이 기본, 더 밝게는 1.3쯤, 덜 밝게는 0.6쯤(불투명도에 곱한다. 1을 넘으면 번쩍임이 더 오래 밝다)
+ * --sd-hdr-limit: dynamic-range-limit 값. no-limit(기본, 화면·OS가 허락하는 만큼)·constrained(Chrome만)·standard(HDR 끔)
+ * 기기나 브라우저가 HDR 밝기를 낮추면(배터리 절약, 밝기 설정) 브라우저가 그대로 따른다.
+ */
+:root {
+  --sd-hdr-strength: 1;
+  --sd-hdr-limit: no-limit;
+}
+.sd-hdr {
+  dynamic-range-limit: var(--sd-hdr-limit);
+  user-select: none;
+}
+.sd-hdr-flash {
+  animation: sd-hdr-flash 1.8s ease-out both;
+}
+@keyframes sd-hdr-flash {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: calc(var(--sd-hdr-strength) * 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.sd-hdr-hit {
+  opacity: calc(var(--sd-hdr-strength) * 0.7);
+  animation: sd-hdr-hit 2.6s ease-in-out infinite;
+}
+@keyframes sd-hdr-hit {
+  0%,
+  100% {
+    opacity: calc(var(--sd-hdr-strength) * 0.45);
+  }
+  50% {
+    opacity: calc(var(--sd-hdr-strength) * 0.85);
+  }
+}
+.sd-hdr-calm {
+  opacity: calc(var(--sd-hdr-strength) * 0.2);
+  animation: sd-hdr-calm 6.3s ease-in-out infinite;
+}
+@keyframes sd-hdr-calm {
+  0%,
+  100% {
+    opacity: calc(var(--sd-hdr-strength) * 0.12);
+  }
+  50% {
+    opacity: calc(var(--sd-hdr-strength) * 0.28);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 반짝임 없이 멈춘 빛(번쩍임은 아예 없다) */
+  .sd-hdr-hit,
+  .sd-hdr-calm {
+    animation: none;
+  }
+  .sd-hdr-flash {
+    display: none;
+  }
+}
+
 /* 보안 배우기 랑데부 해싱: 이사한 우주인이 몇 번 반짝인다(끝나도 흰 테두리는 남는다) */
 .sd-moved {
   animation: sd-moved 0.5s ease-in-out 4 both;

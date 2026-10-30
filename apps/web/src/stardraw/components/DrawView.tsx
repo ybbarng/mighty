@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
+import { drawGlows } from "../hdr-glow";
 import { drawOrder, myRank } from "../results";
 import { planRoulette, type RouletteFrame, rouletteAt } from "../roulette";
 import { starOf } from "../sky";
@@ -22,6 +23,7 @@ const TICK_GAP_MS = 45;
  * 멈추는 차례는 실제 로또처럼 나온 차례다. 결과는 기록의 drand 값으로 이미 정해져 있고 연출은 보여 줄 뿐이다.
  * 칸 위치는 지난 시간으로 계산해(`rouletteAt`) 화면이 늦게 그려져도 늘 목표 별에서 멈춘다.
  * 「결과 바로 보기」와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
+ * HDR 화면이면 켜지는 별이 흰색보다 밝게 한 번 번쩍이고, 결과에서 맞은 내 별이 은은하게 빛난다(hdr-glow.ts).
  */
 export function DrawView({
   record,
@@ -56,6 +58,8 @@ export function DrawView({
   );
   /** 진행을 멈추는 함수(「결과 바로 보기」로 부른다) */
   const stopRef = useRef<() => void>(() => {});
+  /** 룰렛 연출을 실제로 보는 중인지(켜지는 별이 HDR로 번쩍인다). 바로 보기·움직임 줄이기면 false */
+  const [animated, setAnimated] = useState(false);
   const done = frame.done;
   const rank = ticket ? myRank(record, ticket) : null;
 
@@ -63,9 +67,11 @@ export function DrawView({
   useEffect(() => {
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (instant || reduce || order.length === 0) {
+      setAnimated(false);
       setFrame(finished);
       return;
     }
+    setAnimated(true);
     const started = clock.now();
     let raf = 0;
     let alive = true;
@@ -97,6 +103,7 @@ export function DrawView({
     stopRef.current = () => {
       alive = false;
       cancelAnimationFrame(raf);
+      setAnimated(false);
       setFrame(finished);
     };
     return () => {
@@ -161,6 +168,7 @@ export function DrawView({
               cursor: frame.cursor,
             }}
             clock={clock}
+            hdr={drawGlows({ fixed: frame.fixed, mine, done, animated })}
             label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
           />
 
