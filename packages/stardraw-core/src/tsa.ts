@@ -87,6 +87,8 @@ const OID = {
   rsaEncryption: "1.2.840.113549.1.1.1",
   ecPublicKey: "1.2.840.10045.2.1",
   extKeyUsage: "2.5.29.37",
+  basicConstraints: "2.5.29.19",
+  keyUsage: "2.5.29.15",
   subjectKeyId: "2.5.29.14",
   timeStamping: "1.3.6.1.5.5.7.3.8",
 } as const;
@@ -186,7 +188,12 @@ export async function verifyTimestampToken(
       ))
     )
       problems.push("토큰 서명이 맞지 않는다");
-    if (!signer.eku.includes(OID.timeStamping))
+    // RFC 3161 2.3: 시각 인증 인증서의 확장 키 용도는 timeStamping 하나뿐이고 critical이어야 한다
+    if (
+      !signer.ekuCritical ||
+      signer.eku.length !== 1 ||
+      signer.eku[0] !== OID.timeStamping
+    )
       problems.push("서명한 인증서가 시각 인증용이 아니다");
 
     const authorities = expect.authorities ?? TSA_AUTHORITIES;
@@ -299,6 +306,13 @@ interface Cert {
   spki: Uint8Array;
   ski: Uint8Array | null;
   eku: string[];
+  ekuCritical: boolean;
+  /** basicConstraints의 cA(없으면 false) */
+  ca: boolean;
+  /** basicConstraints의 pathLenConstraint(없으면 null = 제한 없음) */
+  pathLen: number | null;
+  /** keyUsage에 keyCertSign이 있는지(keyUsage가 없으면 false) */
+  keyCertSign: boolean;
 }
 
 function readCert(node: Der): Cert {
@@ -309,6 +323,10 @@ function readCert(node: Der): Cert {
   const [notBefore, notAfter] = derChildren(expectTag(validity, TAG.sequence));
   let ski: Uint8Array | null = null;
   let eku: string[] = [];
+  let ekuCritical = false;
+  let ca = false;
+  let pathLen: number | null = null;
+  let keyCertSign = false;
   const exts = rest.find((f) => f.tag === 0xa3);
   if (exts) {
     for (const ext of derChildren(
@@ -321,8 +339,27 @@ function readCert(node: Der): Cert {
       );
       if (id === OID.subjectKeyId)
         ski = expectTag(inner, TAG.octetString).value;
-      if (id === OID.extKeyUsage)
+      const critical =
+        parts.length === 3 &&
+        parts[1]?.tag === TAG.boolean &&
+        parts[1].value[0] !== 0;
+      if (id === OID.extKeyUsage) {
         eku = derChildren(inner).map((o) => readOid(o));
+        ekuCritical = critical;
+      }
+      if (id === OID.basicConstraints) {
+        // SEQUENCE { cA BOOLEAN DEFAULT FALSE, pathLenConstraint INTEGER OPTIONAL }
+        for (const f of derChildren(expectTag(inner, TAG.sequence))) {
+          if (f.tag === TAG.boolean) ca = f.value[0] !== 0;
+          if (f.tag === TAG.integer)
+            pathLen = f.value.reduce((n, b) => n * 256 + b, 0);
+        }
+      }
+      if (id === OID.keyUsage) {
+        // BIT STRING: 첫 바이트는 남는 비트 수, keyCertSign은 비트 5(첫 바이트의 0x04)
+        const ku = expectTag(inner, TAG.bitString).value;
+        keyCertSign = ((ku[1] ?? 0) & 0x04) !== 0;
+      }
     }
   }
   const bits = expectTag(sig, TAG.bitString).value;
@@ -338,6 +375,10 @@ function readCert(node: Der): Cert {
     spki: expectTag(spki, TAG.sequence).bytes,
     ski,
     eku,
+    ekuCritical,
+    ca,
+    pathLen,
+    keyCertSign,
   };
 }
 
@@ -409,7 +450,12 @@ function readToken(token: Uint8Array) {
   };
 }
 
-/** 서명한 인증서에서 위로 올라가며 믿는 열쇠에 닿으면 그 기관 이름 */
+/**
+ * 서명한 인증서에서 위로 올라가며 믿는 열쇠에 닿으면 그 기관 이름.
+ * 고정한 열쇠(신뢰 기준점)는 고정으로 믿고, 그 사이 고정하지 않은 발급 인증서는 CA여야 한다:
+ * basicConstraints cA TRUE, keyUsage keyCertSign, pathLenConstraint 안(RFC 5280 6.1.4).
+ * 이것을 보지 않으면 고정한 루트 아래 아무 일반 인증서(예: 코드 서명용)의 열쇠로 가짜 시각 인증 기관을 만들 수 있다
+ */
 async function chainTo(
   signer: Cert,
   certs: readonly Cert[],
@@ -430,6 +476,19 @@ async function chainTo(
       (c) => c !== cur && equalBytes(c.subject, cur.issuer),
     );
     if (!issuer) return null;
+    const pinned = authorities.some((a) =>
+      a.pins.includes(toHex(sha256(issuer.spki))),
+    );
+    // 이 발급 인증서 아래에 있는 중간 CA 수(서명 인증서는 세지 않는다) = depth
+    if (
+      !pinned &&
+      (!issuer.ca ||
+        !issuer.keyCertSign ||
+        (issuer.pathLen !== null && depth > issuer.pathLen))
+    ) {
+      problems.push("인증서 사슬에 CA가 아닌 발급 인증서가 있다");
+      return null;
+    }
     const hash = HASHES[cur.sigAlg];
     if (
       !hash ||

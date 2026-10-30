@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { fromHex, toHex, utf8 } from "./bytes";
 import { type Der, derChildren, expectTag, parseDer } from "./der";
-import { FakeTsa } from "./testing";
+import { FakeTsa, type FakeTsaChain } from "./testing";
 import {
   TSA_DIGICERT,
   TSA_SECTIGO,
@@ -191,5 +191,54 @@ describe("가짜 시각 인증 기관(시험 도구)", () => {
       problems: [],
     });
     expect((await verifyTimestampToken(t, { imprint })).ok).toBe(false);
+  });
+});
+
+describe("인증서 사슬: 고정한 루트 아래 아무 인증서로 가짜 기관을 만들 수 없다", () => {
+  const check = (chain: FakeTsaChain) => {
+    const fake = new FakeTsa("chain", () => at(0), chain);
+    return verifyTimestampToken(fake.stamp(imprint, at(30)), {
+      imprint,
+      authorities: [fake.authority],
+    });
+  };
+  const CA = { ca: true, keyCertSign: true };
+
+  it("중간 CA(CA·keyCertSign)를 거친 사슬은 통과한다", async () => {
+    expect(
+      (await check({ intermediates: [CA, { ...CA, pathLen: 0 }] })).ok,
+    ).toBe(true);
+  });
+
+  it("CA가 아닌 인증서(예: 코드 서명용)가 발급한 시각 인증 인증서는 거절한다", async () => {
+    const r = await check({
+      intermediates: [{ ca: false, keyCertSign: false }],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.problems).toContain("인증서 사슬에 CA가 아닌 발급 인증서가 있다");
+  });
+
+  it("CA라도 keyUsage에 keyCertSign이 없으면 거절한다", async () => {
+    expect(
+      (await check({ intermediates: [{ ca: true, keyCertSign: false }] })).ok,
+    ).toBe(false);
+  });
+
+  it("경로 길이 제한(pathLenConstraint)을 넘으면 거절한다", async () => {
+    // pathLen 0인 CA 아래에 CA가 하나 더 있다
+    expect(
+      (await check({ intermediates: [{ ...CA, pathLen: 0 }, CA] })).ok,
+    ).toBe(false);
+  });
+
+  it("서명 인증서의 확장 키 용도는 timeStamping 하나뿐이고 critical이어야 한다", async () => {
+    expect((await check({ signerEkuCritical: false })).ok).toBe(false);
+    expect(
+      (
+        await check({
+          signerEku: ["1.3.6.1.5.5.7.3.8", "1.3.6.1.5.5.7.3.3"],
+        })
+      ).ok,
+    ).toBe(false);
   });
 });
