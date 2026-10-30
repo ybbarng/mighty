@@ -101,6 +101,12 @@ export default function StardrawVerify() {
             )이 기준이고, 아래 시험 값으로 다른 언어의 구현을 맞춰 볼 수
             있습니다.
           </p>
+          <a
+            href="/stardraw/learn"
+            className="self-start text-amber-100/90 text-sm underline underline-offset-2"
+          >
+            규칙을 하나씩 직접 눌러 보며 익히려면: 보안 배우기
+          </a>
         </header>
 
         <Section title="공개 데이터" id="data">

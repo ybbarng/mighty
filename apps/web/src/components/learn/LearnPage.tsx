@@ -731,6 +731,12 @@ export function LearnPage() {
           <a href="#elgamal" className="w-fit text-sky-300 text-sm underline">
             심화 학습(아직 적용하지 않은 기법) 바로 가기 ↓
           </a>
+          <a
+            href="/stardraw/learn"
+            className="w-fit text-amber-200 text-sm underline"
+          >
+            하늘의 별 따기(정시 로또)의 보안 배우기 →
+          </a>
           <nav className="grid gap-1.5 sm:grid-cols-2">
             {LESSONS.map((l, i) => (
               <a

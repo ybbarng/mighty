@@ -61,6 +61,12 @@ export default function StardrawAbout() {
           >
             데모에서 응모부터 당첨자 확인까지 해 보기
           </a>
+          <a
+            href="/stardraw/learn"
+            className="self-start text-amber-100/90 text-sm underline underline-offset-2"
+          >
+            어떻게 속일 수 없게 만들었나요? 보안 배우기
+          </a>
         </header>
 
         <Section title="게임 방법">
@@ -224,12 +230,21 @@ export default function StardrawAbout() {
           </ul>
         </Section>
 
-        <a
-          href="/stardraw/verify"
-          className="self-start text-sm text-amber-100/90 underline underline-offset-2"
-        >
-          직접 검증하려면: 장부 파일, 계산 규칙, 시험 값, 장부 전체 검사
-        </a>
+        <div className="flex flex-col gap-2">
+          <a
+            href="/stardraw/learn"
+            className="self-start text-sm text-amber-100/90 underline underline-offset-2"
+          >
+            보안 기술을 직접 해 보며 배우기: 서명, 패스키, 작업 증명, 머클 나무,
+            시각 인증, drand, 사슬, 공격해 보기
+          </a>
+          <a
+            href="/stardraw/verify"
+            className="self-start text-sm text-amber-100/90 underline underline-offset-2"
+          >
+            직접 검증하려면: 장부 파일, 계산 규칙, 시험 값, 장부 전체 검사
+          </a>
+        </div>
 
         <footer className="text-center text-[11px] text-white/40">
           <MadeWith />
