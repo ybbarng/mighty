@@ -740,6 +740,30 @@ describe("열쇠 등록", () => {
       toHex(passkey.signer.publicKey),
     );
   });
+
+  it("본인 확인(UV) 표시 없이 패스키로 서명한 응모권은 드러난다", async () => {
+    const prev = genesisHash(HOURLY);
+    const passkey = await fakePasskey({ flags: 0x01 });
+    const reg = await registerPasskey(passkey, prev);
+    const t = await ticketFor(passkey.signer, 1, [1, 2, 3, 4, 5, 6], prev);
+    const record = closeRound({
+      schedule: HOURLY,
+      round: 1,
+      prev,
+      tickets: [t],
+      registrations: [reg],
+      rootLoggedAt: loggedAt(HOURLY, 1),
+      beacon: beaconFor(HOURLY, 1),
+    });
+    const report = await verifyLedger(
+      HOURLY,
+      [record],
+      [[t]],
+      [[reg]],
+      OPTIONS,
+    );
+    expect(messages(report).some((m) => m.includes("서명"))).toBe(true);
+  });
 });
 
 describe("별명 남기기", () => {

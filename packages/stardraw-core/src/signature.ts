@@ -163,11 +163,24 @@ function checkClientData(
   );
 }
 
-/** rpIdHash(32) ‖ flags(1) ‖ signCount(4) ‖ … — 사이트가 맞고 사용자가 눌렀는지(UP) */
-function checkAuthenticatorData(authData: Uint8Array, rpId: string): boolean {
+/** authenticatorData flags: UP(사람이 있음, 0x01)과 UV(본인 확인, 0x04) */
+export const FLAG_UP = 0x01;
+export const FLAG_UV = 0x04;
+const REQUIRED_FLAGS = FLAG_UP | FLAG_UV;
+
+/**
+ * rpIdHash(32) ‖ flags(1) ‖ signCount(4) ‖ … — 사이트가 맞고, 사람이 눌렀고(UP),
+ * 인증기가 지문·얼굴·PIN으로 본인 확인을 했는지(UV) 본다(docs/36 4절, 2026-10-30).
+ * 화면은 늘 `userVerification: "required"`로 부르므로 진짜 패스키 서명에는 UV가 켜져 있다.
+ * 가상 인증기는 UV도 꾸밀 수 있어 자동화를 막지는 못한다
+ */
+export function checkAuthenticatorData(
+  authData: Uint8Array,
+  rpId: string,
+): boolean {
   if (authData.length < 37) return false;
   if (!equalBytes(authData.slice(0, 32), sha256(utf8(rpId)))) return false;
-  return ((authData[32] ?? 0) & 0x01) === 0x01;
+  return ((authData[32] ?? 0) & REQUIRED_FLAGS) === REQUIRED_FLAGS;
 }
 
 /** DER(SEQUENCE { INTEGER r, INTEGER s }) → r‖s 64바이트. 모양이 틀리면 null */

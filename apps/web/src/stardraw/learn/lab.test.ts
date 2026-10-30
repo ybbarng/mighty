@@ -61,6 +61,30 @@ describe("흉내 패스키", () => {
       0,
     );
     expect(await verifyTicketSignature(real)).toBe(true);
+    if (real.sig.kind !== "webauthn") throw new Error("패스키 서명이어야 한다");
+    expect(readAssertion(real.sig)).toMatchObject({
+      userPresent: true,
+      userVerified: true,
+    });
+
+    // 본인 확인(UV)을 건너뛴 서명은 사람이 눌렀어도(UP) 거절한다
+    const noUv = await signTicket(
+      passkeySigner(pk.publicKey, (c) =>
+        demoAssertion(pk, c, {
+          origin: SITE_ORIGIN,
+          rpId: SITE,
+          userVerified: false,
+        }),
+      ),
+      unsigned,
+      0,
+    );
+    expect(await verifyTicketSignature(noUv)).toBe(false);
+    if (noUv.sig.kind !== "webauthn") throw new Error("패스키 서명이어야 한다");
+    expect(readAssertion(noUv.sig)).toMatchObject({
+      userPresent: true,
+      userVerified: false,
+    });
 
     const phish = await signTicket(
       signer({ origin: "https://game-byb.kr", rpId: "game-byb.kr" }),

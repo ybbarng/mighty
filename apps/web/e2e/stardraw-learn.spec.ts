@@ -43,6 +43,13 @@ test("보안 배우기: 직접 해 보기 상자가 실제 계산으로 통과·
   await passkey.getByRole("button", { name: "응모권에 패스키로 서명" }).click();
   await passkey.getByRole("button", { name: "확인", exact: true }).click();
   await expect(verdict(page, "passkey")).toHaveAttribute("data-ok", "pass");
+  // 본인 확인(UV) 없이 한 서명은 진짜 주소여도 거절된다
+  await passkey.getByLabel(/지문·얼굴·PIN 없이 서명/).check();
+  await passkey.getByRole("button", { name: "응모권에 패스키로 서명" }).click();
+  await passkey.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(verdict(page, "passkey")).toHaveAttribute("data-ok", "fail");
+  await expect(passkey).toContainText("본인 확인(UV)");
+  await passkey.screenshot({ path: info.outputPath("passkey-no-uv.png") });
 
   // 3. 작업 증명: 가장 가벼운 설정으로 실제 Argon2id를 푼다
   const pow = page.locator("[data-toy='pow']");

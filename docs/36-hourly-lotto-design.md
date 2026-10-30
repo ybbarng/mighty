@@ -76,7 +76,7 @@ docs/35의 둘째 안(정시 추첨)을 사용자와 나눈 이야기(응모 비
 1 ‖ r‖s(64)                                           원시 P-256 서명
 2 ‖ authenticatorData ‖ clientDataJSON ‖ DER 서명(각 u16 길이 + 바이트)   패스키(WebAuthn ES256)
 ```
-- 패스키 서명은 `authenticatorData ‖ SHA-256(clientDataJSON)`에 대한 서명이다. 검사기는 clientDataJSON의 `type = "webauthn.get"`, `challenge = base64url(SHA-256(서명할 내용))`, `origin`이 허용 목록(`https://game.byb.kr`)에 있는지, `crossOrigin`이 true가 아닌지, authenticatorData의 rpIdHash = `SHA-256("game.byb.kr")`인지, 사용자가 눌렀는지(UP 비트)를 본 뒤 서명을 확인한다.
+- 패스키 서명은 `authenticatorData ‖ SHA-256(clientDataJSON)`에 대한 서명이다. 검사기는 clientDataJSON의 `type = "webauthn.get"`, `challenge = base64url(SHA-256(서명할 내용))`, `origin`이 허용 목록(`https://game.byb.kr`)에 있는지, `crossOrigin`이 true가 아닌지, authenticatorData의 rpIdHash = `SHA-256("game.byb.kr")`인지, flags에 UP(0x01, 사람이 있었다)와 UV(0x04, 지문·얼굴·PIN으로 본인 확인을 했다)가 모두 켜졌는지(다른 비트는 보지 않는다, 2026-10-30 UV 추가, 11-10)를 본 뒤 서명을 확인한다.
 - 서버 영수증은 서버 열쇠의 원시 서명(64바이트)이다.
 
 **열쇠 등록**: 응모하려면 공개 열쇠를 먼저 장부에 등록한다(그 회차 기록에 들어간다).
@@ -319,7 +319,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 새 기기에서는 따라온 패스키로 Face ID만 하면 브라우저가 패스키 번호를 알려 주고, 서버가 그 번호로 공개 열쇠를 찾는다.
 - 서명은 WebAuthn 형식(authenticatorData ‖ clientDataJSON 해시에 서명, clientDataJSON의 challenge = 서명할 내용의 해시)이라 검사기가 이 형식을 읽는다.
 - **브라우저 응모는 패스키로만**(2026-10-29 사용자). 기기 안 열쇠(IndexedDB)로 응모하는 길은 없앴다. 패스키를 쓸 수 없는 환경은 응모 대신 안내한다: 앱 안 브라우저(카카오톡·네이버 앱·인스타그램 등) → "Safari·Chrome으로 열어 주세요"와 주소 복사, WebAuthn이 없는 브라우저 → 업데이트 안내, 이 기기 잠금을 못 씀 → "화면 잠금을 켜면 이 기기에서 바로, 지금은 휴대폰(QR)·보안 키로", 만들기·서명 취소 → "응모되지 않았어요" + 「패스키가 뭐예요?」 문답, ES256을 못 만드는 인증기(일부 오래된 Windows Hello) → "다른 기기 사용(휴대폰 QR)". 터미널은 열쇠 파일(백업은 파일 복사).
-- 만들기 옵션: ES256(-7)만, attestation `none`, residentKey `required`(새 기기에서 이름 없이 찾기), userVerification `required`, 기기 종류(authenticatorAttachment)는 정하지 않는다(iCloud·Google 비밀번호 관리자·1Password·Bitwarden·Windows Hello·보안 키·휴대폰 QR 모두). 서명도 userVerification `required`.
+- 만들기 옵션: ES256(-7)만, attestation `none`, residentKey `required`(새 기기에서 이름 없이 찾기), userVerification `required`, 기기 종류(authenticatorAttachment)는 정하지 않는다(iCloud·Google 비밀번호 관리자·1Password·Bitwarden·Windows Hello·보안 키·휴대폰 QR 모두). 서명도 userVerification `required`. 검사기는 서명마다 UV 표시를 요구하고, 화면은 만들 때 받은 authenticatorData에 UV가 없으면 미리 "본인 확인을 하지 못합니다"로 막는다(11-10).
 
 **패스키 자연스럽게 쓰게 하기(사용자: 이 게임의 목적 중 하나, 2026-10-29)**
 - 원칙: 등록을 따로 시키지 않고 응모 자체가 패스키 만들기다. 이득을 쉬운 말로, 조르지 않는다. 패스키에 응모권·확률 혜택은 주지 않는다(공정성).
@@ -540,3 +540,15 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 2026-10-30 확인 링크로 다시 설계(11-2): 요청은 당첨자가 만든 링크로만 붙어 요청 폭탄·칸 채우기가 없다(8-1 P7). 이름 칸과 이름 사칭 검사(core `requesterProblem`, "우주국·국장·카노푸스·운영")는 이름 칸과 함께 없앴다(P8). 상한: IP 앞부분마다 하루 링크 만들기 30번(`STARDRAW_INVITES_PER_PREFIX`, 옛 `STARDRAW_CONFIRMS_PER_PREFIX`는 없앴다), 없는 링크 조회 60번, 응모권당 열린 링크 10개. 링크를 받은 사람이 다른 확인자에게 별을 넘겨 당첨자인 척하는 것은 "별 세 개는 알린 그 사람에게만" 한 줄로 막는다. 판정(서명·별 세 개)은 그대로다.
 
 **나중에(아이디어, 만들지 않음)**: 우주국 창구·관인 공지·명예의 전당. 행사·상품이 생기면 본다(map.json next-lotto의 아이디어).
+
+### 11-10. 본인 확인 표시, IP 상한, 터미널 도구의 범위(2026-10-30)
+
+시험 서버가 돌고 있지만 응모가 0장일 때 정했다. 그래서 응모 검사 규칙을 바꿔도 지난 기록이 걸리지 않는다(장부는 다시 시작하지 않았다).
+
+**패스키 서명마다 UV 표시를 요구한다**
+- 규칙: 패스키 서명의 authenticatorData flags에 UP(0x01)와 UV(0x04)가 모두 켜져야 한다(core `checkAuthenticatorData`, `FLAG_UP`·`FLAG_UV`). 다른 비트(BE·BS·AT·ED)는 보지 않는다. 응모권, 별명, 당첨자 확인 승인, 확인 링크 만들기 등 `verifyEntrantSignature`를 거치는 모든 서명에 같이 걸리고, 서버·검증 페이지·터미널 검사기(`verifyLedger`·`checkPublicLedger`)가 같은 코드라 규칙도 같다. 시험 값에 "패스키 authenticatorData" 묶음을 더했다.
+- 이유: 화면은 늘 `userVerification: "required"`로 부르는데 검사는 UP만 봐서, 장부만 보고는 본인 확인을 거쳤는지 알 수 없었다. 이제 진짜 패스키로 낸 응모는 매번 지문·얼굴·PIN을 거쳤다고 장부가 보장한다.
+- 한계: 개발자용 가상 인증기(브라우저 개발 도구, 소프트웨어 인증기)는 UV 표시도 꾸밀 수 있다. 그래서 이 규칙은 자동화를 막지 못한다. 진짜 인증기로 낸 서명의 뜻을 분명히 할 뿐이다.
+- 등록에는 서명이 없어 장부가 UV를 볼 수 없다. 첫 응모권 서명이 UV를 요구하므로 UV 없이 만든 패스키는 응모할 수 없다. 화면은 만들 때 받은 authenticatorData에 UV가 없으면 미리 막는다(`hasUserVerification`).
+- 시험용 가짜 인증기(core `testing.ts` `fakePasskey`, 기본 0x05)와 배우기의 흉내 패스키(`lab.ts` `demoAssertion`)는 UP·UV를 함께 켠다. 배우기 패스키 흉내에서 "지문·얼굴·PIN 없이 서명"을 고르면 UP만 켜져 검사기가 거절한다. 데모 지갑은 원시 서명이라 flags가 없다.
+- 원시 열쇠(kind 1)는 규칙에 남아 있다(연습 장부·데모·시험). 서버도 원시 열쇠 등록·서명을 받으므로, 스스로 프로그램을 짜는 사람은 UV 없이도 원시 열쇠로 응모할 수 있다. 가상 인증기와 마찬가지로 작업 증명 비용만 든다.

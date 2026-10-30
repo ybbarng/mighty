@@ -6,7 +6,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { UnlockPurpose } from "./demo-unlock";
-import { createDemoWallet, createWallet } from "./wallet";
+import { createDemoWallet, createWallet, hasUserVerification } from "./wallet";
 
 afterEach(() => {
   localStorage.clear();
@@ -121,5 +121,20 @@ describe("응모권은 그 장부의 것으로만 센다", () => {
     const old = createWallet("test-old", () => "trial:aaaa");
     expect(old.loadTickets()).toEqual([]);
     expect(old.openedRounds().size).toBe(0);
+  });
+});
+
+describe("패스키 만들기: 본인 확인(UV) 표시", () => {
+  const authData = (flags: number) => {
+    const out = new Uint8Array(37);
+    out[32] = flags;
+    return out;
+  };
+
+  it("UP·UV가 모두 켜져야 통과한다(다른 비트는 상관없다)", () => {
+    expect(hasUserVerification(authData(0x05))).toBe(true);
+    expect(hasUserVerification(authData(0x5d))).toBe(true);
+    expect(hasUserVerification(authData(0x01))).toBe(false);
+    expect(hasUserVerification(authData(0x04))).toBe(false);
   });
 });

@@ -56,7 +56,7 @@ export function unlockWith(ua: string, platform: boolean): string {
 export type PasskeyProblem =
   /** 사용자가 창을 닫았거나 시간이 지났다 */
   | "cancelled"
-  /** 이 인증기가 ES256(P-256) 패스키를 만들지 못한다(일부 오래된 Windows Hello) */
+  /** 이 인증기가 ES256(P-256) 패스키를 만들지 못하거나(일부 오래된 Windows Hello) 본인 확인(UV)을 못 한다 */
   | "unsupported"
   /** 그 밖의 오류 */
   | "other";

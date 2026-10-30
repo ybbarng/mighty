@@ -267,6 +267,7 @@ type PasskeyResult =
       origin: string;
       rpIdMatches: boolean;
       userPresent: boolean;
+      userVerified: boolean;
       bypass: boolean;
     };
 
@@ -275,7 +276,7 @@ export function PasskeyToy() {
   const [exported, setExported] = useState<string | null>(null);
   const [site, setSite] = useState(0);
   const [sheet, setSheet] = useState(false);
-  const [noTouch, setNoTouch] = useState(false);
+  const [noUv, setNoUv] = useState(false);
   const [result, setResult] = useState<PasskeyResult | null>(null);
 
   useEffect(() => {
@@ -291,7 +292,7 @@ export function PasskeyToy() {
   ) => {
     if (!passkey) return;
     const signer = passkeySigner(passkey.publicKey, (c) =>
-      demoAssertion(passkey, c, { ...where, userPresent: !noTouch }),
+      demoAssertion(passkey, c, { ...where, userVerified: !noUv }),
     );
     const t = await signTicket(
       signer,
@@ -306,6 +307,7 @@ export function PasskeyToy() {
       origin: read.origin,
       rpIdMatches: read.rpIdMatches,
       userPresent: read.userPresent,
+      userVerified: read.userVerified,
       bypass,
     });
   };
@@ -372,10 +374,10 @@ export function PasskeyToy() {
         <label className="flex items-center gap-2 text-white/70 text-xs">
           <input
             type="checkbox"
-            checked={noTouch}
-            onChange={(e) => setNoTouch(e.target.checked)}
+            checked={noUv}
+            onChange={(e) => setNoUv(e.target.checked)}
           />
-          사람이 누르지 않고 서명(사용자 확인 표시 끔)
+          지문·얼굴·PIN 없이 서명(본인 확인 표시 UV 끔)
         </label>
       </div>
       <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 font-mono text-[11px] text-white/70">
@@ -441,10 +443,15 @@ export function PasskeyToy() {
               {result.userPresent ? "예" : "아니오"}
             </Mono>
           </Row>
+          <Row label="본인 확인(UV)">
+            <Mono tone={result.userVerified ? "good" : "bad"}>
+              {result.userVerified ? "예" : "아니오"}
+            </Mono>
+          </Row>
           <Verdict ok={result.ok} testId="passkey">
             {result.ok
-              ? "검사기가 받습니다: game.byb.kr에서 사람이 직접 누른 서명입니다"
-              : "검사기가 거절합니다: 이 사이트에서 사람이 누른 서명이 아닙니다"}
+              ? "검사기가 받습니다: game.byb.kr에서 본인 확인을 거친 서명입니다"
+              : "검사기가 거절합니다: 이 사이트에서 본인 확인을 거친 서명이 아닙니다"}
           </Verdict>
         </div>
       )}

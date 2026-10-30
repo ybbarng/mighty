@@ -220,8 +220,10 @@ id    = taggedHash("stardraw/ticket/v1", body)       서명은 id에 들어가�
               <li>
                 authenticatorData: 앞 32바이트가{" "}
                 <code>SHA-256(&quot;game.byb.kr&quot;)</code>(rpId), flags의
-                UP(0x01)가 켜져 있음. 크기 상한은 authenticatorData 512,
-                clientDataJSON 1024, DER 72바이트.
+                UP(0x01)와 UV(0x04)가 모두 켜져 있음(사람이 있었고
+                지문·얼굴·PIN으로 본인 확인을 했다는 표시. 다른 비트는 보지
+                않음). 크기 상한은 authenticatorData 512, clientDataJSON 1024,
+                DER 72바이트.
               </li>
               <li>응모자 id = SHA-256(공개 열쇠) 앞 16바이트.</li>
             </ul>

@@ -64,15 +64,26 @@ describe("패스키(WebAuthn ES256) 서명", () => {
     ).toBe(true);
   });
 
-  it("사용자가 누르지 않은(UP 비트 없음) 서명, 등록용(webauthn.create) 서명은 거절한다", async () => {
-    const noTouch = (await fakePasskey({ flags: 0x04 })).signer;
+  it("UP(0x01)·UV(0x04) 가운데 하나라도 빠진 서명, 등록용(webauthn.create) 서명은 거절한다", async () => {
+    for (const flags of [0x04, 0x01, 0x00, 0x41]) {
+      const s = (await fakePasskey({ flags })).signer;
+      expect(
+        await verifyEntrantSignature(
+          s.publicKey,
+          MESSAGE,
+          await signAsEntrant(s, MESSAGE),
+        ),
+      ).toBe(false);
+    }
+    // 다른 비트(BE·BS 등)가 함께 켜져 있어도 UP·UV만 있으면 받는다(동기화 패스키는 0x1d)
+    const synced = (await fakePasskey({ flags: 0x1d })).signer;
     expect(
       await verifyEntrantSignature(
-        noTouch.publicKey,
+        synced.publicKey,
         MESSAGE,
-        await signAsEntrant(noTouch, MESSAGE),
+        await signAsEntrant(synced, MESSAGE),
       ),
-    ).toBe(false);
+    ).toBe(true);
     const create = (await fakePasskey({ type: "webauthn.create" })).signer;
     expect(
       await verifyEntrantSignature(

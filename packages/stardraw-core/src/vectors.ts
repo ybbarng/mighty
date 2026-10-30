@@ -24,7 +24,7 @@ import {
   type ScheduleEntry,
   withChange,
 } from "./schedule";
-import { webauthnChallenge } from "./signature";
+import { checkAuthenticatorData, webauthnChallenge } from "./signature";
 import {
   encodeTicket,
   type Ticket,
@@ -162,6 +162,16 @@ async function sasSharedSecret(): Promise<Uint8Array> {
   return sasSecret(checker.privateKey, winner.publicKey);
 }
 
+/** authenticatorData = SHA-256("game.byb.kr") ‖ flags ‖ signCount 1 */
+function authData(flags: number): Uint8Array {
+  return concat(
+    sha256(utf8("game.byb.kr")),
+    Uint8Array.from([flags, 0, 0, 0, 1]),
+  );
+}
+const passOrReject = (flags: number) =>
+  checkAuthenticatorData(authData(flags), "game.byb.kr") ? "통과" : "거절";
+
 const DRAW = { numbers: [5, 29, 37, 38, 41, 45], bonus: 4 };
 
 export const TEST_VECTORS: readonly VectorGroup[] = [
@@ -221,6 +231,25 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
               ),
             ),
           ),
+      },
+    ],
+  },
+  {
+    id: "webauthn",
+    title: "패스키 authenticatorData",
+    vectors: [
+      {
+        title: "authenticatorData 바이트(flags 05)",
+        input: 'SHA-256("game.byb.kr") ‖ flags 05(UP + UV) ‖ signCount 1(u32)',
+        expected:
+          "cbeb0bd2fd540b201a4aacf76ead7dbf18a929abe3ef560f2b7e8998e679144d0500000001",
+        compute: () => toHex(authData(0x05)),
+      },
+      {
+        title: "flags 검사: UP(01)·UV(04)가 모두 켜져야 통과",
+        input: "flags 05 / 01 / 04 / 1d(동기화 패스키, BE·BS도 켜짐)",
+        expected: "통과 / 거절 / 거절 / 통과",
+        compute: () => [0x05, 0x01, 0x04, 0x1d].map(passOrReject).join(" / "),
       },
     ],
   },

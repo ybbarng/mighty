@@ -7,6 +7,8 @@ import {
   concat,
   drandRoundForClose,
   equalBytes,
+  FLAG_UP,
+  FLAG_UV,
   GENESIS_ANCHOR_BRANCH,
   GENESIS_ANCHOR_PATH,
   genesisAnchorFile,
@@ -99,12 +101,16 @@ export function rpIdAllowed(origin: string, rpId: string): boolean {
 export async function demoAssertion(
   passkey: DemoPasskey,
   challenge: Uint8Array,
-  where: { origin: string; rpId: string; userPresent?: boolean },
+  where: { origin: string; rpId: string; userVerified?: boolean },
 ): Promise<WebAuthnAssertion> {
   passkey.signCount++;
+  // 진짜 패스키는 화면이 `userVerification: "required"`로 부르므로 UP(0x01)·UV(0x04)가 함께 켜진다.
+  // 본인 확인을 건너뛴 흉내는 UP만 켠다
   const authenticatorData = concat(
     sha256(utf8(where.rpId)),
-    new Uint8Array([where.userPresent === false ? 0x00 : 0x05]),
+    new Uint8Array([
+      where.userVerified === false ? FLAG_UP : FLAG_UP | FLAG_UV,
+    ]),
     new ByteWriter().u32(passkey.signCount).done(),
   );
   const clientDataJSON = utf8(
@@ -125,12 +131,13 @@ export async function demoAssertion(
   return { authenticatorData, clientDataJSON, signature: p1363ToDer(raw) };
 }
 
-/** 패스키 서명에서 사람이 볼 만한 것: 주소, 사이트 해시가 이 사이트 것인지, 눌렀는지 */
+/** 패스키 서명에서 사람이 볼 만한 것: 주소, 사이트 해시가 이 사이트 것인지, 눌렀는지, 본인 확인을 했는지 */
 export function readAssertion(a: WebAuthnAssertion): {
   origin: string;
   challenge: string;
   rpIdMatches: boolean;
   userPresent: boolean;
+  userVerified: boolean;
 } {
   const data = JSON.parse(new TextDecoder().decode(a.clientDataJSON)) as {
     origin: string;
@@ -143,7 +150,8 @@ export function readAssertion(a: WebAuthnAssertion): {
       a.authenticatorData.slice(0, 32),
       sha256(utf8(SITE)),
     ),
-    userPresent: ((a.authenticatorData[32] ?? 0) & 0x01) === 0x01,
+    userPresent: ((a.authenticatorData[32] ?? 0) & FLAG_UP) === FLAG_UP,
+    userVerified: ((a.authenticatorData[32] ?? 0) & FLAG_UV) === FLAG_UV,
   };
 }
 

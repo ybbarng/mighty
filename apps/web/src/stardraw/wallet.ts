@@ -3,6 +3,8 @@ import {
   type EntrantSigner,
   encodeTicket,
   equalBytes,
+  FLAG_UP,
+  FLAG_UV,
   fromBase64Url,
   passkeySigner,
   rawPublicKeyFromSpki,
@@ -168,6 +170,14 @@ export function createWallet(
       if (!spki || response.getPublicKeyAlgorithm?.() !== -7)
         throw new DOMException(
           "이 기기는 이 게임에 맞는 패스키를 만들지 못합니다",
+          "NotSupportedError",
+        );
+      // 장부 검사는 서명마다 UP·UV 표시를 요구한다(docs/36 4절). 본인 확인 없이 만든 패스키는
+      // 응모 서명도 거절되므로 여기서 미리 알린다
+      const authData = response.getAuthenticatorData?.();
+      if (authData && !hasUserVerification(new Uint8Array(authData)))
+        throw new DOMException(
+          "이 기기는 지문·얼굴·화면 잠금으로 본인 확인을 하지 못합니다",
           "NotSupportedError",
         );
       const key: KeyInfo = {
@@ -389,6 +399,12 @@ export function createDemoWallet(
       }
     },
   };
+}
+
+/** authenticatorData의 flags에 UP(0x01)·UV(0x04)가 모두 켜졌는지 */
+export function hasUserVerification(authData: Uint8Array): boolean {
+  const flags = authData[32] ?? 0;
+  return (flags & (FLAG_UP | FLAG_UV)) === (FLAG_UP | FLAG_UV);
 }
 
 /** 패스키 서명. 패스키 번호가 없으면 이 기기의 아무 패스키나 고르게 한다(남의 등록증 주인 확인) */
