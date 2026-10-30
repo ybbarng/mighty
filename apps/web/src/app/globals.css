@@ -723,6 +723,22 @@ button {
   }
 }
 
+/* 보안 배우기 랑데부 해싱: 이사한 우주인이 몇 번 반짝인다(끝나도 흰 테두리는 남는다) */
+.sd-moved {
+  animation: sd-moved 0.5s ease-in-out 4 both;
+}
+@keyframes sd-moved {
+  50% {
+    box-shadow: 0 0 12px 3px rgba(255, 255, 255, 0.85);
+    transform: scale(1.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-moved {
+    animation: none;
+  }
+}
+
 /* 결과 봉투: 봉한 편지 */
 .sd-envelope {
   position: relative;

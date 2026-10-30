@@ -426,3 +426,56 @@ describe("실제 목록", () => {
     expect(homes.size).toBeGreaterThan(ARM_PLACES.length * 0.9);
   });
 });
+
+describe("고정 결과", () => {
+  // 목록을 여기 고정한다(실제 목록에 주소를 더해도 이 시험은 그대로다). 계산 방식이 바뀌면 요약값이 달라진다
+  const FIXED: AstronautLists = {
+    names: ["노을별", "새벽별", "은하수", "별똥별", "샛별"],
+    arm: [
+      { id: "mars", path: ["태양계", "화성"] },
+      { id: "jupiter/europa", path: ["태양계", "목성", "유로파"] },
+      EARTH,
+      TRAPPIST_E,
+    ],
+    galaxies: [M32, { id: "m31", path: ["국부은하군", "안드로메다은하"] }],
+    face: {
+      skin: [0, 1, 2, 3],
+      head: [0, 1, 2],
+      eyes: [0, 1, 2, 3, 4],
+      antenna: [0, 1],
+      mouth: [0, 1, 2],
+      marks: [0, 1, 2, 3],
+    },
+  };
+  it("고정 목록으로 계산한 등록증 300장의 요약값이 그대로다(바뀌면 모두의 등록증이 바뀐 것)", () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 300; i++) {
+      const a = astronautFromHash(sample(i), FIXED);
+      lines.push(
+        [a.number, a.name, a.placeId, a.egg, JSON.stringify(a.face)].join("|"),
+      );
+    }
+    const weighted = Array.from({ length: 300 }, (_, i) =>
+      pick2(sample(i)),
+    ).join(",");
+    expect(
+      toHexDigest(`${lines.join("\n")}\n${weighted}`),
+    ).toMatchInlineSnapshot(`"e4681792b290ffcac1181f15"`);
+  });
+});
+
+/** 가중치도 계산에 들어가는지: p1만 3배 */
+const pick2 = (seed: Uint8Array) =>
+  rendezvous(
+    seed,
+    "w",
+    items(4),
+    (p) => p.id,
+    (p) => (p.id === "p1" ? 3 : 1),
+  ).id;
+
+function toHexDigest(text: string): string {
+  return Array.from(sha256(utf8(text)).slice(0, 12), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}

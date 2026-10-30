@@ -128,8 +128,23 @@ function bytesOf(text: string): Uint8Array {
 }
 
 /**
- * 가중 랑데부 해싱(HRW). 항목마다 u = sha256(씨앗 ‖ 종류 ‖ 0 ‖ id)에서 만든 (0,1) 값,
- * 점수 = -가중치 / ln(u). 가장 높은 항목을 고른다. 가중치가 w인 항목이 뽑힐 확률은 w / (가중치 합)이다.
+ * 랑데부 해싱에서 항목 하나의 점수: u = sha256(씨앗 ‖ 종류 ‖ 0 ‖ id)에서 만든 (0,1) 값, 점수 = -가중치 / ln(u).
+ * 다른 항목과 상관없이 정해진다. 보안 배우기의 점수표도 이 함수를 쓴다
+ */
+export function rendezvousScore(
+  seed: Uint8Array,
+  kind: string,
+  id: string,
+  weight = 1,
+): number {
+  return (
+    -weight / Math.log(unit(sha256(seed, bytesOf(`${kind}\0`), bytesOf(id))))
+  );
+}
+
+/**
+ * 가중 랑데부 해싱(HRW). 항목마다 `rendezvousScore`를 매겨 가장 높은 항목을 고른다.
+ * 가중치가 w인 항목이 뽑힐 확률은 w / (가중치 합)이다.
  * `kind`가 다르면 같은 id라도 점수가 따로 나온다(얼굴 부위끼리 같은 번호가 함께 움직이지 않게).
  */
 export function rendezvous<T>(
@@ -142,14 +157,12 @@ export function rendezvous<T>(
   if (items.length === 0) throw new Error(`빈 목록: ${kind}`);
   // 하나뿐이면 점수를 셀 것도 없다(결과는 같다)
   if (items.length === 1) return items[0] as T;
-  const prefix = bytesOf(`${kind}\0`);
   let best = items[0] as T;
   let bestScore = -Infinity;
   for (const item of items) {
     const w = weightOf(item);
     if (!(w > 0)) continue;
-    const score =
-      -w / Math.log(unit(sha256(seed, prefix, bytesOf(idOf(item)))));
+    const score = rendezvousScore(seed, kind, idOf(item), w);
     if (score > bestScore) {
       bestScore = score;
       best = item;

@@ -144,3 +144,72 @@ test("보안 배우기: 데스크톱 배치", async ({ page }, info) => {
     fullPage: true,
   });
 });
+
+test("보안 배우기: 랑데부 해싱은 주소를 더해도 몇 명만 이사한다", async ({
+  page,
+}, info) => {
+  test.skip(
+    info.project.name !== "phone-portrait",
+    "휴대폰 세로 한 크기로 본다",
+  );
+  await page.goto("/stardraw/learn#rendezvous");
+  const compare = page.locator("[data-toy='rendezvous']");
+  await compare.getByRole("button", { name: "주소 하나 더하기" }).click();
+  // 고정 견본 48명: 나머지 방식은 대부분, 랑데부 해싱은 새 주소가 이긴 사람만 이사한다
+  await expect(verdict(page, "rendezvous-moves")).toHaveAttribute(
+    "data-ok",
+    "pass",
+  );
+  const moved = async (key: string) =>
+    Number(
+      (
+        await compare.locator(`[data-moved-count='${key}']`).textContent()
+      )?.match(/이사 (\d+)/)?.[1],
+    );
+  expect(await moved("mod")).toBeGreaterThan(24);
+  expect(await moved("hrw")).toBeLessThan(16);
+  expect(await compare.locator("[data-grid='hrw'] [data-moved]").count()).toBe(
+    await moved("hrw"),
+  );
+
+  // 점수표: 새 주소 막대가 생기고, 1등을 넘었는지로 이사가 정해진다
+  const score = page.locator("[data-toy='rendezvous-score']");
+  await expect(score.locator("[data-score-row='venus']")).toBeVisible();
+  await expect(verdict(page, "rendezvous-score")).toContainText("새 주소 금성");
+  await expect(score.locator("[data-top]")).toHaveCount(1);
+  await page.screenshot({
+    path: info.outputPath("rendezvous-compare-phone.png"),
+  });
+  await compare.screenshot({
+    path: info.outputPath("rendezvous-compare.png"),
+  });
+  await score.screenshot({ path: info.outputPath("rendezvous-score.png") });
+
+  // 이름만 고치면 아무도 안 움직이고, id를 바꾸면 그 주소 주민이 흩어진다
+  const edit = page.locator("[data-toy='rendezvous-edit']");
+  await edit.getByRole("button", { name: "이름만 고치기" }).click();
+  await expect(verdict(page, "rendezvous-edit")).toHaveAttribute(
+    "data-ok",
+    "pass",
+  );
+  await expect(edit.locator("[data-moved]")).toHaveCount(0);
+  await edit.getByRole("button", { name: "id 바꾸기" }).click();
+  await expect(verdict(page, "rendezvous-edit")).toHaveAttribute(
+    "data-ok",
+    "fail",
+  );
+  // 가중치 2배: 고정 견본 600명으로도 세어 보인다
+  await edit.getByRole("button", { name: "가중치 2배" }).click();
+  await expect(verdict(page, "rendezvous-edit")).toContainText("견본 600명");
+  await edit.getByRole("button", { name: "화성 빼기" }).click();
+  await expect(verdict(page, "rendezvous-edit")).toHaveAttribute(
+    "data-ok",
+    "pass",
+  );
+  await edit.screenshot({ path: info.outputPath("rendezvous-edit.png") });
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
