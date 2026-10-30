@@ -34,6 +34,8 @@ export function DrawView({
   clock = realClock,
   instant = false,
   label,
+  onReplay,
+  onNext,
 }: {
   record: RoundRecord;
   ticket?: Ticket | undefined;
@@ -43,6 +45,10 @@ export function DrawView({
   instant?: boolean | undefined;
   /** 보이는 회차 이름(서버 장부의 "시험 n회"·"정식 n회"). 없으면 "제 n회" */
   label?: string | undefined;
+  /** 결과를 보인 뒤 「다시 보기」(연출을 처음부터). 없으면 단추가 없다 */
+  onReplay?: (() => void) | undefined;
+  /** 결과를 보인 뒤 다음 회차 응모로(지금 응모할 수 있을 때만 넘긴다) */
+  onNext?: (() => void) | undefined;
 }) {
   const order = drawOrder(record);
   // 회차가 바뀔 때만 다시 계산한다(order는 record에서 정해진다)
@@ -175,14 +181,20 @@ export function DrawView({
             카노푸스 우주국 정시 추첨
           </span>
         </div>
-        <button
-          type="button"
-          disabled={done}
-          onClick={() => stopRef.current()}
-          className="text-sm text-white/60 hover:text-white disabled:invisible"
-        >
-          결과 바로 보기
-        </button>
+        {done ? (
+          // 결과가 나오면 단추를 없애고 자리만 둔다(숨긴 단추가 이름 없는 단추로 남지 않게)
+          <span aria-hidden="true" className="invisible text-sm">
+            결과 바로 보기
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => stopRef.current()}
+            className="text-sm text-white/60 hover:text-white"
+          >
+            결과 바로 보기
+          </button>
+        )}
       </div>
 
       {record.void ? (
@@ -318,6 +330,28 @@ export function DrawView({
                 <span className="text-sm text-white/75">
                   이 회차에는 응모하지 않았습니다
                 </span>
+              )}
+            </div>
+          )}
+          {done && (onNext || onReplay) && (
+            <div className="flex flex-col gap-2">
+              {onNext && (
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="sd-cta rounded-2xl py-3 font-bold text-slate-950"
+                >
+                  다음 회차 응모
+                </button>
+              )}
+              {onReplay && (
+                <button
+                  type="button"
+                  onClick={onReplay}
+                  className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
+                >
+                  추첨 다시 보기
+                </button>
               )}
             </div>
           )}

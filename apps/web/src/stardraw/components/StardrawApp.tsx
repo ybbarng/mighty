@@ -193,6 +193,17 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const receiptOf = (id: string) =>
     mine.find((m) => toHex(ticketId(m.ticket)) === id);
 
+  // 이미 응모한 회차의 응모판으로 들어오면(주소로 바로·뒤로가기) 빈 응모권 대신 그 영수증으로
+  const enteredNow =
+    view.name === "enter" && loaded && status?.phase === "open"
+      ? mine.find((m) => m.ticket.round === status.round)
+      : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 응모한 응모권이 정해질 때만 옮긴다
+  useEffect(() => {
+    if (enteredNow)
+      go({ name: "receipt", id: toHex(ticketId(enteredNow.ticket)) }, true);
+  }, [enteredNow]);
+
   return (
     <main
       data-game="stardraw"
@@ -238,20 +249,32 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
                 printing={printing === view.id}
                 onBack={() => back({ name: "home" })}
                 onDraw={(round) => go({ name: "draw", round })}
+                onMine={() => go({ name: "mine" })}
               />
             );
           })()
         ) : view.name === "draw" ? (
-          <DrawFor
-            services={services}
-            round={view.round}
-            mine={mine}
-            onClose={() => {
-              services.wallet.markOpened(view.round);
-              setOpened(services.wallet.openedRounds());
-              back({ name: "home" });
-            }}
-          />
+          // 이 기기에서 이미 본 회차인지(열어 본 회차 기록)를 읽은 뒤에 그린다: 본 회차는 연출 없이 결과부터
+          loaded && (
+            <DrawFor
+              services={services}
+              status={status}
+              round={view.round}
+              mine={mine}
+              seen={opened.has(view.round)}
+              onEnter={() => {
+                // 결과를 봤으니 첫 화면 봉투에서 빠진다
+                services.wallet.markOpened(view.round);
+                setOpened(services.wallet.openedRounds());
+                go({ name: "enter" });
+              }}
+              onClose={() => {
+                services.wallet.markOpened(view.round);
+                setOpened(services.wallet.openedRounds());
+                back({ name: "home" });
+              }}
+            />
+          )
         ) : view.name === "mine" ? (
           <MineView
             services={services}
@@ -573,6 +596,16 @@ function RoundCard({
             {formatLeft(s.times.entryDeadline - s.now)}
           </span>
         )}
+        {/* 결과를 열어 보지 않아도 지금 회차에 응모할 수 있게 */}
+        {!closed && !mine.some((m) => m.ticket.round === s.round) && (
+          <button
+            type="button"
+            onClick={onEnter}
+            className="sd-cta w-full max-w-xs rounded-2xl py-3 font-black text-lg text-slate-950"
+          >
+            별 6개 고르기
+          </button>
+        )}
       </section>
     );
   }
@@ -720,12 +753,14 @@ function ReceiptView({
   printing,
   onBack,
   onDraw,
+  onMine,
 }: {
   services: Services;
   mine: MyTicket;
   printing?: boolean | undefined;
   onBack: () => void;
   onDraw: (round: number) => void;
+  onMine: () => void;
 }) {
   const record = services.ledger.record(mine.ticket.round);
   return (
@@ -750,6 +785,13 @@ function ReceiptView({
         printing={printing}
       />
       <ShareTicket services={services} ticket={mine.ticket} />
+      <button
+        type="button"
+        onClick={onMine}
+        className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
+      >
+        내 응모
+      </button>
       {record && (
         <button
           type="button"
@@ -815,19 +857,35 @@ function ShareTicket({
 
 function DrawFor({
   services,
+  status,
   round,
   mine,
+  seen,
   onClose,
+  onEnter,
 }: {
   services: Services;
+  status: LedgerStatus;
   round: number;
   mine: MyTicket[];
+  /** 이 기기에서 이미 결과까지 본 회차면 연출 없이 결과부터(「추첨 다시 보기」로 다시 돈다) */
+  seen: boolean;
   onClose: () => void;
+  onEnter: () => void;
 }) {
   const record = services.ledger.record(round);
+  const [replays, setReplays] = useState(0);
   if (!record) return null;
+  const canEnter =
+    status.phase === "open" &&
+    status.round > round &&
+    !mine.some((m) => m.ticket.round === status.round);
   return (
     <DrawView
+      key={replays}
+      instant={seen && replays === 0}
+      onReplay={() => setReplays((n) => n + 1)}
+      onNext={canEnter ? onEnter : undefined}
       record={record}
       ticket={mine.find((m) => m.ticket.round === round)?.ticket}
       onClose={onClose}
