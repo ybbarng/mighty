@@ -8,6 +8,7 @@ export * from "./keys";
 export * from "./merkle";
 export * from "./nickname";
 export * from "./operations";
+export * from "./polite-fetch";
 export * from "./pow";
 export * from "./public-ledger";
 export * from "./receipt";

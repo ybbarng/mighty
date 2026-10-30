@@ -305,10 +305,13 @@ async function handle(
   send(res, 404, { error: "없는 주소입니다" });
 }
 
-/** 장부 파일. 닫힌 회차·봉인 파일은 바뀌지 않으므로 오래 캐시하고, head.json은 캐시하지 않는다 */
+/** 장부 파일. 닫힌 회차·봉인·묶음 파일은 바뀌지 않으므로 오래 캐시하고, head.json은 캐시하지 않는다 */
 function serveLedger(dir: string, rel: string, res: ServerResponse): void {
-  // genesis.json, head.json, rounds/000001.json, seals/000001.json 꼴만(위 폴더로 나가지 못하게)
-  if (!/^[a-z]+(\/[0-9]{6})?\.json$/.test(rel)) {
+  // genesis.json, head.json, rounds/000001.json, seals/000001.json, bundles/10/000001.json 꼴만(위 폴더로 나가지 못하게)
+  if (
+    !/^[a-z]+(\/[0-9]{6})?\.json$/.test(rel) &&
+    !/^bundles\/(10|100)\/[0-9]{6}\.json$/.test(rel)
+  ) {
     send(res, 404, { error: "없는 장부 파일입니다" });
     return;
   }
@@ -323,6 +326,7 @@ function serveLedger(dir: string, rel: string, res: ServerResponse): void {
   const immutable =
     rel.startsWith("rounds/") ||
     rel.startsWith("seals/") ||
+    rel.startsWith("bundles/") ||
     rel === "genesis.json";
   res.writeHead(200, {
     "content-type": "application/json; charset=utf-8",

@@ -6,10 +6,17 @@ import { drandRoundForClose } from "./drand";
 import { generateSigner } from "./keys";
 import { directorFingerprint, OP_VERSION, signAsSeal } from "./operations";
 import {
+  BUNDLE_SIZES,
+  bundleFilePath,
   checkPublicLedger,
   findTicket,
+  ledgerPieces,
+  loadPublicLedger,
+  loadRoundFiles,
   type PublicLedger,
   parseTicketQuery,
+  roundFilePath,
+  sealFilePath,
 } from "./public-ledger";
 import { encodeRecord, genesisHash, recordHash } from "./record";
 import { closeRound, sealDigest, sortTickets } from "./round";
@@ -382,5 +389,111 @@ describe("운영 기록이 실린 공개 장부(docs/36 11-12)", () => {
     const other = (await generateSigner()).publicKey;
     const { result } = await opsLedger(() => other);
     expect(statusOf(result.items)["seal-key"]).toBe("fail");
+  });
+});
+
+describe("장부 받기 — 묶음 파일과 낱개", () => {
+  // 회차 n의 파일(모양만 본다: 받는 순서·조각 나누기 시험)
+  const roundFile = (n: number) => ({
+    v: 1,
+    record: `r${n}`,
+    tickets: [],
+    registrations: [],
+  });
+  const sealFile = (n: number) => ({
+    v: 1,
+    round: n,
+    digest: `d${n}`,
+    loggedAt: n,
+  });
+  const bundle = (size: number, first: number) => ({
+    v: 1,
+    first,
+    size,
+    rounds: Array.from({ length: size }, (_, i) => roundFile(first + i)),
+    seals: Array.from({ length: size }, (_, i) => sealFile(first + i)),
+  });
+  /** rounds개 회차가 닫힌 서버. withBundles면 다 찬 묶음을 함께 낸다 */
+  function server(rounds: number, withBundles: boolean) {
+    const files = new Map<string, unknown>();
+    for (let n = 1; n <= rounds; n++) {
+      files.set(roundFilePath(n), roundFile(n));
+      files.set(sealFilePath(n), sealFile(n));
+    }
+    if (withBundles)
+      for (const size of BUNDLE_SIZES)
+        for (let first = 1; first + size - 1 <= rounds; first += size)
+          files.set(bundleFilePath(size, first), bundle(size, first));
+    const asked: string[] = [];
+    const f = (async (url: string) => {
+      asked.push(url);
+      const body = files.get(url);
+      return body === undefined
+        ? new Response("없음", { status: 404 })
+        : Response.json(body);
+    }) as unknown as typeof fetch;
+    return { f, asked, files };
+  }
+
+  it("큰 묶음부터 나누고, 맞지 않는 끝은 낱개로", () => {
+    expect(ledgerPieces(1, 123)).toEqual([
+      { first: 1, size: 100 },
+      { first: 101, size: 10 },
+      { first: 111, size: 10 },
+      { first: 121, size: 1 },
+      { first: 122, size: 1 },
+      { first: 123, size: 1 },
+    ]);
+    // 중간부터(화면이 새로 닫힌 회차만 받을 때)는 경계가 맞는 곳만 묶음
+    expect(ledgerPieces(5, 21).map((p) => p.size)).toEqual([
+      1, 1, 1, 1, 1, 1, 10, 1,
+    ]);
+    expect(ledgerPieces(3, 2)).toEqual([]);
+  });
+
+  it("묶음이 있으면 묶음으로 받아 요청 수가 줄고, 결과는 낱개와 같다", async () => {
+    const bundled = server(123, true);
+    const single = server(123, false);
+    const a = await loadRoundFiles("", bundled.f, 1, 123, { seals: true });
+    const b = await loadRoundFiles("", single.f, 1, 123, { seals: true });
+    expect(a).toEqual(b);
+    expect(a.map((x) => x.seal?.round)).toEqual(
+      Array.from({ length: 123 }, (_, i) => i + 1),
+    );
+    // 묶음 3개 + 낱개 3회차(회차·봉인 2개씩)
+    expect(bundled.asked).toHaveLength(9);
+    // 묶음을 내지 않는 서버: 묶음을 한 번씩 물어보고(404) 낱개로
+    expect(single.asked).toHaveLength(3 + 123 * 2);
+  });
+
+  it("화면처럼 봉인 없이 받으면 낱개는 회차 파일만 받는다", async () => {
+    const s = server(12, true);
+    const out = await loadRoundFiles("", s.f, 1, 12);
+    expect(out.map((x) => x.round.record)).toEqual(
+      Array.from({ length: 12 }, (_, i) => `r${i + 1}`),
+    );
+    expect(out.every((x) => x.seal === undefined)).toBe(true);
+    expect(s.asked.sort()).toEqual(
+      [bundleFilePath(10, 1), roundFilePath(11), roundFilePath(12)].sort(),
+    );
+  });
+
+  it("묶음의 모양이 틀리면(다른 구간) 멈춘다", async () => {
+    const s = server(10, true);
+    s.files.set(bundleFilePath(10, 1), bundle(10, 11));
+    await expect(loadRoundFiles("", s.f, 1, 10)).rejects.toThrow(
+      "모양이 맞지 않습니다",
+    );
+  });
+
+  it("서버가 계속 막으면 쉬운 말로 알린다", async () => {
+    const f = (async () =>
+      new Response("", {
+        status: 429,
+        headers: { "retry-after": "0" },
+      })) as unknown as typeof fetch;
+    await expect(loadPublicLedger("", f)).rejects.toThrow(
+      "/ledger/genesis.json를 받지 못했습니다. 서버가 요청이 많다며 잠시 막았습니다(429)",
+    );
   });
 });

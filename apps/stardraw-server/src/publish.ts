@@ -1,6 +1,13 @@
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
+  BUNDLE_SIZES,
   encodeRecord,
   encodeRegistration,
   encodeTicket,
@@ -19,6 +26,8 @@ import {
  *   head.json            닫힌 회차 수, 마지막 기록 해시, 봉인한 회차 수, 서버 공개 열쇠
  *   seals/000001.json    마감 직후 봉인 값과 투명성 로그 증거(drand 값보다 먼저 나온다)
  *   rounds/000001.json   회차 기록(고정 바이너리 base64url)과 응모권·열쇠 등록 목록(id 순)
+ *   bundles/10/000001.json, bundles/100/000001.json
+ *                        다 찬 10·100회차 구간의 회차·봉인 파일 묶음(받는 요청 수를 줄인다). 한 번 쓰면 바꾸지 않는다
  * 바이너리 형식은 규칙 패키지(@mighty/stardraw-core)가 정한다.
  */
 
@@ -43,6 +52,14 @@ export interface RoundFile {
   registrations: string[];
 }
 
+export interface BundleFile {
+  v: 1;
+  first: number;
+  size: number;
+  rounds: RoundFile[];
+  seals: SealFile[];
+}
+
 export interface GenesisFile {
   v: 1;
   schedule: Schedule;
@@ -60,6 +77,8 @@ export class Publisher {
   constructor(private readonly dir: string) {
     mkdirSync(join(dir, "rounds"), { recursive: true });
     mkdirSync(join(dir, "seals"), { recursive: true });
+    for (const size of BUNDLE_SIZES)
+      mkdirSync(join(dir, "bundles", String(size)), { recursive: true });
   }
 
   private write(path: string, value: unknown): void {
@@ -95,5 +114,29 @@ export class Publisher {
         toBase64Url(encodeRegistration(r)),
       ),
     } satisfies RoundFile);
+  }
+
+  /**
+   * 닫힌 회차가 rounds개일 때 다 찬 묶음 가운데 아직 없는 것을 쓴다(띄울 때 지난 구간도 채운다).
+   * 묶음은 이미 낸 회차·봉인 파일을 그대로 담는다. 있는 묶음은 다시 쓰지 않는다(바뀌지 않는 파일)
+   */
+  bundles(rounds: number): void {
+    for (const size of BUNDLE_SIZES)
+      for (let first = 1; first + size - 1 <= rounds; first += size) {
+        const path = `bundles/${size}/${pad(first)}.json`;
+        if (existsSync(join(this.dir, path))) continue;
+        const read = (kind: string, n: number) =>
+          JSON.parse(
+            readFileSync(join(this.dir, kind, `${pad(n)}.json`), "utf8"),
+          ) as unknown;
+        const range = Array.from({ length: size }, (_, i) => first + i);
+        this.write(path, {
+          v: 1,
+          first,
+          size,
+          rounds: range.map((n) => read("rounds", n)) as RoundFile[],
+          seals: range.map((n) => read("seals", n)) as SealFile[],
+        } satisfies BundleFile);
+      }
   }
 }

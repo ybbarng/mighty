@@ -179,6 +179,7 @@ export class StardrawServer {
       options.limits.argonQueue,
     );
     options.publisher.genesis(this.genesis);
+    this.publishBundles();
     this.publishHead();
   }
 
@@ -672,6 +673,7 @@ export class StardrawServer {
         );
       this.current = this.ops.schedule;
       this.o.publisher.round(record, tickets, registrations);
+      this.publishBundles();
       this.publishHead();
     }
   }
@@ -924,6 +926,17 @@ export class StardrawServer {
       wait.alerted = now;
       this.o.log?.(
         `${round}회차 drand 값을 ${Math.floor((now - wait.since) / 60)}분째 받지 못했다`,
+      );
+    }
+  }
+
+  /** 다 찬 10·100회차 묶음 파일(받는 요청 수 줄이기). 못 써도 낱개 파일이 있으니 회차는 그대로 닫는다 */
+  private publishBundles(): void {
+    try {
+      this.o.publisher.bundles(this.o.store.recordCount());
+    } catch (err) {
+      this.o.log?.(
+        `장부 묶음 파일을 쓰지 못했다: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

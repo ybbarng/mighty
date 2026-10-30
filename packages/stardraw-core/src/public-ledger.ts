@@ -14,6 +14,11 @@ import {
   type OperationsView,
   operationsView,
 } from "./operations";
+import {
+  fetchFailure,
+  type PoliteFetchOptions,
+  politeFetch,
+} from "./polite-fetch";
 import { decodeRecord, type RoundRecord } from "./record";
 import { decodeRegistration, type KeyRegistration } from "./registration";
 import { sealDigest } from "./round";
@@ -123,46 +128,168 @@ export interface PublicCheckOptions {
   onProgress?: (done: number, total: number) => void;
   /** 이미 받아 둔 장부(`loadPublicLedger`). 주면 다시 받지 않는다 */
   ledger?: PublicLedger;
+  /** 한꺼번에 받는 수·다시 받기(시험은 손으로 옮기는 시계를 넣는다) */
+  polite?: PoliteFetchOptions;
 }
 
 const pad = (n: number) => String(n).padStart(6, "0");
+
+/**
+ * 묶음 파일(docs/36 7절 「장부 받기」). 서버는 10회차·100회차가 다 닫히면 그 구간의 회차·봉인 파일을
+ * 한 파일로 묶어 함께 낸다(낱개 파일은 그대로 둔다). 끝난 묶음은 바뀌지 않아 오래 캐시된다.
+ * 받는 쪽은 맞는 묶음이 있으면 묶음으로, 없으면(옛 서버, 아직 덜 찬 구간) 낱개로 받는다.
+ */
+export const BUNDLE_SIZES = [100, 10] as const;
+
+export interface PublicBundleFile {
+  v: 1;
+  /** 묶음의 첫 회차(1, 11, 21… 또는 1, 101…) */
+  first: number;
+  size: number;
+  rounds: PublicRoundFile[];
+  seals: PublicSealFile[];
+}
+
+export const roundFilePath = (round: number) =>
+  `/ledger/rounds/${pad(round)}.json`;
+export const sealFilePath = (round: number) =>
+  `/ledger/seals/${pad(round)}.json`;
+export const bundleFilePath = (size: number, first: number) =>
+  `/ledger/bundles/${size}/${pad(first)}.json`;
+
+/** from~to 회차를 받을 조각: 큰 묶음부터, 맞지 않는 곳은 낱개(size 1) */
+export function ledgerPieces(
+  from: number,
+  to: number,
+): { first: number; size: number }[] {
+  const pieces: { first: number; size: number }[] = [];
+  let round = from;
+  while (round <= to) {
+    const size =
+      BUNDLE_SIZES.find((s) => (round - 1) % s === 0 && round + s - 1 <= to) ??
+      1;
+    pieces.push({ first: round, size });
+    round += size;
+  }
+  return pieces;
+}
+
+export interface LoadedRoundFile {
+  round: PublicRoundFile;
+  /** `seals: true`로 받았을 때만 */
+  seal?: PublicSealFile;
+}
+
+export interface LoadRoundsOptions {
+  /** 봉인 파일도 받는다(공개 장부 검사). 화면은 회차 파일만 쓴다 */
+  seals?: boolean;
+  onProgress?: ((done: number, total: number) => void) | undefined;
+  polite?: PoliteFetchOptions;
+}
+
+/**
+ * from~to 회차 파일을 받는다. 한꺼번에 몇 개만, 서버가 막으면 기다렸다 다시(`politeFetch`).
+ * 닫힌 회차 파일과 묶음은 바뀌지 않으므로 브라우저 캐시를 쓴다
+ */
+export async function loadRoundFiles(
+  base: string,
+  fetchFn: typeof fetch,
+  from: number,
+  to: number,
+  options: LoadRoundsOptions = {},
+): Promise<LoadedRoundFile[]> {
+  const f = politeFetch(fetchFn, options.polite);
+  const total = Math.max(0, to - from + 1);
+  const out: LoadedRoundFile[] = new Array(total);
+  let done = 0;
+  const finished = (n: number) => {
+    done += n;
+    options.onProgress?.(done, total);
+  };
+  const json = async <T>(path: string, what = path): Promise<T | null> => {
+    const res = await f(`${base}${path}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(fetchFailure(what, res.status));
+    return (await res.json()) as T;
+  };
+  const need = async <T>(path: string): Promise<T> => {
+    const body = await json<T>(path);
+    if (body === null) throw new Error(fetchFailure(path, 404));
+    return body;
+  };
+  const single = async (round: number) => {
+    const [file, seal] = await Promise.all([
+      need<PublicRoundFile>(roundFilePath(round)),
+      options.seals ? need<PublicSealFile>(sealFilePath(round)) : undefined,
+    ]);
+    out[round - from] = seal ? { round: file, seal } : { round: file };
+    finished(1);
+  };
+  const bundle = async (first: number, size: number) => {
+    const path = bundleFilePath(size, first);
+    const body = await json<PublicBundleFile>(path);
+    // 묶음을 내지 않는 서버(옛 판)면 낱개로
+    if (body === null) {
+      await Promise.all(
+        Array.from({ length: size }, (_, i) => single(first + i)),
+      );
+      return;
+    }
+    if (
+      body.first !== first ||
+      body.size !== size ||
+      body.rounds?.length !== size ||
+      body.seals?.length !== size ||
+      body.seals.some((s, i) => s.round !== first + i)
+    )
+      throw new Error(`${path}의 모양이 맞지 않습니다`);
+    for (let i = 0; i < size; i++) {
+      const round = body.rounds[i] as PublicRoundFile;
+      const seal = body.seals[i] as PublicSealFile;
+      out[first + i - from] = options.seals ? { round, seal } : { round };
+    }
+    finished(size);
+  };
+  await Promise.all(
+    ledgerPieces(from, to).map((p) =>
+      p.size === 1 ? single(p.first) : bundle(p.first, p.size),
+    ),
+  );
+  return out;
+}
 
 /** 공개 장부 파일을 처음부터 받아 푼다 */
 export async function loadPublicLedger(
   base: string,
   fetchFn: typeof fetch = (...args) => fetch(...args),
   onProgress?: (done: number, total: number) => void,
+  polite?: PoliteFetchOptions,
 ): Promise<PublicLedger> {
-  const get = async <T>(path: string): Promise<T> => {
-    const res = await fetchFn(`${base}${path}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`${path}를 받지 못했습니다(${res.status})`);
+  const f = politeFetch(fetchFn, polite);
+  const get = async <T>(path: string, init?: RequestInit): Promise<T> => {
+    const res = await f(`${base}${path}`, init);
+    if (!res.ok) throw new Error(fetchFailure(path, res.status));
     return (await res.json()) as T;
   };
   const genesis = await get<PublicGenesisFile>("/ledger/genesis.json");
-  const head = await get<PublicHeadFile>("/ledger/head.json");
-  const records: RoundRecord[] = [];
-  const tickets: Ticket[][] = [];
-  const registrations: KeyRegistration[][] = [];
-  const seals: PublicSealFile[] = [];
-  for (let round = 1; round <= head.rounds; round++) {
-    const file = await get<PublicRoundFile>(
-      `/ledger/rounds/${pad(round)}.json`,
-    );
-    records.push(decodeRecord(fromBase64Url(file.record)));
-    tickets.push(file.tickets.map((t) => decodeTicket(fromBase64Url(t))));
-    registrations.push(
-      file.registrations.map((r) => decodeRegistration(fromBase64Url(r))),
-    );
-    seals.push(await get<PublicSealFile>(`/ledger/seals/${pad(round)}.json`));
-    onProgress?.(round, head.rounds);
-  }
+  const head = await get<PublicHeadFile>("/ledger/head.json", {
+    cache: "no-store",
+  });
+  const files = await loadRoundFiles(base, f, 1, head.rounds, {
+    seals: true,
+    onProgress,
+  });
   return {
     genesis: genesis.schedule,
     head,
-    records,
-    tickets,
-    registrations,
-    seals,
+    records: files.map((x) => decodeRecord(fromBase64Url(x.round.record))),
+    tickets: files.map((x) =>
+      x.round.tickets.map((t) => decodeTicket(fromBase64Url(t))),
+    ),
+    registrations: files.map((x) =>
+      x.round.registrations.map((r) => decodeRegistration(fromBase64Url(r))),
+    ),
+    seals: files.map((x) => x.seal as PublicSealFile),
   };
 }
 
@@ -248,7 +375,10 @@ export const problemText = (p: Problem) =>
 export async function checkPublicLedger(
   options: PublicCheckOptions,
 ): Promise<CheckResult & { ledger: PublicLedger }> {
-  const f = options.fetch ?? ((...args) => fetch(...args));
+  const f = politeFetch(
+    options.fetch ?? ((...args) => fetch(...args)),
+    options.polite,
+  );
   const anchorRepo =
     options.anchorRepo === undefined
       ? STARDRAW_ANCHOR_REPO

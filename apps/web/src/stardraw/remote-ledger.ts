@@ -8,13 +8,16 @@ import {
   encodeRegistration,
   encodeRegistrationProof,
   encodeTicket,
+  fetchFailure,
   fromBase64Url,
   fromHex,
   genesisHash,
   type KeyRegistration,
+  loadRoundFiles,
   POW_PARAMS,
   type PowParams,
   phaseOf,
+  politeFetch,
   type RoundRecord,
   roundAt,
   roundTimes,
@@ -36,7 +39,10 @@ import type { LedgerPhase, LedgerStatus } from "./local-ledger";
 /**
  * 서버 장부(docs/36 11-5 3번). 같은 출처 `/stardraw-api`(apps/stardraw-server)를 부른다.
  * - 상태(`/api/state`)는 10초마다, 추첨 시각 무렵에는 3초마다 묻는다(1초마다 부르는 화면이 서버를 두드리지 않게)
- * - 닫힌 회차 파일(`/ledger/rounds/…`)은 바뀌지 않으므로 한 번만 받는다
+ * - 닫힌 회차 파일(`/ledger/rounds/…`)은 바뀌지 않으므로 한 번만, 브라우저 캐시로 받는다.
+ *   처음 열 때는 다 찬 묶음 파일(10·100회차)로 받아 요청이 몇 개뿐이다(docs/36 7절 「장부 받기」)
+ * - 읽기(GET)는 한꺼번에 4개까지, 서버가 막으면(429·503) 기다렸다 다시 받는다. 응모·등록(POST)은
+ *   서버가 상한으로 거절한 것일 수 있어 다시 보내지 않는다
  * - 기기 시계가 틀려도 되게 서버 시각과의 차이를 재 둔다(마감은 서버가 받은 시각으로 정한다)
  * 장부 검사는 받은 파일만으로 처음부터 다시 한다(drand 서명도 실제로 확인한다).
  */
@@ -84,9 +90,12 @@ export class RemoteLedger implements Ledger {
   private registeredAt = new Map<string, number>();
   private busy: Promise<unknown> = Promise.resolve();
   private readonly f: typeof fetch;
+  /** 읽기 전용(GET): 한꺼번에 받는 수를 묶고 429·503이면 기다렸다 다시 */
+  private readonly read: typeof fetch;
 
   constructor(private readonly o: RemoteLedgerOptions) {
     this.f = o.fetch ?? ((...args) => fetch(...args));
+    this.read = politeFetch(this.f);
     this.powParams = o.powParams ?? POW_PARAMS;
   }
 
@@ -121,9 +130,12 @@ export class RemoteLedger implements Ledger {
     return fromHex(this.state.head);
   }
 
-  private async get<T>(path: string): Promise<T> {
-    const res = await this.f(`${this.o.base}${path}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`장부를 받지 못했습니다(${res.status})`);
+  private async get<T>(
+    path: string,
+    init: RequestInit = { cache: "no-store" },
+  ): Promise<T> {
+    const res = await this.read(`${this.o.base}${path}`, init);
+    if (!res.ok) throw new Error(fetchFailure("장부", res.status));
     return (await res.json()) as T;
   }
 
@@ -135,7 +147,11 @@ export class RemoteLedger implements Ledger {
 
   private async settleNow(force: boolean): Promise<void> {
     if (!this.genesis) {
-      const g = await this.get<{ schedule: Schedule }>("/ledger/genesis.json");
+      // 처음 일정표는 바뀌지 않는다(캐시)
+      const g = await this.get<{ schedule: Schedule }>(
+        "/ledger/genesis.json",
+        {},
+      );
       this.genesis = g.schedule;
     }
     const local = Math.floor(this.o.clock.now() / 1000);
@@ -146,14 +162,14 @@ export class RemoteLedger implements Ledger {
       this.lastState = local;
       this.offset = this.state.now - local;
     }
-    // 닫힌 회차 파일을 차례로 받는다
-    while (this.records.length < this.state.records) {
-      const round = this.records.length + 1;
-      const file = await this.get<{
-        record: string;
-        tickets: string[];
-        registrations: string[];
-      }>(`/ledger/rounds/${String(round).padStart(6, "0")}.json`);
+    // 새로 닫힌 회차 파일(맞는 묶음이 있으면 묶음으로)
+    const from = this.records.length + 1;
+    const files =
+      this.state.records >= from
+        ? await loadRoundFiles(this.o.base, this.read, from, this.state.records)
+        : [];
+    for (const [i, { round: file }] of files.entries()) {
+      const round = from + i;
       this.records.push(decodeRecord(fromBase64Url(file.record)));
       this.tickets.push(
         file.tickets.map((t) => decodeTicket(fromBase64Url(t))),
@@ -217,7 +233,7 @@ export class RemoteLedger implements Ledger {
   }
 
   async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {
-    const res = await this.f(
+    const res = await this.read(
       `${this.o.base}/api/passkeys/${toBase64Url(credentialId)}`,
       { cache: "no-store" },
     );
