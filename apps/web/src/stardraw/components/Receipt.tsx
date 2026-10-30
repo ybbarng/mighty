@@ -11,6 +11,7 @@ import {
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
+import { useState } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -42,6 +43,7 @@ export function Receipt({
   const drawAt = drandTime(drandRoundForClose(times.closesAt));
   const id = toHex(ticketId(ticket));
   const rank: Rank | null = record ? myRank(record, ticket) : null;
+  const [aboutId, setAboutId] = useState(false);
   return (
     <article
       aria-label={`${ticket.round}회 응모권`}
@@ -70,10 +72,27 @@ export function Receipt({
         <dd className="text-right">{formatTime(drawAt)}</dd>
         <dt className="text-slate-400">응모</dt>
         <dd className="text-right">{formatTime(receivedAt)}</dd>
-        <dt className="text-slate-400">번호</dt>
+        <dt className="flex items-center gap-1 text-slate-400">
+          일련번호
+          <button
+            type="button"
+            aria-expanded={aboutId}
+            aria-label="일련번호가 뭔가요?"
+            onClick={() => setAboutId((v) => !v)}
+            className="grid size-4 place-items-center rounded-full border border-slate-500 text-[10px] leading-none hover:text-slate-200"
+          >
+            i
+          </button>
+        </dt>
         <dd className="text-right" data-ticket-id>
           {shortId(id)}
         </dd>
+        {aboutId && (
+          <p className="col-span-2 break-keep font-sans text-[11px] text-slate-400 leading-snug">
+            공개 장부에서 내 응모권을 찾는 번호예요. 남에게 보여 줘도 당첨을
+            가져갈 수는 없어요.
+          </p>
+        )}
         {ticket.sig.kind === "webauthn" && (
           <>
             <dt className="text-slate-400">서명</dt>
@@ -90,6 +109,7 @@ export function Receipt({
 
       <Cut />
 
+      <SectionTitle>내 별</SectionTitle>
       <div className="rounded-lg bg-[#0b1322] p-1.5">
         <SkyBoard
           state={{
@@ -104,7 +124,8 @@ export function Receipt({
         />
       </div>
 
-      <ol className="mt-4 flex flex-col gap-2.5">
+      <SectionTitle className="mt-5">별 설명</SectionTitle>
+      <ol className="flex flex-col gap-2.5">
         {ticket.numbers.map((n) => {
           const s = starOf(n);
           const hit =
@@ -149,6 +170,21 @@ export function Receipt({
         당첨 확인은 응모한 열쇠(패스키)로만 할 수 있습니다.
       </p>
     </article>
+  );
+}
+
+/** 영수증 칸 머리말: 위쪽 항목 이름(회차·추첨)처럼 작고 흐리게 */
+function SectionTitle({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <h3 className={cn("mb-2 text-[13px] text-slate-400", className)}>
+      {children}
+    </h3>
   );
 }
 
