@@ -237,7 +237,7 @@ export function DrawView({
                     </span>
                     <span className="text-sm text-white/65">
                       맞은 별 {mine.filter((n) => main.includes(n)).length}개.
-                      로또 1등은 맨눈 별 하나 맞히기보다 약 900배 어렵습니다
+                      로또 1등은 눈에 보이는 별 하나 맞히기보다 약 900배 어렵습니다
                     </span>
                   </>
                 )

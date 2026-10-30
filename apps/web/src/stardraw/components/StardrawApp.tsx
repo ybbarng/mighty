@@ -403,7 +403,7 @@ function Home({
   );
 }
 
-/** 로또 1등과 맨눈 별 하나 맞히기 확률 비교 */
+/** 로또 1등과 눈에 보이는 별 하나 맞히기 확률 비교 */
 function Odds() {
   return (
     <section
@@ -411,11 +411,11 @@ function Odds() {
       className="sd-glass grid grid-cols-2 gap-px overflow-hidden rounded-2xl"
     >
       <div className="flex flex-col gap-1 p-4">
-        <span className="text-white/60 text-xs">맨눈 별 하나 맞히기</span>
+        <span className="text-white/60 text-xs">눈에 보이는 별 하나 맞히기</span>
         <span className="font-mono font-bold text-2xl tabular-nums">
           1/9,000
         </span>
-        <span className="text-white/55 text-xs">온 하늘 맨눈 별 약 9천 개</span>
+        <span className="text-white/55 text-xs">눈에 보이는 별 약 9천 개</span>
       </div>
       <div className="flex flex-col gap-1 p-4">
         <span className="text-white/60 text-xs">로또 1등</span>
