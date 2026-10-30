@@ -397,7 +397,7 @@ const FIRST_HEAD = recordHash(freshChain().records[4] as RoundRecord);
 export function ChainToy() {
   const [chain, setChain] = useState<ChainState>(freshChain);
   const [check, setCheck] = useState<ChainCheck | null>(null);
-  const [liveFrom, setLiveFrom] = useState(30);
+  const [liveFrom, setLiveFrom] = useState(12);
 
   useEffect(() => {
     let live = true;
@@ -425,11 +425,8 @@ export function ChainToy() {
   const problem = change
     ? checkScheduleChange(chain.genesis, change, decided)
     : "일정표 없음";
-  const hours = change
-    ? (roundTimes(chain.genesis, liveFrom).opensAt -
-        roundTimes(chain.genesis, decided).closesAt) /
-      3600
-    : 0;
+  // 결정한 회차와 효력 회차 사이에 장부에 보이는 회차 수(decided+1은 이미 응모받는 중)
+  const notice = Math.max(0, liveFrom - decided - 1);
   const changed =
     change && !problem
       ? { ...chain.genesis, entries: [...chain.genesis.entries, change] }
@@ -550,8 +547,8 @@ export function ChainToy() {
       </Verdict>
       <div className="flex flex-col gap-1.5 border-white/10 border-t pt-3">
         <span className="text-white/70 text-xs">
-          일정 바꾸기(예: 정식 시작)는 회차 기록에 한 줄을 넣고, 그 기록 마감 +
-          24시간 뒤에 시작하는 회차부터만 됩니다. 지금 {decided}회 기록에
+          일정 바꾸기(예: 정식 시작)는 회차 기록에 한 줄을 넣고, 그 뒤 3회차
+          동안 장부에 보인 다음 회차부터만 됩니다. 지금 {decided}회 기록에
           넣는다면:
         </span>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -560,7 +557,7 @@ export function ChainToy() {
           </Btn>
           <Mono>{liveFrom}회부터 정식</Mono>
           <Btn onClick={() => setLiveFrom(liveFrom + 1)}>+</Btn>
-          <span className="text-white/50 text-xs">결정 뒤 {hours}시간</span>
+          <span className="text-white/50 text-xs">예고 {notice}회차</span>
         </div>
         <Verdict ok={!problem} testId="chain-schedule">
           {problem

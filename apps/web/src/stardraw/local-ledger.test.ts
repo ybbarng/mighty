@@ -285,7 +285,7 @@ describe("무작위 번호", () => {
 });
 
 describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
-  it("서버 설정에 넣기 → 하루 뒤 국장 → 시험 소속 추가 → 하루 뒤 적용, 국장 아닌 패스키는 거절, 장부 검사 통과", async () => {
+  it("서버 설정에 넣기 → 3회차 예고 뒤 국장 → 시험 소속 추가 → 예고 뒤 적용, 국장 아닌 패스키는 거절, 장부 검사 통과", async () => {
     const store = memoryStore();
     const { ledger } = setup(store);
     const director = await passkey();
@@ -300,7 +300,7 @@ describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
         signer: "seal",
         status: "pending",
         round: 1,
-        effectiveRound: 26,
+        effectiveRound: 5,
       },
     ]);
     const body = (s: typeof state, effectiveRound: number): OpBody => ({
@@ -325,7 +325,7 @@ describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
         ),
       ),
     ).rejects.toThrow(/국장 열쇠가 아닙니다/);
-    await ledger.skipRounds(25);
+    await ledger.skipRounds(5);
     state = await ledger.directorState();
     expect(state.view.directors).toHaveLength(1);
     const stranger = await passkey();
@@ -345,7 +345,7 @@ describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
     );
     await ledger.skipToNextDraw();
     expect((await ledger.directorState()).view.affiliations).toEqual([]);
-    await ledger.skipRounds(25);
+    await ledger.skipRounds(5);
     state = await ledger.directorState();
     expect(state.view.affiliations).toMatchObject([
       { name: "시험 성단", badgeName: "성단" },

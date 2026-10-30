@@ -742,7 +742,7 @@ export class LocalLedger implements Ledger {
     return { id, round, effectiveRound: op.effectiveRound };
   }
 
-  /** 데모용: n회차만큼 시간을 건너뛰고 추첨한다(「하루 건너뛰기」는 24회차 + 1) */
+  /** 데모용: n회차만큼 시간을 건너뛰고 추첨한다(「예고 건너뛰기」는 5회차) */
   async skipRounds(n: number): Promise<void> {
     await this.settle();
     const target = this.status().nextDrawAt + (n - 1) * PRACTICE_LENGTH + 1;

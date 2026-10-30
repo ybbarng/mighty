@@ -2,7 +2,7 @@ import { expect, type Page, test } from "./test";
 
 /**
  * 우주국장 관리 화면(docs/36 11-12).
- * - 데모 국장 모드: 흉내 패스키로 국장 패스키 만들기 → 서버 설정에 넣기 → 하루 건너뛰기 → 시험 소속 추가 → 하루 건너뛰기로 적용.
+ * - 데모 국장 모드: 흉내 패스키로 국장 패스키 만들기 → 서버 설정에 넣기 → 예고 건너뛰기 → 시험 소속 추가 → 예고 건너뛰기로 적용.
  *   국장 아닌 패스키는 거절된다. 기기 안 연습 장부가 서버와 같은 규칙(core)으로 확인한다.
  * - 실제 관리 화면(/stardraw/admin): 서버 API는 흉내 응답, 패스키는 Chrome 가상 인증기.
  */
@@ -46,8 +46,8 @@ test("데모 국장 모드: 국장이 되어 시험 소속을 추가하고, 국�
 
   await console.getByRole("button", { name: "서버 설정에 넣기(데모)" }).click();
   await expect(message(page)).toHaveAttribute("data-director-message", "ok");
-  await console.getByRole("button", { name: "하루 건너뛰기" }).click();
-  await expect(message(page)).toContainText("하루(25회차)를 건너뛰었습니다", {
+  await console.getByRole("button", { name: "예고 건너뛰기" }).click();
+  await expect(message(page)).toContainText("5회차를 건너뛰었습니다", {
     timeout: 60_000,
   });
   await expect(console.locator("[data-director-keys]")).toContainText(
@@ -69,8 +69,8 @@ test("데모 국장 모드: 국장이 되어 시험 소속을 추가하고, 국�
   await expect(console.locator("[data-director-submitted]")).toContainText(
     "소속 추가",
   );
-  await console.getByRole("button", { name: "하루 건너뛰기" }).click();
-  await expect(message(page)).toContainText("하루(25회차)를 건너뛰었습니다", {
+  await console.getByRole("button", { name: "예고 건너뛰기" }).click();
+  await expect(message(page)).toContainText("5회차를 건너뛰었습니다", {
     timeout: 60_000,
   });
   await expect(console.locator("[data-director-affiliations]")).toContainText(

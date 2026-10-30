@@ -30,7 +30,7 @@ import {
 
 /**
  * 우주국장 관리 화면(docs/36 11-12). 실제(/stardraw/admin)와 데모 국장 모드가 같이 쓴다.
- * 국장도 장부에 남는 기록으로만 일한다: 서명한 요청은 다음 기록에 실리고 24시간 뒤에 효력이 생긴다.
+ * 국장도 장부에 남는 기록으로만 일한다: 서명한 요청은 다음 기록에 실리고 3회차 예고 뒤에 효력이 생긴다.
  */
 
 const STATUS_LABEL = {
@@ -57,8 +57,8 @@ export interface DirectorConsoleProps {
   onInstall?: (config: string) => Promise<void>;
   /** 데모: 국장 아닌 패스키로 서명해 본다 */
   signAsStranger?: (body: OpBody) => Promise<Operation>;
-  /** 데모: 하루(25회차) 건너뛰기 */
-  onSkipDay?: () => Promise<void>;
+  /** 데모: 예고 기간(5회차) 건너뛰기 */
+  onSkipNotice?: () => Promise<void>;
   /** 장부가 바뀌면 오른다(데모의 다른 단추가 시간을 옮겼을 때 다시 읽게) */
   version?: number;
 }
@@ -68,7 +68,7 @@ export function DirectorConsole({
   keyring,
   onInstall,
   signAsStranger,
-  onSkipDay,
+  onSkipNotice,
   version = 0,
 }: DirectorConsoleProps) {
   const [state, setState] = useState<DirectorState | null>(null);
@@ -165,19 +165,19 @@ export function DirectorConsole({
           {`${roundShort(schedule, earliest)}(${at(view.next.earliestEffectiveAt)})부터`}{" "}
           효력이 생깁니다. 그사이 누구나 볼 수 있고, 국장은 취소할 수 있습니다.
         </p>
-        {onSkipDay && (
+        {onSkipNotice && (
           <button
             type="button"
             disabled={busy}
             onClick={() =>
               void act(async () => {
-                await onSkipDay();
-                return "하루(25회차)를 건너뛰었습니다";
+                await onSkipNotice();
+                return "5회차를 건너뛰었습니다";
               })
             }
             className="self-start rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-50 hover:bg-amber-200/15 disabled:opacity-40"
           >
-            하루 건너뛰기
+            예고 건너뛰기
           </button>
         )}
       </section>
@@ -610,7 +610,7 @@ type Fields = {
   issued: number;
 };
 
-/** 정식 시작 예약: 정각 추첨이 되는 x:55 시작 회차만 고를 수 있다(24시간 예고 뒤) */
+/** 정식 시작 예약: 정각 추첨이 되는 x:55 시작 회차만 고를 수 있다(3회차 예고 뒤) */
 function LiveStart({
   state,
   busy,
@@ -642,7 +642,7 @@ function LiveStart({
         <>
           <p className="break-keep text-sm text-white/70">
             정식 단계는 {scheduleLine(3600)}입니다. 첫 회차는 x:55에 열려야
-            하고, 이 요청이 실리는 기록의 마감에서 24시간 뒤부터 고를 수
+            하고, 이 요청이 실리는 기록 뒤 3회차 예고가 지난 회차부터 고를 수
             있습니다. 효력이 생기기 전까지는 취소할 수 있습니다.
           </p>
           <label className="flex flex-col gap-1 text-sm sm:max-w-sm">

@@ -435,8 +435,8 @@ export function StardrawDemo() {
               <p className="break-keep text-sm text-white/70">
                 카노푸스 우주국장이 되어 봅니다. 국장 패스키를 만들고 「서버
                 설정에 넣기」를 누르면 다음 기록에 우주국 관인이 국장 열쇠
-                지정을 싣습니다. 하루를 건너뛰어 국장이 된 뒤 시험 소속을
-                추가하고, 다시 하루를 건너뛰어 적용을 확인하세요. 국장 아닌
+                지정을 싣습니다. 예고를 건너뛰어 국장이 된 뒤 시험 소속을
+                추가하고, 다시 예고를 건너뛰어 적용을 확인하세요. 국장 아닌
                 패스키의 서명은 거절됩니다.
               </p>
               {director && (
@@ -450,8 +450,8 @@ export function StardrawDemo() {
                     practiceOf(services).designateDirector(config);
                     await refresh();
                   }}
-                  onSkipDay={async () => {
-                    await practiceOf(services).skipRounds(25);
+                  onSkipNotice={async () => {
+                    await practiceOf(services).skipRounds(5);
                     await refresh();
                   }}
                   version={version}

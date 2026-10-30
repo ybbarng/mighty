@@ -245,7 +245,7 @@ describe("공격해 보기", () => {
     );
     const now = (await run("op-director-now")).caught;
     expect(now).toContainEqual(
-      expect.stringMatching(/^2회차: 운영 기록 .*24시간 예고가 모자란다/),
+      expect.stringMatching(/^2회차: 운영 기록 .*예고가 모자란다/),
     );
   });
 });

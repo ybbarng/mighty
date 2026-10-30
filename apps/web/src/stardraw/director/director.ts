@@ -24,7 +24,7 @@ import { hasUserVerification, sitePolicy } from "../wallet";
  * 우주국장 관리 화면의 바탕(docs/36 11-12).
  * - 장부 쪽(`DirectorBackend`): 실제는 서버 API, 데모는 기기 안 연습 장부. 둘 다 같은 상태 모양을 준다.
  * - 열쇠 쪽(`DirectorKeyring`): 실제는 국장 패스키(WebAuthn, 우주인 패스키와 다른 패스키), 데모는 흉내 패스키.
- * 이 화면에서 패스키를 만든다고 국장이 되지 않는다. 장부에 "국장 열쇠 지정"이 실리고 24시간이 지나야 서명이 통한다.
+ * 이 화면에서 패스키를 만든다고 국장이 되지 않는다. 장부에 "국장 열쇠 지정"이 실리고 3회차 예고가 지나야 서명이 통한다.
  */
 
 export type { DirectorState };
@@ -214,7 +214,7 @@ export function passkeyKeyring(
         );
         throw new NotDirectorError(
           mine
-            ? "이 패스키는 아직 국장 열쇠가 아닙니다. 우주국이 장부에 지정하고 24시간이 지나야 서명할 수 있습니다"
+            ? "이 패스키는 아직 국장 열쇠가 아닙니다. 우주국이 장부에 지정하고 3회차가 지나야 서명할 수 있습니다"
             : "고른 패스키는 국장 열쇠가 아닙니다(우주인 패스키이거나 지정되지 않은 패스키)",
         );
       }
@@ -320,7 +320,7 @@ export function demoKeyring(
       const id = toBase64Url(softCredentialId(signer.publicKey));
       if (!directors.some((d) => d.until === null && d.credentialId === id))
         throw new NotDirectorError(
-          "이 패스키는 아직 국장 열쇠가 아닙니다. 지정 기록이 실리고 24시간이 지나야 합니다",
+          "이 패스키는 아직 국장 열쇠가 아닙니다. 지정 기록이 실리고 3회차가 지나야 합니다",
         );
       return signAsDirector(
         body,
