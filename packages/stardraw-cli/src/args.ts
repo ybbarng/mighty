@@ -3,10 +3,20 @@
 export const DEFAULT_API = "https://game.byb.kr/stardraw-api";
 export const DEFAULT_SITE = "https://game.byb.kr";
 
+/** 장부를 받을 곳: 앵커 저장소(GitHub raw), 우리 서버, 앵커 저장소를 받아 둔(git clone) 폴더 */
+export type LedgerSource =
+  | { kind: "github" }
+  | { kind: "server" }
+  | { kind: "folder"; path: string };
+
 export type Command =
   | {
       kind: "ledger";
+      /** 우리 서버 주소(원천이 server일 때, 그리고 아직 앵커에 오르지 않은 회차 세기·대조에 쓴다) */
       base: string;
+      source: LedgerSource;
+      /** 두 원천(서버와 앵커 저장소)을 받아 겹치는 회차가 같은지 대조 */
+      compare: boolean;
       tickets: string[];
       powSample: number;
       anchorRepo: string | null | undefined;
@@ -27,7 +37,10 @@ export const USAGE = `stardraw-verify — 하늘의 별 따기 독립 검사기
 
 서버나 우리 화면을 거치지 않고, 공개 장부 전체와 사이트 화면 코드를 내 컴퓨터에서 검사합니다.
 
-  stardraw-verify [ledger] [서버 주소]        공개 장부 전체 검사(기본 ${DEFAULT_API})
+  stardraw-verify [ledger] [서버 주소]        공개 장부 전체 검사(서버 기본 ${DEFAULT_API})
+      --source <github|server|폴더>  장부를 받을 곳(기본 github: 앵커 저장소의 장부 사본).
+                               폴더는 앵커 저장소를 git clone 받은 곳
+      --compare                서버와 앵커 저장소 사본이 겹치는 회차에서 같은지 대조
       --ticket <회차-일련번호>   내 응모권 확인(여러 번 줄 수 있음). 일련번호는 영수증 앞 12자리면 됩니다.
                                공유 주소(…/stardraw/ticket#12-…)를 그대로 넣어도 됩니다
       --pow-sample <n>         회차마다 작업 증명을 계산할 표본 수(기본 8). 내 응모권·당첨은 늘 전부
@@ -55,6 +68,8 @@ export function parseArgs(argv: readonly string[]): Command {
   const positional: string[] = [];
   const tickets: string[] = [];
   let powSample = 8;
+  let source: LedgerSource = { kind: "github" };
+  let compare = false;
   let anchorRepo: string | null | undefined;
   let json = false;
   let hashes: string | undefined;
@@ -88,6 +103,19 @@ export function parseArgs(argv: readonly string[]): Command {
         powSample = n;
         break;
       }
+      case "--source": {
+        only("ledger");
+        const v = value(a);
+        source =
+          v === "github" || v === "server"
+            ? { kind: v }
+            : { kind: "folder", path: v };
+        break;
+      }
+      case "--compare":
+        only("ledger");
+        compare = true;
+        break;
       case "--pow-all":
         only("ledger");
         powSample = Number.POSITIVE_INFINITY;
@@ -128,6 +156,8 @@ export function parseArgs(argv: readonly string[]): Command {
     return {
       kind,
       base: trim(positional[0] ?? DEFAULT_API),
+      source,
+      compare,
       tickets,
       powSample,
       anchorRepo,

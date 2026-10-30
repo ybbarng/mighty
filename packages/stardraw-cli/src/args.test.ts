@@ -7,6 +7,8 @@ describe("명령줄", () => {
     expect(parseArgs([])).toEqual({
       kind: "ledger",
       base: DEFAULT_API,
+      source: { kind: "github" },
+      compare: false,
       tickets: [],
       powSample: 8,
       anchorRepo: undefined,
@@ -29,11 +31,26 @@ describe("명령줄", () => {
     ).toEqual({
       kind: "ledger",
       base: "https://game.byb.kr/stardraw-api",
+      source: { kind: "github" },
+      compare: false,
       tickets: ["1-abcd ef01 2345", "2-0011223344"],
       powSample: Number.POSITIVE_INFINITY,
       anchorRepo: null,
       json: true,
     });
+  });
+
+  it("장부를 받을 곳: github(기본)·server·받아 둔 폴더, 두 원천 대조", () => {
+    expect(parseArgs(["--source", "server"])).toMatchObject({
+      source: { kind: "server" },
+    });
+    expect(
+      parseArgs(["--source", "../stardraw-ledger", "--compare"]),
+    ).toMatchObject({
+      source: { kind: "folder", path: "../stardraw-ledger" },
+      compare: true,
+    });
+    expect(() => parseArgs(["site", "--compare"])).toThrow(/ledger 명령/);
   });
 
   it("site 명령: 기본 사이트, 해시 목록·내 빌드 폴더", () => {

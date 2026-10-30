@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import {
   checkPublicLedger,
+  fetchFailure,
   findTicket,
   loadPublicLedger,
+  type PublicLedger,
   parseTicketQuery,
   ticketIdFromHex,
 } from "@mighty/stardraw-core";
@@ -21,6 +23,7 @@ import {
   type TreeDiff,
   treeDigest,
 } from "./site";
+import { compareLedgers, type ResolvedSource, resolveSource } from "./source";
 
 /**
  * 하늘의 별 따기 독립 검사기(docs/36 7절, 11-8). 규칙 코드는 화면과 같은 @mighty/stardraw-core지만,
@@ -64,12 +67,23 @@ async function runLedger(
       );
     return { text, q };
   });
+  const source = await resolveSource(
+    cmd.source,
+    cmd.base,
+    cmd.anchorRepo,
+    io.fetch,
+  );
   // 장부를 한 번 받아 내 응모권을 찾고, 찾은 응모권은 작업 증명까지 전부 계산하게 검사에 넘긴다
   const ledger = await loadPublicLedger(
-    cmd.base,
-    io.fetch,
+    source.base,
+    source.fetch,
     cmd.json ? undefined : io.progress?.("장부 받는 중"),
   );
+  const pending =
+    source.kind === "server" ? null : await pendingRounds(cmd.base, ledger, io);
+  const compared = cmd.compare
+    ? await compareSources(cmd, source, ledger, io)
+    : null;
   const findings = queries.map(({ text, q }) => ({
     query: text,
     finding: findTicket(ledger, q),
@@ -78,7 +92,7 @@ async function runLedger(
     finding.found ? [ticketIdFromHex(finding.id) as Uint8Array] : [],
   );
   const result = await checkPublicLedger({
-    base: cmd.base,
+    base: source.base,
     ledger,
     fetch: io.fetch,
     powSample: cmd.powSample,
@@ -87,13 +101,18 @@ async function runLedger(
   });
   const failed =
     result.items.some((i) => i.status === "fail") ||
-    findings.some((f) => !f.finding.found || !f.finding.included);
+    findings.some((f) => !f.finding.found || !f.finding.included) ||
+    (compared !== null &&
+      ("error" in compared || compared.differences.length > 0));
   if (cmd.json) {
     const { ledger: _, ...rest } = result;
     io.print(
       JSON.stringify(
         {
-          base: cmd.base,
+          base: source.base,
+          from: { kind: source.kind, label: source.label },
+          pending,
+          compare: compared,
           ...rest,
           mine: findings.map(({ query, finding }) =>
             finding.found
@@ -115,8 +134,111 @@ async function runLedger(
         2,
       ),
     );
-  } else io.print(ledgerReport(cmd.base, result, findings));
+  } else
+    io.print(
+      ledgerReport(
+        source.label,
+        result,
+        findings,
+        sourceNotes(pending, compared),
+      ),
+    );
   return failed ? 1 : 0;
+}
+
+/** 서버는 닫았지만 원천(앵커 저장소)에 아직 없는 회차. 서버에 닿지 못하면 error */
+type Pending =
+  | { server: number; source: number; from: number; to: number }
+  | { error: string };
+
+async function pendingRounds(
+  server: string,
+  ledger: PublicLedger,
+  io: Io,
+): Promise<Pending> {
+  const have = ledger.records.length;
+  try {
+    const res = await io.fetch(`${server}/ledger/head.json`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(fetchFailure("head.json", res.status));
+    const { rounds } = (await res.json()) as { rounds: number };
+    return { server: rounds, source: have, from: have + 1, to: rounds };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** 두 원천 대조: 원천이 서버면 앵커 저장소와, 아니면 서버와 */
+type Compared =
+  | { other: string; rounds: number; differences: string[] }
+  | { other: string; error: string };
+
+async function compareSources(
+  cmd: Extract<Command, { kind: "ledger" }>,
+  source: ResolvedSource,
+  ledger: PublicLedger,
+  io: Io,
+): Promise<Compared> {
+  const otherSource =
+    source.kind === "server"
+      ? await resolveSource(
+          { kind: "github" },
+          cmd.base,
+          cmd.anchorRepo,
+          io.fetch,
+        ).catch((err: unknown) => err as Error)
+      : await resolveSource(
+          { kind: "server" },
+          cmd.base,
+          cmd.anchorRepo,
+          io.fetch,
+        );
+  if (otherSource instanceof Error)
+    return { other: "앵커 저장소", error: otherSource.message };
+  try {
+    const other = await loadPublicLedger(otherSource.base, otherSource.fetch);
+    return {
+      other: otherSource.label,
+      rounds: Math.min(ledger.records.length, other.records.length),
+      differences: compareLedgers(ledger, other),
+    };
+  } catch (err) {
+    return {
+      other: otherSource.label,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function sourceNotes(
+  pending: Pending | null,
+  compared: Compared | null,
+): string[] {
+  const out: string[] = [];
+  if (pending && "error" in pending)
+    out.push(
+      `서버 head.json을 받지 못해 아직 앵커에 오르지 않은 회차를 세지 못했습니다(${pending.error})`,
+    );
+  else if (pending && pending.to >= pending.from)
+    out.push(
+      `아직 앵커에 오르지 않은 회차: ${pending.from === pending.to ? pending.from : `${pending.from}~${pending.to}`}(서버는 ${pending.server}회차까지 닫음. 앵커는 회차가 닫힌 뒤 오르고, raw 주소는 약 5분 캐시됩니다)`,
+    );
+  else if (pending)
+    out.push(`서버가 닫은 ${pending.server}회차까지 모두 앵커에 있습니다`);
+  if (compared && "error" in compared)
+    out.push(
+      `실패    두 원천 대조: ${compared.other}를 받지 못했습니다(${compared.error})`,
+    );
+  else if (compared && compared.differences.length === 0)
+    out.push(
+      `통과    두 원천 대조: ${compared.other}와 겹치는 ${compared.rounds}회차가 같습니다`,
+    );
+  else if (compared) {
+    out.push(`실패    두 원천 대조: ${compared.other}와 다릅니다`);
+    for (const d of compared.differences) out.push(`        ${d}`);
+  }
+  return out;
 }
 
 async function loadHashes(source: string, io: Io): Promise<BuildHashes> {

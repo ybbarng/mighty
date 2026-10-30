@@ -73,6 +73,8 @@ export function ledgerReport(
   base: string,
   result: CheckResult & { ledger: PublicLedger },
   findings: { query: string; finding: TicketFinding }[] = [],
+  /** 원천에 대한 줄(아직 앵커에 오르지 않은 회차, 두 원천 대조) */
+  notes: string[] = [],
 ): string {
   const failed = result.items.some((i) => i.status === "fail");
   const ticketFailed = findings.some(
@@ -83,6 +85,7 @@ export function ledgerReport(
   out.push(
     `${result.mode === "trial" ? "시험" : "정식"} 장부 · 닫힌 회차 ${result.rounds}개 · 응모권 ${result.tickets}장 · 열쇠 등록 ${result.registrations}개 · 작업 증명 계산 ${result.powChecked}장`,
   );
+  out.push(...notes);
   out.push("");
   out.push("[회차별]");
   const rounds = roundLines(result, result.ledger);
