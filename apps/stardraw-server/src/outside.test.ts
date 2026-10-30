@@ -1,4 +1,5 @@
 import {
+  anchorCommitMessage,
   anchorPath,
   genesisAnchorFile,
   ledgerId,
@@ -281,18 +282,85 @@ describe("GitHub 앵커(가짜 GitHub)", () => {
   const anchorOf = (gh: FakeGitHub) =>
     new GitHubAnchor("ybbarng/stardraw-ledger", "test-token", gh.fetch);
 
-  it("회차 파일을 그 브랜치에 커밋하고, 이미 같은 내용이 있으면 성공으로 본다", async () => {
+  /** main만 있는 저장소(처음 일정표를 남긴 뒤) */
+  const started = async () => {
     const gh = new FakeGitHub();
+    await anchorOf(gh).anchorGenesis(SCHEDULE);
+    return gh;
+  };
+  const mirror = (round: number) => [
+    {
+      path: `ledgers/${entry.ledger}/ledger/rounds/00000${round}.json`,
+      text: `{"r":${round}}\n`,
+    },
+    {
+      path: `ledgers/${entry.ledger}/ledger/head.json`,
+      text: `{"rounds":${round}}\n`,
+    },
+  ];
+
+  it("앵커 파일만이면 Contents API 한 번으로 커밋하고, 이미 같은 내용이 있으면 성공으로 본다", async () => {
+    const gh = await started();
     const anchor = anchorOf(gh);
-    await anchor.anchor(entry, "trial");
+    const calls = gh.calls;
+    await anchor.anchor(entry, "main");
+    expect(gh.calls - calls).toBe(1);
     const path = anchorPath(entry.ledger, 3);
-    expect(parseAnchorFile(gh.text("trial", path) ?? "")).toEqual(entry);
-    expect(gh.text("main", path)).toBeUndefined();
+    expect(parseAnchorFile(gh.text("main", path) ?? "")).toEqual(entry);
     expect(gh.sawAuth).toBe(true);
-    await anchor.anchor(entry, "trial"); // 응답을 잃고 다시 보낸 경우
+    await anchor.anchor(entry, "main"); // 응답을 잃고 다시 보낸 경우
     await expect(
-      anchor.anchor({ ...entry, record: "cd".repeat(32) }, "trial"),
+      anchor.anchor({ ...entry, record: "cd".repeat(32) }, "main"),
     ).rejects.toThrow(/다른 내용/);
+  });
+
+  it("장부 사본을 주면 앵커 파일과 함께 커밋 하나에 담고(API 5번), 없는 브랜치는 main에서 만든다", async () => {
+    const gh = await started();
+    const anchor = anchorOf(gh);
+    const calls = gh.calls;
+    await anchor.anchor(entry, "trial", mirror(3));
+    // 앵커 파일 확인, 브랜치 끝(없음 → main), 트리, 커밋, 브랜치 만들기
+    expect(gh.calls - calls).toBe(6);
+    const last = gh.commits.at(-1);
+    expect(last?.branch).toBe("trial");
+    expect(last?.message).toBe(anchorCommitMessage(entry));
+    expect(last?.paths.sort()).toEqual(
+      [anchorPath(entry.ledger, 3), ...mirror(3).map((f) => f.path)].sort(),
+    );
+    expect(gh.text("trial", mirror(3)[0]?.path ?? "")).toBe('{"r":3}\n');
+    expect(gh.text("trial", "genesis.txt")).toBeDefined(); // main에서 갈라졌다
+    expect(gh.text("main", anchorPath(entry.ledger, 3))).toBeUndefined();
+
+    const next = { ...entry, round: 4 };
+    const before = gh.calls;
+    await anchor.anchor(next, "trial", mirror(4));
+    expect(gh.calls - before).toBe(5);
+    expect(gh.commits.at(-1)?.paths).toHaveLength(3);
+  });
+
+  it("앵커 파일이 이미 같은 내용이면(같은 커밋에 사본도 들어갔다) 다시 커밋하지 않고, 다른 내용이면 던진다", async () => {
+    const gh = await started();
+    const anchor = anchorOf(gh);
+    await anchor.anchor(entry, "main", mirror(3));
+    const commits = gh.commits.length;
+    await anchor.anchor(entry, "main", mirror(3));
+    expect(gh.commits.length).toBe(commits);
+    await expect(
+      anchor.anchor({ ...entry, record: "cd".repeat(32) }, "main", mirror(3)),
+    ).rejects.toThrow(/다른 내용/);
+  });
+
+  it("지난 회차 사본은 바뀐 것이 없으면 커밋하지 않고, 트리를 못 만들면 던진다", async () => {
+    const gh = await started();
+    const anchor = anchorOf(gh);
+    await anchor.mirror("main", mirror(1), "채우기");
+    const commits = gh.commits.length;
+    await anchor.mirror("main", mirror(1), "채우기");
+    expect(gh.commits.length).toBe(commits);
+    gh.treeFailures = 1;
+    await expect(anchor.mirror("main", mirror(2), "채우기")).rejects.toThrow(
+      /git\/trees HTTP 500/,
+    );
   });
 
   it("처음 일정표는 main의 genesis.txt에 한 번, 다른 장부가 있으면 거절(다시 시작하지 않는다)", async () => {

@@ -2,6 +2,7 @@ import {
   anchorPath,
   displayRound,
   ledgerId,
+  ledgerMirrorPath,
   parseAnchorFile,
   roundTimes,
   type Schedule,
@@ -89,6 +90,19 @@ describe("시험 → 정식: 이어지는 장부", () => {
     expect(
       parseAnchorFile(gh.text("main", anchorPath(id, 27)) ?? "")?.round,
     ).toBe(27);
+
+    // 장부 사본: 시험 회차는 trial에, 정식 첫 회차 앞에서 지난 시험 회차까지 main에 채워 main 하나로 전체를 받는다
+    const head = (branch: string) =>
+      JSON.parse(gh.text(branch, ledgerMirrorPath(id, "head.json")) ?? "{}")
+        .rounds;
+    expect(head("trial")).toBe(26);
+    expect(head("main")).toBe(27);
+    expect(gh.text("main", ledgerMirrorPath(id, "rounds/000001.json"))).toBe(
+      gh.text("trial", ledgerMirrorPath(id, "rounds/000001.json")),
+    );
+    expect(
+      gh.text("trial", ledgerMirrorPath(id, "rounds/000027.json")),
+    ).toBeUndefined();
   });
 
   it("정각 추첨에 맞지 않는 시각, 회차 경계가 아닌 시각은 거절한다", async () => {

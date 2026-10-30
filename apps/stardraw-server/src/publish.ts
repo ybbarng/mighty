@@ -33,6 +33,15 @@ import {
 
 export const pad = (n: number) => String(n).padStart(6, "0");
 
+/** 공개 장부 파일의 글: JSON 한 줄 + 줄바꿈 */
+const fileText = (value: unknown) => `${JSON.stringify(value)}\n`;
+
+/** 공개 장부 파일 하나(path는 장부 폴더 안 상대 경로, 서버 주소 /ledger/ 뒤와 같다) */
+export interface MirrorFile {
+  path: string;
+  text: string;
+}
+
 export interface SealFile {
   v: 1;
   round: number;
@@ -84,8 +93,38 @@ export class Publisher {
   private write(path: string, value: unknown): void {
     const full = join(this.dir, path);
     const tmp = `${full}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(value)}\n`);
+    writeFileSync(tmp, fileText(value));
     renameSync(tmp, full);
+  }
+
+  private read(path: string): MirrorFile {
+    return { path, text: readFileSync(join(this.dir, path), "utf8") };
+  }
+
+  /**
+   * 앵커 저장소에 함께 올릴 그 회차 파일(docs/36 11-16): 회차·봉인 파일과, 그 회차에서 끝나는 묶음.
+   * 공개한 파일을 그대로(같은 바이트) 읽는다. 회차·봉인 파일이 없으면 던지고, 묶음은 없으면 뺀다(낱개가 있다)
+   */
+  roundFiles(round: number): MirrorFile[] {
+    const out = [
+      this.read(`rounds/${pad(round)}.json`),
+      this.read(`seals/${pad(round)}.json`),
+    ];
+    for (const size of BUNDLE_SIZES) {
+      if (round % size !== 0) continue;
+      const path = `bundles/${size}/${pad(round - size + 1)}.json`;
+      if (existsSync(join(this.dir, path))) out.push(this.read(path));
+    }
+    return out;
+  }
+
+  genesisFile(): MirrorFile {
+    return this.read("genesis.json");
+  }
+
+  /** head.json과 같은 형식의 글(앵커 저장소에는 그 커밋까지 오른 회차를 가리키는 head를 둔다) */
+  static headFile(h: Omit<HeadFile, "v">): MirrorFile {
+    return { path: "head.json", text: fileText({ v: 1, ...h }) };
   }
 
   /** 처음 일정표 */

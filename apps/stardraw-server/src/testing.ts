@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -151,6 +152,8 @@ export async function makeRig(
     rootLog?: (serverKey: ServerKey, clock: ManualClock) => RootLog;
     /** 앵커(기본: 남기지 않음) */
     anchor?: Anchor;
+    /** 지난 회차 사본 커밋 하나의 글 크기 상한(기본 엔진 값) */
+    mirrorCommitBytes?: number;
     /** 서버 열쇠(기본: 새로 만듦) */
     serverKey?: ServerKey;
     /** 서버 설정의 국장 열쇠(STARDRAW_DIRECTOR_KEYS) */
@@ -181,6 +184,9 @@ export async function makeRig(
     drand,
     rootLog: log,
     anchor: limits.anchor ?? noAnchor,
+    ...(limits.mirrorCommitBytes
+      ? { mirrorCommitBytes: limits.mirrorCommitBytes }
+      : {}),
     limits: {
       entriesPerPrefixPerRound:
         limits.entriesPerPrefixPerRound ??
@@ -453,53 +459,173 @@ export class FakeRekor {
   }) as typeof fetch;
 }
 
-/** 가짜 GitHub Contents API(앵커): 경로 → base64 내용. `failures`번은 500으로 실패한다 */
+/**
+ * 가짜 GitHub(앵커): Contents API(파일 하나 읽기·쓰기)와 git tree/commit API(여러 파일을 커밋 하나로).
+ * 브랜치마다 끝 커밋과 그 파일들(경로 → 글)을 둔다. 쓰기(PUT·POST·PATCH)는 `failures`번 500으로,
+ * 트리 만들기는 `treeFailures`번 500으로 실패한다. 실제처럼 Contents API는 없는 브랜치(main 말고)에 쓰지 못한다
+ */
 export class FakeGitHub {
-  /** 키: "브랜치/경로" */
-  files = new Map<string, string>();
+  /** 브랜치 → 끝 커밋 */
+  private refs = new Map<string, string>();
+  private commitsBySha = new Map<
+    string,
+    { tree: string; parents: string[]; message: string }
+  >();
+  private trees = new Map<string, Map<string, string>>();
   failures = 0;
-  puts = 0;
+  treeFailures = 0;
+  /** 브랜치에 들어간 커밋(차례대로): 메시지와 바꾼 경로 */
+  commits: { branch: string; message: string; paths: string[] }[] = [];
+  /** 받은 API 요청 수 */
+  calls = 0;
   /** 마지막 요청에 토큰 머리글이 있었는지(값은 보지 않는다) */
   sawAuth = false;
+
+  constructor() {
+    this.trees.set(this.treeSha(new Map()), new Map());
+  }
+
+  private treeSha(files: Map<string, string>): string {
+    const sorted = [...files.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+    return createHash("sha1").update(JSON.stringify(sorted)).digest("hex");
+  }
+
+  private filesOf(branch: string): Map<string, string> | undefined {
+    const sha = this.refs.get(branch);
+    if (!sha) return undefined;
+    const c = this.commitsBySha.get(sha);
+    return c ? this.trees.get(c.tree) : undefined;
+  }
+
+  /** 브랜치에 커밋 하나를 더한다(바뀐 경로를 commits에 남긴다) */
+  private addCommit(tree: string, parents: string[], message: string): string {
+    const sha = createHash("sha1")
+      .update(
+        `${tree} ${parents.join(",")} ${message} ${this.commitsBySha.size}`,
+      )
+      .digest("hex");
+    this.commitsBySha.set(sha, { tree, parents, message });
+    return sha;
+  }
+
+  /** 브랜치를 커밋으로 옮기고, 부모 커밋과 달라진 경로를 남긴다 */
+  private moveRef(branch: string, sha: string): void {
+    this.refs.set(branch, sha);
+    const c = this.commitsBySha.get(sha);
+    const parent = c?.parents[0] ? this.commitsBySha.get(c.parents[0]) : null;
+    const before = (parent && this.trees.get(parent.tree)) || new Map();
+    const after = (c && this.trees.get(c.tree)) || new Map<string, string>();
+    const paths = [...after.keys()].filter(
+      (k) => before.get(k) !== after.get(k),
+    );
+    this.commits.push({ branch, message: c?.message ?? "", paths });
+  }
 
   fetch: typeof fetch = (async (
     input: RequestInfo | URL,
     init?: RequestInit,
   ) => {
+    this.calls++;
     const url = new URL(String(input));
-    const m = /^\/repos\/[^/]+\/[^/]+\/contents\/(.+)$/.exec(url.pathname);
-    if (!m) return new Response("not found", { status: 404 });
-    const path = decodeURIComponent(m[1] as string);
     const headers = new Headers(init?.headers);
     this.sawAuth = (headers.get("authorization") ?? "").startsWith("Bearer ");
-    if (init?.method === "PUT") {
-      this.puts++;
-      if (this.failures > 0) {
-        this.failures--;
-        return new Response("오류", { status: 500 });
-      }
-      const body = JSON.parse(String(init.body)) as {
-        content: string;
-        branch: string;
-      };
-      const key = `${body.branch}/${path}`;
-      if (this.files.has(key))
-        return new Response(JSON.stringify({ message: "sha" }), {
-          status: 422,
-        });
-      this.files.set(key, body.content);
-      return new Response("{}", { status: 201 });
+    const method = init?.method ?? "GET";
+    const rest = /^\/repos\/[^/]+\/[^/]+\/(.+)$/.exec(url.pathname)?.[1];
+    if (!rest) return new Response("not found", { status: 404 });
+    if (method !== "GET" && this.failures > 0) {
+      this.failures--;
+      return new Response("오류", { status: 500 });
     }
-    const content = this.files.get(
-      `${url.searchParams.get("ref") ?? "main"}/${path}`,
-    );
-    return content === undefined
-      ? new Response("not found", { status: 404 })
-      : new Response(JSON.stringify({ content }), { status: 200 });
+    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    const json = (value: unknown, status = 200) =>
+      new Response(JSON.stringify(value), { status });
+
+    const contents = /^contents\/(.+)$/.exec(rest);
+    if (contents) {
+      const path = decodeURIComponent(contents[1] as string);
+      if (method === "PUT") {
+        const { branch, content, message } = body as {
+          branch: string;
+          content: string;
+          message: string;
+        };
+        const files = this.filesOf(branch);
+        if (!files && branch !== "main")
+          return json({ message: "Branch not found" }, 404);
+        if (files?.has(path)) return json({ message: "sha" }, 422);
+        const next = new Map(files ?? []);
+        next.set(path, Buffer.from(content, "base64").toString());
+        const tree = this.treeSha(next);
+        this.trees.set(tree, next);
+        const parent = this.refs.get(branch);
+        this.moveRef(
+          branch,
+          this.addCommit(tree, parent ? [parent] : [], message),
+        );
+        return json({}, 201);
+      }
+      const text = this.filesOf(url.searchParams.get("ref") ?? "main")?.get(
+        path,
+      );
+      return text === undefined
+        ? json({ message: "Not Found" }, 404)
+        : json({ content: Buffer.from(text).toString("base64") });
+    }
+    const branch = /^branches\/(.+)$/.exec(rest);
+    if (branch && method === "GET") {
+      const sha = this.refs.get(decodeURIComponent(branch[1] as string));
+      const c = sha ? this.commitsBySha.get(sha) : undefined;
+      return c
+        ? json({ commit: { sha, commit: { tree: { sha: c.tree } } } })
+        : json({ message: "Branch not found" }, 404);
+    }
+    if (rest === "git/trees" && method === "POST") {
+      if (this.treeFailures > 0) {
+        this.treeFailures--;
+        return json({ message: "오류" }, 500);
+      }
+      const { base_tree, tree } = body as {
+        base_tree: string;
+        tree: { path: string; content: string }[];
+      };
+      const base = this.trees.get(base_tree);
+      if (!base) return json({ message: "base_tree" }, 422);
+      const next = new Map(base);
+      for (const t of tree) next.set(t.path, t.content);
+      const sha = this.treeSha(next);
+      this.trees.set(sha, next);
+      return json({ sha }, 201);
+    }
+    if (rest === "git/commits" && method === "POST") {
+      const { tree, parents, message } = body as {
+        tree: string;
+        parents: string[];
+        message: string;
+      };
+      return json({ sha: this.addCommit(tree, parents, message) }, 201);
+    }
+    if (rest === "git/refs" && method === "POST") {
+      const { ref, sha } = body as { ref: string; sha: string };
+      const name = ref.replace(/^refs\/heads\//, "");
+      if (this.refs.has(name)) return json({ message: "exists" }, 422);
+      this.moveRef(name, sha);
+      return json({}, 201);
+    }
+    const ref = /^git\/refs\/heads\/(.+)$/.exec(rest);
+    if (ref && method === "PATCH") {
+      const name = ref[1] as string;
+      const { sha } = body as { sha: string };
+      const current = this.refs.get(name);
+      // 빨리 감기만(끝 커밋이 새 커밋의 부모일 때)
+      if (!current || !this.commitsBySha.get(sha)?.parents.includes(current))
+        return json({ message: "not fast forward" }, 422);
+      this.moveRef(name, sha);
+      return json({});
+    }
+    return new Response("not found", { status: 404 });
   }) as typeof fetch;
 
   text(branch: string, path: string): string | undefined {
-    const c = this.files.get(`${branch}/${path}`);
-    return c === undefined ? undefined : Buffer.from(c, "base64").toString();
+    return this.filesOf(branch)?.get(path);
   }
 }

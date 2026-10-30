@@ -55,6 +55,34 @@ export function anchorPath(ledger: string, round: number): string {
   return `ledgers/${ledger}/${String(round).padStart(6, "0")}.txt`;
 }
 
+/**
+ * 장부 JSON 사본(docs/36 11-16): 서버가 공개하는 장부 파일(`/ledger/…`)을 같은 바이트로 앵커 저장소에도 올린다.
+ * 경로는 `ledgers/{장부 id}/ledger/{서버와 같은 상대 경로}`라, 받는 쪽은 기준 주소만
+ * `https://raw.githubusercontent.com/{저장소}/{브랜치}/ledgers/{장부 id}`로 바꾸면 된다(`githubLedgerBase`).
+ * 회차 사본은 그 회차 앵커 파일과 같은 커밋에 들어간다. head.json은 그 커밋까지 오른 회차를 가리킨다.
+ */
+export function ledgerMirrorPath(ledger: string, file: string): string {
+  return `ledgers/${ledger}/ledger/${file}`;
+}
+
+/** 앵커 저장소의 장부 사본 기준 주소(뒤에 `/ledger/…`를 붙여 받는다) */
+export function githubLedgerBase(
+  repo: string,
+  branch: string,
+  ledger: string,
+): string {
+  return `https://raw.githubusercontent.com/${repo}/${branch}/ledgers/${ledger}`;
+}
+
+/** 지난 회차 사본을 채우는 커밋 메시지: "하늘의 별 따기 장부 파일 1~36회 (장부 {id})" */
+export function mirrorCommitMessage(
+  ledger: string,
+  from: number,
+  to: number,
+): string {
+  return `하늘의 별 따기 장부 파일 ${from === to ? from : `${from}~${to}`}회 (장부 ${ledger})`;
+}
+
 /** 앵커 파일 본문(사람도 읽는 줄 형식) */
 export function anchorFile(e: AnchorEntry): string {
   return `${ANCHOR_VERSION}\nledger ${e.ledger}\nround ${e.round}\nrecord ${e.record}\nseal ${e.seal}\n`;
@@ -170,7 +198,7 @@ export function githubGenesisVerifier(opts: {
 }
 
 /** raw.githubusercontent.com에서 파일을 읽는다. 없거나 받지 못하면 null */
-async function rawText(
+export async function rawText(
   fetchFn: typeof fetch,
   repo: string,
   branch: string,

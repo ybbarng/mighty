@@ -1,4 +1,12 @@
-import { githubAnchorVerifier, githubGenesisVerifier } from "./anchor";
+import {
+  GENESIS_ANCHOR_BRANCH,
+  GENESIS_ANCHOR_PATH,
+  githubAnchorVerifier,
+  githubGenesisVerifier,
+  githubLedgerBase,
+  parseGenesisAnchorFile,
+  rawText,
+} from "./anchor";
 import {
   equalBytes,
   fromBase64Url,
@@ -256,6 +264,58 @@ export async function loadRoundFiles(
     ),
   );
   return out;
+}
+
+/** 앵커 저장소에 올라간 장부 사본(docs/36 11-16) */
+export interface GitHubLedgerSource {
+  repo: string;
+  /** 사본이 있는 브랜치: 정식 단계가 시작됐으면 main(지난 시험 회차까지 모두), 아니면 trial */
+  branch: string;
+  ledger: string;
+  /** `loadPublicLedger`·`loadRoundFiles`에 넘기는 기준 주소 */
+  base: string;
+  /** 그 브랜치의 head.json(앵커에 오른 마지막 회차까지). raw 주소는 약 5분 캐시된다 */
+  head: PublicHeadFile;
+}
+
+/**
+ * 앵커 저장소에서 장부 사본을 찾는다. 장부 id는 주지 않으면 main의 genesis.txt에서 읽고,
+ * 브랜치는 main → trial 순으로 head.json이 있는 곳을 쓴다. 없으면 던진다
+ */
+export async function findGitHubLedger(
+  options: { repo?: string; ledger?: string; fetch?: typeof fetch } = {},
+): Promise<GitHubLedgerSource> {
+  const repo = options.repo ?? STARDRAW_ANCHOR_REPO;
+  const fetchFn = options.fetch ?? ((...args) => fetch(...args));
+  let ledger = options.ledger;
+  if (!ledger) {
+    const text = await rawText(
+      fetchFn,
+      repo,
+      GENESIS_ANCHOR_BRANCH,
+      GENESIS_ANCHOR_PATH,
+    );
+    const hash = text === null ? null : parseGenesisAnchorFile(text);
+    if (!hash)
+      throw new Error(
+        `앵커 저장소(${repo})의 ${GENESIS_ANCHOR_PATH}를 받지 못했습니다`,
+      );
+    ledger = hash.slice(0, 16);
+  }
+  for (const branch of ["main", "trial"]) {
+    const base = githubLedgerBase(repo, branch, ledger);
+    const res = await fetchFn(`${base}/ledger/head.json`, {
+      cache: "no-store",
+    });
+    if (res.status === 404) continue;
+    if (!res.ok)
+      throw new Error(fetchFailure(`${branch}의 head.json`, res.status));
+    const head = (await res.json()) as PublicHeadFile;
+    return { repo, branch, ledger, base, head };
+  }
+  throw new Error(
+    `앵커 저장소(${repo})에 장부 ${ledger}의 JSON 사본이 아직 없습니다`,
+  );
 }
 
 /** 공개 장부 파일을 처음부터 받아 푼다 */

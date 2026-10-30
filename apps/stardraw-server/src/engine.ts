@@ -22,7 +22,9 @@ import {
   isVoidRound,
   type KeyRegistration,
   ledgerId,
+  ledgerMirrorPath,
   liveStart,
+  mirrorCommitMessage,
   newOpsState,
   type Operation,
   type OperationsView,
@@ -61,8 +63,8 @@ import {
 } from "@mighty/stardraw-core";
 
 import { BusyError, Counters, Gate, ipPrefix } from "./limits";
-import type { Anchor, DrandSource, RootLog } from "./outside";
-import type { Publisher } from "./publish";
+import type { Anchor, DrandSource, RepoFile, RootLog } from "./outside";
+import { type MirrorFile, Publisher } from "./publish";
 import type { ServerKey } from "./server-key";
 import type { Store } from "./store";
 
@@ -85,6 +87,8 @@ export interface EngineOptions {
   drand: DrandSource;
   rootLog: RootLog;
   anchor: Anchor;
+  /** 지난 회차 사본을 채울 때 커밋 하나에 담을 글 크기 상한(바이트, 기본 2MB). 회차 하나가 넘으면 그 회차만 담는다 */
+  mirrorCommitBytes?: number;
   limits: {
     entriesPerPrefixPerRound: number;
     registrationsPerPrefixPerDay: number;
@@ -849,16 +853,26 @@ export class StardrawServer {
 
   /**
    * 앵커: 장부를 처음 만들 때 처음 일정표를 main에 한 번 남기고, 닫힌 회차를 차례대로 바깥에 남긴다. 회차 진행(봉인 기한)을 막지 않게 tick과 따로 돈다.
-   * 한 번에 하나만 돌고, 실패하면 1분 쉰 뒤 그 회차부터 다시 보낸다(재시작해도 저장소의 표시로 이어진다)
+   * 한 번에 하나만 돌고, 실패하면 1분 쉰 뒤 그 회차부터 다시 보낸다(재시작해도 저장소의 표시로 이어진다).
+   * 장부 JSON 사본(docs/36 11-16): 그 브랜치에 바로 앞 회차까지 사본이 있으면 회차 사본을 앵커와 같은 커밋에 싣는다.
+   * 빠진 지난 회차는 먼저 몇 커밋으로 묶어 채운다. 사본을 올리지 못해도 앵커 파일은 따로 남기고, 사본은 10분 뒤 다시 채운다
    */
   private anchoring: Promise<void> | null = null;
   private nextAnchorTry = 0;
+  private nextMirrorTry = 0;
 
   private startAnchoring(): void {
     if (this.anchoring || this.now() < this.nextAnchorTry) return;
+    const { store } = this.o;
+    const anchored = store.anchored();
+    const mirrorBehind =
+      anchored > 0 &&
+      this.now() >= this.nextMirrorTry &&
+      store.mirrored(anchorBranch(this.schedule(), anchored)) < anchored;
     if (
-      this.o.store.genesisAnchored() &&
-      this.o.store.anchored() >= this.o.store.recordCount()
+      store.genesisAnchored() &&
+      anchored >= store.recordCount() &&
+      !mirrorBehind
     )
       return;
     this.anchoring = this.anchorDue().finally(() => {
@@ -881,6 +895,14 @@ export class StardrawServer {
         return;
       }
     }
+    // 이미 앵커를 남긴 회차의 사본이 빠졌으면(사본을 올리기 전 판에서 남긴 회차 등) 먼저 채운다
+    const anchored = store.anchored();
+    if (anchored > 0)
+      await this.fillMirror(
+        ledger,
+        anchorBranch(this.schedule(), anchored),
+        anchored,
+      );
     for (
       let round = store.anchored() + 1;
       round <= store.recordCount();
@@ -888,16 +910,32 @@ export class StardrawServer {
     ) {
       const record = store.record(round);
       if (!record) return;
+      const entry = {
+        ledger,
+        round,
+        record: toHex(recordHash(record)),
+        seal: sealLogId(store.seal(round)?.log),
+      };
+      const branch = anchorBranch(this.schedule(), round);
+      await this.fillMirror(ledger, branch, round - 1);
+      let files: RepoFile[] = [];
+      if (store.mirrored(branch) === round - 1)
+        try {
+          files = this.mirrorFiles(ledger, round, round);
+        } catch (err) {
+          this.mirrorFailed(`${round}회차 장부 사본을 만들지`, err);
+        }
       try {
-        await this.o.anchor.anchor(
-          {
-            ledger,
-            round,
-            record: toHex(recordHash(record)),
-            seal: sealLogId(store.seal(round)?.log),
-          },
-          anchorBranch(this.schedule(), round),
-        );
+        if (files.length > 0)
+          try {
+            await this.o.anchor.anchor(entry, branch, files);
+            store.setMirrored(branch, round);
+          } catch (err) {
+            // 사본 때문에 앵커가 밀리지 않게 앵커 파일만 따로 남긴다
+            this.mirrorFailed(`${round}회차 장부 사본을 올리지`, err);
+            await this.o.anchor.anchor(entry, branch);
+          }
+        else await this.o.anchor.anchor(entry, branch);
         store.setAnchored(round);
       } catch (err) {
         this.nextAnchorTry = this.now() + 60;
@@ -907,6 +945,76 @@ export class StardrawServer {
         return;
       }
     }
+  }
+
+  private mirrorFailed(what: string, err: unknown): void {
+    this.nextMirrorTry = this.now() + 600;
+    this.o.log?.(`${what} 못해 10분 뒤 다시 시도한다: ${String(err)}`);
+  }
+
+  /**
+   * 그 브랜치의 사본을 to회차까지 채운다. 커밋 하나에 글 크기 상한(`mirrorCommitBytes`)만큼 회차를 묶는다.
+   * 실패하면 기록만 남기고 10분 뒤 다시(회차 진행·앵커는 막지 않는다)
+   */
+  private async fillMirror(
+    ledger: string,
+    branch: string,
+    to: number,
+  ): Promise<void> {
+    const { store } = this.o;
+    const limit = this.o.mirrorCommitBytes ?? 2_000_000;
+    while (store.mirrored(branch) < to && this.now() >= this.nextMirrorTry) {
+      const from = store.mirrored(branch) + 1;
+      try {
+        let last = from;
+        let bytes = 0;
+        for (let round = from; round <= to; round++) {
+          const size = this.o.publisher
+            .roundFiles(round)
+            .reduce((n, f) => n + f.text.length, 0);
+          if (round > from && bytes + size > limit) break;
+          bytes += size;
+          last = round;
+        }
+        await this.o.anchor.mirror(
+          branch,
+          this.mirrorFiles(ledger, from, last),
+          mirrorCommitMessage(ledger, from, last),
+        );
+        store.setMirrored(branch, last);
+        this.o.log?.(
+          `앵커 저장소 ${branch}에 ${mirrorCommitMessage(ledger, from, last)}를 올렸다`,
+        );
+      } catch (err) {
+        this.mirrorFailed(
+          `${branch}에 ${from}회차부터 장부 사본을 채우지`,
+          err,
+        );
+      }
+    }
+  }
+
+  /** from~to 회차 사본(1회차부터면 genesis.json 포함)과 to회차까지를 가리키는 head.json */
+  private mirrorFiles(ledger: string, from: number, to: number): RepoFile[] {
+    const { store, publisher } = this.o;
+    const record = store.record(to);
+    if (!record) throw new Error(`${to}회차 기록이 없다`);
+    const files: MirrorFile[] = [];
+    if (from === 1) files.push(publisher.genesisFile());
+    for (let round = from; round <= to; round++)
+      files.push(...publisher.roundFiles(round));
+    files.push(
+      Publisher.headFile({
+        rounds: to,
+        head: toHex(recordHash(record)),
+        sealed: to,
+        serverKey: toBase64Url(this.o.serverKey.publicKey),
+      }),
+    );
+    return files.map((f) => ({
+      path: ledgerMirrorPath(ledger, f.path),
+      text: f.text,
+    }));
   }
 
   /** 시험용: 돌고 있는 앵커 보내기가 끝날 때까지 */

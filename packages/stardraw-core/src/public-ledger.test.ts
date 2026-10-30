@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { anchorFile, anchorPath, genesisAnchorFile, ledgerId } from "./anchor";
+import {
+  anchorFile,
+  anchorPath,
+  genesisAnchorFile,
+  githubLedgerBase,
+  ledgerId,
+} from "./anchor";
 import { toBase64Url, toHex } from "./bytes";
 import { drandRoundForClose } from "./drand";
 import { generateSigner } from "./keys";
@@ -9,6 +15,7 @@ import {
   BUNDLE_SIZES,
   bundleFilePath,
   checkPublicLedger,
+  findGitHubLedger,
   findTicket,
   ledgerPieces,
   loadPublicLedger,
@@ -228,6 +235,53 @@ describe("앵커 저장소(GitHub raw)", () => {
     expect(result.items.find((i) => i.id === "anchor")).toMatchObject({
       status: "fail",
       detail: "처음 일정표: 앵커 저장소의 장부와 다르다(장부를 다시 시작했다)",
+    });
+  });
+
+  describe("장부 사본(findGitHubLedger)", () => {
+    const id = ledgerId(SCHEDULE);
+    /** 서버 파일을 그 브랜치의 ledgers/{id} 아래로 옮긴 가짜 raw */
+    const mirrored = (branches: string[], withGenesis = true) =>
+      files((f) => {
+        for (const path of Object.keys(f)) {
+          for (const b of branches)
+            f[`${githubLedgerBase("ybbarng/stardraw-ledger", b, id)}${path}`] =
+              f[path];
+          delete f[path];
+        }
+        if (withGenesis)
+          f[`${RAW}/main/genesis.txt`] = genesisAnchorFile(SCHEDULE);
+        f[`${RAW}/trial/${anchorPath(id, 1)}`] = good;
+      });
+
+    it("main의 genesis.txt로 장부 id를 찾고, 정식 전에는 trial 사본을 쓴다. 기준 주소만 바꾸면 서버와 같게 검사된다", async () => {
+      const fetch = mirrored(["trial"]);
+      const source = await findGitHubLedger({ fetch });
+      expect(source).toMatchObject({ branch: "trial", ledger: id });
+      expect(source.head.rounds).toBe(1);
+      const result = await checkPublicLedger({
+        base: source.base,
+        fetch,
+        beaconVerifier: () => true,
+      });
+      expect(result.problems).toEqual([]);
+      expect(statusOf(result.items).anchor).toBe("pass");
+    });
+
+    it("main에 사본이 있으면 main(정식 시작 뒤에는 지난 시험 회차도 main에 있다)", async () => {
+      const source = await findGitHubLedger({
+        fetch: mirrored(["trial", "main"]),
+      });
+      expect(source.branch).toBe("main");
+    });
+
+    it("genesis.txt나 사본이 없으면 알린다", async () => {
+      await expect(
+        findGitHubLedger({ fetch: mirrored(["trial"], false) }),
+      ).rejects.toThrow("genesis.txt를 받지 못했습니다");
+      await expect(findGitHubLedger({ fetch: mirrored([]) })).rejects.toThrow(
+        `장부 ${id}의 JSON 사본이 아직 없습니다`,
+      );
     });
   });
 });
