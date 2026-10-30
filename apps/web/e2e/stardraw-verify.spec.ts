@@ -11,6 +11,13 @@ test("검증하기: 시험 값 다시 계산과 장부 전체 검사가 통과�
   );
   await page.goto("/stardraw/verify");
   await expect(page.getByRole("heading", { name: "검증하기" })).toBeVisible();
+  // 화면을 거치지 않는 길: 터미널 검사기와 화면 코드 해시 비교
+  await expect(
+    page.getByRole("heading", { name: "터미널 검사기" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "/build-hashes.json" }),
+  ).toHaveAttribute("href", "/build-hashes.json");
 
   // 무거운 것(Argon2 16MB)을 뺀 시험 값은 저절로 계산된다
   await expect(

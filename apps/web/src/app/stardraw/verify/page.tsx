@@ -11,8 +11,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#070d19" };
 
-const SOURCE =
-  "https://github.com/ybbarng/mighty/tree/main/packages/stardraw-core/src";
+const REPO = "https://github.com/ybbarng/mighty";
+const SOURCE = `${REPO}/tree/main/packages/stardraw-core/src`;
 
 function Section({
   title,
@@ -463,6 +463,60 @@ await stardraw.verify({ powSample: Infinity })
 await stardraw.vectors()`}</Code>
         </Section>
 
+        <Section title="터미널 검사기" id="cli">
+          <p className="text-white/80">
+            위 검사는 이 페이지 코드가 돌리므로 운영자가 내준 코드를 믿어야
+            합니다. 같은 검사를 서버와 이 화면을 거치지 않고 내 컴퓨터에서 돌릴
+            수 있습니다(
+            <a
+              href={`${REPO}/tree/main/packages/stardraw-cli`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              packages/stardraw-cli
+            </a>
+            , Node 24와 pnpm). 앵커는 GitHub에서 직접 읽습니다.
+          </p>
+          <Code>{`git clone https://github.com/ybbarng/mighty && cd mighty
+pnpm install
+# 공개 장부 전체(회차별 결과, 실패 사유, 건너뛴 것)
+pnpm stardraw-verify https://game.byb.kr/stardraw-api
+# 내 응모권: 회차-일련번호(영수증 앞 12자리면 됩니다)
+pnpm stardraw-verify --ticket "12-abcd ef01 2345"`}</Code>
+        </Section>
+
+        <Section title="화면 코드 확인" id="code">
+          <p className="text-white/80">
+            같은 커밋으로 빌드하면 누가 해도 같은 파일이 나옵니다(재현 빌드).
+            사이트는 빌드한 커밋과 모든 파일의 SHA-256을{" "}
+            <a
+              href="/build-hashes.json"
+              className="font-mono underline underline-offset-2"
+            >
+              /build-hashes.json
+            </a>
+            으로 함께 냅니다. 사이트에서 받은 파일이 그 해시인지, 그 커밋을 직접
+            빌드한 파일이 같은 해시인지 비교하면, 지금 받은 하늘의 별 따기 화면
+            코드가 공개 저장소의 그 커밋에서 나온 것인지 알 수 있습니다.
+          </p>
+          <Code>{`# 1. 사이트 파일이 해시 목록과 같은지
+pnpm stardraw-verify site https://game.byb.kr
+# 2. 목록의 commit과 env(빌드 변수)로 직접 빌드
+git switch --detach <commit>
+NEXT_PUBLIC_SITE_URL=… NEXT_PUBLIC_STARDRAW_API=… NEXT_PUBLIC_UMAMI_WEBSITE_ID=… \\
+  pnpm --filter @mighty/web build
+# 3. 내 빌드가 목록과 같은지
+pnpm stardraw-verify site https://game.byb.kr --build apps/web/out`}</Code>
+          <p className="text-white/80">
+            비교 범위는 하늘의 별 따기 페이지, 모든 화면 코드(
+            <code>_next/</code>), 서비스 워커입니다(<code>--all</code>이면
+            그림까지 전부). 우리 도구 없이 <code>sha256sum -c</code>로도 확인할
+            수 있습니다. 배포할 때마다 GitHub Actions가 Docker 밖에서 한 번 더
+            빌드해 같은지 확인합니다.
+          </p>
+        </Section>
+
         <Section title="믿는 것과 안 믿는 것" id="trust">
           <h3 className="font-semibold text-white/90">
             운영자가 할 수 없는 일
@@ -494,9 +548,19 @@ await stardraw.vectors()`}</Code>
               건너뜁니다(정식 단계에서는 실패로 봅니다).
             </li>
             <li>
-              이 페이지와 화면 코드는 운영자가 내줍니다. 코드 해시 공개, 재현
-              가능한 빌드, 서버를 거치지 않는 독립 터미널 검사기는 아직
-              없습니다. 가장 독립적인 검사는 위 규칙대로 직접 짠 검사기입니다.
+              이 페이지와 화면 코드는 운영자가 내줍니다. 해시 비교로 내가 받은
+              파일이 공개 커밋에서 나왔는지는 알 수 있지만, 운영자가 사람마다
+              또는 때마다 다른 파일을 내주면 내가 비교한 그때의 파일만
+              확인됩니다. 패스키 서명은 여전히 화면 코드가 시키고, 터미널로
+              응모·증명하는 명령은 아직 없습니다.
+            </li>
+            <li>
+              해시 목록은 지금 사이트와 GitHub Actions 기록에만
+              남습니다(배포마다 GitHub 릴리스에 남기는 일은 준비만 했습니다).
+            </li>
+            <li>
+              터미널 검사기도 이 저장소 코드입니다. 가장 독립적인 검사는 위
+              규칙대로 직접 짠 검사기입니다.
             </li>
           </ul>
         </Section>
