@@ -151,6 +151,8 @@ export async function makeRig(
     anchor?: Anchor;
     /** 서버 열쇠(기본: 새로 만듦) */
     serverKey?: ServerKey;
+    /** 서버 설정의 국장 열쇠(STARDRAW_DIRECTOR_KEYS) */
+    directorKeys?: { credentialId: Uint8Array; pub: Uint8Array }[];
   } = {},
 ): Promise<Rig> {
   const dir = limits.dir ?? mkdtempSync(join(tmpdir(), "stardraw-"));
@@ -188,8 +190,10 @@ export async function makeRig(
       argonQueue: 32,
     },
     sealDeadline: 180,
+    ...(limits.directorKeys ? { directorKeys: limits.directorKeys } : {}),
     log: (m) => logs.push(m),
   });
+  await engine.ready();
   const relay = new Relay(
     store,
     clock,

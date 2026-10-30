@@ -5,6 +5,7 @@ import {
   type Phase,
   POW_PARAMS,
   type PowParams,
+  parseDirectorKeys,
   powTargetForTries,
   rekorLogFor,
   type Schedule,
@@ -62,6 +63,13 @@ export interface ServerConfig {
   rekor: { url: string } | null;
   /** GitHub 앵커. 브랜치는 회차의 단계로 정한다(시험 trial, 정식 main) */
   github: { repo: string; token: string } | null;
+  /**
+   * 국장 열쇠(docs/36 11-12, `STARDRAW_DIRECTOR_KEYS`): 장부에 아직 없으면 서버가 관인으로 서명해 다음 기록에
+   * "국장 열쇠 지정"(24시간 예고)으로 싣는다. 설정에서 빼면 예고 중인 관인 지정은 관인이 취소한다
+   */
+  directorKeys: { credentialId: Uint8Array; pub: Uint8Array }[];
+  /** 국장 요청: IP 앞부분 하나당 하루 상한 */
+  directorRequestsPerPrefixPerDay: number;
 }
 
 const env = (name: string): string | undefined => {
@@ -161,6 +169,11 @@ export function loadConfig(): ServerConfig {
     argonConcurrency: int("STARDRAW_ARGON_CONCURRENCY", 2),
     argonQueue: int("STARDRAW_ARGON_QUEUE", 32),
     sealDeadline: int("STARDRAW_SEAL_DEADLINE", 180),
+    directorKeys: parseDirectorKeys(env("STARDRAW_DIRECTOR_KEYS") ?? ""),
+    directorRequestsPerPrefixPerDay: int(
+      "STARDRAW_DIRECTOR_REQUESTS_PER_PREFIX",
+      60,
+    ),
     drandUrls: (
       env("STARDRAW_DRAND_URLS") ??
       "https://api.drand.sh,https://drand.cloudflare.com"

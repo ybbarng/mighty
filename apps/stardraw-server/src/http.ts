@@ -29,6 +29,8 @@ import type { Relay } from "./relay";
  *   POST /api/confirm/:id/answer        { claim, winnerKey } | { declined: true }
  *   POST /api/confirm/:id/report        { reportKey, outcome }
  * 확인 링크 토큰은 주소에 넣지 않고 본문으로만 받는다(서버 로그에 남지 않게).
+ *   GET  /api/director/state            국장 관리 화면: 다음 기록(서명할 장부 끝 해시), 국장 열쇠·운영 기록·소속, 받아 둔 요청
+ *   POST /api/director/ops              { op }(국장 패스키로 서명한 운영 기록) → { id, round, effectiveRound }
  *   GET  /ledger/...                    공개 장부 파일(nginx가 대신 내도 된다)
  * 바이트는 모두 base64url이다. 화면과 같은 출처라 CORS가 필요 없고, 개발용 출처만 허용 목록에 둔다.
  */
@@ -185,6 +187,25 @@ async function handle(
       receipt: toBase64Url(encodeReceipt(receipt)),
       receivedAt: receipt.receivedAt,
     });
+  }
+
+  if (method === "GET" && path === "/api/director/state")
+    return send(res, 200, await engine.directorState());
+
+  if (method === "POST" && path === "/api/director/ops") {
+    const body = await readJson(req);
+    let op: Uint8Array;
+    try {
+      op = fromBase64Url(str(body.op, "운영 기록"));
+    } catch (err) {
+      if (err instanceof EntryError) throw err;
+      throw new EntryError("운영 기록 형식이 맞지 않습니다");
+    }
+    return send(
+      res,
+      200,
+      await engine.submitDirectorOp(op, clientIp(req, o.trustProxy)),
+    );
   }
 
   if (method === "POST" && path === "/api/confirm/invites") {

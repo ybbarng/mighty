@@ -1,23 +1,34 @@
 import type { Clock } from "@mighty/fair-play";
 import {
   anchorBranch,
+  applyRecordOps,
   checkNumbers,
   checkPow,
   checkRegistration,
   checkScheduleChange,
   closedMessage,
   closeRound,
+  decodeOperation,
   decodeRegistration,
   decodeTicket,
+  directorFingerprint,
   drandRoundForClose,
   drandTime,
   entrantId,
   equalBytes,
+  everDirector,
   genesisHash,
   isVoidRound,
   type KeyRegistration,
   ledgerId,
   liveStart,
+  newOpsState,
+  type Operation,
+  type OperationsView,
+  type OpsContext,
+  type OpsState,
+  operationsView,
+  opId,
   type PowParams,
   phaseOf,
   RawKeyRejected,
@@ -30,9 +41,13 @@ import {
   roundTimes,
   type Schedule,
   type ScheduleEntry,
+  scheduleFromRecords,
+  sealDesignations,
   sealDigest,
   sealLogId,
   sealRoot,
+  selectOperations,
+  signAsSeal,
   signReceipt,
   type Ticket,
   ticketContent,
@@ -41,7 +56,6 @@ import {
   toHex,
   verifyTicketSignature,
   type WebAuthnPolicy,
-  withChange,
 } from "@mighty/stardraw-core";
 
 import { BusyError, Counters, Gate, ipPrefix } from "./limits";
@@ -79,6 +93,10 @@ export interface EngineOptions {
   sealDeadline: number;
   /** drand 값을 이만큼(초) 못 받으면 알린다 */
   drandAlertAfter?: number;
+  /** 서버 설정의 국장 열쇠(`STARDRAW_DIRECTOR_KEYS`, docs/36 11-12). 장부에 없으면 관인으로 지정을 싣는다 */
+  directorKeys?: readonly { credentialId: Uint8Array; pub: Uint8Array }[];
+  /** 국장 요청: IP 앞부분 하나당 하루 상한(기본 60) */
+  directorRequestsPerPrefixPerDay?: number;
   log?: (message: string) => void;
 }
 
@@ -129,13 +147,16 @@ export class StardrawServer {
   private current: Schedule;
   /** drand 값을 기다리기 시작한 시각과 마지막 알림 시각 */
   private waitingDrand = new Map<number, { since: number; alerted: number }>();
+  /** 닫힌 기록의 운영 기록을 모두 반영한 상태(서명까지 다시 확인하므로 띄울 때 비동기로 읽는다) */
+  private ops: OpsState;
+  private readonly opsReady: Promise<void>;
 
   constructor(options: EngineOptions) {
     this.o = options;
     this.genesis = options.store.genesis(options.schedule);
-    this.current = this.genesis;
-    for (let r = 1; r <= options.store.recordCount(); r++)
-      this.applyChanges(options.store.record(r));
+    this.current = scheduleFromRecords(this.genesis, this.records());
+    this.ops = newOpsState(this.genesis);
+    this.opsReady = this.loadOps();
     this.gate = new Gate(
       options.limits.argonConcurrency,
       options.limits.argonQueue,
@@ -151,9 +172,54 @@ export class StardrawServer {
     return phaseOf(schedule, round) === "trial" ? "trial" : "live";
   }
 
-  private applyChanges(record: RoundRecord | null): void {
-    for (const change of record?.scheduleChanges ?? [])
-      this.current = withChange(this.current, change);
+  private records(): RoundRecord[] {
+    const out: RoundRecord[] = [];
+    for (let r = 1; r <= this.o.store.recordCount(); r++) {
+      const record = this.o.store.record(r);
+      if (record) out.push(record);
+    }
+    return out;
+  }
+
+  private opsContext(): OpsContext {
+    const { store } = this.o;
+    return {
+      policy: this.o.policy,
+      isEntrant: (pub, credentialId) =>
+        store.isRegistered(toHex(entrantId(pub))) ||
+        (credentialId !== null && store.credentialTaken(toHex(credentialId))),
+    };
+  }
+
+  /** 닫힌 기록을 검사기와 같은 규칙으로 다시 읽고, 설정의 국장 열쇠 지문과 장부 상태를 기록에 남긴다(docs/36 11-12 D1) */
+  private async loadOps(): Promise<void> {
+    const state = newOpsState(this.genesis);
+    for (const record of this.records()) {
+      const problems = await applyRecordOps(state, record, this.opsContext());
+      for (const p of problems)
+        this.o.log?.(`${record.round}회차 기록의 운영 기록 문제: ${p}`);
+    }
+    this.ops = state;
+    for (const key of this.o.directorKeys ?? []) {
+      const fp = directorFingerprint(key.pub);
+      const using = state.directors.some(
+        (d) => equalBytes(d.pub, key.pub) && d.until === null,
+      );
+      const pending = state.ops.some(
+        (e) =>
+          e.status === "pending" &&
+          e.op.kind === "director-add" &&
+          equalBytes(e.op.pub, key.pub),
+      );
+      this.o.log?.(
+        `국장 열쇠(설정) ${fp}: ${using ? "쓰는 중" : pending ? "지정 예고 중" : "다음 기록에 지정을 싣는다"}`,
+      );
+    }
+  }
+
+  /** 시험용: 운영 상태를 다 읽을 때까지 */
+  async ready(): Promise<void> {
+    await this.opsReady;
   }
 
   /** 지금 시각(초) */
@@ -262,6 +328,15 @@ export class StardrawServer {
         throw new EntryError("응모권과 다른 열쇠의 등록입니다");
       const problem = checkRegistration(registration);
       if (problem) throw new EntryError(problem);
+      // 국장 열쇠와 우주인 열쇠는 섞지 않는다(docs/36 11-12)
+      await this.opsReady;
+      if (
+        everDirector(this.ops, registration.pub, registration.credentialId) ||
+        this.submittedDirectorKey(registration.pub, registration.credentialId)
+      )
+        throw new EntryError(
+          "국장 패스키로는 우주인 등록을 할 수 없습니다. 응모용 패스키를 따로 만들어 주세요",
+        );
       credentialHex = toHex(registration.credentialId);
       if (store.credentialTaken(credentialHex))
         throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");
@@ -401,6 +476,7 @@ export class StardrawServer {
 
   private async drawDue(): Promise<void> {
     const { store } = this.o;
+    await this.opsReady;
     for (;;) {
       const round = store.recordCount() + 1;
       const seal = store.seal(round);
@@ -421,15 +497,22 @@ export class StardrawServer {
       const tickets = store.entries(round);
       const registrations = store.registrations(round);
       const scheduleChanges = this.dueChanges(schedule, round);
+      const prev = this.head();
+      const { operations, submittedIds } = await this.dueOperations(
+        round,
+        prev,
+        scheduleChanges,
+      );
       const record = closeRound({
         schedule,
         round,
-        prev: this.head(),
+        prev,
         tickets,
         registrations,
         rootLoggedAt: seal.loggedAt,
         beacon,
         scheduleChanges,
+        operations,
       });
       // 봉인 뒤에는 목록이 바뀌지 않으므로 기록의 루트가 봉인 값과 같아야 한다
       if (!equalBytes(sealDigest(record), seal.digest))
@@ -441,7 +524,19 @@ export class StardrawServer {
           `${round}회차 기록에 일정 바꾸기를 실었다: ${scheduleChanges.map(describeEntry).join(", ")}`,
         );
       }
-      this.applyChanges(record);
+      store.removeDirectorOps(submittedIds);
+      const problems = await applyRecordOps(
+        this.ops,
+        record,
+        this.opsContext(),
+      );
+      for (const p of problems)
+        this.o.log?.(`${round}회차 기록의 운영 기록 문제: ${p}`);
+      for (const op of operations)
+        this.o.log?.(
+          `${round}회차 기록에 운영 기록을 실었다: ${describeOp(op)}`,
+        );
+      this.current = this.ops.schedule;
       this.o.publisher.round(record, tickets, registrations);
       this.publishHead();
     }
@@ -454,13 +549,166 @@ export class StardrawServer {
   private dueChanges(schedule: Schedule, round: number): ScheduleEntry[] {
     const pending = this.o.store.pendingChange();
     if (!pending) return [];
-    const problem = checkScheduleChange(schedule, pending, round);
+    const problem = this.ops.pendingSchedule
+      ? "국장이 예고한 일정 바꾸기가 있다"
+      : checkScheduleChange(schedule, pending, round);
     if (!problem) return [pending];
     this.o.store.setPendingChange(null);
     this.o.log?.(
       `예약한 일정 바꾸기를 ${round}회차 기록에 싣지 못해 지웠다(${problem}): ${describeEntry(pending)}`,
     );
     return [];
+  }
+
+  /**
+   * 이번 기록에 실을 운영 기록: 설정의 국장 열쇠 지정(관인 서명)과 받아 둔 국장 요청을 검사기와 같은 규칙으로 고른다.
+   * 맞지 않게 된 요청(그사이 기록이 바뀌었거나 효력 규칙에 늦음)은 싣지 않고 지운다
+   */
+  private async dueOperations(
+    round: number,
+    prev: Uint8Array,
+    scheduleChanges: readonly ScheduleEntry[],
+  ): Promise<{ operations: Operation[]; submittedIds: string[] }> {
+    const ctx = this.opsContext();
+    const designations = sealDesignations(
+      this.ops,
+      round,
+      prev,
+      this.o.directorKeys ?? [],
+      ctx,
+    );
+    for (const s of designations.skipped)
+      this.o.log?.(
+        `설정의 국장 열쇠 ${directorFingerprint(s.pub)}를 싣지 않는다: ${s.reason}`,
+      );
+    const sealOps = await Promise.all(
+      designations.bodies.map((b) => signAsSeal(b, this.o.serverKey)),
+    );
+    const submitted = this.o.store.directorOps();
+    const { accepted, rejected } = await selectOperations(
+      this.ops,
+      round,
+      prev,
+      [...sealOps, ...submitted.map((x) => x.op)],
+      ctx,
+      scheduleChanges,
+    );
+    for (const r of rejected)
+      this.o.log?.(
+        `운영 기록을 싣지 않았다(${r.problem}): ${describeOp(r.op)}`,
+      );
+    return { operations: accepted, submittedIds: submitted.map((x) => x.id) };
+  }
+
+  // ── 국장 요청(docs/36 11-12) ──
+
+  private submittedDirectorKey(
+    pub: Uint8Array,
+    credentialId: Uint8Array,
+  ): boolean {
+    return this.o.store
+      .directorOps()
+      .some(
+        ({ op }) =>
+          op.kind === "director-add" &&
+          (equalBytes(op.pub, pub) ||
+            equalBytes(op.credentialId, credentialId)),
+      );
+  }
+
+  /** 관리 화면이 보는 상태: 장부의 운영 기록과 받아 두고 아직 싣지 않은 요청 */
+  async directorState(): Promise<{
+    now: number;
+    records: number;
+    schedule: Schedule;
+    view: OperationsView;
+    submitted: { id: string; summary: string; effectiveRound: number }[];
+  }> {
+    await this.opsReady;
+    const records = this.o.store.recordCount();
+    const view = operationsView(this.ops, records, this.head());
+    return {
+      now: this.now(),
+      records,
+      schedule: this.schedule(),
+      view,
+      submitted: this.o.store.directorOps().map(({ id, op }) => ({
+        id,
+        summary: describeOp(op),
+        effectiveRound: op.effectiveRound,
+      })),
+    };
+  }
+
+  /**
+   * 국장 운영 기록 받기: 다음 기록(지금 닫힌 기록 수 + 1)에 실렸다고 치고 검사기와 같은 규칙으로 확인한 뒤 받아 둔다.
+   * 실제로 싣는 것은 그 기록을 닫을 때다(다시 확인한다)
+   */
+  async submitDirectorOp(
+    bytes: Uint8Array,
+    ip: string,
+  ): Promise<{ id: string; round: number; effectiveRound: number }> {
+    const { store } = this.o;
+    const prefix = ipPrefix(ip);
+    const day = String(Math.floor(this.now() / 86400));
+    if (
+      this.counters.count("director", day, prefix) >=
+      (this.o.directorRequestsPerPrefixPerDay ?? 60)
+    )
+      throw new EntryError(
+        "같은 곳에서 오늘 보낸 국장 요청이 너무 많습니다",
+        429,
+      );
+    this.counters.add("director", day, prefix);
+    let op: Operation;
+    try {
+      op = decodeOperation(bytes);
+    } catch {
+      throw new EntryError("운영 기록 형식이 맞지 않습니다");
+    }
+    if (op.signer.role !== "director")
+      throw new EntryError("국장 패스키로 서명한 요청만 받습니다", 403);
+    await this.opsReady;
+    const submitted = store.directorOps();
+    if (submitted.length >= 20)
+      throw new EntryError(
+        "받아 둔 요청이 많습니다. 다음 기록이 닫힌 뒤에 보내 주세요",
+        429,
+      );
+    const round = store.recordCount() + 1;
+    const head = this.head();
+    if (!equalBytes(op.after, head)) {
+      const older =
+        this.records().some((r) => equalBytes(recordHash(r), op.after)) ||
+        equalBytes(genesisHash(this.genesis), op.after);
+      throw older
+        ? new EntryError(
+            "그사이 장부에 기록이 하나 더 닫혔습니다. 다시 서명해 주세요",
+            409,
+          )
+        : new EntryError("이 장부의 자리에서 서명한 요청이 아닙니다");
+    }
+    const id = toHex(opId(op));
+    if (submitted.some((x) => x.id === id))
+      throw new EntryError("이미 받은 요청입니다", 409);
+    const { rejected } = await selectOperations(
+      this.ops,
+      round,
+      head,
+      [...submitted.map((x) => x.op), op],
+      this.opsContext(),
+    );
+    const mine = rejected.find((r) => toHex(opId(r.op)) === id);
+    if (mine) {
+      if (/국장 열쇠가 아니다/.test(mine.problem))
+        throw new EntryError(
+          "국장 열쇠가 아닙니다. 우주국이 지정한 국장 패스키로 서명해 주세요",
+          403,
+        );
+      throw new EntryError(mine.problem);
+    }
+    store.addDirectorOp(id, op, this.now());
+    return { id, round, effectiveRound: op.effectiveRound };
   }
 
   /**
@@ -554,6 +802,28 @@ export class StardrawServer {
       serverKey: toBase64Url(this.o.serverKey.publicKey),
     });
   }
+}
+
+function describeOp(op: Operation): string {
+  const kind = {
+    "director-add": "국장 열쇠 지정",
+    "director-remove": "국장 열쇠 빼기",
+    "affiliation-add": "소속 추가",
+    "affiliation-update": "소속 바꾸기",
+    "affiliation-end": "소속 끝내기",
+    cancel: "예고 취소",
+    schedule: "일정 바꾸기",
+  }[op.kind];
+  const who =
+    op.signer.role === "seal" ? "관인" : directorFingerprint(op.signer.pub);
+  const what =
+    op.kind === "director-add" || op.kind === "director-remove"
+      ? ` ${directorFingerprint(op.pub)}`
+      : op.kind === "affiliation-add" || op.kind === "affiliation-update"
+        ? ` ${op.fields.name}`
+        : "";
+  const when = op.kind === "cancel" ? "바로" : `${op.effectiveRound}회차부터`;
+  return `${kind}${what}(서명 ${who}, ${when})`;
 }
 
 function describeEntry(e: ScheduleEntry): string {

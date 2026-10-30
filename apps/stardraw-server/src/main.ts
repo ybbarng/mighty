@@ -74,6 +74,8 @@ async function main(): Promise<void> {
       argonQueue: config.argonQueue,
     },
     sealDeadline: config.sealDeadline,
+    directorKeys: config.directorKeys,
+    directorRequestsPerPrefixPerDay: config.directorRequestsPerPrefixPerDay,
     log,
   });
   const relay = new Relay(store, clock, config.policy, {

@@ -1,12 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
 import {
+  decodeOperation,
   decodeRecord,
   decodeRegistration,
   decodeTicket,
+  encodeOperation,
   encodeRecord,
   encodeRegistration,
   encodeTicket,
   type KeyRegistration,
+  type Operation,
   type RoundRecord,
   recordHash,
   type Schedule,
@@ -102,6 +105,11 @@ export class Store {
         request_id TEXT
       );
       CREATE INDEX IF NOT EXISTS invites_ticket ON invites (ticket);
+      CREATE TABLE IF NOT EXISTS director_ops (
+        id TEXT PRIMARY KEY,
+        op BLOB NOT NULL,
+        received_at INTEGER NOT NULL
+      );
     `);
     // 2026-10-30 확인 링크로 바꾸며 옛 방식(회차·등수 묶음 요청) 요청을 버린다. 한 번만
     const moved = this.db
@@ -336,6 +344,29 @@ export class Store {
     this.db
       .prepare("INSERT INTO records (round, record, hash) VALUES (?, ?, ?)")
       .run(r.round, blob(encodeRecord(r)), blob(recordHash(r)));
+  }
+
+  // ── 국장 요청(다음 기록에 실을 운영 기록, docs/36 11-12) ──
+
+  /** 받아 두고 아직 기록에 싣지 않은 국장 운영 기록(받은 차례) */
+  directorOps(): { id: string; op: Operation }[] {
+    return this.db
+      .prepare("SELECT id, op FROM director_ops ORDER BY received_at, id")
+      .all()
+      .map((r) => ({ id: String(r.id), op: decodeOperation(bytes(r.op)) }));
+  }
+
+  addDirectorOp(id: string, op: Operation, receivedAt: number): void {
+    this.db
+      .prepare(
+        "INSERT OR IGNORE INTO director_ops (id, op, received_at) VALUES (?, ?, ?)",
+      )
+      .run(id, blob(encodeOperation(op)), receivedAt);
+  }
+
+  removeDirectorOps(ids: readonly string[]): void {
+    const stmt = this.db.prepare("DELETE FROM director_ops WHERE id = ?");
+    for (const id of ids) stmt.run(id);
   }
 
   // ── 당첨자 확인 전달 ──

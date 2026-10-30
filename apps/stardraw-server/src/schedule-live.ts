@@ -7,7 +7,7 @@ import {
   roundTimes,
   type Schedule,
   type ScheduleEntry,
-  withChange,
+  scheduleFromRecords,
 } from "@mighty/stardraw-core";
 
 import { LIVE_ROUND_SECONDS, scheduleEntry } from "./config";
@@ -17,6 +17,7 @@ import type { Store } from "./store";
  * 정식 단계 예약(docs/36 11-6): 장부를 새로 만들지 않고, 일정 바꾸기 한 줄(phase live)을 다음에 닫히는 회차 기록에 싣는다.
  * 규칙의 24시간 예고를 그대로 따르므로 정식 첫 회차는 그 기록 마감 + 24시간 뒤에 열리는 회차부터다.
  * 여기서는 규칙을 미리 확인해 저장소에 예약만 하고, 실제로 싣는 것은 돌고 있는 서버(엔진)가 한다.
+ * 기본 길은 국장 관리 화면(/stardraw/admin, 국장 서명 운영 기록, docs/36 11-12)이고, 이 명령은 국장 열쇠가 없을 때의 예비다.
  */
 
 export interface ScheduleLiveResult {
@@ -25,15 +26,16 @@ export interface ScheduleLiveResult {
   decidedIn: number;
 }
 
-/** 저장소의 처음 일정표에 기록들의 일정 바꾸기를 모두 반영한 지금 일정표 */
+/** 저장소의 처음 일정표에 기록들의 일정 바꾸기(옛 칸과 국장 운영 기록, 취소 반영)를 모두 반영한 지금 일정표 */
 export function currentSchedule(store: Store): Schedule {
   const genesis = store.storedGenesis();
   if (!genesis) throw new Error("장부가 없다. 서버를 먼저 띄운다");
-  let schedule = genesis;
-  for (let r = 1; r <= store.recordCount(); r++)
-    for (const change of store.record(r)?.scheduleChanges ?? [])
-      schedule = withChange(schedule, change);
-  return schedule;
+  const records = [];
+  for (let r = 1; r <= store.recordCount(); r++) {
+    const record = store.record(r);
+    if (record) records.push(record);
+  }
+  return scheduleFromRecords(genesis, records);
 }
 
 export function scheduleLive(
@@ -46,6 +48,8 @@ export function scheduleLive(
     throw new Error("시험 단계로 시작한 장부가 아니다");
   if (liveStart(schedule) !== null)
     throw new Error(`이미 ${liveStart(schedule)}회차부터 정식 단계다`);
+  if (store.directorOps().some(({ op }) => op.kind === "schedule"))
+    throw new Error("국장이 보낸 일정 바꾸기 요청이 다음 기록을 기다린다");
   if (store.pendingChange())
     throw new Error(
       "이미 예약한 일정 바꾸기가 있다(서버가 다음 기록에 싣는다)",
