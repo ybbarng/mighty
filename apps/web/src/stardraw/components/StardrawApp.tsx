@@ -14,7 +14,7 @@ import {
   type VerifyReport,
 } from "@mighty/stardraw-core";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BackToGames } from "@/components/BackToGames";
 import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
@@ -125,16 +125,29 @@ function viewOf(page: StardrawPage, hash: string): View {
 let printingId: string | null = null;
 /** 이번 방문에서 별 따기 화면 사이를 옮겨 다녔는지(아니면 "돌아가기"가 사이트 밖으로 나가지 않게 정한 화면으로) */
 let navigated = false;
+/**
+ * 라우터로 다른 페이지로 갈 때 갈 화면. 새 페이지가 처음 그려지는 순간에는 주소의 # 조각이 아직 바뀌지 않았을 수 있어
+ * (안드로이드 폰에서 첫 화면의 결과 봉투를 누르면 /stardraw/rounds#draw-28 대신 지난 회차 목록이 떠 갇혔다, 2026-10-31)
+ * 주소를 기다리지 않고 이 값으로 시작한다. 한 번 쓰면 지운다
+ */
+let pendingView: { path: string; view: View } | null = null;
 
 /** 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다 */
 export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const { services, status, version, refresh } = useLedger();
   const router = useRouter();
-  const [view, setView] = useState<View>(() =>
-    typeof window === "undefined"
-      ? viewOf(page, "")
-      : viewOf(page, window.location.hash),
-  );
+  /** 라우터로 옮겨 오며 넘겨받은 화면으로 시작했는지(그러면 첫 맞추기에서 아직 안 바뀐 주소를 따르지 않는다) */
+  const startedFromPending = useRef(false);
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === "undefined") return viewOf(page, "");
+    const pending = pendingView;
+    if (pending && pending.path === PATH[page]) {
+      pendingView = null;
+      startedFromPending.current = true;
+      return pending.view;
+    }
+    return viewOf(page, window.location.hash);
+  });
   // 별을 고르거나 추첨을 보다 화면이 당겨져 새로고침되지 않게(그 밖의 화면은 당겨서 새로고침이 된다)
   useNoPullRefresh(view.name === "enter" || view.name === "draw");
   const [mine, setMine] = useState<MyTicket[]>([]);
@@ -159,7 +172,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
   useEffect(() => {
     const sync = () => setView(viewOf(page, window.location.hash));
-    sync();
+    if (!startedFromPending.current) sync();
     window.addEventListener("popstate", sync);
     window.addEventListener("hashchange", sync);
     return () => {
@@ -167,6 +180,17 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       window.removeEventListener("hashchange", sync);
     };
   }, [page]);
+
+  // 추첨(결과)을 열면 그 회차는 "열어 봄": 첫 화면 결과 봉투에서 빠진다. 뒤로가기로 나가도 그대로다
+  // (예전에는 「돌아가기」로 닫을 때만 기록해, 열지 못하거나 뒤로가기로 나가면 첫 화면이 그 봉투에 갇혔다)
+  const drawRound = view.name === "draw" ? view.round : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 회차를 열 때 한 번
+  useEffect(() => {
+    if (!services || !loaded || drawRound === null) return;
+    if (!services.ledger.record(drawRound)) return;
+    services.wallet.markOpened(drawRound);
+    setOpened(services.wallet.openedRounds());
+  }, [drawRound, loaded, services, version]);
 
   /**
    * 다른 화면으로: 주소를 바꿔 기록에 남긴다(replace면 지금 기록을 바꾼다).
@@ -181,8 +205,11 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       if (replace) window.history.replaceState(window.history.state, "", url);
       else window.history.pushState(window.history.state, "", url);
       setView(v);
-    } else if (replace) router.replace(url);
-    else router.push(url);
+    } else {
+      pendingView = { path: url.split("#")[0] as string, view: v };
+      if (replace) router.replace(url);
+      else router.push(url);
+    }
     window.scrollTo({ top: 0 });
   };
   /** 화면의 "돌아가기": 옮겨 왔으면 바로 전 화면, 주소로 바로 열었으면 정한 화면으로 */
