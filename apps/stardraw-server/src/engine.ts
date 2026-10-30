@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { Clock } from "@mighty/fair-play";
 import {
   anchorBranch,
@@ -6,6 +7,8 @@ import {
   checkPow,
   checkRegistration,
   checkScheduleChange,
+  checkTicketQualification,
+  cloneOpsState,
   closedMessage,
   closeRound,
   decodeOperation,
@@ -24,9 +27,12 @@ import {
   ledgerId,
   ledgerMirrorPath,
   liveStart,
+  matureOps,
   mirrorCommitMessage,
+  newIssuerKey,
   newOpsState,
   OP_NAMES,
+  OP_VERSION,
   type Operation,
   type OperationsView,
   type OpsContext,
@@ -34,7 +40,9 @@ import {
   operationsView,
   opId,
   type PowParams,
+  periodView,
   phaseOf,
+  type QualPeriodView,
   RawKeyRejected,
   type Receipt,
   type RoundRecord,
@@ -45,6 +53,7 @@ import {
   roundTimes,
   type Schedule,
   type ScheduleEntry,
+  STAMP_LENGTH,
   scheduleFromRecords,
   sealDesignations,
   sealDigest,
@@ -52,6 +61,7 @@ import {
   sealRoot,
   selectOperations,
   signAsSeal,
+  signBlinded,
   signReceipt,
   type Ticket,
   ticketContent,
@@ -59,10 +69,12 @@ import {
   toBase64Url,
   toHex,
   verifyRegistrationProof,
+  verifyStamp,
   verifyTicketSignature,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
+import { GoogleTokenError, type GoogleTokenVerifier } from "./google";
 import { BusyError, Counters, Gate, ipPrefix } from "./limits";
 import type { Anchor, DrandSource, RepoFile, RootLog } from "./outside";
 import { type MirrorFile, Publisher } from "./publish";
@@ -104,7 +116,34 @@ export interface EngineOptions {
   directorKeys?: readonly { credentialId: Uint8Array; pub: Uint8Array }[];
   /** 국장 요청: IP 앞부분 하나당 하루 상한(기본 60) */
   directorRequestsPerPrefixPerDay?: number;
+  /** 상품 자격 발급(docs/36 11-13). 없으면 도장을 찍지 않는다(응모권 v2 확인은 늘 한다) */
+  qualification?: QualificationOptions;
   log?: (message: string) => void;
+}
+
+/**
+ * 소속마다 신원 확인 방법(비공개 서버 설정 `STARDRAW_QUAL_AFFILIATIONS`). 장부에는 소속 이름과 방법 이름만 있고,
+ * 기관 도메인은 여기에만 둔다. 방법은 소속마다 바꿔 끼운다(지금은 구글 로그인 + hd만, 나중에 신청 + 국장 승인 등)
+ */
+export type QualMethodConfig = { kind: "google"; domain: string };
+
+export interface QualificationOptions {
+  /** 소속 이름 → 확인 방법 */
+  affiliations: ReadonlyMap<string, QualMethodConfig>;
+  /** 구글 ID 토큰 확인(운영은 google.ts googleTokenVerifier, 시험은 흉내) */
+  verifyGoogle?: GoogleTokenVerifier;
+  /** 발급 요청: IP 앞부분 하나당 하루 상한(기본 200, 회사 NAT 기준) */
+  issuesPerPrefixPerDay?: number;
+}
+
+/** 화면이 보는 자격 기간(GET /api/qual) */
+export interface QualPeriodInfo extends QualPeriodView {
+  badge: number;
+  method: string;
+  /** 이 서버에서 지금 받을 수 있는지(설정된 확인 방법이 있고 기간이 끝나지 않음) */
+  open: boolean;
+  /** 확인 방법 종류(화면이 단추를 고른다). 설정이 없으면 null */
+  verify: "google" | null;
 }
 
 /** 응모자에게 보일 거절. status는 HTTP 응답 번호 */
@@ -284,6 +323,17 @@ export class StardrawServer {
       mode: this.mode,
       liveFrom: liveStart(this.schedule()),
     };
+  }
+
+  /** 회차 round가 열릴 때의 운영 상태(효력이 생긴 기간·소속까지). 닫힌 기록이 바뀔 때만 새로 만든다 */
+  private opsCache: { key: string; state: OpsState } | null = null;
+  private opsAt(round: number): OpsState {
+    const key = `${this.o.store.recordCount()}:${round}:${this.ops.ops.length}`;
+    if (this.opsCache?.key === key) return this.opsCache.state;
+    const state = cloneOpsState(this.ops);
+    matureOps(state, round);
+    this.opsCache = { key, state };
+    return state;
   }
 
   isRegistered(pub: Uint8Array): boolean {
@@ -503,6 +553,24 @@ export class StardrawServer {
     // 4. 서명(ECDSA라 싸다)
     if (!(await verifyTicketSignature(ticket, this.o.policy)))
       throw new EntryError("응모권 서명이 맞지 않습니다");
+
+    // 4-1. 상품 자격 증서(v2): 쓸 수 있는 기간, 자격 서명, 도장. 같은 자격이 이 회차에 이미 있어도 받는다
+    // (먼저 낸 쪽만 받으면 증서를 훔친 사람이 주인을 밀어낼 수 있다. 둘 다 상품 대상에서 빠진다, docs/36 11-13)
+    if (ticket.qual) {
+      await this.opsReady;
+      const state = this.opsAt(round);
+      const problem = checkTicketQualification(state, ticket, times.closesAt);
+      if (problem) throw new EntryError(`상품 자격 증서: ${problem}`);
+      const period = state.periods.find((p) =>
+        equalBytes(p.id, ticket.qual?.cert.periodId ?? new Uint8Array()),
+      );
+      const cert = ticket.qual.cert;
+      if (
+        !period ||
+        !verifyStamp(period.issuerKey, cert.periodId, cert.qualPub, cert.stamp)
+      )
+        throw new EntryError("상품 자격 증서: 도장이 맞지 않습니다");
+    }
 
     // 5. 열쇠당 회차 1장
     if (store.hasEntry(round, who))
@@ -734,12 +802,34 @@ export class StardrawServer {
     const sealOps = await Promise.all(
       designations.bodies.map((b) => signAsSeal(b, this.o.serverKey)),
     );
+    // 발급 수(kind 9): 효력이 생긴 기간마다 이 서버가 찍은 도장 수가 장부의 수보다 많으면 관인으로 싣는다
+    const matured = cloneOpsState(this.ops);
+    matureOps(matured, round);
+    const issuedOps = await Promise.all(
+      matured.periods.flatMap((p) => {
+        const count = this.o.store.qualIssuedCount(toHex(p.id));
+        if (count <= p.issued) return [];
+        return [
+          signAsSeal(
+            {
+              v: OP_VERSION,
+              kind: "qual-issued",
+              after: prev,
+              effectiveRound: 0,
+              period: p.id,
+              issued: count,
+            },
+            this.o.serverKey,
+          ),
+        ];
+      }),
+    );
     const submitted = this.o.store.directorOps();
     const { accepted, rejected } = await selectOperations(
       this.ops,
       round,
       prev,
-      [...sealOps, ...submitted.map((x) => x.op)],
+      [...sealOps, ...issuedOps, ...submitted.map((x) => x.op)],
       ctx,
       scheduleChanges,
     );
@@ -859,6 +949,152 @@ export class StardrawServer {
     }
     store.addDirectorOp(id, op, this.now());
     return { id, round, effectiveRound: op.effectiveRound };
+  }
+
+  // ── 상품 자격(docs/36 11-13) ──
+
+  /**
+   * 국장이 자격 기간을 열기 전에: 새 도장 열쇠를 만들어 비밀은 서버에 두고 공개 열쇠를 돌려준다.
+   * 국장은 이 공개 열쇠를 kind 8에 넣어 서명한다. 쓰이지 않은 열쇠는 그냥 남는다(장부에 실린 열쇠만 쓴다)
+   */
+  createIssuerKey(ip: string): { issuerKey: string } {
+    const prefix = ipPrefix(ip);
+    const day = String(Math.floor(this.now() / 86400));
+    if (
+      this.counters.count("director", day, prefix) >=
+      (this.o.directorRequestsPerPrefixPerDay ?? 60)
+    )
+      throw new EntryError(
+        "같은 곳에서 오늘 보낸 국장 요청이 너무 많습니다",
+        429,
+      );
+    this.counters.add("director", day, prefix);
+    const key = newIssuerKey();
+    this.o.store.qualKeyAdd(toHex(key.publicKey), key.secretKey);
+    return { issuerKey: toBase64Url(key.publicKey) };
+  }
+
+  /** 화면이 보는 자격 기간: 지금 회차에 효력이 생긴 기간과, 이 서버에서 받을 수 있는지 */
+  async qualInfo(): Promise<{ round: number; periods: QualPeriodInfo[] }> {
+    await this.opsReady;
+    const now = this.now();
+    const round = roundAt(this.schedule(), now) ?? 0;
+    const state = this.opsAt(Math.max(round, 1));
+    const periods = state.periods.map((p) => {
+      const a = state.affiliations.find((x) => equalBytes(x.id, p.affiliation));
+      const config = a
+        ? this.o.qualification?.affiliations.get(a.fields.name)
+        : undefined;
+      const active =
+        !!a && (a.until === null || a.until > round) && now < p.endsAt;
+      return {
+        ...periodView(state, p),
+        badge: a?.fields.badge ?? 0,
+        method: a?.fields.method ?? "",
+        open: active && !!config,
+        verify: config ? config.kind : null,
+      };
+    });
+    return { round, periods };
+  }
+
+  /**
+   * 도장 받기: 기관 계정을 확인하고, 이번 기간에 처음이면 가린 값에 도장을 찍어 돌려준다.
+   * 서버가 아는 것은 "이 계정(HMAC)이 이 기간에 받았다"뿐이다. 무엇에 찍었는지는 모른다(블라인드).
+   * 같은 계정이 같은 가린 값을 다시 보내면(응답을 못 받은 경우) 같은 도장을 다시 준다
+   */
+  async issueStamp(input: {
+    periodId: string;
+    idToken: string;
+    blinded: Uint8Array;
+    ip: string;
+  }): Promise<{ blindStamp: Uint8Array }> {
+    const q = this.o.qualification;
+    if (!q)
+      throw new EntryError("이 서버는 상품 자격을 발급하지 않습니다", 404);
+    const prefix = ipPrefix(input.ip);
+    const day = String(Math.floor(this.now() / 86400));
+    if (
+      this.counters.count("qual", day, prefix) >=
+      (q.issuesPerPrefixPerDay ?? 200)
+    )
+      throw new EntryError(
+        "같은 곳에서 오늘 보낸 자격 요청이 너무 많습니다",
+        429,
+      );
+    this.counters.add("qual", day, prefix);
+    if (input.blinded.length !== STAMP_LENGTH)
+      throw new EntryError("가린 값은 48바이트입니다");
+    const info = (await this.qualInfo()).periods.find(
+      (p) => p.id === input.periodId,
+    );
+    if (!info) throw new EntryError("효력이 생긴 자격 기간이 아닙니다", 404);
+    const state = this.opsAt(
+      Math.max(1, roundAt(this.schedule(), this.now()) ?? 1),
+    );
+    const period = state.periods.find((p) => toHex(p.id) === input.periodId);
+    const affiliation = period
+      ? state.affiliations.find((a) => equalBytes(a.id, period.affiliation))
+      : undefined;
+    const config = affiliation
+      ? q.affiliations.get(affiliation.fields.name)
+      : undefined;
+    if (!period || !info.open || !config)
+      throw new EntryError("지금 이 서버에서 받을 수 없는 자격입니다", 409);
+
+    // 신원 확인(방법마다). 화면이 보낸 이메일·도메인은 믿지 않는다
+    let account: string;
+    if (config.kind === "google") {
+      if (!q.verifyGoogle)
+        throw new EntryError("구글 로그인을 준비 중입니다", 503);
+      let who: Awaited<ReturnType<GoogleTokenVerifier>>;
+      try {
+        who = await q.verifyGoogle(input.idToken);
+      } catch (err) {
+        if (err instanceof GoogleTokenError)
+          throw new EntryError(err.message, 401);
+        throw new EntryError("구글 로그인을 확인하지 못했습니다", 502);
+      }
+      const domain = config.domain.toLowerCase();
+      const email = who.email.toLowerCase();
+      if (
+        !who.emailVerified ||
+        who.hd?.toLowerCase() !== domain ||
+        !email.endsWith(`@${domain}`)
+      )
+        throw new EntryError(
+          `${affiliation?.fields.method ?? "기관 계정"}으로 로그인해 주세요`,
+          403,
+        );
+      account = createHmac("sha256", this.o.store.qualAccountKey())
+        .update(email)
+        .digest("hex");
+    } else {
+      throw new EntryError("모르는 확인 방법입니다", 500);
+    }
+
+    const secret = this.o.store.qualKeySecret(toHex(period.issuerKey));
+    if (!secret) {
+      this.o.log?.(
+        `자격 기간 ${input.periodId.slice(0, 12)}의 도장 비밀 열쇠가 이 서버에 없다`,
+      );
+      throw new EntryError("이 기간의 도장 열쇠가 서버에 없습니다", 500);
+    }
+    const blindedHex = toHex(input.blinded);
+    let blindStamp: Uint8Array;
+    try {
+      blindStamp = signBlinded(secret, input.blinded);
+    } catch {
+      throw new EntryError("가린 값이 곡선 위 점이 아닙니다");
+    }
+    this.o.store.transaction(() => {
+      const before = this.o.store.qualIssue(input.periodId, account);
+      if (before === null)
+        this.o.store.qualIssueAdd(input.periodId, account, blindedHex);
+      else if (before !== blindedHex)
+        throw new EntryError("이번 기간 자격을 이미 받았습니다", 409);
+    });
+    return { blindStamp };
   }
 
   /**

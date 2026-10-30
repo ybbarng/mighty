@@ -51,6 +51,7 @@ export interface RelayRow {
 }
 
 const blob = (b: Uint8Array) => new Uint8Array(b);
+const fromHexText = (hex: string) => new Uint8Array(Buffer.from(hex, "hex"));
 const bytes = (v: unknown) => new Uint8Array(v as Uint8Array);
 
 export class Store {
@@ -109,6 +110,16 @@ export class Store {
         id TEXT PRIMARY KEY,
         op BLOB NOT NULL,
         received_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS qual_keys (
+        pub TEXT PRIMARY KEY,
+        secret BLOB NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS qual_issued (
+        period TEXT NOT NULL,
+        account TEXT NOT NULL,
+        blinded TEXT NOT NULL,
+        PRIMARY KEY (period, account)
       );
     `);
     // 2026-10-30 확인 링크로 바꾸며 옛 방식(회차·등수 묶음 요청) 요청을 버린다. 한 번만
@@ -383,6 +394,61 @@ export class Store {
   removeDirectorOps(ids: readonly string[]): void {
     const stmt = this.db.prepare("DELETE FROM director_ops WHERE id = ?");
     for (const id of ids) stmt.run(id);
+  }
+
+  // ── 상품 자격 발급(docs/36 11-13) ──
+  // 도장 비밀 열쇠는 기간마다 새로 만든다. 발급 장부는 "이 계정(HMAC)이 이 기간에 받았다"만 둔다.
+  // 받은 시각은 남기지 않는다(받은 직후의 응모와 이어 짐작하기 어렵게). 가린 값은 같은 요청을 다시 보낼 때만 쓴다
+
+  qualKeyAdd(pubHex: string, secret: Uint8Array): void {
+    this.db
+      .prepare("INSERT INTO qual_keys (pub, secret) VALUES (?, ?)")
+      .run(pubHex, blob(secret));
+  }
+
+  qualKeySecret(pubHex: string): Uint8Array | null {
+    const r = this.db
+      .prepare("SELECT secret FROM qual_keys WHERE pub = ?")
+      .get(pubHex);
+    return r ? bytes(r.secret) : null;
+  }
+
+  /** 이 계정이 이 기간에 받았을 때 보낸 가린 값(hex). 받지 않았으면 null */
+  qualIssue(periodHex: string, account: string): string | null {
+    const r = this.db
+      .prepare(
+        "SELECT blinded FROM qual_issued WHERE period = ? AND account = ?",
+      )
+      .get(periodHex, account);
+    return r ? String(r.blinded) : null;
+  }
+
+  qualIssueAdd(periodHex: string, account: string, blindedHex: string): void {
+    this.db
+      .prepare(
+        "INSERT INTO qual_issued (period, account, blinded) VALUES (?, ?, ?)",
+      )
+      .run(periodHex, account, blindedHex);
+  }
+
+  qualIssuedCount(periodHex: string): number {
+    const r = this.db
+      .prepare("SELECT COUNT(*) AS n FROM qual_issued WHERE period = ?")
+      .get(periodHex);
+    return Number(r?.n ?? 0);
+  }
+
+  /** 계정 값을 HMAC으로 바꾸는 비밀(처음 한 번 만들어 둔다) */
+  qualAccountKey(): Uint8Array {
+    const r = this.db
+      .prepare("SELECT v FROM meta WHERE k = 'qual-account-key'")
+      .get();
+    if (r) return fromHexText(String(r.v));
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    this.db
+      .prepare("INSERT INTO meta (k, v) VALUES ('qual-account-key', ?)")
+      .run(Buffer.from(key).toString("hex"));
+    return key;
   }
 
   // ── 당첨자 확인 전달 ──

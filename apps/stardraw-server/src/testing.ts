@@ -27,6 +27,7 @@ import {
   makeTicket,
   type PowParams,
   p1363ToDer,
+  type QualHolding,
   type RekorLog,
   type RoundRecord,
   roundTimes,
@@ -41,7 +42,7 @@ import {
 } from "@mighty/stardraw-core";
 
 import { DEFAULT_PREFIX_LIMITS } from "./config";
-import { StardrawServer } from "./engine";
+import { type QualificationOptions, StardrawServer } from "./engine";
 import {
   type Anchor,
   type DrandSource,
@@ -158,6 +159,8 @@ export async function makeRig(
     serverKey?: ServerKey;
     /** 서버 설정의 국장 열쇠(STARDRAW_DIRECTOR_KEYS) */
     directorKeys?: { credentialId: Uint8Array; pub: Uint8Array }[];
+    /** 상품 자격 발급 설정 */
+    qualification?: QualificationOptions;
   } = {},
 ): Promise<Rig> {
   const dir = limits.dir ?? mkdtempSync(join(tmpdir(), "stardraw-"));
@@ -199,6 +202,7 @@ export async function makeRig(
     },
     sealDeadline: 180,
     ...(limits.directorKeys ? { directorKeys: limits.directorKeys } : {}),
+    ...(limits.qualification ? { qualification: limits.qualification } : {}),
     log: (m) => logs.push(m),
   });
   await engine.ready();
@@ -259,10 +263,17 @@ export async function entryFor(
   round: number,
   numbers: number[],
   challenge: Uint8Array,
+  qual?: QualHolding | null,
 ): Promise<{ ticket: Ticket; registration?: KeyRegistration }> {
-  const ticket = await makeTicket(p.signer, round, numbers, challenge, EASY, {
-    params: TEST_POW,
-  });
+  const ticket = await makeTicket(
+    p.signer,
+    round,
+    numbers,
+    challenge,
+    EASY,
+    { params: TEST_POW },
+    qual,
+  );
   if (!ticket) throw new Error("응모권을 만들지 못했다");
   if (p.registered) return { ticket };
   const registration = await makeRegistration(
@@ -282,6 +293,7 @@ export async function enter(
   p: Player,
   numbers: number[],
   ip = "203.0.113.7",
+  qual?: QualHolding | null,
 ) {
   const round = rig.engine.state().round;
   const { ticket, registration } = await entryFor(
@@ -289,6 +301,7 @@ export async function enter(
     round,
     numbers,
     rig.engine.head(),
+    qual,
   );
   const receipt = await rig.engine.submit({
     ticket: encodeTicket(ticket),

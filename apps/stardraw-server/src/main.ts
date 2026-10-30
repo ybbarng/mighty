@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { backup } from "node:sqlite";
 import { realClock } from "@mighty/fair-play";
 
+import { GOOGLE_CLIENT_ID } from "@mighty/stardraw-core";
 import { loadConfig } from "./config";
 import { StardrawServer } from "./engine";
+import { googleTokenVerifier } from "./google";
 import { createHttpServer } from "./http";
 import {
   type Anchor,
@@ -51,6 +53,11 @@ async function main(): Promise<void> {
         : "시각 인증을 꺼서 서버 시계로 봉인 시각을 적는다(시각 증명 없음)",
   );
   log(
+    config.qualAffiliations.size > 0
+      ? `상품 자격 발급: ${[...config.qualAffiliations.keys()].join(", ")}(${GOOGLE_CLIENT_ID ? "구글 로그인" : "구글 클라이언트 ID가 없어 준비 중"})`
+      : "상품 자격 소속 설정이 없어 도장을 찍지 않는다",
+  );
+  log(
     config.github
       ? `앵커: ${config.github.repo}(시험 단계 trial, 정식 단계 main 브랜치)`
       : "앵커 저장소 설정이 없어 앵커를 남기지 않는다",
@@ -76,6 +83,10 @@ async function main(): Promise<void> {
     sealDeadline: config.sealDeadline,
     directorKeys: config.directorKeys,
     directorRequestsPerPrefixPerDay: config.directorRequestsPerPrefixPerDay,
+    qualification: {
+      affiliations: config.qualAffiliations,
+      verifyGoogle: googleTokenVerifier(GOOGLE_CLIENT_ID),
+    },
     log,
   });
   const relay = new Relay(store, clock, config.policy, {

@@ -14,6 +14,7 @@ import {
   tsaByName,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
+import type { QualMethodConfig } from "./engine";
 
 /**
  * 서버 설정. 모두 환경 변수로 받고, 없으면 운영 기본값이다.
@@ -70,6 +71,35 @@ export interface ServerConfig {
   directorKeys: { credentialId: Uint8Array; pub: Uint8Array }[];
   /** 국장 요청: IP 앞부분 하나당 하루 상한 */
   directorRequestsPerPrefixPerDay: number;
+  /**
+   * 상품 자격 소속마다 신원 확인 방법(docs/36 11-13, `STARDRAW_QUAL_AFFILIATIONS`). 기관 도메인은 여기(비공개 설정)에만 둔다.
+   * 모양: `소속 이름=google:도메인`을 쉼표로 여럿. 비면 도장을 찍지 않는다
+   */
+  qualAffiliations: Map<string, QualMethodConfig>;
+}
+
+/** `벌집 성단=google:example.com,다른 성단=google:example.org` */
+export function parseQualAffiliations(
+  text: string,
+): Map<string, QualMethodConfig> {
+  const out = new Map<string, QualMethodConfig>();
+  for (const item of text
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)) {
+    const at = item.lastIndexOf("=");
+    const name = item.slice(0, at).trim();
+    const [kind, domain, extra] = item
+      .slice(at + 1)
+      .trim()
+      .split(":");
+    if (at < 1 || kind !== "google" || !domain || extra !== undefined)
+      throw new Error(
+        `STARDRAW_QUAL_AFFILIATIONS 모양이 아니다(소속 이름=google:도메인): ${item.slice(0, 12)}…`,
+      );
+    out.set(name.normalize("NFC"), { kind, domain: domain.toLowerCase() });
+  }
+  return out;
 }
 
 const env = (name: string): string | undefined => {
@@ -173,6 +203,9 @@ export function loadConfig(): ServerConfig {
     directorRequestsPerPrefixPerDay: int(
       "STARDRAW_DIRECTOR_REQUESTS_PER_PREFIX",
       60,
+    ),
+    qualAffiliations: parseQualAffiliations(
+      env("STARDRAW_QUAL_AFFILIATIONS") ?? "",
     ),
     drandUrls: (
       env("STARDRAW_DRAND_URLS") ??

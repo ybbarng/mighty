@@ -32,6 +32,9 @@ import type { Relay } from "./relay";
  * 확인 링크 토큰은 주소에 넣지 않고 본문으로만 받는다(서버 로그에 남지 않게).
  *   GET  /api/director/state            국장 관리 화면: 다음 기록(서명할 장부 끝 해시), 국장 열쇠·운영 기록·소속, 받아 둔 요청
  *   POST /api/director/ops              { op }(국장 패스키로 서명한 운영 기록) → { id, round, effectiveRound }
+ *   POST /api/director/qual-key         새 도장 열쇠(비밀은 서버에) → { issuerKey }. 국장이 자격 기간 열기에 넣어 서명한다
+ *   GET  /api/qual                      효력이 생긴 자격 기간과 이 서버에서 받을 수 있는지 { round, periods }
+ *   POST /api/qual/:periodId/blind      { idToken, blinded }(구글 ID 토큰, 가린 값) → { blindStamp }(docs/36 11-13)
  *   GET  /ledger/...                    공개 장부 파일(nginx가 대신 내도 된다)
  * 바이트는 모두 base64url이다. 화면과 같은 출처라 CORS가 필요 없고, 개발용 출처만 허용 목록에 둔다.
  */
@@ -230,6 +233,31 @@ async function handle(
       200,
       await engine.submitDirectorOp(op, clientIp(req, o.trustProxy)),
     );
+  }
+
+  if (method === "POST" && path === "/api/director/qual-key")
+    return send(res, 200, engine.createIssuerKey(clientIp(req, o.trustProxy)));
+
+  if (method === "GET" && path === "/api/qual")
+    return send(res, 200, await engine.qualInfo());
+
+  const qualMatch = path.match(/^\/api\/qual\/([0-9a-f]{64})\/blind$/);
+  if (method === "POST" && qualMatch) {
+    const body = await readJson(req);
+    let blinded: Uint8Array;
+    try {
+      blinded = fromBase64Url(str(body.blinded, "가린 값"));
+    } catch (err) {
+      if (err instanceof EntryError) throw err;
+      throw new EntryError("가린 값 형식이 맞지 않습니다");
+    }
+    const { blindStamp } = await engine.issueStamp({
+      periodId: qualMatch[1] as string,
+      idToken: str(body.idToken, "로그인 결과"),
+      blinded,
+      ip: clientIp(req, o.trustProxy),
+    });
+    return send(res, 200, { blindStamp: toBase64Url(blindStamp) });
   }
 
   if (method === "POST" && path === "/api/confirm/invites") {
