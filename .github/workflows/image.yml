@@ -53,6 +53,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SITE_URL=https://game.byb.kr
             NEXT_PUBLIC_UMAMI_WEBSITE_ID=73d4af92-bdfe-4bcb-945a-cdc440d380f4
+            NEXT_PUBLIC_STARDRAW_API=/stardraw-api
           cache-from: type=gha,scope=mighty
           cache-to: type=gha,scope=mighty,mode=max
 
