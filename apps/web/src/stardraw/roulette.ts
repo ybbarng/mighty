@@ -21,14 +21,20 @@ export interface RouletteTiming {
   holdMs: number;
   /** 바퀴마다 적어도 이만큼 한 바퀴를 더 돈다 */
   laps: number;
+  /** 멈출 별이 이 칸 수보다 가까우면 한 바퀴를 더 돈다(불빛이 거의 안 움직이고 멈추지 않게) */
+  minSteps: number;
 }
 
-/** 한 번 멈춤 약 2.9초, 전체 약 21초 */
+/**
+ * 한 번 멈춤 약 4.5초, 전체 약 32초. 불빛을 눈으로 따라갈 수 있게 덧바퀴 없이 멈출 별까지만 돈다
+ * (사용자: 룰렛이 너무 빨리 돈다, 2026-10-30)
+ */
 export const ROULETTE_TIMING: RouletteTiming = {
   leadMs: 600,
-  spinMs: 2400,
-  holdMs: 500,
-  laps: 1,
+  spinMs: 3600,
+  holdMs: 900,
+  laps: 0,
+  minSteps: 15,
 };
 
 export interface RouletteStop {
@@ -73,11 +79,12 @@ export function planRoulette(
     const goal = ring.indexOf(target);
     if (goal === -1) throw new Error(`도는 차례에 없는 별 ${target}`);
     const distance = (goal - start + ring.length) % ring.length;
+    const near = distance < timing.minSteps ? ring.length : 0;
     stops.push({
       target,
       ring,
       start,
-      steps: distance + timing.laps * ring.length,
+      steps: distance + near + timing.laps * ring.length,
       at: timing.leadMs + i * (timing.spinMs + timing.holdMs),
     });
     taken.push(target);
@@ -104,9 +111,9 @@ export interface RouletteFrame {
   done: boolean;
 }
 
-/** 빠르게 시작해 점점 느려지는 곡선(0~1 → 0~1) */
+/** 빠르게 시작해 점점 느려지는 곡선(0~1 → 0~1). 출발이 너무 급하지 않게 제곱 */
 function easeOut(u: number): number {
-  return 1 - (1 - u) ** 3;
+  return 1 - (1 - u) ** 2;
 }
 
 /** 추첨 시작부터 t(ms) 지났을 때의 모습. t가 같으면 늘 같다 */
@@ -119,7 +126,8 @@ export function rouletteAt(plan: RoulettePlan, t: number): RouletteFrame {
       return { fixed, cursor: null, stop: i - 1, step: 0, done: false };
     const u = (t - s.at) / spinMs;
     if (u < 1) {
-      const step = Math.min(s.steps, Math.floor(easeOut(u) * s.steps));
+      // 반올림: 마지막 칸(당첨 별)에 멈추기 조금 전에 닿아 잠깐 머문다
+      const step = Math.min(s.steps, Math.round(easeOut(u) * s.steps));
       const cursor = s.ring[(s.start + step) % s.ring.length] ?? null;
       return { fixed, cursor, stop: i, step, done: false };
     }

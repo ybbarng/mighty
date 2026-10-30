@@ -30,11 +30,12 @@ describe("추첨 룰렛: 미리 정한 칸 수로 정확히 당첨 별에서 멈
     expect(last.fixed).toEqual(order);
   });
 
-  it("이미 뽑힌 별은 다음 바퀴에서 건너뛰고, 바퀴마다 적어도 한 바퀴를 돈다", () => {
+  it("이미 뽑힌 별은 다음 바퀴에서 건너뛰고, 바퀴마다 적어도 minSteps칸 지나되 두 바퀴는 넘지 않는다", () => {
     plan.stops.forEach((s, i) => {
       expect(s.ring).toHaveLength(45 - i);
       for (const n of order.slice(0, i)) expect(s.ring).not.toContain(n);
-      expect(s.steps).toBeGreaterThanOrEqual(s.ring.length);
+      expect(s.steps).toBeGreaterThanOrEqual(ROULETTE_TIMING.minSteps);
+      expect(s.steps).toBeLessThan(ROULETTE_TIMING.minSteps + s.ring.length);
       // 도는 동안 불빛은 뽑힌 별에 가지 않는다
       for (let t = s.at; t < s.at + spinMs; t += 7) {
         const f = rouletteAt(plan, t);
@@ -70,8 +71,17 @@ describe("추첨 룰렛: 미리 정한 칸 수로 정확히 당첨 별에서 멈
     }
   });
 
-  it("전체는 약 20초", () => {
-    expect(plan.totalMs).toBeGreaterThan(18_000);
-    expect(plan.totalMs).toBeLessThan(23_000);
+  it("전체는 약 32초", () => {
+    expect(plan.totalMs).toBeGreaterThan(29_000);
+    expect(plan.totalMs).toBeLessThan(35_000);
+  });
+
+  it("멈출 별이 바로 다음 칸이어도 불빛이 충분히 지나간다", () => {
+    // 첫 바퀴는 1부터 돌므로 2를 뽑으면 거리 1
+    const near = planRoulette([2, 3, 4, 5, 6, 7, 8]);
+    for (const s of near.stops)
+      expect(s.steps).toBeGreaterThanOrEqual(ROULETTE_TIMING.minSteps);
+    const end = rouletteAt(near, (near.stops[0]?.at ?? 0) + spinMs - 0.001);
+    expect(end.cursor).toBe(2);
   });
 });
