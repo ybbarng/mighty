@@ -10,6 +10,7 @@ import {
   closeRound,
   decodeOperation,
   decodeRegistration,
+  decodeRegistrationProof,
   decodeTicket,
   directorFingerprint,
   drandRoundForClose,
@@ -54,6 +55,7 @@ import {
   ticketId,
   toBase64Url,
   toHex,
+  verifyRegistrationProof,
   verifyTicketSignature,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
@@ -108,6 +110,21 @@ export class EntryError extends Error {
   ) {
     super(message);
   }
+}
+
+/** 국장 열쇠로 응모·등록·찾기를 하려 할 때(docs/36 11-12). 화면에 그대로 보인다 */
+export const DIRECTOR_KEY_MESSAGE =
+  "이 패스키는 국장 열쇠라 응모에 쓸 수 없습니다";
+
+/** 등록만 올리기(우주인 등록 직후, docs/36 11-14) */
+export interface RegisterInput {
+  /** encodeRegistration 바이트 */
+  registration: Uint8Array;
+  /** encodeRegistrationProof 바이트(그 패스키의 서명, UV) */
+  proof: Uint8Array;
+  /** 작업 증명에 쓴 문제 값(hex). 지금 문제 값과 다르면 다시 풀라고 409로 알린다 */
+  head: string;
+  ip: string;
 }
 
 export interface EntryInput {
@@ -263,11 +280,134 @@ export class StardrawServer {
     return this.o.store.registrationRound(toHex(entrantId(pub)));
   }
 
-  /** 패스키 번호 → 공개 열쇠(장부에 공개될 값이라 숨길 것이 없다) */
-  passkeyPub(credentialId: Uint8Array): Uint8Array | null {
+  /** 패스키 번호 → 공개 열쇠(장부에 공개될 값이라 숨길 것이 없다). 국장 패스키면 그렇다고 알린다 */
+  async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {
+    const pub =
+      this.o.store.registrationByCredential(toHex(credentialId))?.pub ?? null;
+    if (!pub && (await this.isDirectorKey(null, credentialId)))
+      throw new EntryError(DIRECTOR_KEY_MESSAGE, 403);
+    return pub;
+  }
+
+  /**
+   * 국장 열쇠와 겹치는 열쇠·패스키 번호인지: 장부에 실렸거나 예고 중인 지정, 받아 두고 아직 싣지 않은 요청,
+   * 서버 설정(`STARDRAW_DIRECTOR_KEYS`)까지 본다. 국장 열쇠와 우주인 열쇠는 섞지 않는다(docs/36 11-12)
+   */
+  private async isDirectorKey(
+    pub: Uint8Array | null,
+    credentialId: Uint8Array,
+  ): Promise<boolean> {
+    await this.opsReady;
+    const p = pub ?? new Uint8Array(0);
     return (
-      this.o.store.registrationByCredential(toHex(credentialId))?.pub ?? null
+      everDirector(this.ops, p, credentialId) ||
+      this.submittedDirectorKey(p, credentialId) ||
+      (this.o.directorKeys ?? []).some(
+        (k) =>
+          (pub !== null && equalBytes(k.pub, pub)) ||
+          equalBytes(k.credentialId, credentialId),
+      )
     );
+  }
+
+  // ── 우주인 등록(응모 없이 등록만) ──
+
+  /**
+   * 우주인 등록 직후 등록만 올린다. 응모와 같은 확인을 같은 순서로 한다: IP 상한 → 형식 → 받는 때 →
+   * 국장 열쇠 거절 → 패스키 서명(UV) → 작업 증명. 장부에 싣는 등록 형식은 응모와 함께 오는 것과 같다.
+   * 이미 등록된 열쇠면 그 회차를 그대로 돌려준다(다시 보내도 같다)
+   */
+  async register(input: RegisterInput): Promise<{ round: number }> {
+    const { store } = this.o;
+    const receivedAt = this.now();
+    const schedule = this.schedule();
+    const round = roundAt(schedule, receivedAt);
+    if (round === null) throw new EntryError("아직 1회차가 열리지 않았습니다");
+    const prefix = ipPrefix(input.ip);
+    const day = String(Math.floor(receivedAt / 86400));
+
+    // 1. IP 상한
+    if (
+      this.counters.count("register", day, prefix) >=
+      this.o.limits.registrationsPerPrefixPerDay
+    )
+      throw new EntryError(
+        "같은 곳에서 오늘 새로 등록한 열쇠가 너무 많습니다",
+        429,
+      );
+
+    // 2. 형식
+    let registration: KeyRegistration;
+    let proof: ReturnType<typeof decodeRegistrationProof>;
+    try {
+      registration = decodeRegistration(input.registration);
+      proof = decodeRegistrationProof(input.proof);
+    } catch (err) {
+      if (err instanceof RawKeyRejected)
+        throw new EntryError(
+          "패스키로만 등록할 수 있습니다. 직접 만든 열쇠는 받지 않습니다",
+        );
+      throw new EntryError("등록 형식이 맞지 않습니다");
+    }
+    const who = toHex(entrantId(registration.pub));
+    const known = store.registrationRound(who);
+    if (known !== null) return { round: known };
+
+    // 3. 받는 때: 응모를 받는 동안만(등록은 그 회차 기록에 실린다)
+    const times = roundTimes(schedule, round);
+    if (
+      store.recordCount() < round - 1 ||
+      receivedAt >= times.closesAt ||
+      store.seal(round)
+    )
+      throw new EntryError("다음 회차가 열리면 등록됩니다", 409);
+    if (input.head !== toHex(this.head()))
+      throw new EntryError("회차가 바뀌었습니다. 다시 계산해 주세요", 409);
+
+    // 4. 국장 열쇠와 섞지 않는다, 패스키 번호는 한 번만
+    if (await this.isDirectorKey(registration.pub, registration.credentialId))
+      throw new EntryError(DIRECTOR_KEY_MESSAGE, 403);
+    const credentialHex = toHex(registration.credentialId);
+    if (store.credentialTaken(credentialHex))
+      throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");
+
+    // 5. 패스키 서명(본인 확인 UV까지)
+    if (!(await verifyRegistrationProof(registration, proof, this.o.policy)))
+      throw new EntryError("등록 서명이 맞지 않습니다");
+
+    // 6. 작업 증명
+    const challenge = this.head();
+    const ok = await this.gate
+      .run(() =>
+        checkPow(
+          challenge,
+          registrationContent(registration),
+          registration.nonce,
+          times.entry.registerPowTarget,
+          this.o.pow,
+        ),
+      )
+      .catch((err) => {
+        if (err instanceof BusyError) throw new EntryError(err.message, 503);
+        throw err;
+      });
+    if (!ok) throw new EntryError("열쇠 등록 계산이 맞지 않습니다");
+
+    let at = round;
+    store.transaction(() => {
+      if (store.seal(round))
+        throw new EntryError("다음 회차가 열리면 등록됩니다", 409);
+      const again = store.registrationRound(who);
+      if (again !== null) {
+        at = again;
+        return;
+      }
+      if (store.credentialTaken(credentialHex))
+        throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");
+      store.addRegistration(round, who, credentialHex, registration);
+      this.counters.add("register", day, prefix);
+    });
+    return { round: at };
   }
 
   // ── 응모 ──
@@ -329,14 +469,8 @@ export class StardrawServer {
       const problem = checkRegistration(registration);
       if (problem) throw new EntryError(problem);
       // 국장 열쇠와 우주인 열쇠는 섞지 않는다(docs/36 11-12)
-      await this.opsReady;
-      if (
-        everDirector(this.ops, registration.pub, registration.credentialId) ||
-        this.submittedDirectorKey(registration.pub, registration.credentialId)
-      )
-        throw new EntryError(
-          "국장 패스키로는 우주인 등록을 할 수 없습니다. 응모용 패스키를 따로 만들어 주세요",
-        );
+      if (await this.isDirectorKey(registration.pub, registration.credentialId))
+        throw new EntryError(DIRECTOR_KEY_MESSAGE, 403);
       credentialHex = toHex(registration.credentialId);
       if (store.credentialTaken(credentialHex))
         throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");

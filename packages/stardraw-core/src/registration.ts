@@ -8,7 +8,16 @@ import {
 } from "./bytes";
 import { PUBLIC_KEY_LENGTH } from "./keys";
 import { type SolveOptions, solvePow } from "./pow";
-import { RAW_KEY_KIND, RawKeyRejected } from "./signature";
+import {
+  type EntrantSigner,
+  RAW_KEY_KIND,
+  RawKeyRejected,
+  readSignature,
+  type SignatureData,
+  verifyEntrantSignature,
+  type WebAuthnPolicy,
+  writeSignature,
+} from "./signature";
 
 /**
  * 열쇠 등록(docs/36 5절, 11-2). 응모하려면 먼저 공개 열쇠를 장부에 등록한다.
@@ -130,4 +139,50 @@ export async function makeRegistration(
     options,
   );
   return nonce === null ? null : { ...unsolved, nonce };
+}
+
+/**
+ * 등록 증명(2026-10-30, docs/36 11-14). 우주인 등록 직후 응모권 없이 등록만 올릴 때(`POST /api/register`)
+ * 그 패스키로 서명해 열쇠를 가졌고 본인 확인(UV)을 했다는 것을 보인다. 응모권과 함께 올리는 등록은
+ * 응모권 서명이 같은 일을 하므로 증명이 필요 없다. 증명은 서버가 확인만 하고 장부에는 싣지 않는다
+ * (장부 형식은 그대로). 서명 대상은 nonce를 뺀 등록 앞부분이라, 작업 증명을 다시 풀어도(회차가 넘어가
+ * 문제 값이 바뀌어도) 같은 증명을 다시 쓸 수 있다.
+ */
+export function registrationProofMessage(r: UnsolvedRegistration): Uint8Array {
+  return concat(
+    utf8("stardraw/register-proof/v1"),
+    new Uint8Array([0]),
+    head(r).done(),
+  );
+}
+
+export function signRegistrationProof(
+  signer: EntrantSigner,
+  r: UnsolvedRegistration,
+): Promise<SignatureData> {
+  return signer.sign(registrationProofMessage(r));
+}
+
+export function encodeRegistrationProof(sig: SignatureData): Uint8Array {
+  return writeSignature(new ByteWriter(), sig).done();
+}
+
+export function decodeRegistrationProof(bytes: Uint8Array): SignatureData {
+  const reader = new ByteReader(bytes);
+  const sig = readSignature(reader);
+  reader.end();
+  return sig;
+}
+
+export function verifyRegistrationProof(
+  r: UnsolvedRegistration,
+  sig: SignatureData,
+  policy?: WebAuthnPolicy,
+): Promise<boolean> {
+  return verifyEntrantSignature(
+    r.pub,
+    registrationProofMessage(r),
+    sig,
+    policy,
+  );
 }

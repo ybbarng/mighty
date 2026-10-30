@@ -19,7 +19,8 @@ import type { Relay } from "./relay";
  * HTTP 주소(모두 `basePath` 아래, 운영은 /stardraw-api).
  *   GET  /api/state                     지금 회차·닫힌 회차 수·문제 값·응모 수·서버 공개 열쇠
  *   GET  /api/keys/:pub                 이 공개 열쇠가 등록돼 있는지와 등록 회차 { registered, round }
- *   GET  /api/passkeys/:credentialId    패스키 번호로 공개 열쇠 찾기(다른 기기에서 내 패스키 찾기)
+ *   GET  /api/passkeys/:credentialId    패스키 번호로 공개 열쇠 찾기(다른 기기에서 내 패스키 찾기). 국장 패스키면 403
+ *   POST /api/register                  { registration, proof, head } → { round }(우주인 등록 직후 등록만 올리기)
  *   POST /api/enter                     { ticket, registration? } → { receipt, receivedAt }
  *   POST /api/confirm/invites           당첨자: { invite }(서명한 확인 링크 초대) → { expiresAt }
  *   POST /api/confirm/peek              확인하는 사람: { token } → { state: "open", round, ticketId, expiresAt } | { state: "used" }
@@ -161,9 +162,32 @@ async function handle(
     } catch {
       throw new EntryError("패스키 번호 형식이 맞지 않습니다");
     }
-    const pub = engine.passkeyPub(credentialId);
+    const pub = await engine.passkeyPub(credentialId);
     if (!pub) throw new EntryError("장부에 없는 패스키입니다", 404);
     return send(res, 200, { pub: toBase64Url(pub) });
+  }
+
+  if (method === "POST" && path === "/api/register") {
+    const body = await readJson(req);
+    let registration: Uint8Array;
+    let proof: Uint8Array;
+    try {
+      registration = fromBase64Url(str(body.registration, "열쇠 등록"));
+      proof = fromBase64Url(str(body.proof, "등록 서명"));
+    } catch (err) {
+      if (err instanceof EntryError) throw err;
+      throw new EntryError("등록 형식이 맞지 않습니다");
+    }
+    return send(
+      res,
+      200,
+      await engine.register({
+        registration,
+        proof,
+        head: str(body.head, "문제 값"),
+        ip: clientIp(req, o.trustProxy),
+      }),
+    );
   }
 
   if (method === "POST" && path === "/api/enter") {

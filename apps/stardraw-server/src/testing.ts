@@ -15,6 +15,7 @@ import {
   drawNumbers,
   drawSeed,
   encodeRegistration,
+  encodeRegistrationProof,
   encodeTicket,
   fromBase64Url,
   fromHex,
@@ -31,6 +32,7 @@ import {
   type Schedule,
   type SoftPasskey,
   sha256,
+  signRegistrationProof,
   softPasskeySigner,
   type Ticket,
   taggedHash,
@@ -289,6 +291,32 @@ export async function enter(
   });
   p.registered = true;
   return { ticket, receipt };
+}
+
+/** 응모 없이 등록만 올린다(우주인 등록 직후, 패스키 서명으로 증명) */
+export async function registerOnly(
+  rig: Rig,
+  p: Player,
+  ip = "203.0.113.7",
+  head: Uint8Array = rig.engine.head(),
+) {
+  const registration = await makeRegistration(
+    p.signer,
+    p.signer.credentialId,
+    head,
+    EASY,
+    { params: TEST_POW },
+  );
+  if (!registration) throw new Error("등록을 만들지 못했다");
+  const proof = await signRegistrationProof(p.signer, registration);
+  const out = await rig.engine.register({
+    registration: encodeRegistration(registration),
+    proof: encodeRegistrationProof(proof),
+    head: toHex(head),
+    ip,
+  });
+  p.registered = true;
+  return out;
 }
 
 /** 서버가 쓴 공개 장부 파일만 읽는다(검사기가 내려받는 것과 같다) */

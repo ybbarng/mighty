@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import { fromHex, toHex } from "./bytes";
 import {
   decodeRegistration,
+  decodeRegistrationProof,
   encodeRegistration,
+  encodeRegistrationProof,
   type KeyRegistration,
   registrationContent,
   registrationId,
+  signRegistrationProof,
+  verifyRegistrationProof,
 } from "./registration";
 import { registrationRoot, sealDigest } from "./round";
 import { RawKeyRejected } from "./signature";
@@ -82,5 +86,44 @@ describe("봉인 값", () => {
     };
     expect(toHex(sealDigest(base))).not.toBe(toHex(sealDigest(other)));
     expect(toHex(sealDigest(base))).toBe(toHex(sealDigest({ ...base })));
+  });
+});
+
+describe("등록 증명(등록만 올릴 때의 패스키 서명)", () => {
+  it("그 패스키의 서명만 통과하고, 등록 앞부분이 달라지거나 본인 확인(UV)이 없으면 거절한다", async () => {
+    const passkey = await fakePasskey();
+    const reg = {
+      v: 1,
+      credentialId: passkey.credentialId,
+      pub: passkey.signer.publicKey,
+    };
+    const sig = decodeRegistrationProof(
+      encodeRegistrationProof(await signRegistrationProof(passkey.signer, reg)),
+    );
+    expect(await verifyRegistrationProof(reg, sig)).toBe(true);
+    // 패스키 번호를 바꾼 등록에는 맞지 않는다
+    expect(
+      await verifyRegistrationProof(
+        { ...reg, credentialId: fromHex("00ff") },
+        sig,
+      ),
+    ).toBe(false);
+    // 다른 열쇠의 서명
+    const other = await fakePasskey();
+    expect(
+      await verifyRegistrationProof(
+        reg,
+        await signRegistrationProof(other.signer, reg),
+      ),
+    ).toBe(false);
+    // 본인 확인 없는 인증기(UP만)
+    const noUv = await fakePasskey({ flags: 0x01 });
+    const noUvReg = { ...reg, pub: noUv.signer.publicKey };
+    expect(
+      await verifyRegistrationProof(
+        noUvReg,
+        await signRegistrationProof(noUv.signer, noUvReg),
+      ),
+    ).toBe(false);
   });
 });
