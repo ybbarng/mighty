@@ -1,9 +1,13 @@
 // @vitest-environment node
 import {
+  anchorFile,
+  anchorPath,
   closeRound,
   drandRoundForClose,
   encodeRecord,
+  genesisAnchorFile,
   genesisHash,
+  ledgerId,
   recordHash,
   roundTimes,
   type Schedule,
@@ -28,9 +32,9 @@ const SCHEDULE: Schedule = {
       closeMargin: 5,
       powTarget: 2 ** 31,
       registerPowTarget: 2 ** 31,
+      phase: "trial",
     },
   ],
-  ledger: "trial",
 };
 const { closesAt } = roundTimes(SCHEDULE, 1);
 const RECORD = closeRound({
@@ -47,7 +51,7 @@ const RECORD = closeRound({
 
 function files(change: (f: Record<string, unknown>) => void = () => {}) {
   const f: Record<string, unknown> = {
-    "/ledger/genesis.json": { v: 1, schedule: SCHEDULE, carried: [] },
+    "/ledger/genesis.json": { v: 1, schedule: SCHEDULE },
     "/ledger/head.json": {
       v: 1,
       rounds: 1,
@@ -70,9 +74,8 @@ function files(change: (f: Record<string, unknown>) => void = () => {}) {
   change(f);
   return (async (url: string) => {
     const body = f[url];
-    return body === undefined
-      ? new Response("없음", { status: 404 })
-      : Response.json(body);
+    if (body === undefined) return new Response("없음", { status: 404 });
+    return typeof body === "string" ? new Response(body) : Response.json(body);
   }) as unknown as typeof fetch;
 }
 
@@ -80,7 +83,7 @@ const statusOf = (items: { id: string; status: string }[]) =>
   Object.fromEntries(items.map((i) => [i.id, i.status]));
 
 describe("장부 전체 검사(서버 공개 파일)", () => {
-  it("정직한 장부는 모든 항목이 통과하고, 바깥 시각 증명만 건너뜀이다", async () => {
+  it("정직한 장부는 모든 항목이 통과하고, 바깥 증명(시각 인증·앵커)만 건너뜀이다", async () => {
     const result = await checkServerLedger({
       base: "",
       fetch: files(),
@@ -90,11 +93,11 @@ describe("장부 전체 검사(서버 공개 파일)", () => {
     expect(result.mode).toBe("trial");
     const status = statusOf(result.items);
     expect(status.timestamp).toBe("skip");
-    expect(
-      result.items.filter((i) => i.id !== "timestamp").map((i) => i.status),
-    ).toEqual(
-      result.items.filter((i) => i.id !== "timestamp").map(() => "pass"),
+    expect(status.anchor).toBe("skip");
+    const inside = result.items.filter(
+      (i) => i.id !== "timestamp" && i.id !== "anchor",
     );
+    expect(inside.map((i) => i.status)).toEqual(inside.map(() => "pass"));
   });
 
   it("drand 서명이 맞지 않으면 그 항목이 실패한다", async () => {
@@ -140,8 +143,11 @@ describe("봉인 시각 증명(공개 시각 인증 토큰)", () => {
       const seal = f["/ledger/seals/000001.json"] as Record<string, unknown>;
       seal.log = log;
       if (mode === "live") {
-        const { ledger: _, ...live } = SCHEDULE;
-        f["/ledger/genesis.json"] = { v: 1, schedule: live, carried: [] };
+        const live: Schedule = {
+          ...SCHEDULE,
+          entries: SCHEDULE.entries.map((e) => ({ ...e, phase: "live" })),
+        };
+        f["/ledger/genesis.json"] = { v: 1, schedule: live };
       }
     });
   const proof = (token: string, genTime = RECORD.rootLoggedAt): TsaProof => ({
@@ -178,10 +184,43 @@ describe("봉인 시각 증명(공개 시각 인증 토큰)", () => {
     });
   });
 
-  it("증거가 없는 회차는 시험 운영이면 건너뜀, 정식이면 실패", async () => {
+  it("증거가 없는 회차는 시험 단계면 건너뜀, 정식 단계면 실패", async () => {
     expect((await timestamp(withLog({ kind: "local" })))?.status).toBe("skip");
     expect((await timestamp(withLog({ kind: "local" }, "live")))?.status).toBe(
       "fail",
     );
+  });
+});
+
+describe("앵커 저장소(GitHub raw)", () => {
+  const RAW = "https://raw.githubusercontent.com/ybbarng/stardraw-ledger";
+  const withAnchor = (genesis: Schedule, recordFile?: string) =>
+    files((f) => {
+      f[`${RAW}/main/genesis.txt`] = genesisAnchorFile(genesis);
+      if (recordFile)
+        f[`${RAW}/trial/${anchorPath(ledgerId(SCHEDULE), 1)}`] = recordFile;
+    });
+  const run = (fetch: typeof globalThis.fetch) =>
+    checkServerLedger({ base: "", fetch, beaconVerifier: () => true });
+  const good = anchorFile({
+    ledger: ledgerId(SCHEDULE),
+    round: 1,
+    record: toHex(recordHash(RECORD)),
+    seal: "-",
+  });
+
+  it("처음 일정표와 회차 기록 해시가 앵커와 같으면 통과한다(시험 회차는 trial 브랜치)", async () => {
+    const result = await run(withAnchor(SCHEDULE, good));
+    expect(statusOf(result.items).anchor).toBe("pass");
+    expect(result.problems).toEqual([]);
+  });
+
+  it("앵커의 처음 일정표와 다르면(장부를 다시 시작했다) 실패한다", async () => {
+    const other: Schedule = { ...SCHEDULE, epoch: SCHEDULE.epoch + 3600 };
+    const result = await run(withAnchor(other, good));
+    expect(result.items.find((i) => i.id === "anchor")).toMatchObject({
+      status: "fail",
+      detail: "처음 일정표: 앵커 저장소의 장부와 다르다(장부를 다시 시작했다)",
+    });
   });
 });

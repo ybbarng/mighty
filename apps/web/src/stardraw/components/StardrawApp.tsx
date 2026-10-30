@@ -16,17 +16,16 @@ import {
 } from "@mighty/stardraw-core";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
 import { BackToGames } from "@/components/BackToGames";
 import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
-
 import { type CheckBatch, type CheckTicket, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
+import { roundShort, roundTitle } from "../round-label";
 import { type Services, useLedger } from "../services";
 import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckPanel } from "./CheckPanel";
@@ -314,7 +313,7 @@ export function TrialBanner() {
       data-trial-banner
       className="rounded-xl border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-center text-amber-50 text-sm"
     >
-      시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다
+      시험 운영 중 · 정식 시작 뒤에도 시험 회차는 장부에 그대로 남습니다
     </p>
   );
 }
@@ -382,7 +381,7 @@ export function Home({
       >
         <div className="flex items-baseline justify-between">
           <span className="font-bold text-xl tabular-nums">
-            제 {status.round}회
+            {roundTitle(services.ledger.schedule, status.round)}
           </span>
           <span className="text-sm text-white/60" data-schedule-line>
             {scheduleLine(status.times.entry.length)}
@@ -469,7 +468,7 @@ export function Home({
                 className="sd-envelope flex w-32 shrink-0 flex-col items-center gap-1 rounded-xl px-3 pt-12 pb-3 text-slate-900"
               >
                 <span className="font-bold tabular-nums">
-                  제 {m.ticket.round}회
+                  {roundTitle(services.ledger.schedule, m.ticket.round)}
                 </span>
                 <span className="text-xs">눌러서 추첨 보기</span>
               </button>
@@ -631,7 +630,7 @@ function ShareTicket({
       services.ledger.schedule,
       ticket.round,
     ).closesAt;
-    const text = `하늘의 별 따기 ${ticket.round}회에 응모했어요. 추첨은 ${koreanHour(drandTime(drandRoundForClose(closesAt)))}!`;
+    const text = `하늘의 별 따기 ${roundShort(services.ledger.schedule, ticket.round)}에 응모했어요. 추첨은 ${koreanHour(drandTime(drandRoundForClose(closesAt)))}!`;
     const url = ticketUrl(window.location.origin, ticket);
     if (navigator.share) {
       try {
@@ -678,6 +677,7 @@ function DrawFor({
       ticket={mine.find((m) => m.ticket.round === round)?.ticket}
       onClose={onClose}
       clock={services.clock}
+      label={roundTitle(services.ledger.schedule, round)}
     />
   );
 }
@@ -729,7 +729,7 @@ export function MineView({
                 >
                   <span className="flex flex-col">
                     <span className="font-semibold tabular-nums">
-                      제 {m.ticket.round}회
+                      {roundTitle(services.ledger.schedule, m.ticket.round)}
                     </span>
                     <span
                       className={cn(
@@ -903,7 +903,11 @@ export function RoundsView({
         <ul className="flex flex-col gap-2">
           {closed.slice(0, limit).map(({ record }) => (
             <li key={record.round}>
-              <RoundRow record={record} onOpen={() => onOpen(record.round)} />
+              <RoundRow
+                record={record}
+                label={roundTitle(services.ledger.schedule, record.round)}
+                onOpen={() => onOpen(record.round)}
+              />
             </li>
           ))}
         </ul>
@@ -923,9 +927,12 @@ export function RoundsView({
 
 function RoundRow({
   record,
+  label,
   onOpen,
 }: {
   record: RoundRecord;
+  /** 보이는 회차 이름(roundTitle) */
+  label: string;
   onOpen: () => void;
 }) {
   const counts = winnerCounts(record);
@@ -938,7 +945,7 @@ function RoundRow({
       className="sd-glass flex w-full flex-col gap-2 rounded-2xl px-4 py-3 text-left"
     >
       <span className="flex items-baseline justify-between">
-        <span className="font-semibold tabular-nums">제 {record.round}회</span>
+        <span className="font-semibold tabular-nums">{label}</span>
         <span className="text-white/55 text-xs tabular-nums">
           응모 {record.count}장 · 당첨 {winners}장
         </span>
@@ -986,7 +993,10 @@ function RoundDetail({
   const myIds = new Set(mine.map((m) => toHex(ticketId(m.ticket))));
 
   return (
-    <section className="flex flex-col gap-4" aria-label={`제 ${round}회`}>
+    <section
+      className="flex flex-col gap-4"
+      aria-label={roundTitle(services.ledger.schedule, round)}
+    >
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -995,7 +1005,9 @@ function RoundDetail({
         >
           ← 지난 회차
         </button>
-        <h2 className="font-bold text-lg tabular-nums">제 {round}회</h2>
+        <h2 className="font-bold text-lg tabular-nums">
+          {roundTitle(services.ledger.schedule, round)}
+        </h2>
         <button
           type="button"
           onClick={onDraw}

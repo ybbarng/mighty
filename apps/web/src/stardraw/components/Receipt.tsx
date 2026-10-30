@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  displayRound,
   drandRoundForClose,
   drandTime,
   type Rank,
@@ -12,10 +13,9 @@ import {
   toHex,
 } from "@mighty/stardraw-core";
 import { useState } from "react";
-
 import { cn } from "@/lib/cn";
-
 import { myRank } from "../results";
+import { roundShort } from "../round-label";
 import { starOf } from "../sky";
 import { KeyIcon } from "./PasskeyHelp";
 import { formatTime, LottoBall, RANK_LABEL, shortId } from "./parts";
@@ -47,7 +47,7 @@ export function Receipt({
   const [aboutId, setAboutId] = useState(false);
   return (
     <article
-      aria-label={`${ticket.round}회 응모권`}
+      aria-label={`${roundShort(schedule, ticket.round)} 응모권`}
       data-receipt={id}
       className={cn(
         "sd-paper relative mx-auto w-full max-w-sm px-5 pt-6 pb-7 text-slate-100",
@@ -68,7 +68,11 @@ export function Receipt({
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[13px] tabular-nums">
         <dt className="text-slate-400">회차</dt>
-        <dd className="text-right font-bold">제 {ticket.round} 회</dd>
+        <dd className="text-right font-bold">
+          {displayRound(schedule, ticket.round).phase
+            ? roundShort(schedule, ticket.round)
+            : `제 ${ticket.round} 회`}
+        </dd>
         <dt className="text-slate-400">추첨</dt>
         <dd className="text-right">{formatTime(drawAt)}</dd>
         {receivedAt !== undefined && (

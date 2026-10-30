@@ -2,11 +2,10 @@
 
 import { type Rank, type Ticket, ticketId, toHex } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useState } from "react";
-
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
-
 import { type CheckBatch, type CheckTicket, isActive } from "../checks";
+import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
 import { formatTime, RANK_LABEL, shortId } from "./parts";
@@ -126,7 +125,7 @@ export function CheckPanel({
     }
   };
 
-  const title = `${round}회 ${RANK_LABEL[rank]}`;
+  const title = `${roundShort(services.ledger.schedule, round)} ${RANK_LABEL[rank]}`;
   const signed = batch?.tickets.filter((t) => t.status === "signed") ?? [];
   const waiting = batch?.tickets.filter((t) => t.status === "waiting") ?? [];
   const green = flash?.kind === "confirmed";

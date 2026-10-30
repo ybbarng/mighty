@@ -2,13 +2,12 @@
 
 import { equalBytes, type Ticket, ticketId } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useState } from "react";
-
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
-
 import { myTicketFor, prepareAnswer } from "../confirm";
 import type { ConfirmOutcome, OpenRequest } from "../confirm-relay";
 import { myRank } from "../results";
+import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
 import { RANK_LABEL } from "./parts";
@@ -178,7 +177,8 @@ export function Inbox({
             className="sd-breathe flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
           >
             <p className="font-bold">
-              {req.request.requester}님이 {req.request.round}회{" "}
+              {req.request.requester}님이{" "}
+              {roundShort(services.ledger.schedule, req.request.round)}{" "}
               {rank ? RANK_LABEL[rank] : ""} 당첨자 확인을 요청했습니다
             </p>
             <p className="text-sm text-amber-100/80">

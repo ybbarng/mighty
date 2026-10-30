@@ -29,6 +29,7 @@ export function DrawView({
   onClose,
   clock = realClock,
   instant = false,
+  label,
 }: {
   record: RoundRecord;
   ticket?: Ticket | undefined;
@@ -36,6 +37,8 @@ export function DrawView({
   clock?: Clock | undefined;
   /** 연출 없이 결과부터(데모 화면 둘러보기) */
   instant?: boolean | undefined;
+  /** 보이는 회차 이름(서버 장부의 "시험 n회"·"정식 n회"). 없으면 "제 n회" */
+  label?: string | undefined;
 }) {
   const order = drawOrder(record);
   // 회차가 바뀔 때만 다시 계산한다(order는 record에서 정해진다)
@@ -113,7 +116,7 @@ export function DrawView({
   return (
     <section
       className="flex flex-col gap-4"
-      aria-label={`${record.round}회 추첨`}
+      aria-label={`${label ?? `${record.round}회`} 추첨`}
     >
       <div className="flex items-center justify-between">
         <button
@@ -124,7 +127,7 @@ export function DrawView({
           ← 돌아가기
         </button>
         <h2 className="font-bold text-lg tabular-nums">
-          제 {record.round}회 추첨
+          {label ?? `제 ${record.round}회`} 추첨
         </h2>
         <button
           type="button"

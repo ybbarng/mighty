@@ -6,8 +6,11 @@ import {
   decodeRegistration,
   decodeTicket,
   fromBase64Url,
+  githubAnchorVerifier,
+  githubGenesisVerifier,
   type KeyRegistration,
   type Problem,
+  phaseOf,
   type RoundRecord,
   type Schedule,
   sealDigest,
@@ -29,6 +32,10 @@ import {
 
 /** 서버 주소(빌드할 때 들어간다, services.ts와 같은 값). 비어 있으면 연습 장부 */
 export const SERVER_API = process.env.NEXT_PUBLIC_STARDRAW_API ?? "";
+
+/** GitHub 앵커 저장소(docs/36 11-7). 시험 단계 회차는 trial, 정식 단계 회차와 처음 일정표는 main 브랜치 */
+export const ANCHOR_REPO =
+  process.env.NEXT_PUBLIC_STARDRAW_ANCHOR_REPO ?? "ybbarng/stardraw-ledger";
 
 export type CheckStatus = "pass" | "fail" | "skip";
 
@@ -55,7 +62,6 @@ export interface CheckResult {
 
 interface GenesisFile {
   schedule: Schedule;
-  carried?: string[];
 }
 interface HeadFile {
   rounds: number;
@@ -82,14 +88,20 @@ export interface CheckOptions {
   base?: string;
   /** 시험만 바꿔 끼운다(기본은 quicknet BLS 확인) */
   beaconVerifier?: BeaconVerifier;
+  /** 앵커 저장소(기본 ANCHOR_REPO). null이면 앵커를 보지 않는다 */
+  anchorRepo?: string | null;
   /** 시험만 바꿔 끼운다(기본은 core에 열쇠를 고정한 기관 `TSA_AUTHORITIES`) */
   tsaAuthorities?: readonly TsaAuthority[];
 }
 
 /** 문제 문장을 항목으로 나누는 규칙(verify.ts의 문장 기준, 위에서부터 처음 맞는 것) */
 const RULES: { id: string; label: string; test: RegExp }[] = [
+  {
+    id: "anchor",
+    label: "앵커 저장소(다시 시작하지 않음·기록 해시)",
+    test: /앵커/,
+  },
   { id: "genesis", label: "처음 일정표", test: /^처음 일정표/ },
-  { id: "carried", label: "옮겨 온 등록", test: /^옮긴 등록/ },
   {
     id: "chain",
     label: "기록 사슬",
@@ -166,11 +178,10 @@ export async function checkServerLedger(
   };
   const pad = (n: number) => String(n).padStart(6, "0");
 
+  const anchorRepo =
+    options.anchorRepo === undefined ? ANCHOR_REPO : options.anchorRepo;
   const genesis = await get<GenesisFile>("/ledger/genesis.json");
   const head = await get<HeadFile>("/ledger/head.json");
-  const carried = (genesis.carried ?? []).map((r) =>
-    decodeRegistration(fromBase64Url(r)),
-  );
   const records: RoundRecord[] = [];
   const tickets: Ticket[][] = [];
   const registrations: KeyRegistration[][] = [];
@@ -191,7 +202,20 @@ export async function checkServerLedger(
     {
       powSample: options.powSample ?? 8,
       webauthnPolicy: DEFAULT_WEBAUTHN_POLICY,
-      carried,
+      // 바깥 앵커(GitHub): 장부를 다시 시작하지 않았는지(main의 genesis.txt), 회차 기록 해시가 같은지
+      ...(anchorRepo
+        ? {
+            genesisAnchorVerifier: githubGenesisVerifier({
+              repo: anchorRepo,
+              fetchFn: f,
+            }),
+            anchorVerifier: githubAnchorVerifier({
+              repo: anchorRepo,
+              genesis: genesis.schedule,
+              fetchFn: f,
+            }),
+          }
+        : {}),
       ...(options.beaconVerifier
         ? { beaconVerifier: options.beaconVerifier }
         : {}),
@@ -230,18 +254,24 @@ export async function checkServerLedger(
     await timestampItem(
       records,
       seals,
-      genesis.schedule.ledger === "trial",
+      report.schedule,
       options.tsaAuthorities,
     ),
   ];
+  const anchorSkips = report.skipped.filter((s) => s.includes("앵커")).length;
+  const skips: Record<string, string> = {};
+  if (!anchorRepo) skips.anchor = "앵커 저장소를 정하지 않은 빌드입니다";
+  else if (anchorSkips === records.length + 1)
+    skips.anchor = "앵커 저장소에 이 장부의 기록이 아직 없습니다";
+  const nowRound = Math.max(1, records.length);
   return result(
     "server",
-    genesis.schedule.ledger === "trial" ? "trial" : "live",
+    phaseOf(report.schedule, nowRound) === "trial" ? "trial" : "live",
     report,
     records,
     tickets,
     registrations,
-    withPowDetail(itemsFrom(report.problems, extra, {}), report),
+    withPowDetail(itemsFrom(report.problems, extra, skips), report),
   );
 }
 
@@ -251,16 +281,17 @@ const TIMESTAMP_LABEL = "봉인이 drand보다 먼저였다는 바깥 증명(공
  * 봉인 시각 증명(docs/36 11-1, core tsa.ts): 회차마다 seals/N의 시각 인증 토큰을 확인한다.
  * 통과 규칙: 실린 토큰이 모두 맞고 서로 다른 기관 DEFAULT_TSA_MIN곳 이상이며, 가장 이른 시각이 기록의 rootLoggedAt과 같다.
  * 그 시각이 drand 시각보다 앞서는지는 「무효 회차 규칙」 항목이 본다. 무효 회차(rootLoggedAt 0)는 볼 것이 없다.
- * 시험 운영에서 증거가 없는 회차(서버 시계로 봉인)는 건너뜀, 정식이면 실패다
+ * 시험 단계에서 증거가 없는 회차(서버 시계로 봉인)는 건너뜀, 정식 단계면 실패다
  */
 async function timestampItem(
   records: readonly RoundRecord[],
   seals: readonly SealFile[],
-  trial: boolean,
+  schedule: Schedule,
   authorities?: readonly TsaAuthority[],
 ): Promise<CheckItem> {
   const failed: string[] = [];
   const missing: number[] = [];
+  let missingLive = false;
   const names = new Set<string>();
   let proved = 0;
   let voided = 0;
@@ -272,6 +303,7 @@ async function timestampItem(
     const log = seals[i]?.log as TsaProof | null | undefined;
     if (log?.kind !== "tsa") {
       missing.push(record.round);
+      if (phaseOf(schedule, record.round) !== "trial") missingLive = true;
       continue;
     }
     const check = await verifyTsaProof(log, {
@@ -299,7 +331,7 @@ async function timestampItem(
   if (failed.length > 0) return item("fail", failed.join(" / "));
   const noProof = `시각 인증 없이 서버 시계로 봉인한 회차: ${missing.join(", ")}`;
   if (missing.length > 0)
-    return trial ? item("skip", noProof) : item("fail", noProof);
+    return missingLive ? item("fail", noProof) : item("skip", noProof);
   if (proved === 0)
     return item(
       "skip",
@@ -335,6 +367,7 @@ export async function checkPracticeLedger(ledger: {
       ],
       {
         drand: "연습 장부는 기기 안에서 만든 가짜 난수라 drand 서명이 없습니다",
+        anchor: "연습 장부는 이 기기 안에서만 돌아 앵커를 남기지 않습니다",
       },
     ),
     report,

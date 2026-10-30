@@ -13,6 +13,7 @@ import {
   type KeyRegistration,
   POW_PARAMS,
   type PowParams,
+  phaseOf,
   type RoundRecord,
   roundAt,
   roundTimes,
@@ -24,6 +25,7 @@ import {
   type VerifyReport,
   verifyLedger,
   type WebAuthnPolicy,
+  withChange,
 } from "@mighty/stardraw-core";
 
 import type { Ledger } from "./ledger";
@@ -66,7 +68,8 @@ const STATE_EVERY_NEAR_DRAW = 3;
 export class RemoteLedger implements Ledger {
   readonly powParams: PowParams;
   private genesis: Schedule | null = null;
-  private carried: KeyRegistration[] = [];
+  /** 기록의 일정 바꾸기를 반영한 일정표(기록 수가 바뀔 때만 다시 계산) */
+  private effective: { records: number; schedule: Schedule } | null = null;
   private state: StateJson | null = null;
   /** 서버 시각 - 기기 시각(초) */
   private offset = 0;
@@ -83,16 +86,25 @@ export class RemoteLedger implements Ledger {
     this.powParams = o.powParams ?? POW_PARAMS;
   }
 
+  /** 처음 일정표에 닫힌 기록의 일정 바꾸기(정식 단계 예고 등)를 모두 반영한 일정표 */
   get schedule(): Schedule {
     if (!this.genesis) throw new Error("장부를 아직 받지 못했습니다");
-    return this.genesis;
+    if (this.effective?.records !== this.records.length) {
+      let schedule = this.genesis;
+      for (const record of this.records)
+        for (const change of record.scheduleChanges)
+          schedule = withChange(schedule, change);
+      this.effective = { records: this.records.length, schedule };
+    }
+    return this.effective.schedule;
   }
 
-  /** 서버가 알려 준 운영 모드(시험이면 화면이 띠를 띄운다) */
+  /** 지금 회차의 단계(시험이면 화면이 띠를 띄운다). 서버가 알려 준 값, 없으면 일정표로 */
   get mode(): "trial" | "live" {
-    return (
-      this.state?.mode ?? (this.genesis?.ledger === "trial" ? "trial" : "live")
-    );
+    if (this.state?.mode) return this.state.mode;
+    if (!this.genesis) return "live";
+    const round = roundAt(this.schedule, this.now()) ?? 1;
+    return phaseOf(this.schedule, round) === "trial" ? "trial" : "live";
   }
 
   id(): string | null {
@@ -122,15 +134,8 @@ export class RemoteLedger implements Ledger {
 
   private async settleNow(force: boolean): Promise<void> {
     if (!this.genesis) {
-      const g = await this.get<{ schedule: Schedule; carried?: string[] }>(
-        "/ledger/genesis.json",
-      );
+      const g = await this.get<{ schedule: Schedule }>("/ledger/genesis.json");
       this.genesis = g.schedule;
-      // 시험 장부에서 옮겨 온 등록(정식 장부의 genesis에 묶여 있다)
-      this.carried = (g.carried ?? []).map((r) =>
-        decodeRegistration(fromBase64Url(r)),
-      );
-      for (const r of this.carried) this.registered.add(toBase64Url(r.pub));
     }
     const local = Math.floor(this.o.clock.now() / 1000);
     const nearDraw = this.state && this.now() >= this.status().nextDrawAt;
@@ -256,7 +261,6 @@ export class RemoteLedger implements Ledger {
         powParams: this.powParams,
         mine,
         webauthnPolicy: this.o.policy,
-        carried: this.carried,
         ...this.o.verifyOptions,
       },
     );

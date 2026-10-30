@@ -116,9 +116,8 @@ export default function StardrawVerify() {
                     ledger/genesis.json
                   </td>
                   <td className="text-white/75">
-                    처음 일정표 <code>schedule</code>(epoch, 회차 길이 줄, 시험
-                    표시 <code>ledger: &quot;trial&quot;</code>, 옮겨 온 등록의
-                    수·루트 <code>carried</code>)와 옮겨 온 등록 목록
+                    처음 일정표 <code>schedule</code>(epoch, 회차 길이 줄과
+                    줄마다 단계 <code>phase</code>)
                   </td>
                 </tr>
                 <tr>
@@ -222,7 +221,7 @@ id    = taggedHash("stardraw/ticket/v1", body)       서명은 id에 들어가�
             </ul>
           </Rule>
 
-          <Rule title="열쇠 등록과 옮겨 온 등록" file="registration.ts">
+          <Rule title="열쇠 등록" file="registration.ts">
             <Code>{`등록 = v(u8=1) ‖ kind(u8: 1 원시, 2 패스키) ‖ credentialId(u16 길이 + 바이트)
      ‖ pub(65) ‖ nonce(u32)
 id   = taggedHash("stardraw/registration/v1", 등록 바이트)
@@ -235,12 +234,6 @@ id   = taggedHash("stardraw/registration/v1", 등록 바이트)
               <li>
                 등록은 그 회차 기록의 <code>registrationCount</code>·
                 <code>registrationRoot</code>(id 사전 순 머클 루트)에 묶입니다.
-              </li>
-              <li>
-                정식 장부는 시험 장부의 패스키 등록을 옮겨 올 수 있습니다.
-                목록은 genesis.json에 있고, 수와 루트가 처음 일정표의{" "}
-                <code>carried</code>에 들어가 genesis 해시에 묶입니다. 옮긴
-                등록은 작업 증명을 다시 보지 않습니다.
               </li>
             </ul>
           </Rule>
@@ -282,7 +275,7 @@ h 앞 4바이트(u32) < 목표값 이면 통과
           </Rule>
 
           <Rule title="회차 시각과 drand 회차" file="schedule.ts">
-            <Code>{`일정표 = epoch + 줄들 { fromRound, length, closeMargin, powTarget, registerPowTarget }
+            <Code>{`일정표 = epoch + 줄들 { fromRound, length, closeMargin, powTarget, registerPowTarget, phase }
 회차 k: 앞 줄들의 길이를 더해 opensAt, closesAt = opensAt + length
 drand 회차 = closesAt + 300초 이후(같거나 뒤) 처음 나오는 quicknet 회차
 quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
@@ -290,6 +283,19 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
               <li>
                 일정 변경은 회차 기록의 <code>scheduleChanges</code>에 들어가고,
                 그 회차 마감 + 24시간 뒤에 시작하는 회차부터 적용됩니다.
+              </li>
+              <li>
+                단계 <code>phase</code>: 서버 장부는 시험 단계(
+                <code>trial</code>)로 시작하고, 정식 시작은 일정 변경 한 줄(
+                <code>phase: &quot;live&quot;</code>)입니다. 그래서 하루 전에
+                장부에 예고되고, 시험 회차도 같은 사슬에 그대로 남습니다. 정식
+                뒤로 시험 단계는 둘 수 없고, 단계는 모든 줄에 있거나(서버 장부)
+                모두 없습니다(기기 안 연습 장부).
+              </li>
+              <li>
+                보이는 회차 번호(<code>displayRound</code>): 정식 단계 첫 회차가
+                「정식 1회」, 그 앞은 「시험 n회」. 데이터(공유 주소, 기록, 앵커
+                경로)는 늘 사슬 회차 번호를 씁니다.
               </li>
               <li>
                 quicknet: 체인 해시{" "}
@@ -318,7 +324,7 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
             <p className="text-white/80">
               마감 직후 봉인 값으로 공개 시각 인증 기관(RFC 3161 TSA) 여러
               곳에서 시각 인증 토큰을 받아 <code>seals/N.json</code>의{" "}
-              <code>log</code>에 싣습니다. 시험 운영도 같게 받습니다.
+              <code>log</code>에 싣습니다. 시험 단계도 같게 받습니다.
             </p>
             <Code>{`log = { kind: "tsa", tokens: [{ tsa, genTime, token(DER, base64) }, …] }
 토큰에 실린 값(messageImprint, SHA-256) = SHA-256(sealDigest)
@@ -377,16 +383,39 @@ rootLoggedAt = 맞는 토큰 가운데 가장 이른 genTime(초, 소수점 아�
      ‖ registrationCount(u32) ‖ registrationRoot(32) ‖ rootLoggedAt(u64) ‖ void(u8)
      ‖ drandRound(u64) ‖ drandSig(u16 길이 + 바이트) ‖ numbers(6) ‖ bonus(u8)
      ‖ 등수 1~5마다 [개수(u32) ‖ 응모권 id(32) × 개수]
-     ‖ 일정 변경 [개수(u16) ‖ (u32 × 5) × 개수]
+     ‖ 일정 변경 [개수(u16) ‖ 줄 × 개수]
      ‖ 별명 [개수(u16) ‖ …]
 기록 해시 = taggedHash("stardraw/record/v1", 기록)      다음 회차의 prev이자 문제 값
-genesis 해시 = taggedHash("stardraw/genesis/v1" | "stardraw/genesis-trial/v1",
-               epoch(u64) ‖ 줄 수(u16) ‖ 줄마다 u32 × 5 [‖ carried 수(u32) ‖ 루트(32)])`}</Code>
+줄           = fromRound, length, closeMargin, powTarget, registerPowTarget(u32 × 5) ‖ phase(u8: 0 없음, 1 시험, 2 정식)
+genesis 해시 = taggedHash("stardraw/genesis/v1", epoch(u64) ‖ 줄 수(u16) ‖ 줄 × 줄 수)`}</Code>
             <p className="text-white/80">
-              시험 장부는 genesis 꼬리표가 달라 정식 장부와 사슬이 처음부터
-              갈립니다. 무효 회차는 numbers 0 × 6, bonus 0, drandSig 빈
-              바이트입니다.
+              무효 회차는 numbers 0 × 6, bonus 0, drandSig 빈 바이트입니다.
             </p>
+          </Rule>
+
+          <Rule title="이 장부는 다시 시작하지 않는다" file="anchor.ts">
+            <p className="text-white/80">
+              시험에서 정식까지 해시 사슬 하나를 끝까지 잇습니다. 장부를 처음
+              만들 때 서버가 앵커 저장소 <code>ybbarng/stardraw-ledger</code>의
+              main 브랜치에 <code>genesis.txt</code>를 한 번 커밋합니다.
+              운영자가 장부를 버리고 새로 시작하면 처음 일정표가 이 파일과
+              달라져 드러납니다.
+            </p>
+            <Code>{`genesis.txt = "stardraw-genesis v1" / ledger <장부 id> / genesis <genesis 해시 hex> / epoch <epoch>
+회차 파일   = ledgers/<장부 id>/<회차 6자리>.txt  (시험 단계 회차는 trial, 정식 단계 회차는 main 브랜치)
+            = "stardraw-anchor v1" / ledger / round / record <기록 해시 hex> / seal <봉인 증거 요약>
+장부 id     = genesis 해시 hex 앞 16자리`}</Code>
+            <ul className={li}>
+              <li>
+                장부 전체 검사는 raw.githubusercontent.com에서 두 파일을 읽어
+                genesis 해시와 회차 기록 해시를 비교합니다. 다르면 실패, 아직
+                없으면 건너뜁니다.
+              </li>
+              <li>
+                앵커 저장소는 운영자가 고칠 수 있는 보조 기록입니다(커밋 기록이
+                남습니다). 봉인 시각은 공개 시각 인증 토큰이 맡습니다.
+              </li>
+            </ul>
           </Rule>
 
           <Rule title="별 세 개(당첨자 확인)" file="sas.ts">
@@ -454,9 +483,9 @@ await stardraw.vectors()`}</Code>
         <Section title="지금의 한계" id="limits">
           <ul className={li}>
             <li>
-              시험 운영 중이라 봉인 값의 시각 인증(TSA)을 받지 않습니다. 그래서
-              봉인이 drand 값보다 먼저였다는 것을 서버 밖에서 증명할 수
-              없습니다. 장부 전체 검사도 이 항목을 건너뜁니다.
+              시각 인증과 앵커를 넣기 전에 닫힌 회차는 봉인 시각을 서버 밖에서
+              증명할 수 없습니다. 장부 전체 검사는 시험 단계의 그런 회차를
+              건너뜁니다(정식 단계에서는 실패로 봅니다).
             </li>
             <li>
               이 페이지와 화면 코드는 운영자가 내줍니다. 코드 해시 공개, 재현

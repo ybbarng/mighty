@@ -7,10 +7,8 @@ import {
   type Ticket,
 } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
-
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
-
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -19,6 +17,7 @@ import {
   passkeyProblem,
   platformUnlock,
 } from "../passkey-env";
+import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
@@ -224,7 +223,7 @@ export function EnterView({
             ← 처음으로
           </button>
           <span className="text-sm text-white/60 tabular-nums">
-            {status.round}회 응모
+            {roundShort(services.ledger.schedule, status.round)} 응모
           </span>
         </div>
         <KeySetup
@@ -250,7 +249,7 @@ export function EnterView({
           ← 처음으로
         </button>
         <span className="text-sm text-white/60 tabular-nums">
-          {status.round}회 응모
+          {roundShort(services.ledger.schedule, status.round)} 응모
         </span>
       </div>
 
