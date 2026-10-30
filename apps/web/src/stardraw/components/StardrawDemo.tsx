@@ -39,7 +39,17 @@ import { Receipt } from "./Receipt";
 export function StardrawDemo() {
   const { services, status, version, refresh, reset } = useLedger(DEMO_NS);
   const [mine, setMine] = useState<MyTicket[]>([]);
-  const [entering, setEntering] = useState<{ key: number; picks: number[] }>({
+  /**
+   * 응모 화면에 채워 둘 번호. 「n등 되게」로 채웠으면 고른 등수(rank)와 그 회차(round)를 기억해,
+   * 응모하기 전에 회차가 넘어가면(지금 마감·지금 추첨, 정각 지남) 새 회차 당첨 번호로 다시 채운다.
+   * 예전 회차 번호가 남아 있으면 다음 회차에 그 번호로 응모해 낙첨이 됐다(2026-10-30 사용자 제보)
+   */
+  const [entering, setEntering] = useState<{
+    key: number;
+    picks: number[];
+    rank?: Rank | null;
+    round?: number;
+  }>({
     key: 0,
     picks: [],
   });
@@ -51,6 +61,15 @@ export function StardrawDemo() {
   useEffect(() => {
     if (services) setMine(services.wallet.loadTickets());
   }, [services, version]);
+
+  // 「n등 되게」로 채운 뒤 회차가 넘어가면, 고른 등수로 새 회차 번호를 다시 채운다
+  const round = status?.round;
+  useEffect(() => {
+    if (!services?.practice || round === undefined) return;
+    if (entering.rank === undefined || entering.round === round) return;
+    const picks = demoPick(services.practice.peekDraw(round), entering.rank);
+    setEntering({ key: Date.now(), picks, rank: entering.rank, round });
+  }, [services, round, entering.rank, entering.round]);
 
   if (!services || !status)
     return (
@@ -195,7 +214,14 @@ export function StardrawDemo() {
                   <RankPicker
                     services={services}
                     round={status.round}
-                    onPick={(picks) => setEntering({ key: Date.now(), picks })}
+                    onPick={(picks, rank) =>
+                      setEntering({
+                        key: Date.now(),
+                        picks,
+                        rank,
+                        round: status.round,
+                      })
+                    }
                   />
                 }
               />
@@ -386,7 +412,7 @@ function RankPicker({
 }: {
   services: Services;
   round: number;
-  onPick: (picks: number[]) => void;
+  onPick: (picks: number[], rank: Rank | null) => void;
 }) {
   const draw = practiceOf(services).peekDraw(round);
   return (
@@ -399,7 +425,7 @@ function RankPicker({
           <button
             key={rank}
             type="button"
-            onClick={() => onPick(demoPick(draw, rank))}
+            onClick={() => onPick(demoPick(draw, rank), rank)}
             className="rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-50 text-sm hover:bg-amber-200/15"
           >
             {RANK_LABEL[rank]} 되게
@@ -407,7 +433,7 @@ function RankPicker({
         ))}
         <button
           type="button"
-          onClick={() => onPick(demoPick(draw, null))}
+          onClick={() => onPick(demoPick(draw, null), null)}
           className="rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10"
         >
           낙첨되게

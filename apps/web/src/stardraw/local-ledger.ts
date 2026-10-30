@@ -70,7 +70,7 @@ export const PRACTICE_BOTS = 24;
 const BOT_ROUNDS = 3;
 
 /** 연습 장부 회차 길이: 매시 정각 추첨 · 55분 마감 */
-const PRACTICE_LENGTH = 3600;
+export const PRACTICE_LENGTH = 3600;
 
 export function practiceSchedule(epoch: number): Schedule {
   return {

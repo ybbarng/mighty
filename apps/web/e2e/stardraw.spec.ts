@@ -398,3 +398,43 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     ),
   ).toBe(0);
 });
+
+test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차가 넘어가도 1등이 된다", async ({
+  page,
+}, info) => {
+  test.skip(isPhone(info.project.name), "저장된 상태와 회차 흐름은 한 크기로");
+  await page.goto("/stardraw/demo");
+  // 이미 해 본 기기: 한 회차 응모·추첨을 거쳐 열쇠와 장부가 저장된 상태(「데모 처음부터」를 누르지 않는다)
+  await page.getByRole("button", { name: "자동", exact: true }).click();
+  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await demoUnlock(page, "create");
+  await demoUnlock(page, "sign");
+  await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "지금 추첨" }).click();
+  await expect(page.locator("[data-demo-result]")).toBeVisible({
+    timeout: 60_000,
+  });
+  await page.reload();
+
+  // 「1등 되게」로 채운 뒤, 응모보다 먼저 「지금 마감」·「지금 추첨」을 눌러 회차를 넘긴다
+  await page.getByRole("button", { name: "1등 되게" }).click();
+  await expect(page.getByText("6/6")).toBeVisible();
+  const before = await page
+    .locator("[data-demo-round]")
+    .getAttribute("data-demo-round");
+  await page.getByRole("button", { name: "지금 마감" }).click();
+  await page.getByRole("button", { name: "지금 추첨" }).click();
+  await expect(page.locator("[data-demo-round]")).not.toHaveAttribute(
+    "data-demo-round",
+    before ?? "",
+  );
+  // 회차가 바뀌면 고른 등수(1등)로 새 회차 번호를 다시 채운다
+  await expect(page.getByText("6/6")).toBeVisible();
+  await page.getByRole("button", { name: "이 별 6개로 응모하기" }).click();
+  await demoUnlock(page, "sign");
+  await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "지금 추첨" }).click();
+  await expect(page.locator("[data-demo-result]")).toHaveText("1등 당첨", {
+    timeout: 60_000,
+  });
+});

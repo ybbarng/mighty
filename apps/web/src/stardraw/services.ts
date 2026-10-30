@@ -1,6 +1,7 @@
 "use client";
 
 import { type Clock, realClock } from "@mighty/fair-play";
+import { isAlignedEpoch } from "@mighty/stardraw-core";
 import { useEffect, useState } from "react";
 
 import { browserCheckStore, Checker } from "./checks";
@@ -10,7 +11,11 @@ import {
   LocalConfirmRelay,
 } from "./confirm-relay";
 import type { Ledger } from "./ledger";
-import { type LedgerStatus, LocalLedger } from "./local-ledger";
+import {
+  type LedgerStatus,
+  LocalLedger,
+  PRACTICE_LENGTH,
+} from "./local-ledger";
 import { RemoteLedger } from "./remote-ledger";
 import { browserTokenStore, RemoteConfirmRelay } from "./remote-relay";
 import {
@@ -60,6 +65,7 @@ export function getServices(ns: string = GAME_NS): Services {
       )
     : new LocalConfirmRelay(clock, browserRelayStore(), `${ns}-confirm:`);
   const ledgerKey = `${ns}-ledger`;
+  if (ns === DEMO_NS) dropStaleDemo(ns, ledgerKey);
   const practice = useServer
     ? null
     : new LocalLedger({
@@ -101,6 +107,25 @@ export function getServices(ns: string = GAME_NS): Services {
   };
   cache.set(ns, services);
   return services;
+}
+
+/**
+ * 예전 시각 규칙(정각 마감)으로 저장된 데모 장부는 화면 문구("55분 마감")와 시각이 어긋나니
+ * 그 이름공간을 통째로 지우고 새로 시작한다. 데모라 지워도 잃을 것이 없다
+ */
+function dropStaleDemo(ns: string, ledgerKey: string): void {
+  try {
+    const text = localStorage.getItem(ledgerKey);
+    if (!text) return;
+    const epoch = (JSON.parse(text) as { epoch?: unknown }).epoch;
+    if (typeof epoch === "number" && isAlignedEpoch(epoch, PRACTICE_LENGTH))
+      return;
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith(`${ns}-`)) localStorage.removeItem(key);
+    indexedDB.deleteDatabase(`${ns}-checks`);
+  } catch {
+    // 읽지 못하면 그대로 둔다
+  }
 }
 
 /** 데모를 처음부터: 그 이름공간의 장부·지갑·전달을 지우고 새로 만든다 */
