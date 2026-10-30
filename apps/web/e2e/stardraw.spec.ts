@@ -751,6 +751,10 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["check-fail", (s) => s.locator("[data-verdict='fail']")],
     ["register", (s) => s.getByRole("button", REGISTER)],
     ["id-card", (s) => s.locator("[data-idcard]")],
+    [
+      "id-earth",
+      (s) => s.getByText("우리 은하 › 오리온 팔 › 태양계 › 지구 › 남극"),
+    ],
     ["id-laika", (s) => s.locator("[data-egg='laika']")],
     ["id-prince", (s) => s.locator("[data-egg='prince']")],
     ["id-rabbit", (s) => s.locator("[data-egg='rabbit']")],

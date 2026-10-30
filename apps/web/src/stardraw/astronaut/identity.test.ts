@@ -6,7 +6,7 @@ import {
   utf8,
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
-import { TOUR_EGG_PUBS } from "../demo-tour";
+import { TOUR_EARTH_PUB, TOUR_EGG_PUBS } from "../demo-tour";
 import {
   type AstronautLists,
   astronautFromHash,
@@ -351,6 +351,19 @@ describe("주사위 비율", () => {
   it("화면 둘러보기에 둔 공개 열쇠 셋은 각각 그 사진이 나온다", () => {
     for (const [egg, pub] of Object.entries(TOUR_EGG_PUBS))
       expect(astronautOf(fromBase64Url(pub)).egg).toBe(egg);
+  });
+
+  it("화면 둘러보기의 지구 대륙 견본은 지구 남극에 산다", () => {
+    const a = astronautOf(fromBase64Url(TOUR_EARTH_PUB));
+    expect(a.placeId).toBe("earth/antarctica");
+    expect(a.short).toEqual([
+      "우리 은하",
+      "오리온 팔",
+      "태양계",
+      "지구",
+      "남극",
+    ]);
+    expect(residentPhrase(a)).toBe(`지구 남극에 거주하는 ${a.name}`);
   });
 });
 

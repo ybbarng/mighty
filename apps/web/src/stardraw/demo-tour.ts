@@ -35,6 +35,10 @@ export const TOUR_EGG_PUBS = {
     "BKvETKGV-q5fqfPRMMiO3d7E-s06JSIUK6OanREJZAMBNICgITGMUAqH1tHFKVSYMofisWE-xv8or65zYoUNlpc",
 } as const;
 
+/** 화면 둘러보기의 지구 대륙 등록증(지구 › 남극이 나오도록 찾아 둔 공개 열쇠 모양 값) */
+export const TOUR_EARTH_PUB =
+  "BPuokmtzXiMOlhq_CUkfYmQ2WQBYc4bVpwz6_AVORQdqPKoZDuRMJoiisWHqKjhOk9x7KSJ1Tcjhf3l4FHP4vO4";
+
 export interface TourState {
   services: Services;
   /** 내 1회 응모권(1등, 추첨 끝)과 2회 응모권(추첨 전) */

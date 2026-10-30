@@ -3,7 +3,12 @@
 import { fromBase64Url, type Rank } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { buildTour, TOUR_EGG_PUBS, type TourState } from "../demo-tour";
+import {
+  buildTour,
+  TOUR_EARTH_PUB,
+  TOUR_EGG_PUBS,
+  type TourState,
+} from "../demo-tour";
 import { AstronautPanel } from "./AstronautPanel";
 import { CheckLink } from "./CheckLink";
 import { DemoUnlockPrompt } from "./DemoUnlockSheet";
@@ -37,6 +42,7 @@ export const TOUR_ITEMS = [
   { id: "check-fail", label: "확인 실패" },
   { id: "register", label: "우주인 등록" },
   { id: "id-card", label: "등록증" },
+  { id: "id-earth", label: "등록증: 지구 대륙" },
   { id: "id-laika", label: "등록증: 우주견" },
   { id: "id-prince", label: "등록증: 작은 별의 아이" },
   { id: "id-rabbit", label: "등록증: 달토끼" },
@@ -259,6 +265,13 @@ function Screen({
       );
     case "id-card":
       return <AstronautPanel services={services} pub={drawn.ticket.pub} />;
+    case "id-earth":
+      return (
+        <AstronautPanel
+          services={services}
+          pub={fromBase64Url(TOUR_EARTH_PUB)}
+        />
+      );
     case "id-laika":
     case "id-prince":
     case "id-rabbit":
