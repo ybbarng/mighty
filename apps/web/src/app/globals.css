@@ -870,6 +870,26 @@ button {
   }
 }
 
+/* 응모권 칸: 6개를 다 고른 뒤 또 누르면 짧게 흔들린다 */
+.sd-shake {
+  animation: sd-shake 0.36s ease-in-out;
+}
+@keyframes sd-shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-shake {
+    animation: none;
+  }
+}
+
 .sd-glory {
   animation: sd-glory 2.4s ease-in-out infinite;
 }

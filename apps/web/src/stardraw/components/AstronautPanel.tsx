@@ -124,7 +124,7 @@ export function AstronautPanel({
         {copied ? "링크를 복사했어요" : "등록증 공유"}
       </button>
       <p className="-mt-2 break-keep text-center text-white/55 text-xs">
-        등록증을 보여 주면 장부 속 응모가 내 것인 줄 알 수 있습니다.
+        등록증을 보여 주면 공개 기록 속 응모가 내 것임을 보일 수 있습니다.
       </p>
     </section>
   );

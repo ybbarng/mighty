@@ -238,6 +238,8 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     >
       <div className="mx-auto flex max-w-xl flex-col gap-5">
         {services?.ledger.mode === "trial" && <TrialBanner />}
+        {/* 서버 없이 이 기기 안에서만 도는 연습판(데모는 따로 자기 띠가 있다) */}
+        {services?.practice && services.ns === GAME_NS && <PracticeBanner />}
         {!services || !status ? (
           <p className="py-20 text-center text-white/60">
             하늘을 펴고 있습니다
@@ -380,6 +382,18 @@ export function TrialBanner() {
   );
 }
 
+/** 서버 없는 연습판 띠 */
+function PracticeBanner() {
+  return (
+    <p
+      data-practice-banner
+      className="rounded-xl border border-sky-200/30 bg-sky-200/10 px-3 py-1.5 text-center text-sky-50 text-sm"
+    >
+      연습 모드 · 이 기기 안에서만
+    </p>
+  );
+}
+
 export function Home({
   services,
   status,
@@ -428,9 +442,7 @@ export function Home({
       <header className="flex flex-col gap-4">
         <BackToGames />
         <StardrawTitle />
-        {key !== undefined && (
-          <Greeting services={services} keyInfo={key} onRegister={onEnter} />
-        )}
+        {key !== undefined && <Greeting services={services} keyInfo={key} />}
       </header>
 
       <RoundCard
@@ -521,23 +533,12 @@ export function Home({
 function Greeting({
   services,
   keyInfo,
-  onRegister,
 }: {
   services: Services;
   keyInfo: KeyInfo | null;
-  onRegister: () => void;
 }) {
-  if (!keyInfo)
-    return (
-      <button
-        type="button"
-        onClick={onRegister}
-        data-greeting="none"
-        className="self-center rounded-full border border-amber-200/40 px-4 py-1.5 font-semibold text-amber-100 text-sm hover:bg-amber-200/10"
-      >
-        우주인 등록
-      </button>
-    );
+  // 등록 전에는 인사를 비운다. 등록은 카드의 「별 6개 고르기」가 맡는다(같은 곳으로 가는 단추가 둘이었다, 2026-10-31 UX 시험)
+  if (!keyInfo) return null;
   const a = astronautOf(keyInfo.pub);
   const text = `${residentPhrase(a)} 님, 안녕하세요`;
   // 데모·둘러보기의 가짜 우주인은 실제 게임의 내 등록증으로 잇지 않는다
@@ -1418,7 +1419,7 @@ function RoundDetail({
             )}
             {services.practice && (
               <p className="mt-1 text-white/50 text-xs">
-                연습 장부라 drand 서명과 봉인 시각 증거는 확인하지 않습니다.
+                연습이라 추첨 난수와 마감 시각 증명은 따로 확인하지 않습니다.
               </p>
             )}
           </div>

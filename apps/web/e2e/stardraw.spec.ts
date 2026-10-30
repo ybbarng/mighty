@@ -176,10 +176,9 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     page.getByText("로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?"),
   ).toBeVisible();
   await noSideScroll(page);
-  // 처음 온 사람: 인사 대신 「우주인 등록」, 카드에는 지금 단계의 시계 하나(마감까지)와 할 일 하나
-  await expect(page.locator("[data-greeting='none']")).toHaveText(
-    "우주인 등록",
-  );
+  // 처음 온 사람: 인사는 비우고(같은 곳으로 가는 단추를 두지 않는다), 카드에는 지금 단계의 시계 하나(마감까지)와 할 일 하나
+  await expect(page.locator("[data-greeting]")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: TO_PICK })).toBeVisible();
   await expect(page.locator("[data-card='open']")).toBeVisible();
   await expect(page.locator("[data-countdown='close']")).toBeVisible();
   await expect(page.locator("[data-countdown='draw']")).toHaveCount(0);
@@ -268,6 +267,13 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.getByRole("button", { name: "남은 칸 자동" }).click();
   await expect(slip).toHaveAttribute("data-entry-slip", "6");
   await expect(slip.getByText("6/6")).toBeVisible();
+  // 6개를 다 고른 뒤 또 누르면 글 없이 응모권 칸이 흔들리고 그대로 6개다
+  await page
+    .locator("button[aria-pressed='false']")
+    .filter({ hasText: /^\d+/ })
+    .first()
+    .click();
+  await expect(page.locator(".sd-shake[data-entry-slip='6']")).toHaveCount(1);
   await noSideScroll(page);
   await page.screenshot({
     path: info.outputPath("stardraw-enter.png"),
@@ -403,7 +409,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     /^04[0-9a-f]{128}$/,
   );
   await expect(
-    page.getByText("이 값으로 장부 속 내 응모를 찾을 수 있습니다"),
+    page.getByText("공개 기록에서 내 응모권을 찾는 값입니다"),
   ).toBeVisible();
   await expect(back.getByRole("button", { name: "복사" })).toBeVisible();
   expect(await passkeyCalls(page)).toEqual({ create: 0, get: 2 });

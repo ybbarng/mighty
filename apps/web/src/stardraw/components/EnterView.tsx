@@ -62,6 +62,8 @@ export function EnterView({
 }) {
   const [picked, setPicked] = useState<number[]>([...initialPicked]);
   const [focus, setFocus] = useState<number | null>(null);
+  /** 6개를 다 고른 뒤 또 누른 횟수: 응모권 칸이 짧게 흔들린다(글 없이) */
+  const [nudges, setNudges] = useState(0);
   const [step, setStep] = useState<Step>("pick");
   const [work, setWork] = useState("");
   const [error, setError] = useState<Failure | null>(null);
@@ -137,6 +139,10 @@ export function EnterView({
   const toggle = (n: number) => {
     setFocus(n);
     setError(null);
+    if (!picked.includes(n) && picked.length >= 6) {
+      setNudges((k) => k + 1);
+      return;
+    }
     setPicked((prev) => {
       if (prev.includes(n)) return prev.filter((x) => x !== n);
       if (prev.length >= 6) return prev;
@@ -319,6 +325,8 @@ export function EnterView({
       <EnterHeader onBack={onBack} />
 
       <EntrySlip
+        key={nudges}
+        shake={nudges > 0}
         title={`${roundShort(services.ledger.schedule, status.round)} 응모권`}
         picked={picked}
         onRemove={step === "pick" ? toggle : undefined}
@@ -455,7 +463,10 @@ function EntrySlip({
   title,
   picked,
   onRemove,
+  shake = false,
 }: {
+  /** 막 그려질 때 한 번 흔들린다(6개를 다 고른 뒤 또 누름) */
+  shake?: boolean;
   title: string;
   picked: readonly number[];
   onRemove: ((n: number) => void) | undefined;
@@ -468,6 +479,7 @@ function EntrySlip({
       className={cn(
         "sd-slip relative rounded-2xl px-3.5 pt-3 pb-3.5",
         picked.length === 6 && "sd-slip-full",
+        shake && "sd-shake",
       )}
     >
       <div className="mb-2.5 flex items-baseline justify-between gap-3 px-0.5">
