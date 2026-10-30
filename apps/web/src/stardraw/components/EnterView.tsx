@@ -255,11 +255,14 @@ export function EnterView({
             <p
               role="status"
               data-issued={issued.kind}
-              className="break-keep text-center font-semibold text-amber-100"
+              className="flex flex-col items-center gap-1 break-keep text-center text-amber-100"
             >
-              {issued.kind === "new"
-                ? `${phrase} 님, 우주인으로 등록되었습니다`
-                : `${phrase} 님, 다시 만나 반갑습니다`}
+              <span className="text-sm text-amber-100/75">{phrase} 님,</span>
+              <span className="font-bold text-xl">
+                {issued.kind === "new"
+                  ? "우주인으로 등록되었습니다. 환영합니다!"
+                  : "다시 만나 반갑습니다"}
+              </span>
             </p>
           }
         >
@@ -268,7 +271,7 @@ export function EnterView({
             onClick={() => setIssued(null)}
             className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950"
           >
-            별 6개 고르기
+            별을 고르러 가 볼까요?
           </button>
         </AstronautPanel>
       </section>

@@ -41,8 +41,10 @@ const ENTER = "이 별 6개로 응모하기";
 const REGISTER = { name: "우주인 등록", exact: true } as const;
 /** 등록증에서 누를 자리(제목 부분. 가운데는 주소 단추라 피한다) */
 const CARD_TAP = { x: 40, y: 30 } as const;
-/** 등록증을 받은 뒤 별 고르기로 */
+/** 첫 화면에서 별 고르기로 */
 const TO_PICK = "별 6개 고르기";
+/** 등록증을 받은 뒤 별 고르기로 */
+const TO_PICK_ISSUED = "별을 고르러 가 볼까요?";
 
 /** 응모 화면까지 간다. 등록증(패스키)이 없으면 먼저 "우주인 등록" 단계가 나온다 */
 async function toEntry(page: Page) {
@@ -204,7 +206,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
   // 등록 직후 등록증을 발급해 보여 준다. 아직 응모 전이라 등록일은 비어 있다
   await expect(page.locator("[data-issued='new']")).toContainText(
-    /^.+에 거주하는 .+ 님, 우주인으로 등록되었습니다$/,
+    /^.+에 거주하는 .+ 님,우주인으로 등록되었습니다\. 환영합니다!$/,
   );
   const card = page.locator("[data-idcard]");
   await expect(card).toBeVisible();
@@ -233,7 +235,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     fullPage: true,
   });
   expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
-  await page.getByRole("button", { name: TO_PICK }).click();
+  await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   // 칸에서 하나, 하늘에서 하나 고르고 나머지는 자동
   await page.getByRole("button", { name: "7 베텔게우스" }).click();
   await expect(page.locator("[data-star-info='7']")).toContainText(
@@ -544,7 +546,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   await demoCard.click({ position: CARD_TAP });
   await demoUnlock(page, "check");
   await expect(demoCard.locator("[data-owner-ok]")).toBeVisible();
-  await page.getByRole("button", { name: TO_PICK }).click();
+  await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   const afterCreate = await demoUnlocks(page);
 
   // 응모: 이번 회차 1등이 되게 채우고 낸다. 서명 시트 한 번
@@ -714,7 +716,7 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   await page.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
   await demoUnlock(page, "sign");
-  await page.getByRole("button", { name: TO_PICK }).click();
+  await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", { name: ENTER }).click();
   await demoUnlock(page, "sign");
