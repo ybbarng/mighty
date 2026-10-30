@@ -1,7 +1,19 @@
 import { githubAnchorVerifier, githubGenesisVerifier } from "./anchor";
-import { equalBytes, fromBase64Url, fromHex, toHex } from "./bytes";
+import {
+  equalBytes,
+  fromBase64Url,
+  fromHex,
+  toBase64Url,
+  toHex,
+} from "./bytes";
 import type { BeaconVerifier } from "./drand";
 import { RANKS, type Rank } from "./draw";
+import {
+  type DirectorHistoryLine,
+  directorHistory,
+  type OperationsView,
+  operationsView,
+} from "./operations";
 import { decodeRecord, type RoundRecord } from "./record";
 import { decodeRegistration, type KeyRegistration } from "./registration";
 import { sealDigest } from "./round";
@@ -55,6 +67,10 @@ export interface CheckResult {
   items: CheckItem[];
   problems: Problem[];
   skipped: string[];
+  /** 국장 열쇠 내력(지정·빼기·취소, docs/36 11-12). 서버 설정으로 몰래 바꿔도 여기 드러난다 */
+  directors: DirectorHistoryLine[];
+  /** 운영 기록·소속·국장 열쇠 */
+  operations: OperationsView;
 }
 
 export interface PublicGenesisFile {
@@ -180,6 +196,11 @@ const RULES: { id: string; label: string; test: RegExp }[] = [
   { id: "void", label: "무효 회차 규칙", test: /무효/ },
   { id: "draw", label: "당첨 번호·등수", test: /당첨/ },
   { id: "schedule", label: "일정 변경", test: /^일정 변경/ },
+  {
+    id: "operations",
+    label: "운영 기록(국장·관인 서명, 24시간 예고)",
+    test: /^운영 기록/,
+  },
 ];
 
 /** 장부 검사의 문제 목록을 항목별 통과·실패·건너뜀으로 묶는다 */
@@ -287,6 +308,7 @@ export async function checkPublicLedger(
           status: "fail",
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
+    sealKeyItem(report, head),
     await timestampItem(
       records,
       seals,
@@ -312,8 +334,34 @@ export async function checkPublicLedger(
     problems: report.problems,
     // 봉인 시각은 아래 「바깥 증명」 항목(timestampItem)이 seals의 토큰으로 따로 본다
     skipped: report.skipped.filter((s) => !s.includes("머클 루트 로그 시각")),
+    directors: directorHistory(report.operations),
+    operations: operationsView(report.operations, records.length, report.head),
     ledger,
   };
+}
+
+/**
+ * 관인(서버 서명 열쇠): 장부에 처음 실린 관인 운영 기록의 열쇠가 head.json의 서버 공개 열쇠(영수증 확인용)와 같은지.
+ * 관인 기록이 없으면 건너뜀(docs/36 11-12)
+ */
+function sealKeyItem(report: VerifyReport, head: PublicHeadFile): CheckItem {
+  const label = "관인 열쇠(운영 기록과 영수증이 같은 우주국)";
+  const seal = report.operations.sealKey;
+  if (!seal)
+    return {
+      id: "seal-key",
+      label,
+      status: "skip",
+      detail: "관인 운영 기록이 아직 없습니다",
+    };
+  if (head.serverKey !== toBase64Url(seal))
+    return {
+      id: "seal-key",
+      label,
+      status: "fail",
+      detail: "장부의 관인 열쇠가 head.json의 서버 공개 열쇠와 다르다",
+    };
+  return { id: "seal-key", label, status: "pass" };
 }
 
 export const TIMESTAMP_LABEL =

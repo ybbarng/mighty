@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { anchorFile, anchorPath, genesisAnchorFile, ledgerId } from "./anchor";
 import { toBase64Url, toHex } from "./bytes";
 import { drandRoundForClose } from "./drand";
+import { generateSigner } from "./keys";
+import { directorFingerprint, OP_VERSION, signAsSeal } from "./operations";
 import {
   checkPublicLedger,
   findTicket,
@@ -90,8 +92,10 @@ describe("장부 전체 검사(서버 공개 파일)", () => {
     const status = statusOf(result.items);
     expect(status.timestamp).toBe("skip");
     expect(status.anchor).toBe("skip");
+    // 운영 기록이 없는 장부라 관인 열쇠는 볼 것이 없다
+    expect(status["seal-key"]).toBe("skip");
     const inside = result.items.filter(
-      (i) => i.id !== "timestamp" && i.id !== "anchor",
+      (i) => !["timestamp", "anchor", "seal-key"].includes(i.id),
     );
     expect(inside.map((i) => i.status)).toEqual(inside.map(() => "pass"));
   });
@@ -296,5 +300,87 @@ describe("내 응모권 찾기", () => {
     expect(findTicket(ledger, { round: 2, id: "00000000" })).toMatchObject({
       found: false,
     });
+  });
+});
+
+describe("운영 기록이 실린 공개 장부(docs/36 11-12)", () => {
+  async function opsLedger(serverKeyOf: (seal: Uint8Array) => Uint8Array) {
+    const seal = await generateSigner();
+    const [director] = await signers(1);
+    const d = director as NonNullable<typeof director>;
+    const op = await signAsSeal(
+      {
+        v: OP_VERSION,
+        kind: "director-add",
+        after: genesisHash(SCHEDULE),
+        effectiveRound: 26,
+        credentialId: d.credentialId,
+        pub: d.publicKey,
+      },
+      seal,
+    );
+    const record = closeRound({
+      schedule: SCHEDULE,
+      round: 1,
+      prev: genesisHash(SCHEDULE),
+      tickets: [],
+      rootLoggedAt: closesAt + 10,
+      beacon: {
+        round: drandRoundForClose(closesAt),
+        signature: new Uint8Array(48).fill(7),
+      },
+      operations: [op],
+    });
+    const result = await checkServerLedger({
+      base: "",
+      anchorRepo: null,
+      beaconVerifier: () => true,
+      fetch: files((f) => {
+        f["/ledger/head.json"] = {
+          v: 1,
+          rounds: 1,
+          head: toHex(recordHash(record)),
+          sealed: 1,
+          serverKey: toBase64Url(serverKeyOf(seal.publicKey)),
+        };
+        f["/ledger/seals/000001.json"] = {
+          v: 1,
+          round: 1,
+          digest: toHex(sealDigest(record)),
+          loggedAt: record.rootLoggedAt,
+        };
+        f["/ledger/rounds/000001.json"] = {
+          v: 1,
+          record: toBase64Url(encodeRecord(record)),
+          tickets: [],
+          registrations: [],
+        };
+      }),
+    });
+    return { result, director: d };
+  }
+
+  it("관인 지정 기록은 국장 열쇠 내력에 지문과 함께 보이고, 관인이 head.json 서버 열쇠와 같으면 통과", async () => {
+    const { result, director } = await opsLedger((k) => k);
+    expect(result.problems).toEqual([]);
+    expect(statusOf(result.items)["seal-key"]).toBe("pass");
+    expect(statusOf(result.items).operations).toBe("pass");
+    expect(result.directors).toEqual([
+      {
+        round: 1,
+        action: "지정",
+        fingerprint: directorFingerprint(director.publicKey),
+        signedBy: "관인",
+        effectiveRound: 26,
+        status: "pending",
+        cancelledIn: null,
+      },
+    ]);
+  });
+
+  it("장부의 관인이 head.json의 서버 열쇠와 다르면 실패", async () => {
+    const other = (await generateSigner()).publicKey;
+    const { result } = await opsLedger(() => other);
+    expect(statusOf(result.items)["seal-key"]).toBe("fail");
   });
 });

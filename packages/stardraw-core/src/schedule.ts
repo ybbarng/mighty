@@ -1,3 +1,4 @@
+import type { ByteReader, ByteWriter } from "./bytes";
 import { DRAND_DELAY } from "./drand";
 
 /**
@@ -242,4 +243,35 @@ export function displayRound(schedule: Schedule, round: number): DisplayRound {
     number,
     label: `${phase === "live" ? "정식" : "시험"} ${number}회`,
   };
+}
+
+/** 단계: 0 없음, 1 시험, 2 정식 */
+const PHASE_CODE = { trial: 1, live: 2 } as const;
+
+/**
+ * 일정표 한 줄의 바이트(genesis 해시, 회차 기록의 일정 변경, 운영 기록의 일정 바꾸기가 같이 쓴다):
+ * fromRound ‖ length ‖ closeMargin ‖ powTarget ‖ registerPowTarget(각 u32) ‖ 단계(u8)
+ */
+export function writeScheduleEntry(w: ByteWriter, e: ScheduleEntry): void {
+  w.u32(e.fromRound)
+    .u32(e.length)
+    .u32(e.closeMargin)
+    .u32(e.powTarget)
+    .u32(e.registerPowTarget)
+    .u8(e.phase ? PHASE_CODE[e.phase] : 0);
+}
+
+export function readScheduleEntry(r: ByteReader): ScheduleEntry {
+  const entry: ScheduleEntry = {
+    fromRound: r.u32(),
+    length: r.u32(),
+    closeMargin: r.u32(),
+    powTarget: r.u32(),
+    registerPowTarget: r.u32(),
+  };
+  const phase = r.u8();
+  if (phase === 1) entry.phase = "trial";
+  else if (phase === 2) entry.phase = "live";
+  else if (phase !== 0) throw new Error(`모르는 단계: ${phase}`);
+  return entry;
 }

@@ -15,8 +15,16 @@ import {
 } from "./drand";
 import { drawNumbers, drawSeed, rankOf } from "./draw";
 import { merkleRoot } from "./merkle";
+import {
+  directorFingerprint,
+  encodeOpBody,
+  type OpBody,
+  opId,
+  opMessage,
+  verifyOperationSignature,
+} from "./operations";
 import { POW_PARAMS, powHash } from "./pow";
-import { genesisHash } from "./record";
+import { genesisHash, recordVersionFor } from "./record";
 import {
   decodeRegistration,
   encodeRegistration,
@@ -219,6 +227,43 @@ function rejects(decode: () => unknown): string {
 }
 
 const DRAW = { numbers: [5, 29, 37, 38, 41, 45], bonus: 4 };
+
+/** 고정 운영 기록: 소속 추가 "시험 성단"(성단, 초대 코드), after 11 × 32, 51회차부터 */
+const OP_BODY: OpBody = {
+  v: 1,
+  kind: "affiliation-add",
+  after: new Uint8Array(32).fill(0x11),
+  effectiveRound: 51,
+  fields: {
+    name: "시험 성단",
+    badge: 2,
+    method: "초대 코드",
+    issuerKey: new Uint8Array(),
+    issued: 0,
+  },
+};
+const OP_TEXT =
+  "소속 추가 시험 성단·성단(2)·초대 코드, after 11 × 32, 51회차부터";
+const OP_CLIENT_DATA =
+  '{"type":"webauthn.get","challenge":"TAV_fd9_XDQAtFArZlWwjYrXPeGZ5IfXnOwB4zMi54c","origin":"https://game.byb.kr","crossOrigin":false}';
+/** WINNER_JWK로 미리 한 국장 서명(DER, flags 05) */
+const OP_DER = fromHex(
+  "30440220338d80908c0ef4a0c997e03f16572fcdba0fa1d678e3a9816358fd2307c8fa0002200ee168946f943109f9eae2283ae2e2e409f5b529393497eb4cbb7b274be132df",
+);
+const opSignedBy = (body: OpBody) =>
+  verifyOperationSignature({
+    ...body,
+    signer: {
+      role: "director",
+      pub: SIGNED_PUB,
+      signature: {
+        kind: "webauthn",
+        authenticatorData: authData(0x05),
+        clientDataJSON: utf8(OP_CLIENT_DATA),
+        signature: OP_DER,
+      },
+    },
+  } as Parameters<typeof verifyOperationSignature>[0]);
 
 export const TEST_VECTORS: readonly VectorGroup[] = [
   {
@@ -557,6 +602,64 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
         expected: "27, 11, 10",
         compute: async () =>
           sasStars(await sasSharedSecret(), "req-2").join(", "),
+      },
+    ],
+  },
+  {
+    id: "operations",
+    title: "운영 기록(국장·관인)",
+    vectors: [
+      {
+        title: "운영 기록 본문 바이트",
+        input: OP_TEXT,
+        expected:
+          "0103111111111111111111111111111111111111111111111111111111111111111100000033000dec8b9ced979820ec84b1eb8ba802000decb488eb8c8020ecbd94eb939c000000000000",
+        compute: () => toHex(encodeOpBody(OP_BODY)),
+      },
+      {
+        title: '운영 기록 id = taggedHash("stardraw/op/v1", 본문)',
+        input: OP_TEXT,
+        expected:
+          "3a1d8d247ba51cd3bfb2c77e433f4689934c7df3a7b3fcdc1950033498167430",
+        compute: () => toHex(opId(OP_BODY)),
+      },
+      {
+        title:
+          '국장 패스키 challenge = base64url(SHA-256("stardraw/op-sig/v1" ‖ 00 ‖ 본문))',
+        input: OP_TEXT,
+        expected: "TAV_fd9_XDQAtFArZlWwjYrXPeGZ5IfXnOwB4zMi54c",
+        compute: () => toBase64Url(webauthnChallenge(opMessage(OP_BODY))),
+      },
+      {
+        title: "국장 서명 확인(고정 열쇠, flags 05)",
+        input: "위 본문에 당첨자 열쇠(WINNER_JWK)로 미리 한 패스키 서명",
+        expected: "true",
+        compute: async () => String(await opSignedBy(OP_BODY)),
+      },
+      {
+        title: "서명 뒤 내용을 바꾸면 거절",
+        input: '같은 서명, 이름만 "가짜 성단"으로',
+        expected: "false",
+        compute: async () =>
+          String(
+            await opSignedBy({
+              ...OP_BODY,
+              fields: { ...OP_BODY.fields, name: "가짜 성단" },
+            } as OpBody),
+          ),
+      },
+      {
+        title: "국장 열쇠 지문",
+        input: `공개 열쇠 ${PUB_TEXT}`,
+        expected: "국장-PQ4H-271Y-NRQJ",
+        compute: () => directorFingerprint(PUB),
+      },
+      {
+        title: "회차 기록 판",
+        input: "운영 기록 없음 · 하나 이상",
+        expected: "1 · 2",
+        compute: () =>
+          `${recordVersionFor([])} · ${recordVersionFor([{} as never])}`,
       },
     ],
   },

@@ -3,6 +3,8 @@ import {
   type CheckResult,
   checkItemsFrom,
   checkPublicLedger,
+  directorHistory,
+  operationsView,
   type RoundRecord,
   STARDRAW_ANCHOR_REPO,
   TIMESTAMP_LABEL,
@@ -97,5 +99,7 @@ export async function checkPracticeLedger(ledger: {
     items,
     problems: report.problems,
     skipped: report.skipped,
+    directors: directorHistory(report.operations),
+    operations: operationsView(report.operations, closed.length, report.head),
   };
 }

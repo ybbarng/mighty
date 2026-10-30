@@ -41,6 +41,8 @@ describe("장부 검사(받아 둔 실제 장부)", () => {
     expect(out).toContain("당첨 번호 9 21 29 38 39 45 + 23");
     expect(out).toContain("1회차 확인(digicert, sectigo)");
     expect(out).toMatch(/통과 {4}앵커 저장소/);
+    expect(out).toContain("[국장 열쇠 내력]");
+    expect(out).toContain("국장 열쇠 지정 기록이 없습니다");
     expect(out).toContain("결과: 모든 확인을 통과했습니다");
     expect(code).toBe(0);
   });

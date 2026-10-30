@@ -8,7 +8,8 @@ import {
 import { drawNumbers, drawSeed, rankOf } from "./draw";
 import { merkleRoot } from "./merkle";
 import { type Nickname, sortNicknames } from "./nickname";
-import { emptyWinners, RECORD_VERSION, type RoundRecord } from "./record";
+import { type Operation, sortOperations } from "./operations";
+import { emptyWinners, type RoundRecord, recordVersionFor } from "./record";
 import {
   type KeyRegistration,
   registrationId,
@@ -87,6 +88,8 @@ export interface CloseRoundInput {
   scheduleChanges?: ScheduleEntry[];
   /** 지난 회차 당첨자가 낸 별명 */
   nicknames?: readonly Nickname[];
+  /** 이 기록에 싣는 운영 기록(operations.ts selectOperations로 고른 것). 있으면 기록 판 2 */
+  operations?: readonly Operation[];
 }
 
 export function closeRound(input: CloseRoundInput): RoundRecord {
@@ -95,7 +98,7 @@ export function closeRound(input: CloseRoundInput): RoundRecord {
   const ids = sorted.map(ticketId);
   const drandRound = drandRoundForClose(closesAt);
   const base = {
-    v: RECORD_VERSION,
+    v: recordVersionFor(input.operations as Operation[] | undefined),
     round: input.round,
     prev: input.prev,
     count: sorted.length,
@@ -106,6 +109,9 @@ export function closeRound(input: CloseRoundInput): RoundRecord {
     drandRound,
     scheduleChanges: input.scheduleChanges ?? [],
     nicknames: sortNicknames(input.nicknames ?? []),
+    ...(input.operations && input.operations.length > 0
+      ? { operations: sortOperations(input.operations) }
+      : {}),
   };
   if (isVoidRound(closesAt, input.rootLoggedAt)) {
     return {

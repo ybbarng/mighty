@@ -19,12 +19,18 @@ import {
   type Nickname,
   verifyNicknameSignature,
 } from "./nickname";
+import {
+  applyRecordOps,
+  everDirector,
+  newOpsState,
+  type OpsState,
+} from "./operations";
 import { checkPow, POW_PARAMS, type PowParams } from "./pow";
 import {
   genesisHash,
-  RECORD_VERSION,
   type RoundRecord,
   recordHash,
+  recordVersionFor,
 } from "./record";
 import {
   checkRegistration,
@@ -33,13 +39,7 @@ import {
   registrationId,
 } from "./registration";
 import { isVoidRound } from "./round";
-import {
-  checkSchedule,
-  checkScheduleChange,
-  roundTimes,
-  type Schedule,
-  withChange,
-} from "./schedule";
+import { checkSchedule, roundTimes, type Schedule } from "./schedule";
 import type { WebAuthnPolicy } from "./signature";
 import {
   TICKET_VERSION,
@@ -105,6 +105,8 @@ export interface VerifyReport {
   keys: KeyRegistration[];
   /** 규칙을 지킨 별명 */
   nicknames: Nickname[];
+  /** 운영 기록(국장·관인)을 모두 반영한 상태(docs/36 11-12). operationsView·directorHistory로 읽는다 */
+  operations: OpsState;
 }
 
 export async function verifyLedger(
@@ -126,10 +128,12 @@ export async function verifyLedger(
       powChecked: 0,
       keys: [],
       nicknames: [],
+      operations: newOpsState(genesis),
     };
   }
   const beaconVerifier = options.beaconVerifier ?? verifyQuicknetBeacon;
   const mine = new Set((options.mine ?? []).map(toHex));
+  const ops = newOpsState(genesis);
   let schedule = genesis;
   let head = genesisHash(genesis);
   let powChecked = 0;
@@ -160,7 +164,8 @@ export async function verifyLedger(
     const fail = (message: string) => problems.push({ round, message });
     const { closesAt, entry } = roundTimes(schedule, round);
 
-    if (record.v !== RECORD_VERSION) fail(`모르는 기록 판 ${record.v}`);
+    if (record.v !== recordVersionFor(record.operations))
+      fail(`모르는 기록 판 ${record.v}(운영 기록이 있으면 2, 없으면 1)`);
     if (record.round !== round)
       fail(`회차 번호가 ${round}여야 하는데 ${record.round}다`);
     if (!equalBytes(record.prev, head))
@@ -186,6 +191,13 @@ export async function verifyLedger(
       }
       if (keyByCredential.has(credential)) {
         fail(`등록 ${short(id)}: 이미 등록된 패스키 번호`);
+        continue;
+      }
+      // 국장 열쇠와 우주인 열쇠는 섞지 않는다(docs/36 11-12)
+      if (everDirector(ops, reg.pub, reg.credentialId)) {
+        fail(
+          `등록 ${short(id)}: 국장으로 지정된 열쇠·패스키는 우주인으로 등록할 수 없다`,
+        );
         continue;
       }
       const ok = await checkPow(
@@ -358,12 +370,15 @@ export async function verifyLedger(
     }
 
     const roundSchedule = schedule;
-    // 6. 일정 변경
-    for (const change of record.scheduleChanges) {
-      const problem = checkScheduleChange(schedule, change, round);
-      if (problem) fail(`일정 변경: ${problem}`);
-      else schedule = withChange(schedule, change);
-    }
+    // 6. 일정 변경(옛 칸)과 운영 기록(국장·관인 서명, 24시간 예고, 취소)
+    const opProblems = await applyRecordOps(ops, record, {
+      ...(options.webauthnPolicy ? { policy: options.webauthnPolicy } : {}),
+      isEntrant: (pub, credentialId) =>
+        keyByEntrant.has(toHex(entrantId(pub))) ||
+        (credentialId !== null && keyByCredential.has(toHex(credentialId))),
+    });
+    for (const p of opProblems) fail(p);
+    schedule = ops.schedule;
 
     head = recordHash(record);
 
@@ -383,6 +398,7 @@ export async function verifyLedger(
     powChecked,
     keys,
     nicknames: accepted,
+    operations: ops,
   };
 }
 

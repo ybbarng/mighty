@@ -1,14 +1,13 @@
 import {
   type CheckResult,
-  checkScheduleChange,
   displayRound,
   drandTime,
   type PublicLedger,
   problemText,
   RANKS,
   roundTimes,
+  scheduleFromRecords,
   type TicketFinding,
-  withChange,
 } from "@mighty/stardraw-core";
 
 /** 검사 결과를 터미널 글로 옮긴다(시험하기 쉽게 문자열만 만든다) */
@@ -42,7 +41,8 @@ export function roundLines(
   ledger: PublicLedger,
 ): string[] {
   const lines: string[] = [];
-  let schedule = ledger.genesis;
+  // 취소된 일정 바꾸기를 뺀 지금 일정표로 모든 회차를 센다(바뀐 줄 앞 회차의 시각은 그대로다)
+  const schedule = scheduleFromRecords(ledger.genesis, ledger.records);
   for (const [i, record] of ledger.records.entries()) {
     const round = i + 1;
     const { closesAt } = roundTimes(schedule, round);
@@ -65,10 +65,6 @@ export function roundLines(
     for (const p of problems) lines.push(`        문제: ${p.message}`);
     for (const s of skipped)
       lines.push(`        건너뜀: ${s.slice(`${round}회차: `.length)}`);
-    // 검사기와 같게, 규칙에 맞는 일정 변경만 다음 회차부터 반영한다
-    for (const change of record.scheduleChanges)
-      if (!checkScheduleChange(schedule, change, round))
-        schedule = withChange(schedule, change);
   }
   return lines;
 }
@@ -99,6 +95,8 @@ export function ledgerReport(
   }
   const whole = result.problems.filter((p) => p.round === 0);
   for (const p of whole) out.push(`        문제: ${problemText(p)}`);
+  out.push("");
+  out.push(...directorLines(result));
   if (findings.length > 0) {
     out.push("");
     out.push("[내 응모권]");
@@ -138,4 +136,38 @@ export function ticketLines(
       ? "        머클 증명: 그 회차 기록의 응모권 루트에 들어 있습니다(작업 증명도 전부 계산했습니다)"
       : "        머클 증명: 기록의 응모권 루트와 맞지 않습니다",
   ];
+}
+
+/**
+ * 국장 열쇠 내력(docs/36 11-12): 언제 어느 열쇠(지문)가 누구 서명으로 지정·빼기됐는지.
+ * 서버 설정으로 국장 열쇠를 몰래 바꿔도 장부의 지정 기록으로 여기 드러난다
+ */
+export function directorLines(result: CheckResult): string[] {
+  const out = ["[국장 열쇠 내력]"];
+  if (result.directors.length === 0) {
+    out.push(
+      "  국장 열쇠 지정 기록이 없습니다(운영 기록을 낼 수 있는 국장이 없음)",
+    );
+    return out;
+  }
+  const STATUS_TEXT = {
+    pending: "예고 중",
+    applied: "효력",
+    cancelled: "취소됨",
+  };
+  for (const d of result.directors)
+    out.push(
+      `  사슬 ${d.round} 기록 · ${d.action} ${d.fingerprint} · 서명 ${d.signedBy} · ${d.effectiveRound}회차부터 · ${STATUS_TEXT[d.status]}${d.cancelledIn ? `(사슬 ${d.cancelledIn}에서)` : ""}`,
+    );
+  const others = result.operations.operations.filter(
+    (o) => o.kind !== "director-add" && o.kind !== "director-remove",
+  );
+  if (others.length > 0) {
+    out.push("[운영 기록]");
+    for (const o of others)
+      out.push(
+        `  사슬 ${o.round} 기록 · ${o.summary} · 서명 ${o.signedBy} · ${o.kind === "cancel" ? "바로" : `${o.effectiveRound}회차부터`} · ${STATUS_TEXT[o.status]}`,
+      );
+  }
+  return out;
 }
