@@ -1240,9 +1240,11 @@ button {
     opacity: 0.9;
   }
 }
-/* 은박 패치: 은빛 바탕 + 도는 무지개 + 회절 살 + 미끄러지는 반사광 + 새김 무늬 */
+/* 은박 패치: 은빛 바탕 + 도는 무지개 + 회절 살 + 미끄러지는 반사광 + 새김 무늬.
+   사진 모서리에 겹치므로 반투명(평소 0.55, 기울이면 더 또렷하게) */
 .sd-foil {
   border-radius: 50%;
+  opacity: calc(0.55 + var(--li) * 0.3);
   background:
     var(--foil-art) center / 100% 100% no-repeat,
     radial-gradient(
