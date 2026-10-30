@@ -28,6 +28,17 @@ const START = ADDRESS_POOL.slice(0, START_COUNT);
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
+/** 끝 글자의 받침 번호(0이면 받침 없음, 한글이 아니면 0) */
+function batchim(word: string): number {
+  const code = (word.at(-1) ?? "").charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 ? code % 28 : 0;
+}
+const obj = (w: string) => `${w}${batchim(w) ? "을" : "를"}`;
+const subj = (w: string) => `${w}${batchim(w) ? "이" : "가"}`;
+/** 받침이 없거나 ㄹ(8)이면 "로" */
+const toward = (w: string) =>
+  `${w}${batchim(w) && batchim(w) !== 8 ? "으로" : "로"}`;
+
 /** 이 기기에 등록증(패스키 공개 열쇠)이 있으면 그 열쇠 */
 function useMyKey(): Uint8Array | null {
   const [pub, setPub] = useState<Uint8Array | null>(null);
@@ -238,9 +249,9 @@ function CompareAndScore({
         {prev && (
           <Verdict ok={hrwMoved.size < modMoved.size} testId="rendezvous-moves">
             {added
-              ? `${added.name}을(를) 더하자 나머지 방식은 ${modMoved.size}명이 이사했고, 랑데부 해싱은 ${added.name} 점수가 1등이 된 ${hrwMoved.size}명만 이사했습니다.`
+              ? `${obj(added.name)} 더하자 나머지 방식은 ${modMoved.size}명이 이사했고, 랑데부 해싱은 ${added.name} 점수가 1등이 된 ${hrwMoved.size}명만 이사했습니다.`
               : dropped
-                ? `${dropped.name}을(를) 빼자 나머지 방식은 ${modMoved.size}명이 이사했고, 랑데부 해싱은 ${dropped.name}에 살던 ${hrwMoved.size}명만 옮겼습니다.`
+                ? `${obj(dropped.name)} 빼자 나머지 방식은 ${modMoved.size}명이 이사했고, 랑데부 해싱은 ${dropped.name}에 살던 ${hrwMoved.size}명만 옮겼습니다.`
                 : ""}
           </Verdict>
         )}
@@ -295,10 +306,10 @@ function ScoreTable({
     if (newRow)
       story =
         newRow.id === top.id
-          ? `새 주소 ${newRow.name}의 점수 ${fmt(newRow.score)}가 원래 1등 ${prevTop.name}(${fmt(prevTop.score)})보다 높아 ${newRow.name}(으)로 이사합니다.`
+          ? `새 주소 ${newRow.name}의 점수 ${fmt(newRow.score)}가 원래 1등 ${prevTop.name}(${fmt(prevTop.score)})보다 높아 ${toward(newRow.name)} 이사합니다.`
           : `새 주소 ${newRow.name}의 점수 ${fmt(newRow.score)}가 1등 ${top.name}(${fmt(top.score)})보다 낮아 그대로 삽니다. 다른 막대는 하나도 바뀌지 않았습니다.`;
     else if (prevTop.id !== top.id)
-      story = `살던 ${prevTop.name}이(가) 빠져 2등이던 ${top.name}(으)로 옮겼습니다.`;
+      story = `살던 ${subj(prevTop.name)} 빠져 2등이던 ${toward(top.name)} 옮겼습니다.`;
     else
       story = `빠진 주소가 1등이 아니라 그대로 삽니다. 남은 막대는 하나도 바뀌지 않았습니다.`;
   }
@@ -450,7 +461,7 @@ function EditToy({ people, me }: { people: Uint8Array[]; me: boolean }) {
   else if (edit === "rename")
     result = {
       ok: moved.length === 0,
-      text: `화면 이름을 '${RENAMED}'(으)로 고쳤지만 이사한 사람은 ${moved.length}명입니다. 점수는 id(${TARGET.id})로 계산하기 때문입니다.`,
+      text: `화면 이름을 '${RENAMED}'${toward(RENAMED).slice(RENAMED.length)} 고쳤지만 이사한 사람은 ${moved.length}명입니다. 점수는 id(${TARGET.id})로 계산하기 때문입니다.`,
     };
   else if (edit === "reid") {
     const left = oldResidents.filter((i) => after[i] !== NEW_ID).length;
@@ -463,7 +474,7 @@ function EditToy({ people, me }: { people: Uint8Array[]; me: boolean }) {
     const newCount = residents(after, list).get(TARGET.id) ?? 0;
     result = {
       ok: true,
-      text: `${TARGET.name}의 가중치를 2배로 하자 주민이 ${oldCount}명 → ${newCount}명이 됐습니다${manyCounts ? `(견본 600명으로 세면 ${manyCounts[0]}명 → ${manyCounts[1]}명)` : ""}. 기댓값은 1/5 → 2/6입니다. 이사한 사람은 모두 ${TARGET.name}(으)로 옮겨 왔습니다.`,
+      text: `${TARGET.name}의 가중치를 2배로 하자 주민이 ${oldCount}명 → ${newCount}명이 됐습니다${manyCounts ? `(견본 600명으로 세면 ${manyCounts[0]}명 → ${manyCounts[1]}명)` : ""}. 기댓값은 1/5 → 2/6입니다. 이사한 사람은 모두 ${toward(TARGET.name)} 옮겨 왔습니다.`,
     };
   }
 
@@ -529,7 +540,7 @@ function EditToy({ people, me }: { people: Uint8Array[]; me: boolean }) {
         </Verdict>
       ) : (
         <p className="text-[11px] text-white/55">
-          단추를 눌러 {TARGET.name}을(를) 바꿔 보세요. 이사한 우주인이
+          단추를 눌러 {obj(TARGET.name)} 바꿔 보세요. 이사한 우주인이
           반짝입니다.
         </p>
       )}
