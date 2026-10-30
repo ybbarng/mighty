@@ -36,7 +36,7 @@ async function showDrawResult(page: Page) {
 }
 
 /** 응모 단추(패스키로 서명, 확인 한 번) */
-const ENTER = "이 별 6개로 응모하기";
+const ENTER = { name: "응모하기", exact: true } as const;
 /** 우주인 등록 단추(패스키 만들기) */
 const REGISTER = { name: "우주인 등록", exact: true } as const;
 /** 등록증에서 누를 자리(제목 부분. 가운데는 주소 단추라 피한다) */
@@ -243,22 +243,47 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   );
   await tapStar(page, "canvas[data-sky='pick']", 1);
   await expect(
-    page.getByRole("button", { name: "1 시리우스" }),
+    page.getByRole("button", { name: "1 시리우스", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  // 응모 화면도 첫 화면과 같은 제목·소개 문구, 그 아래 이번 회차 응모권 칸 6개가 고른 별로 채워진다
+  await expect(
+    page.getByRole("heading", { name: "하늘의 별 따기", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?"),
+  ).toBeVisible();
+  const slip = page.getByRole("region", { name: "1회 응모권" });
+  await expect(slip).toHaveAttribute("data-entry-slip", "2");
+  await expect(slip.locator("[data-slip-star='7']")).toContainText(
+    "베텔게우스",
+  );
+  // 채운 칸을 누르면 그 별이 빠진다
+  await slip.getByRole("button", { name: "1 시리우스 빼기" }).click();
+  await expect(slip).toHaveAttribute("data-entry-slip", "1");
+  await expect(
+    page.getByRole("button", { name: "1 시리우스", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", ENTER)).toBeDisabled();
+  await tapStar(page, "canvas[data-sky='pick']", 1);
   await page.getByRole("button", { name: "남은 칸 자동" }).click();
+  await expect(slip).toHaveAttribute("data-entry-slip", "6");
+  await expect(slip.getByText("6/6")).toBeVisible();
   await noSideScroll(page);
   await page.screenshot({
     path: info.outputPath("stardraw-enter.png"),
     fullPage: true,
   });
   // 응모하기는 서명만(인증기 한 번)
-  await page.getByRole("button", { name: ENTER }).click();
+  await page.getByRole("button", ENTER).click();
   const receipt = page.locator("[data-receipt]");
   await expect(receipt).toBeVisible({ timeout: 30_000 });
   expect(await passkeyCalls(page)).toEqual({ create: 1, get: 2 });
   await expect(receipt).toContainText("베텔게우스");
   await expect(receipt).toContainText("시리우스");
   await expect(receipt.locator("[data-passkey-mark]")).toBeVisible();
+  await expect(receipt.locator("[data-wish]")).toHaveText(
+    "내 별에 소원을 빌어 보세요",
+  );
   await page.screenshot({
     path: info.outputPath("stardraw-receipt.png"),
     fullPage: true,
@@ -298,6 +323,8 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     "href",
     "/stardraw/id",
   );
+  // 인사는 문장 하나(작은 등록증 그림 없이)
+  await expect(page.locator(`[data-greeting="${number}"] *`)).toHaveCount(0);
   await expect(page.locator("[data-card='entered']")).toContainText(
     "응모 완료",
   );
@@ -422,7 +449,7 @@ test("패스키 만들기를 취소하면 만들어지지 않았다고 알리고
   );
   // 별 고르기로 넘어가지 않는다
   await expect(setup).toBeVisible();
-  await expect(page.getByRole("button", { name: ENTER })).toHaveCount(0);
+  await expect(page.getByRole("button", ENTER)).toHaveCount(0);
   await noSideScroll(page);
 });
 
@@ -552,7 +579,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   // 응모: 이번 회차 1등이 되게 채우고 낸다. 서명 시트 한 번
   await page.getByRole("button", { name: "1등 되게" }).click();
   await expect(page.getByText("6/6")).toBeVisible();
-  await page.getByRole("button", { name: ENTER }).click();
+  await page.getByRole("button", ENTER).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   expect((await demoUnlocks(page)) - afterCreate).toBe(1);
@@ -718,7 +745,7 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   await demoUnlock(page, "sign");
   await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
-  await page.getByRole("button", { name: ENTER }).click();
+  await page.getByRole("button", ENTER).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "지금 추첨" }).click();
@@ -743,7 +770,7 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   await expect(page.getByText("6/6")).toBeVisible();
   // 두 번째 응모: 패스키 만들기 없이 서명 시트 한 번
   const beforeEntry = await demoUnlocks(page);
-  await page.getByRole("button", { name: ENTER }).click();
+  await page.getByRole("button", ENTER).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   expect((await demoUnlocks(page)) - beforeEntry).toBe(1);

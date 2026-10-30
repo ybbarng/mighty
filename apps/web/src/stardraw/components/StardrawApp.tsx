@@ -20,7 +20,6 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
-import { Avatar } from "../astronaut/Avatar";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
@@ -39,6 +38,7 @@ import {
   formatTime,
   LottoBall,
   RANK_LABEL,
+  StardrawTitle,
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
@@ -112,8 +112,6 @@ function viewOf(page: StardrawPage, hash: string): View {
 let printingId: string | null = null;
 /** 이번 방문에서 별 따기 화면 사이를 옮겨 다녔는지(아니면 "돌아가기"가 사이트 밖으로 나가지 않게 정한 화면으로) */
 let navigated = false;
-
-export const TAGLINE = "로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?";
 
 /** 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다 */
 export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
@@ -351,10 +349,7 @@ export function Home({
     <>
       <header className="flex flex-col gap-4">
         <BackToGames />
-        <div className="sd-title flex flex-col gap-1 text-center">
-          <h1 className="font-black text-3xl tracking-tight">하늘의 별 따기</h1>
-          <p className="break-keep text-sm text-white/65">{TAGLINE}</p>
-        </div>
+        <StardrawTitle />
         {key !== undefined && (
           <Greeting services={services} keyInfo={key} onRegister={onEnter} />
         )}
@@ -441,7 +436,7 @@ export function Home({
 }
 
 /**
- * 맨 위 인사. 이 기기에 등록증이 있으면 "○○에 거주하는 ○○ 님, 안녕하세요"와 작은 등록증(누르면 내 등록증),
+ * 맨 위 인사. 이 기기에 등록증이 있으면 "○○에 거주하는 ○○ 님, 안녕하세요"(누르면 내 등록증, 밑줄 없는 은은한 링크),
  * 없으면 「우주인 등록」
  */
 function Greeting({
@@ -465,49 +460,23 @@ function Greeting({
       </button>
     );
   const a = astronautOf(keyInfo.pub);
-  const body = (
-    <>
-      <IdThumb pub={keyInfo.pub} />
-      <span className="break-keep text-left text-sm text-white/85">
-        {residentPhrase(a)} 님, 안녕하세요
-      </span>
-    </>
-  );
+  const text = `${residentPhrase(a)} 님, 안녕하세요`;
   // 데모·둘러보기의 가짜 우주인은 실제 게임의 내 등록증으로 잇지 않는다
   return services.ns === GAME_NS ? (
     <a
       href="/stardraw/id"
       data-greeting={a.number}
-      aria-label={`${residentPhrase(a)} 님, 안녕하세요. 내 등록증`}
-      className="flex items-center gap-3 self-center rounded-2xl px-2 py-1 hover:bg-white/5"
+      className="self-center break-keep px-2 py-1 text-center text-sm text-white/85 no-underline transition-colors hover:text-amber-100"
     >
-      {body}
+      {text}
     </a>
   ) : (
-    <div
+    <p
       data-greeting={a.number}
-      className="flex items-center gap-3 self-center px-2 py-1"
+      className="self-center break-keep px-2 py-1 text-center text-sm text-white/85"
     >
-      {body}
-    </div>
-  );
-}
-
-/** 작은 등록증(얼굴만) */
-function IdThumb({ pub }: { pub: Uint8Array }) {
-  const a = astronautOf(pub);
-  return (
-    <span
-      aria-hidden="true"
-      className="sd-idthumb relative flex h-10 w-16 shrink-0 items-center overflow-hidden rounded-md pl-1"
-    >
-      <Avatar face={a.face} egg={a.egg} label="" className="h-8 w-auto" />
-      <span className="ml-1.5 flex flex-1 flex-col gap-1 pr-1.5">
-        <span className="h-0.5 rounded bg-white/45" />
-        <span className="h-0.5 w-3/4 rounded bg-white/30" />
-        <span className="h-0.5 w-1/2 rounded bg-white/30" />
-      </span>
-    </span>
+      {text}
+    </p>
   );
 }
 

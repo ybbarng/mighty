@@ -129,3 +129,15 @@ export function scheduleLine(length: number): string {
     length % 3600 === 0 ? `${length / 3600}시간` : `${length / 60}분`;
   return `${every}마다 추첨 · 추첨 5분 전 마감`;
 }
+
+export const TAGLINE = "로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?";
+
+/** 제목과 소개 문구(첫 화면·응모 화면이 같은 머리말을 쓴다) */
+export function StardrawTitle() {
+  return (
+    <div className="sd-title flex flex-col gap-1 text-center">
+      <h1 className="font-black text-3xl tracking-tight">하늘의 별 따기</h1>
+      <p className="break-keep text-sm text-white/65">{TAGLINE}</p>
+    </div>
+  );
+}

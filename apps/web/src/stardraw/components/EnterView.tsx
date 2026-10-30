@@ -26,7 +26,7 @@ import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
 import { AstronautPanel } from "./AstronautPanel";
 import { KeyIcon } from "./PasskeyHelp";
-import { LottoBall, StarInfo } from "./parts";
+import { LottoBall, StardrawTitle, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
 type Step = "pick" | "working" | "folding";
@@ -236,18 +236,10 @@ export function EnterView({
     const phrase = residentPhrase(astronautOf(issued.key.pub));
     return (
       <section className="flex flex-col gap-4" aria-label="우주인 등록증 발급">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-sm text-white/70 hover:text-white"
-          >
-            ← 처음으로
-          </button>
-          <span className="text-sm text-white/60 tabular-nums">
-            {roundShort(services.ledger.schedule, status.round)} 응모
-          </span>
-        </div>
+        <EnterHeader
+          onBack={onBack}
+          round={roundShort(services.ledger.schedule, status.round)}
+        />
         <AstronautPanel
           services={services}
           pub={issued.key.pub}
@@ -281,18 +273,10 @@ export function EnterView({
   if (!key)
     return (
       <section className="flex flex-col gap-4" aria-label="응모">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-sm text-white/70 hover:text-white"
-          >
-            ← 처음으로
-          </button>
-          <span className="text-sm text-white/60 tabular-nums">
-            {roundShort(services.ledger.schedule, status.round)} 응모
-          </span>
-        </div>
+        <EnterHeader
+          onBack={onBack}
+          round={roundShort(services.ledger.schedule, status.round)}
+        />
         <KeySetup
           demo={demo}
           env={env}
@@ -307,18 +291,13 @@ export function EnterView({
 
   return (
     <section className="flex flex-col gap-4" aria-label="응모">
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-sm text-white/70 hover:text-white"
-        >
-          ← 처음으로
-        </button>
-        <span className="text-sm text-white/60 tabular-nums">
-          {roundShort(services.ledger.schedule, status.round)} 응모
-        </span>
-      </div>
+      <EnterHeader onBack={onBack} />
+
+      <EntrySlip
+        title={`${roundShort(services.ledger.schedule, status.round)} 응모권`}
+        picked={picked}
+        onRemove={step === "pick" ? toggle : undefined}
+      />
 
       <div
         className={cn(
@@ -336,23 +315,6 @@ export function EnterView({
       </div>
 
       <StarInfo n={focus} />
-
-      <div className="flex flex-wrap items-center gap-2" aria-live="polite">
-        {[0, 1, 2, 3, 4, 5].map((i) => {
-          const n = [...picked].sort((a, b) => a - b)[i];
-          return n ? (
-            <LottoBall key={n} n={n} className="sd-pop" />
-          ) : (
-            <span
-              key={`empty-${i}`}
-              className="size-9 rounded-full border border-white/20 border-dashed"
-            />
-          );
-        })}
-        <span className="ml-auto text-sm text-white/60 tabular-nums">
-          {picked.length}/6
-        </span>
-      </div>
 
       {extra}
 
@@ -399,7 +361,7 @@ export function EnterView({
           type="button"
           disabled={!full || !open || step !== "pick"}
           onClick={() => void start()}
-          className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950 disabled:opacity-40"
+          className="sd-cta rounded-2xl py-4 font-black text-slate-950 text-xl disabled:opacity-40"
         >
           {step === "working" || step === "folding"
             ? work || "응모하고 있습니다"
@@ -407,9 +369,108 @@ export function EnterView({
               ? status.phase === "waiting"
                 ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
                 : "이번 회차 응모가 마감되었습니다"
-              : "이 별 6개로 응모하기"}
+              : "응모하기"}
         </button>
       </div>
+    </section>
+  );
+}
+
+/** 응모 화면 머리: 돌아가기와 첫 화면과 같은 제목·소개 문구(등록 단계는 회차 이름도) */
+function EnterHeader({
+  onBack,
+  round,
+}: {
+  onBack: () => void;
+  round?: string;
+}) {
+  return (
+    <header className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-sm text-white/70 hover:text-white"
+        >
+          ← 처음으로
+        </button>
+        {round && (
+          <span className="text-sm text-white/60 tabular-nums">
+            {round} 응모
+          </span>
+        )}
+      </div>
+      <StardrawTitle />
+    </header>
+  );
+}
+
+/**
+ * 응모권(응모 용지): 이번 회차 이름과 칸 6개. 별을 고르면 빈 칸이 번호 공과 별 이름으로 채워진다(작은 수부터).
+ * 채운 칸을 누르면 그 별을 뺀다
+ */
+function EntrySlip({
+  title,
+  picked,
+  onRemove,
+}: {
+  title: string;
+  picked: readonly number[];
+  onRemove: ((n: number) => void) | undefined;
+}) {
+  const sorted = [...picked].sort((a, b) => a - b);
+  return (
+    <section
+      aria-label={title}
+      data-entry-slip={picked.length}
+      className={cn(
+        "sd-slip relative rounded-2xl px-3.5 pt-3 pb-3.5",
+        picked.length === 6 && "sd-slip-full",
+      )}
+    >
+      <div className="mb-2.5 flex items-baseline justify-between gap-3 px-0.5">
+        <h2 className="font-bold text-base text-rose-50 tabular-nums">
+          {title}
+        </h2>
+        <span
+          className="font-mono text-rose-100/70 text-sm tabular-nums"
+          aria-live="polite"
+        >
+          {picked.length}/6
+        </span>
+      </div>
+      <ol className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {[0, 1, 2, 3, 4, 5].map((i) => {
+          const n = sorted[i];
+          if (n === undefined)
+            return (
+              <li
+                key={`empty-${i}`}
+                className="sd-slip-cell grid h-[4.6rem] place-items-center rounded-xl border border-rose-200/25 border-dashed"
+              >
+                <span className="size-7 rounded-full border border-rose-200/25 border-dashed" />
+              </li>
+            );
+          const s = starOf(n);
+          return (
+            <li key={n} className="h-[4.6rem]">
+              <button
+                type="button"
+                disabled={!onRemove}
+                onClick={() => onRemove?.(n)}
+                aria-label={`${n} ${s.ko} 빼기`}
+                data-slip-star={n}
+                className="sd-pop flex size-full flex-col items-center justify-center gap-1 rounded-xl border border-amber-200/45 bg-amber-100/10 px-1 hover:bg-amber-100/15"
+              >
+                <LottoBall n={n} size="sm" />
+                <span className="line-clamp-2 break-keep text-center font-semibold text-[11px] text-amber-50 leading-tight">
+                  {s.ko}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

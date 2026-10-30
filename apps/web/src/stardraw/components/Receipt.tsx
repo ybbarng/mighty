@@ -113,6 +113,12 @@ export function Receipt({
           className="rounded-md border-0"
         />
       </div>
+      <p
+        className="mt-2.5 text-center text-[12px] text-amber-100/60 tracking-wide"
+        data-wish
+      >
+        내 별에 소원을 빌어 보세요
+      </p>
 
       <SectionTitle className="mt-5">별 설명</SectionTitle>
       <ol className="flex flex-col gap-2.5">
