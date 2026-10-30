@@ -750,6 +750,119 @@ button {
     opacity: 0;
   }
 }
+/*
+ * 번호 공: 스스로 빛나는 별처럼. 가운데가 가장 뜨겁고 밝고 가장자리로 갈수록 어둡고 붉어진다(가장자리 어두워짐).
+ * 몸통(::before) 표면에는 해의 쌀알 무늬처럼 밝고 어두운 얼룩이 두 겹으로 반대 방향으로 흘러 끓는 듯 이글거리고,
+ * 둘레(::after)로 그 별빛이 매끈하게 번지며 고르지 않게 작게 반짝인다. 빛줄기 무늬는 두지 않는다(전광판처럼 보인다).
+ * 공 자체에는 animation을 두지 않아 등장 움직임(sd-drop·sd-pop)을 덮어쓰지 않는다. 맞힌 번호의 ring과도 겹치지 않는다.
+ * 색은 --ball(그 별의 빛깔을 진하게, sky.ts ballColor)
+ */
+.sd-ball {
+  position: relative;
+  isolation: isolate;
+}
+.sd-ball::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  /* 얼룩: 잡음 무늬 두 장(밝은 쪽·어두운 쪽), 그 아래 가장자리 어두워짐 */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='432' height='432'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.13889' numOctaves='1' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.98 0 0 0 0 0.94 0 0 0 1.1 -0.55'/%3E%3C/filter%3E%3Crect width='432' height='432' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='432' height='432'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.12903' numOctaves='1' seed='29'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.7 -0.36'/%3E%3C/filter%3E%3Crect width='432' height='432' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--ball) 30%, #fff) 0%,
+      color-mix(in srgb, var(--ball) 70%, #fff) 34%,
+      var(--ball) 68%,
+      color-mix(in srgb, var(--ball) 62%, #3a0d00) 100%
+    );
+  background-size:
+    432px 432px,
+    432px 432px,
+    100% 100%;
+  background-repeat: no-repeat;
+  animation: sd-ball-boil 150s ease-in-out infinite alternate;
+  animation-delay: var(--boil-delay, 0s);
+}
+.sd-ball::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -2;
+  border-radius: 50%;
+  /* 공 가장자리(이 상자 반지름의 --edge 자리)부터 바로 번진다 */
+  --edge: 52%;
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--ball) 75%, #fff) var(--edge),
+    color-mix(in srgb, var(--ball) 38%, transparent) calc(var(--edge) + 15%),
+    transparent 100%
+  );
+  animation: sd-ball-twinkle 2.7s steps(1, end) infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+}
+/* 맞힌 번호: 고리 대신 빛이 더 멀리 번진다 */
+.sd-ball-hit::after {
+  inset: -62%;
+  --edge: 44%;
+}
+/* 촘촘한 얼룩을 화면 크기 그대로 크게 한 장씩(늘이지도 되풀이하지도 않아 이음매가 없다), 두 장이 서로 다른 방향으로 천천히 오간다 */
+@keyframes sd-ball-boil {
+  from {
+    background-position:
+      -40px -40px,
+      -340px -60px,
+      0 0;
+  }
+  to {
+    background-position:
+      -340px -300px,
+      -60px -320px,
+      0 0;
+  }
+}
+/* 반짝임: 주기 없이 보이게 고르지 않은 밝기를 계단으로(숨 쉬듯 커졌다 작아지지 않는다) */
+@keyframes sd-ball-twinkle {
+  0% {
+    opacity: 1;
+  }
+  9% {
+    opacity: 0.88;
+  }
+  15% {
+    opacity: 0.97;
+  }
+  27% {
+    opacity: 0.91;
+  }
+  38% {
+    opacity: 1;
+  }
+  46% {
+    opacity: 0.86;
+  }
+  53% {
+    opacity: 0.96;
+  }
+  67% {
+    opacity: 0.9;
+  }
+  79% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 0.92;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-ball::after,
+  .sd-ball::before {
+    animation: none;
+  }
+}
+
 .sd-glory {
   animation: sd-glory 2.4s ease-in-out infinite;
 }

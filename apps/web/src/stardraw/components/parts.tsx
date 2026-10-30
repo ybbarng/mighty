@@ -1,10 +1,12 @@
 "use client";
 
+import type React from "react";
+
 import { cn } from "@/lib/cn";
 
 import { ballColor, type SkyStar, starOf } from "../sky";
 
-/** 로또 공 하나(입체 공, 숫자) */
+/** 번호 공 하나(스스로 빛나는 별처럼, 숫자). 색은 그 별의 빛깔, 모양은 globals.css .sd-ball */
 export function LottoBall({
   n,
   size = "md",
@@ -15,7 +17,7 @@ export function LottoBall({
   n: number;
   size?: "sm" | "md" | "lg";
   dim?: boolean;
-  /** 맞힌 번호 강조 */
+  /** 맞힌 번호 강조(고리 대신 더 밝고 크게 빛난다) */
   ring?: boolean;
   className?: string;
 }) {
@@ -23,17 +25,22 @@ export function LottoBall({
     <span
       data-ball={n}
       className={cn(
-        "inline-grid shrink-0 place-items-center rounded-full font-bold text-neutral-900 tabular-nums",
+        "sd-ball inline-grid shrink-0 place-items-center rounded-full font-bold text-neutral-900 tabular-nums",
         size === "sm" && "size-7 text-xs",
         size === "md" && "size-9 text-sm",
         size === "lg" && "size-12 text-lg",
         dim && "opacity-35",
-        ring && "ring-2 ring-emerald-300 ring-offset-2 ring-offset-[#0b1322]",
+        ring && "sd-ball-hit",
         className,
       )}
-      style={{
-        background: `radial-gradient(circle at 32% 28%, #ffffffcc 0 12%, ${ballColor(n)} 45%, ${ballColor(n)} 70%, #00000055 100%)`,
-      }}
+      style={
+        {
+          "--ball": ballColor(n),
+          // 공마다 반짝임 박자와 표면 얼룩 자리를 어긋나게(같은 무늬로 함께 움직이지 않게)
+          "--twinkle-delay": `-${((n * 0.73) % 2.7).toFixed(2)}s`,
+          "--boil-delay": `-${((n * 7.3) % 44).toFixed(1)}s`,
+        } as React.CSSProperties
+      }
     >
       {n}
     </span>
