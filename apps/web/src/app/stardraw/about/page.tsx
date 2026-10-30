@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 
 import { MadeWith } from "@/components/brand/MadeWith";
-import { PasskeyFaq } from "@/stardraw/components/PasskeyHelp";
+import {
+  KeyHoldingExplained,
+  PasskeyFaq,
+} from "@/stardraw/components/PasskeyHelp";
 import { LottoBall } from "@/stardraw/components/parts";
 import { RANK_RULE } from "@/stardraw/results";
 import { SKY_STARS, tempWord } from "@/stardraw/sky";
@@ -16,13 +19,15 @@ export const viewport: Viewport = { themeColor: "#070d19" };
 
 function Section({
   title,
+  id,
   children,
 }: {
   title: string;
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section id={id} className="flex scroll-mt-6 flex-col gap-3">
       <h2 className="font-bold text-xl">{title}</h2>
       {children}
     </section>
@@ -155,12 +160,14 @@ export default function StardrawAbout() {
           </p>
         </Section>
 
-        <Section title="패스키가 뭐예요?">
+        <Section title="패스키와 보안" id="passkey">
           <p className="text-white/85">
             하늘의 별 따기는 패스키로만 응모합니다. 비밀번호보다 안전하고 쓰기도
-            쉬워서, 이 게임으로 패스키에 익숙해지면 좋겠습니다. 사람들이 많이
-            묻는 것을 모았습니다.
+            쉬워서, 이 게임으로 패스키에 익숙해지면 좋겠습니다. 처음 한 번
+            패스키를 만들고(얼굴·지문 확인 한 번), 그 뒤 응모할 때마다 그
+            패스키로 서명합니다(확인 한 번). 사람들이 많이 묻는 것을 모았습니다.
           </p>
+          <KeyHoldingExplained />
           <PasskeyFaq />
         </Section>
 

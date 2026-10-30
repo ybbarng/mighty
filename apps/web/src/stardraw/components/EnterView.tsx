@@ -18,12 +18,11 @@ import {
   passkeyApi,
   passkeyProblem,
   platformUnlock,
-  unlockWith,
 } from "../passkey-env";
 import { DEMO_NS, type Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
-import { PasskeyFaq } from "./PasskeyHelp";
+import { KeyIcon } from "./PasskeyHelp";
 import { LottoBall, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -64,10 +63,14 @@ export function EnterView({
   const [work, setWork] = useState("");
   const [error, setError] = useState<Failure | null>(null);
   const [env, setEnv] = useState<Env | null>(null);
-  const [faq, setFaq] = useState(false);
+  /** 이 기기·브라우저의 패스키. 없으면 별을 고르기 전에 먼저 만든다(등록과 서명을 나눈다, 2026-10-30 사용자) */
+  const [key, setKey] = useState<KeyInfo | null>(() =>
+    services.wallet.loadKey(),
+  );
+  const [keyWork, setKeyWork] = useState<null | "create" | "recover">(null);
+  const [keyNote, setKeyNote] = useState<string | null>(null);
   const full = picked.length === 6;
   const open = status.phase === "open";
-  const hasKey = !!services.wallet.loadKey();
   // 데모는 실제 패스키 대신 화면 안 흉내 시트를 쓴다: 패스키를 못 쓰는 환경 안내로 막지 않는다
   const demo = services.ns === DEMO_NS;
 
@@ -83,14 +86,14 @@ export function EnterView({
     };
   }, []);
 
-  const fail = (err: unknown) => {
+  const fail = (err: unknown, what = "응모되지 않았어요") => {
     setStep("pick");
     const kind = passkeyProblem(err);
     setError({
       kind,
       text:
         kind === "cancelled"
-          ? "응모되지 않았어요. 패스키 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요."
+          ? `${what}. 패스키 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요.`
           : kind === "unsupported"
             ? "이 기기에서는 패스키를 만들 수 없어요. 다시 누른 뒤 '다른 기기 사용'(휴대폰)을 고르고, 화면의 QR을 휴대폰 카메라로 찍어 주세요."
             : err instanceof Error
@@ -169,22 +172,72 @@ export function EnterView({
     }
   };
 
-  /** 응모 단추: 패스키가 없으면 이 누름이 곧 패스키 만들기다(따로 등록시키지 않는다) */
+  /** 응모 단추: 고른 별로 응모권을 만들고 패스키로 서명한다(확인 한 번) */
   const start = async () => {
-    const key = services.wallet.loadKey();
-    if (key) {
-      await submit(key);
-      return;
-    }
-    setStep("working");
+    if (key) await submit(key);
+  };
+
+  /** 패스키 만들기(등록만, 확인 한 번). 서명은 별을 고른 뒤 응모할 때 한다 */
+  const createKey = async () => {
+    setKeyWork("create");
+    setKeyNote(null);
     setError(null);
-    setWork("패스키를 만들고 있습니다(처음 한 번은 확인을 두 번 해요)");
     try {
-      await submit(await services.wallet.createPasskey());
+      setKey(await services.wallet.createPasskey());
     } catch (err) {
-      fail(err);
+      fail(err, "패스키를 만들지 않았어요");
+    } finally {
+      setKeyWork(null);
     }
   };
+
+  /** 다른 기기에서 만든(따라온) 패스키를 찾아 장부의 등록을 확인한다 */
+  const recoverKey = async () => {
+    setKeyWork("recover");
+    setKeyNote(null);
+    setError(null);
+    try {
+      const found = await services.wallet.recoverPasskey((id) =>
+        services.ledger.passkeyPub(id),
+      );
+      if (found) setKey(found);
+      else
+        setKeyNote(
+          "이 패스키로 응모한 기록이 없어요. 처음이면 「패스키 만들기」를 눌러 주세요.",
+        );
+    } catch (err) {
+      fail(err, "패스키를 찾지 못했어요");
+    } finally {
+      setKeyWork(null);
+    }
+  };
+
+  if (!key)
+    return (
+      <section className="flex flex-col gap-4" aria-label="응모">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm text-white/70 hover:text-white"
+          >
+            ← 처음으로
+          </button>
+          <span className="text-sm text-white/60 tabular-nums">
+            {status.round}회 응모
+          </span>
+        </div>
+        <KeySetup
+          demo={demo}
+          env={env}
+          working={keyWork}
+          note={keyNote}
+          error={error}
+          onCreate={() => void createKey()}
+          onRecover={() => void recoverKey()}
+        />
+      </section>
+    );
 
   return (
     <section className="flex flex-col gap-4" aria-label="응모">
@@ -278,84 +331,140 @@ export function EnterView({
         </button>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="flex flex-col gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-rose-100 text-sm"
-        >
-          <p className="break-keep">{error.text}</p>
-          {error.kind === "cancelled" && (
-            <button
-              type="button"
-              onClick={() => setFaq(true)}
-              className="self-start text-rose-100 underline underline-offset-2"
-            >
-              패스키가 뭐예요?
-            </button>
-          )}
-        </div>
-      )}
+      {error && <ErrorBox error={error} />}
 
-      {!demo && env?.inApp ? (
-        <InAppNotice app={env.inApp} />
-      ) : !demo && env && !env.api ? (
-        <p
-          role="note"
-          className="break-keep rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/80"
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          disabled={!full || !open || step !== "pick"}
+          onClick={() => void start()}
+          className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950 disabled:opacity-40"
         >
-          이 브라우저는 패스키를 지원하지 않아요. 브라우저를 최신 판으로
-          업데이트하거나, Safari·Chrome으로 열어 주세요.
-        </p>
+          {step === "working" || step === "folding"
+            ? work || "응모하고 있습니다"
+            : !open
+              ? status.phase === "waiting"
+                ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
+                : "이번 회차 응모가 마감되었습니다"
+              : !full
+                ? `별을 ${6 - picked.length}개 더 골라 주세요`
+                : "이 별 6개로 응모하기"}
+        </button>
+        {demo && (
+          <p className="break-keep text-center text-white/60 text-xs">
+            데모는 패스키를 만들지 않습니다. 확인 창은 흉내예요.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** 오류 상자. 패스키 확인을 취소했으면 설명 페이지의 패스키 칸으로 잇는다 */
+function ErrorBox({ error }: { error: Failure }) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-rose-100 text-sm"
+    >
+      <p className="break-keep">{error.text}</p>
+      {error.kind === "cancelled" && (
+        <a
+          href="/stardraw/about#passkey"
+          className="self-start text-rose-100 underline underline-offset-2"
+        >
+          패스키가 뭐예요?
+        </a>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 응모하려면 패스키가 필요하다: 별을 고르기 전에 먼저 만든다(등록만, 확인 한 번).
+ * 다른 기기에서 만든 패스키가 따라왔으면 「이미 패스키가 있어요」로 찾는다.
+ * 패스키를 못 쓰는 환경(앱 안 브라우저·미지원)은 한두 줄로 안내한다. 데모는 흉내라 막지 않는다
+ */
+function KeySetup({
+  demo,
+  env,
+  working,
+  note,
+  error,
+  onCreate,
+  onRecover,
+}: {
+  demo: boolean;
+  env: Env | null;
+  working: null | "create" | "recover";
+  note: string | null;
+  error: Failure | null;
+  onCreate: () => void;
+  onRecover: () => void;
+}) {
+  const blocked = !demo && env && (env.inApp || !env.api);
+  return (
+    <div
+      className="sd-glass flex flex-col items-center gap-3 rounded-3xl px-5 py-7 text-center"
+      data-key-setup
+    >
+      <KeyIcon className="size-9 text-amber-100" />
+      <h2 className="font-bold text-xl">응모하려면 패스키가 필요해요</h2>
+      <p className="break-keep text-sm text-white/75">
+        비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요
+      </p>
+      {blocked ? (
+        env?.inApp ? (
+          <InAppNotice app={env.inApp} />
+        ) : (
+          <p role="note" className="break-keep text-sm text-white/80">
+            이 브라우저는 패스키를 지원하지 않아요. 최신 Safari·Chrome으로 열어
+            주세요.
+          </p>
+        )
       ) : (
-        <div className="flex flex-col gap-2">
+        <>
           <button
             type="button"
-            disabled={!env || !full || !open || step !== "pick"}
-            onClick={() => void start()}
-            className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950 disabled:opacity-40"
+            disabled={working !== null || (!demo && !env)}
+            onClick={onCreate}
+            className="sd-cta w-full max-w-xs rounded-2xl py-3 font-bold text-slate-950 disabled:opacity-40"
           >
-            {step === "working" || step === "folding"
-              ? work || "응모하고 있습니다"
-              : !open
-                ? status.phase === "waiting"
-                  ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
-                  : "이번 회차 응모가 마감되었습니다"
-                : !full
-                  ? `별을 ${6 - picked.length}개 더 골라 주세요`
-                  : hasKey || !env
-                    ? "이 별 6개로 응모하기"
-                    : `${unlockWith(env.ua, demo || env.platform)} 응모하기`}
+            {working === "create"
+              ? "패스키를 만들고 있습니다"
+              : "패스키 만들기"}
           </button>
+          {!demo && env && !env.platform && (
+            <p className="break-keep text-white/55 text-xs">
+              화면 잠금(지문·얼굴·PIN)을 켜면 이 기기에서 바로 만들 수 있어요.
+            </p>
+          )}
+          {!demo && (
+            <button
+              type="button"
+              disabled={working !== null}
+              onClick={onRecover}
+              className="text-sm text-white/75 underline underline-offset-2 disabled:opacity-40"
+            >
+              {working === "recover" ? "찾고 있습니다" : "이미 패스키가 있어요"}
+            </button>
+          )}
           {demo && (
-            <p className="break-keep text-center text-white/60 text-xs">
+            <p className="break-keep text-white/55 text-xs">
               데모는 패스키를 만들지 않습니다. 확인 창은 흉내예요.
             </p>
           )}
-          {!demo && !hasKey && env && (
-            <div className="flex flex-col items-center gap-1 text-center text-white/65 text-xs">
-              <p className="break-keep">
-                비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요
-              </p>
-              {!env.platform && (
-                <p className="break-keep text-white/55">
-                  화면 잠금(지문·얼굴·PIN)을 켜면 이 기기에서 바로 쓸 수 있어요.
-                  지금은 휴대폰(QR)이나 보안 키로 할 수 있어요.
-                </p>
-              )}
-              <button
-                type="button"
-                aria-expanded={faq}
-                onClick={() => setFaq((v) => !v)}
-                className="text-sky-200 underline underline-offset-2"
-              >
-                패스키가 뭐예요?
-              </button>
-            </div>
-          )}
-        </div>
+        </>
       )}
-      {faq && <PasskeyFaq />}
-    </section>
+      {note && <p className="break-keep text-amber-100/85 text-xs">{note}</p>}
+      {error && <ErrorBox error={error} />}
+      <a
+        href="/stardraw/about#passkey"
+        className="text-sky-200 text-xs underline underline-offset-2"
+      >
+        패스키가 뭐예요?
+      </a>
+    </div>
   );
 }
 

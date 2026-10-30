@@ -27,6 +27,15 @@ function publish(): void {
 /** 시트가 떠서 답할 때까지 기다린다. 시트가 없으면(화면이 아직 안 그려짐) 취소로 본다 */
 export function requestUnlock(purpose: UnlockPurpose): Promise<boolean> {
   if (listeners.size === 0) return Promise.resolve(false);
+  // 시트가 뜬 횟수를 화면에 남긴다(응모 한 번에 몇 번 묻는지 화면 시험이 센다)
+  try {
+    const root = document.documentElement;
+    root.dataset.demoUnlocks = String(
+      Number(root.dataset.demoUnlocks ?? 0) + 1,
+    );
+  } catch {
+    // 화면이 없으면(단위 시험) 세지 않는다
+  }
   // 앞서 묻던 것이 있으면 취소로 닫는다
   current?.answer(false);
   return new Promise((resolve) => {

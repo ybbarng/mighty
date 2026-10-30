@@ -35,16 +35,57 @@ async function showDrawResult(page: Page) {
   }).toPass({ intervals: [50], timeout: 30_000 });
 }
 
-/** 첫 응모 단추: "Touch ID로 응모하기"처럼 기기에 맞는 잠금 이름이 붙는다 */
-const FIRST_ENTRY =
-  /^(Face ID|Face ID·Touch ID|Touch ID|지문·화면 잠금|Windows Hello|패스키)(로|으로) 응모하기$/;
+/** 응모 단추(패스키로 서명, 확인 한 번) */
+const ENTER = "이 별 6개로 응모하기";
 
-/** 응모 화면까지 가서 별 6개를 자동으로 채운다 */
-async function pickSix(page: Page) {
+/** 응모 화면까지 간다. 패스키가 없으면 먼저 "패스키 만들기" 단계가 나온다 */
+async function toEntry(page: Page) {
   await page.goto("/stardraw");
   await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
-  await page.getByRole("button", { name: "자동", exact: true }).click();
 }
+
+/**
+ * 실제 패스키 호출(navigator.credentials의 만들기·단언)을 센다. 가상 인증기 위에서 원래 동작은 그대로 하고
+ * 횟수만 남긴다(첫 방문: 만들기 1·단언 1, 두 번째 응모: 단언 1)
+ */
+async function countPasskeyCalls(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __passkey: { create: number; get: number };
+    };
+    w.__passkey = { create: 0, get: 0 };
+    const c = navigator.credentials;
+    const create = c.create.bind(c);
+    const get = c.get.bind(c);
+    Object.defineProperty(c, "create", {
+      configurable: true,
+      value: (o?: CredentialCreationOptions) => {
+        w.__passkey.create++;
+        return create(o);
+      },
+    });
+    Object.defineProperty(c, "get", {
+      configurable: true,
+      value: (o?: CredentialRequestOptions) => {
+        w.__passkey.get++;
+        return get(o);
+      },
+    });
+  });
+}
+
+const passkeyCalls = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as unknown as { __passkey: { create: number; get: number } })
+        .__passkey,
+  );
+
+/** 데모 흉내 시트가 지금까지 뜬 횟수 */
+const demoUnlocks = (page: Page) =>
+  page.evaluate(() =>
+    Number(document.documentElement.dataset.demoUnlocks ?? 0),
+  );
 
 async function noSideScroll(page: Page) {
   const overflow = await page.evaluate(
@@ -106,6 +147,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   const motion = info.project.name === "desktop";
   if (motion) await page.emulateMedia({ reducedMotion: "no-preference" });
   await virtualAuthenticator(page);
+  await countPasskeyCalls(page);
   await page.goto("/");
   await page.getByRole("link", { name: /하늘의 별 따기/ }).click();
   await expect(page).toHaveURL(/\/stardraw$/);
@@ -122,6 +164,21 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.screenshot({ path: info.outputPath("home-countdowns.png") });
 
   await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  // 처음엔 별을 고르기 전에 패스키부터 만든다(등록만, 인증기 한 번)
+  const setup = page.locator("[data-key-setup]");
+  await expect(setup).toContainText("응모하려면 패스키가 필요해요");
+  await expect(
+    setup.getByText(
+      "비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요",
+    ),
+  ).toBeVisible();
+  await expect(
+    setup.getByRole("link", { name: "패스키가 뭐예요?" }),
+  ).toHaveAttribute("href", "/stardraw/about#passkey");
+  await page.screenshot({ path: info.outputPath("stardraw-key-setup.png") });
+  await setup.getByRole("button", { name: "패스키 만들기" }).click();
+  await expect(setup).toHaveCount(0);
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
   // 칸에서 하나, 하늘에서 하나 고르고 나머지는 자동
   await page.getByRole("button", { name: "7 베텔게우스" }).click();
   await expect(page.locator("[data-star-info='7']")).toContainText(
@@ -137,15 +194,11 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-enter.png"),
     fullPage: true,
   });
-  // 첫 응모 단추가 곧 패스키 만들기다(기기에 맞는 말)
-  await expect(
-    page.getByText(
-      "비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요",
-    ),
-  ).toBeVisible();
-  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  // 응모하기는 서명만(인증기 한 번)
+  await page.getByRole("button", { name: ENTER }).click();
   const receipt = page.locator("[data-receipt]");
   await expect(receipt).toBeVisible({ timeout: 30_000 });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
   await expect(receipt).toContainText("베텔게우스");
   await expect(receipt).toContainText("시리우스");
   await expect(receipt.locator("[data-passkey-mark]")).toBeVisible();
@@ -176,9 +229,8 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.getByRole("button", { name: "← 돌아가기" }).click();
   await page.getByRole("button", { name: /내 응모/ }).click();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
-  // 열쇠 상태와 "서버가 가진 것 / 내 기기에만 있는 것"
-  await expect(page.getByText("패스키 · 기기를 바꿔도 안전")).toBeVisible();
-  await expect(page.getByText("꺼낼 수 없음")).toBeVisible();
+  // 게임 화면은 단순하게: 열쇠 칩·"서버가 가진 것" 비교는 설명 페이지에만
+  await expect(page.getByText("서버(공개 장부)가 가진 것")).toHaveCount(0);
   await page.screenshot({
     path: info.outputPath("stardraw-mine.png"),
     fullPage: true,
@@ -189,22 +241,22 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
 });
 
-test("패스키를 취소하면 응모되지 않았다고 알리고 문답으로 이어 준다", async ({
+test("패스키 만들기를 취소하면 만들어지지 않았다고 알리고 설명으로 이어 준다", async ({
   page,
 }) => {
   await virtualAuthenticator(page, false);
-  await pickSix(page);
-  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await toEntry(page);
+  const setup = page.locator("[data-key-setup]");
+  await setup.getByRole("button", { name: "패스키 만들기" }).click();
   // Next.js 경로 안내용 빈 alert가 따로 있어 문구로 고른다
-  const alert = page
-    .getByRole("alert")
-    .filter({ hasText: "응모되지 않았어요" });
+  const alert = setup.getByRole("alert").filter({ hasText: "취소" });
   await expect(alert).toBeVisible({ timeout: 30_000 });
-  await alert.getByRole("button", { name: "패스키가 뭐예요?" }).click();
-  const faq = page.getByRole("region", { name: "패스키가 뭐예요?" });
-  await faq.getByText("가짜 사이트에 속으면요?").click();
-  await expect(faq.getByText(/game\.byb\.kr에 묶여/)).toBeVisible();
-  await expect(page.locator("[data-receipt]")).toHaveCount(0);
+  await expect(
+    alert.getByRole("link", { name: "패스키가 뭐예요?" }),
+  ).toHaveAttribute("href", "/stardraw/about#passkey");
+  // 별 고르기로 넘어가지 않는다
+  await expect(setup).toBeVisible();
+  await expect(page.getByRole("button", { name: ENTER })).toHaveCount(0);
   await noSideScroll(page);
 });
 
@@ -217,11 +269,13 @@ test("패스키를 못 쓰는 브라우저와 앱 안 브라우저는 응모 대
     // @ts-expect-error 시험: 패스키가 없는 브라우저 흉내
     delete window.PublicKeyCredential;
   });
-  await pickSix(page);
+  await toEntry(page);
   await expect(page.getByRole("note")).toContainText(
     "이 브라우저는 패스키를 지원하지 않아요",
   );
-  await expect(page.getByRole("button", { name: FIRST_ENTRY })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "패스키 만들기" })).toHaveCount(
+    0,
+  );
 
   // 카카오톡 안 브라우저
   const kakao = await browser.newContext({
@@ -229,7 +283,7 @@ test("패스키를 못 쓰는 브라우저와 앱 안 브라우저는 응모 대
       "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.8.5",
   });
   const inApp = await kakao.newPage();
-  await pickSix(inApp);
+  await toEntry(inApp);
   await expect(inApp.getByRole("note")).toContainText(
     "카카오톡 안에서는 패스키를 쓸 수 없어요",
   );
@@ -247,10 +301,12 @@ test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
       exact: false,
     }),
   ).toBeVisible();
-  // 패스키 문답
+  // 패스키와 보안: 문답과 "서버가 가진 것 / 내 기기에만 있는 것"은 여기에
   await expect(
-    page.getByRole("heading", { name: "패스키가 뭐예요?" }),
+    page.getByRole("heading", { name: "패스키와 보안" }),
   ).toBeVisible();
+  await expect(page.locator("#passkey")).toBeVisible();
+  await expect(page.getByText("서버(공개 장부)가 가진 것")).toBeVisible();
   await expect(page.getByText("얼굴·지문이 서버로 가나요?")).toBeVisible();
   await expect(page.getByText(/솔직한 한계/)).toBeVisible();
   await noSideScroll(page);
@@ -267,24 +323,29 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     page.getByText("데모는 패스키를 만들지 않습니다", { exact: false }).first(),
   ).toBeVisible();
 
-  // 응모: 이번 회차 1등이 되게 채우고 낸다. 처음엔 흉내 창을 취소해 본다
-  await page.getByRole("button", { name: "1등 되게" }).click();
-  await expect(page.getByText("6/6")).toBeVisible();
-  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  // 처음엔 별을 고르기 전에 패스키부터 만든다(흉내 시트 한 번). 먼저 취소해 본다
+  const setup = page.locator("[data-key-setup]");
+  await setup.getByRole("button", { name: "패스키 만들기" }).click();
   await expect(page.locator("[data-demo-unlock='create']")).toBeVisible();
   await page.screenshot({
     path: info.outputPath("stardraw-demo-sheet.png"),
   });
   await demoUnlock(page, "create", false);
   await expect(
-    page.getByRole("alert").filter({ hasText: "응모되지 않았어요" }),
+    setup.getByRole("alert").filter({ hasText: "패스키를 만들지 않았어요" }),
   ).toBeVisible();
-  await expect(page.locator("[data-receipt]")).toHaveCount(0);
-  // 다시 누르면 만들기·서명 두 번 확인하고 응모된다
-  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await setup.getByRole("button", { name: "패스키 만들기" }).click();
   await demoUnlock(page, "create");
+  await expect(setup).toHaveCount(0);
+  const afterCreate = await demoUnlocks(page);
+
+  // 응모: 이번 회차 1등이 되게 채우고 낸다. 서명 시트 한 번
+  await page.getByRole("button", { name: "1등 되게" }).click();
+  await expect(page.getByText("6/6")).toBeVisible();
+  await page.getByRole("button", { name: ENTER }).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  expect((await demoUnlocks(page)) - afterCreate).toBe(1);
 
   // 추첨
   await page.getByRole("button", { name: "지금 추첨" }).click();
@@ -405,9 +466,10 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   test.skip(isPhone(info.project.name), "저장된 상태와 회차 흐름은 한 크기로");
   await page.goto("/stardraw/demo");
   // 이미 해 본 기기: 한 회차 응모·추첨을 거쳐 열쇠와 장부가 저장된 상태(「데모 처음부터」를 누르지 않는다)
-  await page.getByRole("button", { name: "자동", exact: true }).click();
-  await page.getByRole("button", { name: FIRST_ENTRY }).click();
+  await page.getByRole("button", { name: "패스키 만들기" }).click();
   await demoUnlock(page, "create");
+  await page.getByRole("button", { name: "자동", exact: true }).click();
+  await page.getByRole("button", { name: ENTER }).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "지금 추첨" }).click();
@@ -430,9 +492,12 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   );
   // 회차가 바뀌면 고른 등수(1등)로 새 회차 번호를 다시 채운다
   await expect(page.getByText("6/6")).toBeVisible();
-  await page.getByRole("button", { name: "이 별 6개로 응모하기" }).click();
+  // 두 번째 응모: 패스키 만들기 없이 서명 시트 한 번
+  const beforeEntry = await demoUnlocks(page);
+  await page.getByRole("button", { name: ENTER }).click();
   await demoUnlock(page, "sign");
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  expect((await demoUnlocks(page)) - beforeEntry).toBe(1);
   await page.getByRole("button", { name: "지금 추첨" }).click();
   await expect(page.locator("[data-demo-result]")).toHaveText("1등 당첨", {
     timeout: 60_000,

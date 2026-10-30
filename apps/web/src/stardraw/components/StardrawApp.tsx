@@ -29,7 +29,6 @@ import { CheckPanel } from "./CheckPanel";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
 import { Inbox } from "./Inbox";
-import { KeyChip, KeyHolding, PasskeyFaq } from "./PasskeyHelp";
 import {
   formatLeft,
   formatTime,
@@ -518,7 +517,6 @@ function MineView({
 }) {
   const sorted = [...mine].sort((a, b) => b.ticket.round - a.ticket.round);
   const [key, setKey] = useState(() => services.wallet.loadKey());
-  const [faq, setFaq] = useState(false);
   return (
     <section className="flex flex-col gap-4" aria-label="내 응모">
       <div className="flex items-center justify-between">
@@ -585,32 +583,16 @@ function MineView({
         </ul>
       )}
 
-      <section aria-label="내 열쇠" className="flex flex-col gap-2 pt-2">
-        <h3 className="font-semibold text-white/85">내 열쇠</h3>
-        {key ? (
-          <>
-            <KeyChip />
-            <KeyHolding keyInfo={key} />
-          </>
-        ) : (
-          <RecoverKey
-            services={services}
-            onFound={(found) => {
-              setKey(found);
-              onRecovered();
-            }}
-          />
-        )}
-        <button
-          type="button"
-          aria-expanded={faq}
-          onClick={() => setFaq((v) => !v)}
-          className="self-start text-sky-200 text-sm underline underline-offset-2"
-        >
-          패스키가 뭐예요?
-        </button>
-        {faq && <PasskeyFaq />}
-      </section>
+      {/* 게임 화면은 단순하게: 패스키·보안 설명은 설명 페이지(/stardraw/about#passkey)에 둔다 */}
+      {!key && (
+        <RecoverKey
+          services={services}
+          onFound={(found) => {
+            setKey(found);
+            onRecovered();
+          }}
+        />
+      )}
     </section>
   );
 }

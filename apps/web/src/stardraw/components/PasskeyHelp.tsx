@@ -1,16 +1,12 @@
 "use client";
 
-import { toBase64Url, toHex } from "@mighty/stardraw-core";
-
 import { cn } from "@/lib/cn";
-
-import type { KeyInfo } from "../wallet";
 
 /**
  * 패스키를 자연스럽게 쓰게 하는 부품(docs/36 11-2). 조르지 않고, 패스키에 응모권·확률 혜택은 주지 않는다(공정성).
  * - `PasskeyFaq`: 사람들이 실제로 걱정하는 질문에 쉬운 말로 답한다
- * - `KeyChip`: 내 열쇠 상태
- * - `KeyHolding`: "서버(장부)가 가진 것"과 "내 기기에만 있는 것"을 나란히 보여 준다
+ * - `KeyHoldingExplained`: "서버(장부)가 가진 것"과 "내 기기에만 있는 것"을 나란히 보여 준다
+ * 게임 화면은 단순하게 두고, 이 설명은 설명 페이지(/stardraw/about#passkey)에만 둔다(2026-10-30 사용자)
  */
 
 const FAQ: { q: string; a: string }[] = [
@@ -91,52 +87,32 @@ export function PasskeyFaq({ className }: { className?: string }) {
   );
 }
 
-/** 내 열쇠 상태 칩 */
-export function KeyChip() {
-  return (
-    <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-1 text-emerald-100 text-xs">
-      <KeyIcon className="size-3.5" />
-      패스키 · 기기를 바꿔도 안전
-    </span>
-  );
-}
-
-/** "서버(장부)가 가진 것"과 "내 기기에만 있는 것" */
-export function KeyHolding({ keyInfo }: { keyInfo: KeyInfo }) {
-  const pub = toHex(keyInfo.pub);
-  const credential = toBase64Url(keyInfo.credentialId);
+/** "서버(공개 장부)가 가진 것"과 "내 기기에만 있는 것"(설명 페이지용, 실제 열쇠 값은 보이지 않는다) */
+export function KeyHoldingExplained() {
   return (
     <section
-      aria-label="내 열쇠가 있는 곳"
+      aria-label="패스키 열쇠가 있는 곳"
       className="grid grid-cols-1 gap-2 sm:grid-cols-2"
     >
       <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-white/10 bg-white/5 p-3">
         <p className="font-semibold text-sm">서버(공개 장부)가 가진 것</p>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt className="text-white/55">공개 열쇠</dt>
-          <dd className="truncate font-mono text-white/80">
-            {pub.slice(0, 18)}…
-          </dd>
-          <dt className="text-white/55">패스키 번호</dt>
-          <dd className="truncate font-mono text-white/80">
-            {credential.slice(0, 14)}…
-          </dd>
-        </dl>
+        <ul className="flex flex-col gap-0.5 text-white/80 text-xs">
+          <li>공개 열쇠</li>
+          <li>패스키 번호</li>
+        </ul>
         <p className="break-keep text-white/55 text-xs">
           누구나 볼 수 있어요. 서명이 맞는지 확인하는 데만 쓰여요.
         </p>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-emerald-300/25 bg-emerald-300/5 p-3">
         <p className="font-semibold text-sm">내 기기에만 있는 것</p>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt className="text-white/55">비밀 열쇠</dt>
-          <dd className="flex items-center gap-1 text-emerald-100">
+        <ul className="flex flex-col gap-0.5 text-emerald-100 text-xs">
+          <li className="flex items-center gap-1">
             <KeyIcon className="size-3.5" />
-            꺼낼 수 없음
-          </dd>
-          <dt className="text-white/55">얼굴·지문</dt>
-          <dd className="text-emerald-100">기기 밖으로 안 나감</dd>
-        </dl>
+            비밀 열쇠(꺼낼 수 없음)
+          </li>
+          <li>얼굴·지문(기기 밖으로 안 나감)</li>
+        </ul>
         <p className="break-keep text-white/55 text-xs">
           이 사이트도, 서버도 볼 수 없어요. 잠금을 풀어야만 서명에 쓰여요.
         </p>
