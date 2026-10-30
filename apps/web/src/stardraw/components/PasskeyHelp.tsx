@@ -72,8 +72,8 @@ export function PasskeyFaq({ className }: { className?: string }) {
         ))}
       </ul>
       <p className="break-keep rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-2 text-amber-100/85 text-xs leading-relaxed">
-        솔직한 한계: 누군가 내 휴대폰 잠금을 풀 수 있다면 그 사람도 내 패스키를
-        쓸 수 있어요. 화면 잠금은 꼭 켜 두세요.
+        솔직한 한계: 휴대폰 잠금 비밀번호를 아는 사람은 지문 대신 그 비밀번호로
+        패스키를 쓸 수 있어요.
       </p>
       <div className="break-keep rounded-xl border border-sky-200/20 bg-sky-200/5 px-3 py-2 text-sky-100/85 text-xs leading-relaxed">
         <p className="font-semibold text-sm">연습: 다른 기기에서 열어 보기</p>
