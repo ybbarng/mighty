@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CHECK_LINK_REQUESTER,
   checkScheduleChange,
   displayRound,
   drandRandomness,
@@ -592,7 +593,7 @@ interface SasOutcome {
 
 const REQUEST_ID = "req-12-1";
 const CHALLENGE = "K7Q2MX9PRA";
-const REQUESTER = "확인하는 분";
+const REQUESTER = CHECK_LINK_REQUESTER;
 
 async function makeSasWorld(): Promise<SasWorld> {
   const signer = await generateSigner();

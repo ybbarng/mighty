@@ -1,4 +1,5 @@
 import {
+  CHECK_LINK_REQUESTER,
   checkPow,
   closeRound,
   drandTime,
@@ -13,6 +14,7 @@ import {
   makeChallengeClaim,
   makeRegistration,
   makeTicket,
+  newInviteToken,
   type PowParams,
   powTargetForTries,
   type RoundRecord,
@@ -21,6 +23,7 @@ import {
   type Signer,
   sealDigest,
   sealImprint,
+  signInvite,
   signTicket,
   sortRegistrations,
   sortTickets,
@@ -32,6 +35,7 @@ import {
   tsaRootLogVerifier,
   unsignedTicket,
   verifyClaim,
+  verifyInvite,
   verifyLedger,
 } from "@mighty/stardraw-core";
 import { FakeTsa } from "@mighty/stardraw-core/testing";
@@ -331,8 +335,8 @@ async function ledgerAttack(l: MiniLedger, why: string): Promise<AttackResult> {
   return { caught, why };
 }
 
-/** 확인 문구 증명(당첨자 확인) 흉내: 확인하는 분이 건넨 문구 */
-const REQUEST = { challenge: "K7Q2MX9PRA", requester: "확인하는 분" };
+/** 확인 문구 증명(당첨자 확인) 흉내: 확인 링크로 붙은 요청의 문구 */
+const REQUEST = { challenge: "K7Q2MX9PRA", requester: CHECK_LINK_REQUESTER };
 
 function myTicket(w: World): Ticket {
   const me = w.people[0] as Person;
@@ -575,6 +579,22 @@ export const ATTACKS: readonly Attack[] = [
       return {
         caught: problems.map((p) => `확인하는 분 기기: ${p}`),
         why: "확인 문구가 요청마다 달라 지난 서명은 새 요청에 맞지 않는다",
+      };
+    },
+  },
+  {
+    id: "en-fake-link",
+    role: "entrant",
+    title: "남의 당첨으로 확인 링크 만들기",
+    how: "민지가 내 1등 응모권의 확인 링크를 자기 열쇠로 서명해 서버에 올린다",
+    run: async (w) => {
+      const t = myTicket(w);
+      const minji = w.people[1] as Person;
+      const forged = await signInvite(minji.signer, t, newInviteToken());
+      const problems = await verifyInvite(forged, t);
+      return {
+        caught: problems.map((p) => `서버: ${p}`),
+        why: "서버는 장부에 있는 그 응모권의 공개 열쇠로 서명이 맞아야 링크를 받는다. 그래서 응모권 주인만 링크를 만든다",
       };
     },
   },

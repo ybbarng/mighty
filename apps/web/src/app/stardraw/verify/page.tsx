@@ -435,6 +435,17 @@ seed     = taggedHash("stardraw/sas/v1", 공유 비밀 ‖ 요청 id(u16 길이 
               열쇠로 했는지는 확인하는 쪽 브라우저가 장부로 직접 검사합니다.
             </p>
           </Rule>
+
+          <Rule title="확인 링크(당첨자 확인)" file="invite.ts">
+            <Code>{`토큰       = 무작위 18바이트(base64url 24자). 링크 …/stardraw/check#토큰 의 # 뒤에만 있다
+토큰 해시  = taggedHash("stardraw/confirm-invite-token/v1", utf8(토큰))
+서명할 내용 = "stardraw/confirm-invite/v1" ‖ 0x00 ‖ round(u32) ‖ 응모권 id(32) ‖ 토큰 해시(32)`}</Code>
+            <p className="text-white/80">
+              당첨자가 응모권 열쇠로 서명해 올리고, 서버는 장부의 그 응모권 공개
+              열쇠로 서명이 맞을 때만 받습니다. 서버는 토큰 해시만 두고, 링크는
+              확인을 시작하면 한 번으로 닫힙니다.
+            </p>
+          </Rule>
         </Section>
 
         <Section title="시험 값" id="vectors">
