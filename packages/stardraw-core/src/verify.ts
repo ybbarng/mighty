@@ -66,9 +66,14 @@ export interface VerifyOptions {
   mine?: readonly Uint8Array[];
   /**
    * 봉인 값(round.ts `sealDigest`)이 그 시각(rootLoggedAt)에 투명성 로그에 들어갔는지 확인.
-   * TODO: Rekor 포함 증명 확인(서버를 만들 때). 없으면 확인하지 않고 skipped에 남긴다.
+   * Rekor 항목 확인은 rekor.ts `rekorRootLogVerifier`. 없으면 확인하지 않고 skipped에 남긴다.
    */
   rootLogVerifier?: (record: RoundRecord) => Promise<boolean>;
+  /**
+   * 회차 기록 해시가 바깥 앵커와 같은지(선택). anchor.ts `githubAnchorVerifier`.
+   * true 같음, false 다름(문제), null 앵커가 없음(skipped)
+   */
+  anchorVerifier?: (record: RoundRecord) => Promise<boolean | null>;
   /** 패스키 서명을 받을 사이트·주소. 기본은 game.byb.kr */
   webauthnPolicy?: WebAuthnPolicy;
   /**
@@ -385,6 +390,13 @@ export async function verifyLedger(
     }
 
     head = recordHash(record);
+
+    // 7. 바깥 앵커(선택)
+    if (options.anchorVerifier) {
+      const anchored = await options.anchorVerifier(record);
+      if (anchored === false) fail("기록 해시가 앵커 저장소의 기록과 다르다");
+      else if (anchored === null) skipped.push(`${round}회차: 앵커(기록 없음)`);
+    }
   }
 
   return {

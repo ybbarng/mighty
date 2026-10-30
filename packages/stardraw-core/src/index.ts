@@ -1,3 +1,4 @@
+export * from "./anchor";
 export * from "./bytes";
 export * from "./claim";
 export * from "./drand";
