@@ -187,6 +187,7 @@ async function handle(
         ticketId: str(body.ticketId, "응모권 id"),
         requester: str(body.requester, "확인하는 분 이름"),
         checkerKey: str(body.checkerKey, "임시 공개 열쇠"),
+        ip: clientIp(req, o.trustProxy),
       }),
     );
   }

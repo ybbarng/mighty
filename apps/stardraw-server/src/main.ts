@@ -76,7 +76,9 @@ async function main(): Promise<void> {
     sealDeadline: config.sealDeadline,
     log,
   });
-  const relay = new Relay(store, clock, config.policy);
+  const relay = new Relay(store, clock, config.policy, {
+    requestsPerPrefixPerDay: config.confirmsPerPrefixPerDay,
+  });
   const http = createHttpServer(engine, relay, {
     basePath: config.basePath,
     ledgerDir: config.ledgerDir,

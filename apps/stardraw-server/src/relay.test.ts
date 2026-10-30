@@ -14,6 +14,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 import { EntryError } from "./engine";
+import type { RelayLimits } from "./relay";
 import {
   drawOf,
   EPOCH,
@@ -28,8 +29,8 @@ let rig: Rig;
 afterEach(() => rig?.close());
 
 /** 1회차를 돌려 winner는 1등, loser는 낙첨으로 만든다 */
-async function setup() {
-  rig = await makeRig();
+async function setup(relay?: Partial<RelayLimits>) {
+  rig = await makeRig(relay ? { relay } : {});
   const [winner, loser] = await Promise.all([player(), player()]);
   await rig.at(EPOCH + 10);
   const won = await enter(rig, winner, drawOf(1).numbers);
@@ -166,5 +167,40 @@ describe("당첨자 확인 전달", () => {
     await rejects(() => rig.relay.answer(created.id, answer), 410);
     rig.clock.advance(6 * 24 * 60 * 60 * 1000);
     await rejects(() => rig.relay.get(created.id), 404);
+  });
+});
+
+describe("장난 요청 막기", () => {
+  const ask = (won: Ticket, key: Uint8Array, extra: object = {}) =>
+    rig.relay.create({
+      round: 1,
+      ticketId: toBase64Url(ticketId(won)),
+      requester: "Brice",
+      checkerKey: toBase64Url(key),
+      ...extra,
+    });
+
+  it("확인하는 분 이름으로 우주국·운영자 행세를 하면 거절(400)", async () => {
+    const { won } = await setup();
+    const { publicKey } = await generateSasKey();
+    for (const requester of [
+      "카노푸스 우주국",
+      "우 주 국 장",
+      "Canopus",
+      "운영자",
+    ])
+      await rejects(() => ask(won, publicKey, { requester }), 400);
+    expect(rig.relay.openFor([toBase64Url(ticketId(won))])).toEqual([]);
+  });
+
+  it("IP 앞부분마다 하루 상한: 같은 /24는 함께 세고, 다른 곳·다음 날은 따로", async () => {
+    const { won } = await setup({ requestsPerPrefixPerDay: 2 });
+    const { publicKey } = await generateSasKey();
+    ask(won, publicKey, { ip: "203.0.113.5" });
+    ask(won, publicKey, { ip: "203.0.113.77" });
+    await rejects(() => ask(won, publicKey, { ip: "203.0.113.9" }), 429);
+    ask(won, publicKey, { ip: "198.51.100.1" });
+    rig.clock.advance(24 * 60 * 60 * 1000);
+    ask(won, publicKey, { ip: "203.0.113.5" });
   });
 });

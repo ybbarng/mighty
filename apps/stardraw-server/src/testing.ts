@@ -52,7 +52,7 @@ import {
   pad,
   type RoundFile,
 } from "./publish";
-import { Relay } from "./relay";
+import { DEFAULT_RELAY_LIMITS, Relay, type RelayLimits } from "./relay";
 import {
   newServerKeyPkcs8,
   type ServerKey,
@@ -135,6 +135,8 @@ export async function makeRig(
   limits: {
     entriesPerPrefixPerRound?: number;
     registrationsPerPrefixPerDay?: number;
+    /** 당첨자 확인 요청 상한(기본 DEFAULT_RELAY_LIMITS) */
+    relay?: Partial<RelayLimits>;
     /** 처음 일정표(기본 SCHEDULE). 데이터 폴더에 장부가 있으면 그것이 우선이다 */
     schedule?: Schedule;
     /** 이미 있는 데이터 폴더(서버를 다시 띄우는 시험). 없으면 새 임시 폴더 */
@@ -182,10 +184,12 @@ export async function makeRig(
     sealDeadline: 180,
     log: (m) => logs.push(m),
   });
-  const relay = new Relay(store, clock, {
-    rpId: "game.byb.kr",
-    origins: ["https://game.byb.kr"],
-  });
+  const relay = new Relay(
+    store,
+    clock,
+    { rpId: "game.byb.kr", origins: ["https://game.byb.kr"] },
+    { ...DEFAULT_RELAY_LIMITS, ...limits.relay },
+  );
   const at = async (seconds: number) => {
     const now = clock.now();
     if (seconds * 1000 > now) clock.advance(seconds * 1000 - now);

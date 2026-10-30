@@ -12,6 +12,7 @@ export * from "./receipt";
 export * from "./record";
 export * from "./registration";
 export * from "./rekor";
+export * from "./requester";
 export * from "./round";
 export * from "./sas";
 export * from "./schedule";

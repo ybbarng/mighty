@@ -8,6 +8,7 @@ import {
   fromBase64Url,
   newChallengeText,
   RANKS,
+  requesterProblem,
   sasChallenge,
   type Ticket,
   ticketId,
@@ -18,6 +19,7 @@ import {
 } from "@mighty/stardraw-core";
 
 import { EntryError } from "./engine";
+import { Counters, ipPrefix } from "./limits";
 import type { Store } from "./store";
 
 /**
@@ -28,11 +30,12 @@ import type { Store } from "./store";
  * - 응답은 서명이 맞아야 받는다. 요청 id는 응모권 id(공개)로 찾을 수 있어서, 엉터리 응답을 먼저 올려
  *   진짜 당첨자가 답하지 못하게 하는 것을 막는다. 서명 확인에 필요한 값은 모두 공개 값이다
  * 결과는 요청을 만든 쪽만 올린다(만들 때 준 비밀 표).
+ * 장난 요청도 막는다(2026-10-30): 확인하는 분 이름으로 우주국·운영자 행세 금지(`requesterProblem`),
+ * IP 앞부분마다 하루 요청 수 상한. 응모권당 열린 요청 상한은 두지 않는다(장난꾼이 칸을 채워 진짜 확인을 막는 도구가 된다).
  */
 
 export const ANSWER_TTL_MS = 24 * 60 * 60 * 1000;
 export const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_REQUESTER = 40;
 const MAX_CLAIM = 4096;
 const MAX_OPEN_QUERY = 64;
 
@@ -51,11 +54,23 @@ export interface OpenRequestJson {
   answerBy: number;
 }
 
+export interface RelayLimits {
+  /** 공인 IP 앞부분 하나당 하루(UTC) 확인 요청 수 */
+  requestsPerPrefixPerDay: number;
+}
+
+export const DEFAULT_RELAY_LIMITS: RelayLimits = {
+  requestsPerPrefixPerDay: 30,
+};
+
 export class Relay {
+  private readonly counters = new Counters();
+
   constructor(
     private readonly store: Store,
     private readonly clock: Clock,
     private readonly policy: WebAuthnPolicy,
+    private readonly limits: RelayLimits = DEFAULT_RELAY_LIMITS,
   ) {}
 
   /** 닫힌 회차의 당첨 응모권(id로 찾음) */
@@ -76,10 +91,12 @@ export class Relay {
     ticketId: string;
     requester: string;
     checkerKey: string;
+    /** 보낸 곳 IP(앞부분만 메모리에서 센다) */
+    ip?: string;
   }): OpenRequestJson & { token: string } {
     const requester = input.requester.trim();
-    if (!requester || requester.length > MAX_REQUESTER)
-      throw new EntryError(`확인하는 분 이름은 1~${MAX_REQUESTER}자입니다`);
+    const problem = requesterProblem(requester);
+    if (problem) throw new EntryError(problem);
     const id = fromBase64Url(input.ticketId);
     const checkerKey = fromBase64Url(input.checkerKey);
     if (id.length !== 32 || checkerKey.length !== 65)
@@ -87,6 +104,17 @@ export class Relay {
     if (!this.winningTicket(input.round, id))
       throw new EntryError("그 회차의 당첨 응모권이 아닙니다", 404);
     const now = this.clock.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const prefix = ipPrefix(input.ip ?? "unknown");
+    if (
+      this.counters.count("confirm", day, prefix) >=
+      this.limits.requestsPerPrefixPerDay
+    )
+      throw new EntryError(
+        "오늘 이 곳에서 보낸 확인 요청이 너무 많습니다. 내일 다시 해 주세요",
+        429,
+      );
+    this.counters.add("confirm", day, prefix);
     const request: ConfirmRequest = {
       challenge: newChallengeText(),
       requester,
