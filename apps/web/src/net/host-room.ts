@@ -734,6 +734,8 @@ export class HostRoom<
             },
             guest.peerId,
           );
+      // 첫 판이 바로 끝나 게임도 끝났으면(한 판짜리 총통) 뒤따르는 화면이 없어 구독에서 판 끝 기록을 보내지 못한다.
+      if (this.kit.isOver(match.viewFor(0))) this.sendAudit();
       this.broadcastLobby();
       this.persist();
       return match;

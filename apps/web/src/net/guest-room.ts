@@ -1143,6 +1143,9 @@ export class GuestRoom<
   /** 멘탈 포커 판 끝: 다 열린 판까지 기록 전체를 다시 계산한다 */
   private async verifyFairEnd(log: FairLogged[]): Promise<AuditResult> {
     if (this.startProblem) return { ok: false, reason: this.startProblem };
+    // 화투: 게임이 시작하자마자 끝나면(한 판짜리 첫 판 총통) 게임 끝 기록이 첫 화면보다 먼저 올 수 있다
+    // (첫 화면은 보일 카드를 다 연 뒤에 넘긴다). 대국이 없으면 검증할 수 없으니 첫 화면을 기다린다.
+    if (this.fair instanceof HwatuGuestSeat) await this.whenMatch();
     // 화투: 마지막 판 카드가 다 열리기 전에 게임 끝 기록이 올 수 있다(판 끝에 열쇠를 공개한다).
     const view = this.match?.current() as
       | { roundNumber?: number; retired?: boolean }
@@ -1159,6 +1162,22 @@ export class GuestRoom<
     const verdict = await verifyFairLog(input);
     if (verdict.ok) this.emitArchive(input.rules, input.seed, log);
     return verdict.ok ? { ok: true } : { ok: false, reason: verdict.reason };
+  }
+
+  /** 첫 화면을 받아 대국이 생길 때까지 기다린다. `ms`가 지나면 false(`HwatuGuestSeat.whenOpened`와 같은 상한) */
+  private whenMatch(ms = 30_000): Promise<boolean> {
+    if (this.match) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let off = () => {};
+      let cancel = () => {};
+      const done = (ok: boolean) => {
+        off();
+        cancel();
+        resolve(ok);
+      };
+      off = this.on("match", () => done(true)) as () => void;
+      cancel = this.clock.after(ms, () => done(false));
+    });
   }
 
   /** 시작 때 알린 약속과 공개한 값으로 시드를 다시 만든다 */
