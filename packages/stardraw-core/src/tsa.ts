@@ -47,18 +47,20 @@ export const TSA_SECTIGO: TsaAuthority = {
   pins: ["a4db8668c6796ebf476ddc5ace453a9260dbd4dbb09f51ecec9a839003824795"],
 };
 
-/** FreeTSA(개인 운영, 기본으로는 쓰지 않는다): 루트 "Free TSA Root CA" */
+/**
+ * FreeTSA(개인 운영): 루트 "Free TSA Root CA". 검사기·서버가 믿는 목록에는 넣지 않는다(2026-10-31 보안 검토:
+ * 개인이 운영하는 한 곳이 장악되거나 운영자와 짜면 꾸민 토큰 하나로 통과한다). 보안 배우기의 실제 토큰 보기에만 쓴다
+ */
 export const TSA_FREETSA: TsaAuthority = {
   name: "freetsa",
   url: "https://freetsa.org/tsr",
   pins: ["52c54ba340885605314daa1857c8763b94087d05c636092938d4e2d1818e99b5"],
 };
 
-/** 검사기가 믿는 기관 전체 */
+/** 검사기가 믿는 기관 전체(서버 설정도 이 안에서만 고른다). 운영 장부의 토큰은 모두 이 두 곳이다 */
 export const TSA_AUTHORITIES: readonly TsaAuthority[] = [
   TSA_DIGICERT,
   TSA_SECTIGO,
-  TSA_FREETSA,
 ];
 
 /** 서버가 기본으로 묻는 기관 */

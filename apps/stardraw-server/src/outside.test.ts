@@ -60,11 +60,15 @@ describe("바깥 기록 설정(outsideConfig)", () => {
       "sectigo",
     ]);
     expect(tsa?.minValid).toBe(1);
-    const three = outsideConfig(
-      env({ STARDRAW_TSA: "digicert,sectigo,freetsa", STARDRAW_TSA_MIN: "2" }),
+    const both = outsideConfig(
+      env({ STARDRAW_TSA: "digicert,sectigo", STARDRAW_TSA_MIN: "2" }),
     ).tsa;
-    expect(three?.authorities.length).toBe(3);
-    expect(three?.minValid).toBe(2);
+    expect(both?.authorities.length).toBe(2);
+    expect(both?.minValid).toBe(2);
+    // FreeTSA(개인 운영)는 검사기가 믿지 않으므로 서버도 고를 수 없다
+    expect(() =>
+      outsideConfig(env({ STARDRAW_TSA: "digicert,freetsa" })),
+    ).toThrow(/freetsa/);
     expect(outsideConfig(env({ STARDRAW_TSA: "off" })).tsa).toBeNull();
     expect(() =>
       outsideConfig(env({ STARDRAW_TSA: "digicert,example" })),

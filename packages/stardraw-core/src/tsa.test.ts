@@ -5,6 +5,7 @@ import { type Der, derChildren, expectTag, parseDer } from "./der";
 import { FakeTsa, type FakeTsaChain } from "./testing";
 import {
   TSA_DIGICERT,
+  TSA_FREETSA,
   TSA_SECTIGO,
   type TsaProof,
   timestampRequest,
@@ -32,14 +33,28 @@ function signatureOffset(t: Uint8Array): number {
   return expectTag(si[attrs + 2], 0x04).value.byteOffset;
 }
 
+/** FreeTSA까지 믿는 목록(실제 토큰 모양 시험용. 검사기 기본 목록에는 FreeTSA가 없다) */
+const WITH_FREETSA = [TSA_DIGICERT, TSA_SECTIGO, TSA_FREETSA];
+
 describe("시각 인증 토큰(실제 기관 토큰)", () => {
   it.each([
     ["digicert", at(12)],
     ["sectigo", at(14)],
     ["freetsa", at(15)],
   ] as const)("%s 토큰은 서명·사슬·담긴 값이 맞다", async (name, genTime) => {
-    const check = await verifyTimestampToken(token(name), { imprint });
+    const check = await verifyTimestampToken(token(name), {
+      imprint,
+      authorities: WITH_FREETSA,
+    });
     expect(check).toEqual({ ok: true, genTime, tsa: name, problems: [] });
+  });
+
+  it("검사기 기본 목록은 DigiCert·Sectigo뿐이라 FreeTSA 토큰은 거절한다", async () => {
+    const check = await verifyTimestampToken(token("freetsa"), { imprint });
+    expect(check.ok).toBe(false);
+    expect(check.problems).toContain(
+      "인증서가 믿는 기관 열쇠로 이어지지 않는다",
+    );
   });
 
   it("다른 값을 담은 토큰은 거절한다", async () => {
@@ -56,9 +71,14 @@ describe("시각 인증 토큰(실제 기관 토큰)", () => {
       const sig = token(name);
       const k = signatureOffset(sig) + 10;
       sig[k] = (sig[k] ?? 0) ^ 1;
-      expect((await verifyTimestampToken(sig, { imprint })).problems).toEqual([
-        "토큰 서명이 맞지 않는다",
-      ]);
+      expect(
+        (
+          await verifyTimestampToken(sig, {
+            imprint,
+            authorities: WITH_FREETSA,
+          })
+        ).problems,
+      ).toEqual(["토큰 서명이 맞지 않는다"]);
     }
     // 시각 "…015112Z"의 초를 바꾼다
     const moved = token("digicert");

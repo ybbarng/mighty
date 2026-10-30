@@ -28,7 +28,9 @@ import {
   softPasskeySigner,
   type Ticket,
   type TimestampCheck,
-  TSA_AUTHORITIES,
+  TSA_DIGICERT,
+  TSA_FREETSA,
+  TSA_SECTIGO,
   toHex,
   unsignedTicket,
   utf8,
@@ -65,6 +67,9 @@ import { Btn, Mono, Row, Toy, Verdict } from "./ui";
 /* ------------------------------------------------------------------ */
 /* 5. 시각 인증(TSA)                                                   */
 /* ------------------------------------------------------------------ */
+
+/** 장난감은 세 기관의 실제 토큰을 보여 준다(FreeTSA는 검사기 기본 목록에는 없다, tsa.ts) */
+const TOY_AUTHORITIES = [TSA_DIGICERT, TSA_SECTIGO, TSA_FREETSA];
 
 type Tokens = Record<"digicert" | "sectigo" | "freetsa", string>;
 const TSA_LABEL = {
@@ -109,8 +114,8 @@ export function TsaToy() {
     void verifyTimestampToken(token, {
       imprint: sha256(utf8(text)),
       authorities: untrust
-        ? TSA_AUTHORITIES.filter((a) => a.name !== name)
-        : TSA_AUTHORITIES,
+        ? TOY_AUTHORITIES.filter((a) => a.name !== name)
+        : TOY_AUTHORITIES,
     }).then((c) => live && setCheck(c));
     return () => {
       live = false;
