@@ -1,6 +1,7 @@
 import { BaseballIconArt } from "@/baseball/icon-art";
 import { ChessPawnArt } from "@/chess/icon-art";
 import { GostopIconArt } from "@/gostop/components/GostopIcon";
+import { CHO_GLYPH, HAN_GLYPH } from "@/janggi/icon-glyphs";
 import { MinhwatuIconArt } from "@/minhwatu/components/MinhwatuIconArt";
 import { NyrongppongIconArt } from "@/nyrongppong/icon-art";
 import { StardrawIconArt } from "@/stardraw/icon-art";
@@ -324,8 +325,71 @@ function octagonPoints(cx: number, cy: number, r: number): string {
 }
 
 /**
- * 장기 아이콘. 대각선이 그려진 궁성 위에 초(초록)·한(빨강) 말 둘.
- * 아이콘을 만들 때 한글 글꼴이 없어 글자 대신 테두리 색과 안쪽 고리로 편을 보인다
+ * 장기 아이콘의 말 하나: 장기판의 알처럼 그림자 → 옆면(두께) → 윗면 → 안쪽 모서리 빛 → 글자.
+ * satori는 <svg> 안에 컴포넌트를 받지 않아(기본 태그만) JSX 컴포넌트가 아니라 함수로 부른다
+ */
+function janggiIconPiece({
+  cx,
+  cy,
+  r,
+  color,
+  glyph,
+  em,
+  bold,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  color: string;
+  glyph: { path: string };
+  /** 글자 칸 높이(1em)를 반지름의 몇 배로 쓸지. 장기판의 HANJA_SCALE과 같은 뜻 */
+  em: number;
+  /** 글자 윤곽을 같은 색 테두리로 굵히는 두께(아이콘 좌표). 초서는 획이 가늘어 작은 아이콘에서 굵힌다 */
+  bold: number;
+}) {
+  const size = r * em;
+  return (
+    <g>
+      <polygon
+        points={octagonPoints(cx + r * 0.1, cy + r * 0.2, r)}
+        fill="#000000"
+        opacity="0.32"
+      />
+      <polygon
+        points={octagonPoints(cx, cy + r * PIECE_DEPTH, r)}
+        fill="url(#janggi-side)"
+      />
+      <polygon
+        points={octagonPoints(cx, cy, r)}
+        fill="url(#janggi-face)"
+        stroke={color}
+        strokeWidth={r * 0.08}
+      />
+      <polygon
+        points={octagonPoints(cx, cy, r * 0.86)}
+        fill="none"
+        stroke="#ffffff"
+        strokeOpacity="0.5"
+        strokeWidth={r * 0.045}
+      />
+      <path
+        d={glyph.path}
+        transform={`translate(${cx} ${cy}) scale(${size})`}
+        fill={color}
+        stroke={color}
+        strokeWidth={bold / size}
+        strokeLinejoin="round"
+      />
+    </g>
+  );
+}
+
+/** 알 두께(반지름에 대한 비율). 장기판(JanggiBoard)의 PIECE_DEPTH와 같다 */
+const PIECE_DEPTH = 0.24;
+
+/**
+ * 장기 아이콘. 대각선이 그려진 궁성 위에 초(초록 楚, 초서)·한(빨강 漢, 해서) 궁 둘.
+ * 아이콘(next/og)은 글꼴로 글자를 쓰지 못해, 장기판과 같은 부분 글꼴에서 뽑아 둔 윤곽(icon-glyphs.ts)을 그린다
  */
 function JanggiPalace() {
   const lines = [10, 50, 90];
@@ -337,6 +401,18 @@ function JanggiPalace() {
       aria-hidden="true"
       style={{ display: "flex" }}
     >
+      <defs>
+        {/* 장기판의 알과 같은 빛: 윗면은 왼쪽 위에서 오는 빛, 옆면은 위가 밝은 나무색 */}
+        <radialGradient id="janggi-face" cx="0.38" cy="0.32" r="0.8">
+          <stop offset="0" stopColor="#fffaf0" />
+          <stop offset="0.6" stopColor="#f1e2c0" />
+          <stop offset="1" stopColor="#c9ad78" />
+        </radialGradient>
+        <linearGradient id="janggi-side" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#c9a46a" />
+          <stop offset="1" stopColor="#7a5a2c" />
+        </linearGradient>
+      </defs>
       <rect width="100" height="100" fill={SITE.board} />
       {lines.map((p) => (
         <g key={p}>
@@ -374,40 +450,25 @@ function JanggiPalace() {
         stroke={SITE.ink}
         strokeWidth="2.2"
       />
-      <polygon
-        points={octagonPoints(68, 34, 21)}
-        fill="#000000"
-        opacity="0.3"
-      />
-      <polygon
-        points={octagonPoints(66, 31, 21)}
-        fill="#f1e2c0"
-        stroke="#b91c1c"
-        strokeWidth="3.4"
-      />
-      <polygon
-        points={octagonPoints(66, 31, 12)}
-        fill="none"
-        stroke="#b91c1c"
-        strokeWidth="2.6"
-      />
-      <polygon
-        points={octagonPoints(38, 66, 26)}
-        fill="#000000"
-        opacity="0.35"
-      />
-      <polygon
-        points={octagonPoints(35, 62, 26)}
-        fill="#f1e2c0"
-        stroke="#0f6b3a"
-        strokeWidth="3.8"
-      />
-      <polygon
-        points={octagonPoints(35, 62, 15)}
-        fill="none"
-        stroke="#0f6b3a"
-        strokeWidth="3"
-      />
+      {/* 뒤에 놓인 한(漢)이 먼저, 앞의 초(楚)가 나중 */}
+      {janggiIconPiece({
+        cx: 68,
+        cy: 29,
+        r: 23,
+        color: "#b91c1c",
+        glyph: HAN_GLYPH,
+        em: 1.15,
+        bold: 1.2,
+      })}
+      {janggiIconPiece({
+        cx: 36,
+        cy: 60,
+        r: 29,
+        color: "#0f6b3a",
+        glyph: CHO_GLYPH,
+        em: 1.55,
+        bold: 2.6,
+      })}
     </svg>
   );
 }
