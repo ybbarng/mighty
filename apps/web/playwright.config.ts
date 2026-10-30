@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 4173;
+/** 다른 작업 트리가 같은 포트로 띄운 서버를 재사용하지 않게 `E2E_PORT`로 바꿀 수 있다 */
+const PORT = Number(process.env.E2E_PORT ?? 4173);
 
 /** 실제 정적 빌드(out/)를 띄워 화면 크기별로 한 판을 끝까지 해 본다 */
 export default defineConfig({
