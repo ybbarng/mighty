@@ -18,6 +18,7 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  scheduleFromRecords,
   type Ticket,
   toBase64Url,
   toHex,
@@ -25,7 +26,6 @@ import {
   type VerifyReport,
   verifyLedger,
   type WebAuthnPolicy,
-  withChange,
 } from "@mighty/stardraw-core";
 
 import type { Ledger } from "./ledger";
@@ -88,14 +88,11 @@ export class RemoteLedger implements Ledger {
     this.powParams = o.powParams ?? POW_PARAMS;
   }
 
-  /** 처음 일정표에 닫힌 기록의 일정 바꾸기(정식 단계 예고 등)를 모두 반영한 일정표 */
+  /** 처음 일정표에 닫힌 기록의 일정 바꾸기(옛 칸과 국장 운영 기록, 취소 반영)를 모두 반영한 일정표 */
   get schedule(): Schedule {
     if (!this.genesis) throw new Error("장부를 아직 받지 못했습니다");
     if (this.effective?.records !== this.records.length) {
-      let schedule = this.genesis;
-      for (const record of this.records)
-        for (const change of record.scheduleChanges)
-          schedule = withChange(schedule, change);
+      const schedule = scheduleFromRecords(this.genesis, this.records);
       this.effective = { records: this.records.length, schedule };
     }
     return this.effective.schedule;
@@ -269,8 +266,10 @@ export class RemoteLedger implements Ledger {
   }
 
   verify(mine: readonly Uint8Array[] = []): Promise<VerifyReport> {
+    if (!this.genesis) throw new Error("장부를 아직 받지 못했습니다");
+    // 검사는 처음 일정표에서 시작한다(바뀐 일정표를 넘기면 genesis 해시가 달라진다)
     return verifyLedger(
-      this.schedule,
+      this.genesis,
       this.records,
       this.tickets,
       this.registrations,

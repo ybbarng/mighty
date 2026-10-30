@@ -1,6 +1,7 @@
 import type { Clock } from "@mighty/fair-play";
 import {
   alignedEpoch,
+  applyRecordOps,
   ByteWriter,
   checkPow,
   checkRegistration,
@@ -9,6 +10,7 @@ import {
   concat,
   type DrandBeacon,
   type Draw,
+  decodeOperation,
   decodeRecord,
   decodeRegistration,
   decodeTicket,
@@ -17,17 +19,26 @@ import {
   drandTime,
   drawNumbers,
   drawSeed,
+  encodeOperation,
   encodeRecord,
   encodeRegistration,
   encodeTicket,
   entrantId,
+  everDirector,
   fromBase64Url,
   generateSigner,
   genesisHash,
   type KeyRegistration,
   makeRegistration,
   makeTicket,
+  newOpsState,
+  type Operation,
+  type OpsContext,
+  type OpsState,
+  operationsView,
+  opId,
   type PowParams,
+  parseDirectorKeys,
   powTargetForTries,
   type RoundRecord,
   type RoundTimes,
@@ -36,6 +47,11 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  type Signer,
+  sealDesignations,
+  selectOperations,
+  signAsSeal,
+  signerFromKeyPair,
   softPasskeySigner,
   sortRegistrations,
   sortTickets,
@@ -121,6 +137,31 @@ interface Saved {
   tickets: string[][];
   registrations: string[][];
   pending: { round: number; tickets: string[]; registrations: string[] };
+  /** 데모 관인(이 기기 안 서버 서명 열쇠, JWK). 처음 국장을 지정할 때 만든다 */
+  seal?: { priv: JsonWebKey; pub: JsonWebKey };
+  /** 데모의 "서버 설정"(STARDRAW_DIRECTOR_KEYS와 같은 값 목록) */
+  directorKeys?: string[];
+  /** 받아 두고 다음 기록에 실을 국장 운영 기록 */
+  directorOps?: string[];
+}
+
+const OP_NAME: Record<Operation["kind"], string> = {
+  "director-add": "국장 열쇠 지정",
+  "director-remove": "국장 열쇠 빼기",
+  "affiliation-add": "소속 추가",
+  "affiliation-update": "소속 바꾸기",
+  "affiliation-end": "소속 끝내기",
+  cancel: "예고 취소",
+  schedule: "일정 바꾸기",
+};
+
+/** 관리 화면이 보는 상태(서버 GET /api/director/state와 같은 모양) */
+export interface DirectorState {
+  now: number;
+  records: number;
+  schedule: Schedule;
+  view: ReturnType<typeof operationsView>;
+  submitted: { id: string; summary: string; effectiveRound: number }[];
 }
 
 export type LedgerPhase =
@@ -165,6 +206,11 @@ export class LocalLedger implements Ledger {
   };
   /** 등록된 열쇠(응모자 id hex) */
   private keys = new Set<string>();
+  /** 운영 기록 상태(처음 쓸 때 기록을 다시 읽어 만든다) */
+  private ops: OpsState | null = null;
+  private seal: Saved["seal"];
+  private directorKeys: string[];
+  private directorOps: Operation[];
   private busy: Promise<unknown> = Promise.resolve();
   private readonly clock: Clock;
   private readonly store: LedgerStore | undefined;
@@ -205,6 +251,11 @@ export class LocalLedger implements Ledger {
       : { round: 1, tickets: [], registrations: [] };
     for (const list of [...this.registrations, this.pending.registrations])
       for (const r of list) this.keys.add(toHex(entrantId(r.pub)));
+    this.seal = saved?.seal;
+    this.directorKeys = saved?.directorKeys ?? [];
+    this.directorOps = (saved?.directorOps ?? []).map((o) =>
+      decodeOperation(dec(o)),
+    );
   }
 
   id(): string {
@@ -249,6 +300,8 @@ export class LocalLedger implements Ledger {
       const tickets = [...mine.tickets, ...bots.tickets];
       const registrations = [...mine.registrations, ...bots.registrations];
       const beacon = this.beaconFor(round);
+      // 서버처럼: 설정의 국장 열쇠 지정(데모 관인 서명)과 받아 둔 국장 요청을 같은 규칙으로 골라 싣는다
+      const operations = await this.dueOperations(round, prev, registrations);
       const record = closeRound({
         schedule: this.schedule,
         round,
@@ -257,6 +310,7 @@ export class LocalLedger implements Ledger {
         registrations,
         rootLoggedAt: times.closesAt + 60,
         beacon,
+        operations,
       });
       this.records.push(record);
       // 장부의 목록은 id 순서(검사기가 정렬을 확인한다)
@@ -266,6 +320,9 @@ export class LocalLedger implements Ledger {
         this.keys.add(toHex(entrantId(r.pub)));
       if (this.pending.round <= round)
         this.pending = { round: round + 1, tickets: [], registrations: [] };
+      if (this.ops) await applyRecordOps(this.ops, record, this.opsContext());
+      if (operations.length > 0 || this.directorOps.length > 0)
+        this.directorOps = [];
       changed = true;
     }
     if (changed) this.write();
@@ -378,6 +435,14 @@ export class LocalLedger implements Ledger {
       const problem = checkRegistration(registration);
       if (problem) throw new Error(problem);
       if (
+        everDirector(
+          await this.opsState(),
+          registration.pub,
+          registration.credentialId,
+        )
+      )
+        throw new Error("국장 패스키로는 우주인 등록을 할 수 없습니다");
+      if (
         !this.keys.has(who) &&
         !(await checkPow(
           challenge,
@@ -464,6 +529,175 @@ export class LocalLedger implements Ledger {
     return drawNumbers(drawSeed(round, drandRandomness(this.beaconFor(round))));
   }
 
+  // ── 국장(데모 국장 모드, docs/36 11-12) ──
+
+  private opsContext(): OpsContext {
+    return {
+      policy: this.policy,
+      isEntrant: (pub, credentialId) =>
+        this.keys.has(toHex(entrantId(pub))) ||
+        (credentialId !== null &&
+          [...this.registrations, this.pending.registrations].some((l) =>
+            l.some((r) => toHex(r.credentialId) === toHex(credentialId)),
+          )),
+    };
+  }
+
+  /** 운영 기록 상태. 처음 부르면 닫힌 기록을 검사기와 같은 규칙으로 다시 읽는다 */
+  private async opsState(): Promise<OpsState> {
+    if (!this.ops) {
+      const state = newOpsState(this.schedule);
+      for (const record of this.records)
+        await applyRecordOps(state, record, this.opsContext());
+      this.ops = state;
+    }
+    return this.ops;
+  }
+
+  private async sealSigner(): Promise<Signer> {
+    const algorithm = { name: "ECDSA", namedCurve: "P-256" };
+    if (!this.seal) {
+      const pair = await crypto.subtle.generateKey(algorithm, true, [
+        "sign",
+        "verify",
+      ]);
+      this.seal = {
+        priv: await crypto.subtle.exportKey("jwk", pair.privateKey),
+        pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
+      };
+      this.write();
+    }
+    return signerFromKeyPair({
+      privateKey: await crypto.subtle.importKey(
+        "jwk",
+        this.seal.priv,
+        algorithm,
+        false,
+        ["sign"],
+      ),
+      publicKey: await crypto.subtle.importKey(
+        "jwk",
+        this.seal.pub,
+        algorithm,
+        true,
+        ["verify"],
+      ),
+    });
+  }
+
+  private async dueOperations(
+    round: number,
+    prev: Uint8Array,
+    registrations: readonly KeyRegistration[],
+  ): Promise<Operation[]> {
+    if (
+      this.directorKeys.length === 0 &&
+      this.directorOps.length === 0 &&
+      !this.ops?.ops.length
+    )
+      return [];
+    const state = await this.opsState();
+    const base = this.opsContext();
+    // 이 회차에 함께 들어가는 등록도 우주인으로 친다
+    const ctx: OpsContext = {
+      ...base,
+      isEntrant: (pub, cred) =>
+        base.isEntrant(pub, cred) ||
+        registrations.some(
+          (r) => toHex(entrantId(r.pub)) === toHex(entrantId(pub)),
+        ),
+    };
+    const designations = sealDesignations(
+      state,
+      round,
+      prev,
+      parseDirectorKeys(this.directorKeys.join(",")),
+      ctx,
+    );
+    const seal =
+      designations.bodies.length > 0 ? await this.sealSigner() : null;
+    const sealOps = seal
+      ? await Promise.all(designations.bodies.map((b) => signAsSeal(b, seal)))
+      : [];
+    const { accepted } = await selectOperations(
+      state,
+      round,
+      prev,
+      [...sealOps, ...this.directorOps],
+      ctx,
+    );
+    return accepted;
+  }
+
+  /** 데모의 "서버 설정에 넣기": 다음 기록에 데모 관인이 국장 열쇠 지정을 싣는다 */
+  designateDirector(config: string): void {
+    parseDirectorKeys(config);
+    if (!this.directorKeys.includes(config)) this.directorKeys.push(config);
+    this.write();
+  }
+
+  /** 관리 화면 상태(서버 /api/director/state와 같은 모양) */
+  async directorState(): Promise<DirectorState> {
+    await this.settle();
+    const state = await this.opsState();
+    return {
+      now: this.now(),
+      records: this.records.length,
+      schedule: this.schedule,
+      view: operationsView(state, this.records.length, this.head()),
+      submitted: this.directorOps.map((op) => ({
+        id: toHex(opId(op)),
+        summary: OP_NAME[op.kind],
+        effectiveRound: op.effectiveRound,
+      })),
+    };
+  }
+
+  /** 국장 운영 기록 받기(서버 POST /api/director/ops와 같은 확인) */
+  async submitOperation(
+    op: Operation,
+  ): Promise<{ id: string; round: number; effectiveRound: number }> {
+    await this.settle();
+    const state = await this.opsState();
+    const round = this.records.length + 1;
+    const head = this.head();
+    if (op.signer.role !== "director")
+      throw new Error("국장 패스키로 서명한 요청만 받습니다");
+    if (toHex(op.after) !== toHex(head))
+      throw new Error(
+        "그사이 장부에 기록이 하나 더 닫혔습니다. 다시 서명해 주세요",
+      );
+    const id = toHex(opId(op));
+    if (this.directorOps.some((o) => toHex(opId(o)) === id))
+      throw new Error("이미 받은 요청입니다");
+    const { rejected } = await selectOperations(
+      state,
+      round,
+      head,
+      [...this.directorOps, op],
+      this.opsContext(),
+    );
+    const mine = rejected.find((r) => toHex(opId(r.op)) === id);
+    if (mine)
+      throw new Error(
+        /국장 열쇠가 아니다/.test(mine.problem)
+          ? "국장 열쇠가 아닙니다. 우주국이 지정한 국장 패스키로 서명해 주세요"
+          : mine.problem,
+      );
+    this.directorOps.push(op);
+    this.write();
+    return { id, round, effectiveRound: op.effectiveRound };
+  }
+
+  /** 데모용: n회차만큼 시간을 건너뛰고 추첨한다(「하루 건너뛰기」는 24회차 + 1) */
+  async skipRounds(n: number): Promise<void> {
+    await this.settle();
+    const target = this.status().nextDrawAt + (n - 1) * PRACTICE_LENGTH + 1;
+    if (target > this.now()) this.skipped += target - this.now();
+    this.write();
+    await this.settle();
+  }
+
   /** 연습용: 이번 회차 마감 시각까지 건너뛴다 */
   async skipToClose(): Promise<void> {
     await this.settle();
@@ -511,6 +745,13 @@ export class LocalLedger implements Ledger {
           enc(encodeRegistration(r)),
         ),
       },
+      ...(this.seal ? { seal: this.seal } : {}),
+      ...(this.directorKeys.length > 0
+        ? { directorKeys: this.directorKeys }
+        : {}),
+      ...(this.directorOps.length > 0
+        ? { directorOps: this.directorOps.map((o) => enc(encodeOperation(o))) }
+        : {}),
     };
     this.store?.save(JSON.stringify(saved));
   }

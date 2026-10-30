@@ -12,12 +12,14 @@ import {
   type Ticket,
   ticketId,
 } from "@mighty/stardraw-core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MadeWith } from "@/components/brand/MadeWith";
 import { cn } from "@/lib/cn";
 
 import { demoPick } from "../demo-pick";
+import { DirectorConsole } from "../director/DirectorConsole";
+import { demoKeyring, practiceDirectorBackend } from "../director/director";
 import { invitesOf } from "../invites";
 import type { LocalLedger } from "../local-ledger";
 import { myRank } from "../results";
@@ -67,6 +69,15 @@ export function StardrawDemo() {
   /** 같은 링크를 다른 사람이 열어 본다(한 번만 쓰이는지) */
   const [second, setSecond] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 국장 모드: 기기 안 연습 장부가 서버 노릇을 하고, 흉내 패스키로 국장이 된다(docs/36 11-12)
+  const director = useMemo(() => {
+    if (!services?.practice) return null;
+    const keyring = demoKeyring(services.ns);
+    return {
+      backend: practiceDirectorBackend(services.practice),
+      keyring,
+    };
+  }, [services]);
   // 화면 둘러보기(#tour-<id>). 목록에서 들어왔으면 「화면 목록」은 뒤로가기다
   const [tourId, setTourId] = useState<TourId | null>(null);
   useEffect(() => {
@@ -419,6 +430,34 @@ export function StardrawDemo() {
                 </p>
               )}
             </Step>
+
+            <Step n={5} title="국장 모드" id="director">
+              <p className="break-keep text-sm text-white/70">
+                카노푸스 우주국장이 되어 봅니다. 국장 패스키를 만들고 「서버
+                설정에 넣기」를 누르면 다음 기록에 우주국 관인이 국장 열쇠
+                지정을 싣습니다. 하루를 건너뛰어 국장이 된 뒤 시험 소속을
+                추가하고, 다시 하루를 건너뛰어 적용을 확인하세요. 국장 아닌
+                패스키의 서명은 거절됩니다.
+              </p>
+              {director && (
+                <DirectorConsole
+                  backend={director.backend}
+                  keyring={director.keyring}
+                  signAsStranger={(body) =>
+                    director.keyring.signAsStranger(body)
+                  }
+                  onInstall={async (config) => {
+                    practiceOf(services).designateDirector(config);
+                    await refresh();
+                  }}
+                  onSkipDay={async () => {
+                    await practiceOf(services).skipRounds(25);
+                    await refresh();
+                  }}
+                  version={version}
+                />
+              )}
+            </Step>
           </>
         )}
 
@@ -433,14 +472,20 @@ export function StardrawDemo() {
 function Step({
   n,
   title,
+  id,
   children,
 }: {
   n: number;
   title: string;
+  id?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3" aria-label={title}>
+    <section
+      className="flex flex-col gap-3 scroll-mt-14"
+      aria-label={title}
+      id={id}
+    >
       <h2 className="flex items-center gap-2 font-bold text-xl">
         <span className="grid size-7 place-items-center rounded-full bg-amber-200 text-slate-950 text-sm">
           {n}

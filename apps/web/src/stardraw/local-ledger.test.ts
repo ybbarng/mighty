@@ -2,12 +2,17 @@
 import { ManualClock } from "@mighty/fair-play";
 import {
   DEFAULT_WEBAUTHN_POLICY,
+  directorKeyConfig,
   type EntrantSigner,
+  fromHex,
   generateSigner,
   genesisHash,
   makeRegistration,
   makeTicket,
+  OP_VERSION,
+  type OpBody,
   rankOf,
+  signAsDirector,
   softCredentialId,
   softPasskeySigner,
   ticketId,
@@ -277,4 +282,78 @@ describe("무작위 번호", () => {
     );
     expect(pick).toEqual([1, 2, 3, 4, 5, 6]);
   });
+});
+
+describe("데모 국장 모드(운영 기록, docs/36 11-12)", () => {
+  it("서버 설정에 넣기 → 하루 뒤 국장 → 시험 소속 추가 → 하루 뒤 적용, 국장 아닌 패스키는 거절, 장부 검사 통과", async () => {
+    const store = memoryStore();
+    const { ledger } = setup(store);
+    const director = await passkey();
+    ledger.designateDirector(
+      directorKeyConfig(director.credentialId, director.publicKey),
+    );
+    await ledger.skipToNextDraw();
+    let state = await ledger.directorState();
+    expect(state.view.operations).toMatchObject([
+      {
+        kind: "director-add",
+        signer: "seal",
+        status: "pending",
+        round: 1,
+        effectiveRound: 26,
+      },
+    ]);
+    const body = (s: typeof state, effectiveRound: number): OpBody => ({
+      v: OP_VERSION,
+      kind: "affiliation-add",
+      after: fromHex(s.view.next.after),
+      effectiveRound,
+      fields: {
+        name: "시험 성단",
+        badge: 2,
+        method: "초대 코드",
+        issuerKey: new Uint8Array(),
+        issued: 0,
+      },
+    });
+    // 아직 국장이 아니다
+    await expect(
+      ledger.submitOperation(
+        await signAsDirector(
+          body(state, state.view.next.earliestEffectiveRound),
+          director,
+        ),
+      ),
+    ).rejects.toThrow(/국장 열쇠가 아닙니다/);
+    await ledger.skipRounds(25);
+    state = await ledger.directorState();
+    expect(state.view.directors).toHaveLength(1);
+    const stranger = await passkey();
+    await expect(
+      ledger.submitOperation(
+        await signAsDirector(
+          body(state, state.view.next.earliestEffectiveRound),
+          stranger,
+        ),
+      ),
+    ).rejects.toThrow(/국장 열쇠가 아닙니다/);
+    await ledger.submitOperation(
+      await signAsDirector(
+        body(state, state.view.next.earliestEffectiveRound),
+        director,
+      ),
+    );
+    await ledger.skipToNextDraw();
+    expect((await ledger.directorState()).view.affiliations).toEqual([]);
+    await ledger.skipRounds(25);
+    state = await ledger.directorState();
+    expect(state.view.affiliations).toMatchObject([
+      { name: "시험 성단", badgeName: "성단" },
+    ]);
+    // 저장했다가 다시 열어도 같다
+    const reopened = setup(store).ledger;
+    expect((await reopened.directorState()).view.affiliations).toHaveLength(1);
+    const report = await ledger.verify();
+    expect(report.problems).toEqual([]);
+  }, 20_000);
 });
