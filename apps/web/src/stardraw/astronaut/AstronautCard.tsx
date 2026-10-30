@@ -39,9 +39,51 @@ const TILT_X = 22;
 /** 마우스를 올려만 둘 때의 기울기(도) */
 const HOVER_Y = 9;
 const HOVER_X = 6;
-/** 카드 두께(cqw, 실제 ID-1 카드보다 조금 두껍게) 와 옆면 층 수 */
+/** 카드 두께(cqw, 실제 ID-1 카드보다 조금 두껍게) */
 const THICK = 1.4;
-const EDGE_LAYERS = 9;
+
+/**
+ * 옆면 띠 조각들: 카드 둘레(둥근 모서리 포함)를 따라 두께 THICK의 띠를 한 바퀴 두른다.
+ * 같은 모양 판을 여러 장 쌓으면 옆에서 볼 때 둥근 모서리끼리 어긋나 톱니가 보여서, 하나로 이어진 면으로 그린다.
+ * 단위는 cqw(카드 너비 100). 각 조각은 가운데 (x, y), 길이 len, 접선이 세로에서 phi도 기운 띠.
+ */
+type EdgeSegment = { x: number; y: number; len: number; phi: number };
+const EDGE: EdgeSegment[] = (() => {
+  const w = 100;
+  const h = w / 1.586;
+  const r = 3.7;
+  const perCorner = 6;
+  const segs: EdgeSegment[] = [
+    { x: 0, y: h / 2, len: h - 2 * r, phi: 0 },
+    { x: w, y: h / 2, len: h - 2 * r, phi: 0 },
+    { x: w / 2, y: 0, len: w - 2 * r, phi: 90 },
+    { x: w / 2, y: h, len: w - 2 * r, phi: 90 },
+  ];
+  // 모서리 중심과 시작 각(도, x축에서 시계 방향 = 화면 아래쪽이 +y)
+  const corners: [number, number, number][] = [
+    [r, r, 180],
+    [w - r, r, 270],
+    [w - r, h - r, 0],
+    [r, h - r, 90],
+  ];
+  const step = 90 / perCorner;
+  // 조각 사이가 벌어지지 않게 조금 겹친다
+  const len = 2 * r * Math.sin(((step / 2) * Math.PI) / 180) * 1.08;
+  for (const [cx, cy, start] of corners) {
+    for (let i = 0; i < perCorner; i++) {
+      const a = start + step * (i + 0.5);
+      const rad = (a * Math.PI) / 180;
+      // 원 위의 점에서 접선은 반지름에 수직: 세로에서 a도 기운 방향
+      segs.push({
+        x: cx + r * Math.cos(rad),
+        y: cy + r * Math.sin(rad),
+        len,
+        phi: a,
+      });
+    }
+  }
+  return segs;
+})();
 
 /** 기울기·빛 상태(돌림판의 CSS 변수로 옮긴다) */
 type Pose = { ry: number; rx: number; px: number; py: number; ht: number };
@@ -338,22 +380,22 @@ export function AstronautCard({
           className="sd-idcard-flip relative"
           data-flipped={flipped ? "" : undefined}
         >
-          {/* 옆면: 앞뒷면 사이에 쌓은 얇은 층. 돌리면 가장자리 띠로 보인다 */}
-          {Array.from({ length: EDGE_LAYERS }, (_, i) => {
-            const z = -THICK / 2 + (THICK * (i + 0.5)) / EDGE_LAYERS;
-            return (
-              <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: 고정된 층
-                key={i}
-                aria-hidden="true"
-                className={cn(
-                  "sd-idcard-edge",
-                  (i === 0 || i === EDGE_LAYERS - 1) && "sd-idcard-edge-ink",
-                )}
-                style={{ transform: `translateZ(${z.toFixed(3)}cqw)` }}
-              />
-            );
-          })}
+          {/* 옆면: 카드 둘레를 한 바퀴 두른 띠. 돌리면 가장자리로 보인다 */}
+          {EDGE.map((s, i) => (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: 고정된 조각
+              key={i}
+              aria-hidden="true"
+              className="sd-idcard-edge"
+              style={{
+                left: `${(s.x - THICK / 2).toFixed(3)}cqw`,
+                top: `${(s.y - s.len / 2).toFixed(3)}cqw`,
+                width: `${THICK}cqw`,
+                height: `${s.len.toFixed(3)}cqw`,
+                transform: `rotateZ(${s.phi.toFixed(2)}deg) rotateY(90deg)`,
+              }}
+            />
+          ))}
           {/* biome-ignore lint/a11y/useSemanticElements: 카드 안에 다른 단추(주소·패스키 마크)가 있어 button으로 감쌀 수 없다 */}
           <div
             role="button"

@@ -843,16 +843,17 @@ button {
 .sd-idcard-flip[data-dragging] {
   transition: none;
 }
-/* 옆면 층: 흰 플라스틱 심, 앞뒷면 쪽 두 층은 인쇄 색 */
+/* 옆면 띠 조각: 가운데는 흰 플라스틱 심, 앞뒷면 쪽 끝은 인쇄 색(가로 방향이 카드 두께) */
 .sd-idcard-edge {
   position: absolute;
-  inset: 0;
-  border-radius: 3.7cqw;
-  background: linear-gradient(180deg, #f4f7fd 0%, #c9d1e2 55%, #9aa5bd 100%);
+  background: linear-gradient(
+    90deg,
+    #2a3a6c 0 14%,
+    #eef2fa 14% 50%,
+    #b9c3d8 50% 86%,
+    #2a3a6c 86% 100%
+  );
   pointer-events: none;
-}
-.sd-idcard-edge-ink {
-  background: linear-gradient(180deg, #34477e, #1a2650);
 }
 .sd-idcard {
   container-type: inline-size;
