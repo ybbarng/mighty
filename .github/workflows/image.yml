@@ -6,18 +6,22 @@ name: Image
 # 태그: 커밋 sha 는 항상, main 이면 latest 도.
 # 서버 쪽 compose.yaml·deploy.sh 는 servers 저장소의 byb.kr/apps/mighty/ 에 있다.
 
+# CI(단위·화면 시험)가 main 에서 성공한 뒤에만 빌드하고 배포한다(2026-10-30). 무거운 전체 화면 시험을
+# 개발 맥 대신 CI 가 맡고, 깨진 커밋은 사이트에 올라가지 않는다. 빌드할 커밋은 CI 가 확인한 커밋(head_sha)이다.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    # 문서만 바뀐 커밋은 이미지를 다시 만들거나 배포하지 않는다
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
   workflow_dispatch:
 
 concurrency:
-  group: image-${{ github.ref }}
+  group: image-main
   cancel-in-progress: true
+
+env:
+  # CI 가 확인한 커밋. 손으로 돌리면(workflow_dispatch) 지금 main
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 permissions:
   contents: read
@@ -25,10 +29,13 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -40,8 +47,8 @@ jobs:
         with:
           images: ghcr.io/ybbarng/mighty
           tags: |
-            type=sha,format=long,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ env.SHA }}
+            type=raw,value=latest
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -61,11 +68,13 @@ jobs:
   # 이미지만 만들어 올리고 배포는 하지 않는다(servers 저장소 apps/stardraw/ 에서 손으로 띄운다, deploy/stardraw/README.md).
   # 저장소 변수 STARDRAW_SERVER_IMAGE 를 true 로 켜기 전에는 돌지 않는다.
   server-image:
-    if: vars.STARDRAW_SERVER_IMAGE == 'true'
+    if: vars.STARDRAW_SERVER_IMAGE == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -77,8 +86,8 @@ jobs:
         with:
           images: ghcr.io/ybbarng/stardraw-server
           tags: |
-            type=sha,format=long,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ env.SHA }}
+            type=raw,value=latest
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -92,7 +101,7 @@ jobs:
 
   # 서버에 배포한다. 서버의 배포 키는 forced-command 로 servers 저장소의 apps/mighty/deploy.sh 만 실행한다.
   # 이미지를 받을 토큰은 이 실행의 GITHUB_TOKEN 을 표준입력으로 넘긴다(서버에 남지 않고, 실행이 끝나면 만료된다).
-  # main 이면 운영 배포, 그 밖의 브랜치면 띄워서 헬스체크만 하고 내리는 시험(test).
+  # CI 가 성공한 main 커밋만 오므로 늘 운영 배포다(빌드가 건너뛰어지면 배포도 건너뛴다).
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -111,7 +120,7 @@ jobs:
           USER: ${{ secrets.SERVER_USER }}
           PORT: ${{ secrets.SERVER_PORT || '22' }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODE: ${{ github.ref == 'refs/heads/main' && 'deploy' || 'test' }}
+          MODE: deploy
         run: |
           set -euo pipefail
           # 배포 키를 아직 넣지 않았으면(서버 준비 전) 이미지만 올리고 배포는 건너뛴다
@@ -125,5 +134,5 @@ jobs:
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           printf '%s\n' "$TOKEN" | ssh -i ~/.ssh/deploy_key -p "$PORT" \
             -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes \
-            "$USER@$HOST" "$MODE $GITHUB_SHA"
+            "$USER@$HOST" "$MODE $SHA"
           rm -f ~/.ssh/deploy_key
