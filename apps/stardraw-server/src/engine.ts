@@ -147,6 +147,8 @@ export interface ServerState {
   records: number;
   /** 봉인한 회차 수 */
   sealed: number;
+  /** 마감이 지났는데 아직 닫지 못한 회차 수. 마감부터 추첨까지는 1, 봉인·추첨이 멈추면 다음 마감에 2가 된다(서버 감시가 본다) */
+  behind: number;
   /** 다음 회차 문제 값 */
   head: string;
   /** 이번 회차에 들어온 응모 수 */
@@ -263,11 +265,13 @@ export class StardrawServer {
   state(): ServerState {
     const now = this.now();
     const round = roundAt(this.schedule(), now) ?? 0;
+    const records = this.o.store.recordCount();
     return {
       now,
       round,
-      records: this.o.store.recordCount(),
+      records,
       sealed: this.o.store.lastSealed(),
+      behind: Math.max(0, round - 1 - records),
       head: toHex(this.head()),
       entries: round > 0 ? this.o.store.entryCount(round) : 0,
       serverKey: toBase64Url(this.o.serverKey.publicKey),

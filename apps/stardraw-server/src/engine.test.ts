@@ -63,6 +63,7 @@ describe("회차 진행: 응모 → 마감·봉인 → drand 추첨 → 공개 �
       round: 1,
       records: 0,
       entries: 0,
+      behind: 0,
     });
     // 1회차: c는 당첨 번호 그대로(1등)
     await enter(rig, a, [1, 2, 3, 4, 5, 6]);
@@ -73,9 +74,18 @@ describe("회차 진행: 응모 → 마감·봉인 → drand 추첨 → 공개 �
     // 마감하면 봉인하고, drand 시각 전에는 기록을 닫지 않는다
     const close1 = roundTimes(SCHEDULE, 1).closesAt;
     await rig.at(close1);
-    expect(rig.engine.state()).toMatchObject({ sealed: 1, records: 0 });
+    // 마감부터 추첨까지는 1회 밀린 것이 정상이다(서버 감시는 2부터 알린다)
+    expect(rig.engine.state()).toMatchObject({
+      sealed: 1,
+      records: 0,
+      behind: 1,
+    });
     await rig.at(drawTimeOf(1));
-    expect(rig.engine.state()).toMatchObject({ records: 1, round: 2 });
+    expect(rig.engine.state()).toMatchObject({
+      records: 1,
+      round: 2,
+      behind: 0,
+    });
     const record1 = rig.store.record(1) as RoundRecord;
     expect(record1.numbers).toEqual(drawOf(1).numbers);
     expect(record1.winners[1]).toHaveLength(1);
