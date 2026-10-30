@@ -312,6 +312,14 @@ test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고
   await page.goto("/stardraw/rounds");
   await page.getByRole("button", { name: /처음으로/ }).click();
   await expect(page).toHaveURL(/\/stardraw$/);
+  // 당겨서 새로고침은 응모(하늘에서 별 고르기)와 추첨 화면에서만 막는다
+  const noPull = page.locator("html[data-no-pull]");
+  await expect(noPull).toHaveCount(0);
+  await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  await expect(page).toHaveURL(/\/stardraw\/enter$/);
+  await expect(noPull).toHaveCount(1);
+  await page.goBack();
+  await expect(noPull).toHaveCount(0);
 });
 
 test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {

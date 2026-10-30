@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BackToGames } from "@/components/BackToGames";
 import { MadeWith } from "@/components/brand/MadeWith";
+import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
 
@@ -119,6 +120,8 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       ? viewOf(page, "")
       : viewOf(page, window.location.hash),
   );
+  // 별을 고르거나 추첨을 보다 화면이 당겨져 새로고침되지 않게(그 밖의 화면은 당겨서 새로고침이 된다)
+  useNoPullRefresh(view.name === "enter" || view.name === "draw");
   const [mine, setMine] = useState<MyTicket[]>([]);
   /** 지갑을 한 번 읽었는지(그 전에는 영수증을 "찾을 수 없어요"로 보이지 않는다) */
   const [loaded, setLoaded] = useState(false);
