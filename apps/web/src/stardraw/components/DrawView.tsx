@@ -28,11 +28,14 @@ export function DrawView({
   ticket,
   onClose,
   clock = realClock,
+  instant = false,
 }: {
   record: RoundRecord;
   ticket?: Ticket | undefined;
   onClose: () => void;
   clock?: Clock | undefined;
+  /** 연출 없이 결과부터(데모 화면 둘러보기) */
+  instant?: boolean | undefined;
 }) {
   const order = drawOrder(record);
   // 회차가 바뀔 때만 다시 계산한다(order는 record에서 정해진다)
@@ -46,7 +49,7 @@ export function DrawView({
     done: true,
   };
   const [frame, setFrame] = useState<RouletteFrame>(() =>
-    order.length === 0 ? finished : rouletteAt(plan, 0),
+    instant || order.length === 0 ? finished : rouletteAt(plan, 0),
   );
   /** 진행을 멈추는 함수(「결과 바로 보기」로 부른다) */
   const stopRef = useRef<() => void>(() => {});
@@ -56,7 +59,7 @@ export function DrawView({
   // biome-ignore lint/correctness/useExhaustiveDependencies: 회차가 바뀔 때만 다시 돈다
   useEffect(() => {
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce || order.length === 0) {
+    if (instant || reduce || order.length === 0) {
       setFrame(finished);
       return;
     }
@@ -100,8 +103,8 @@ export function DrawView({
   }, [record.round, clock]);
 
   useEffect(() => {
-    if (done && rank && order.length > 0) play("starWin");
-  }, [done, rank, order.length]);
+    if (done && rank && order.length > 0 && !instant) play("starWin");
+  }, [done, rank, order.length, instant]);
 
   const main = frame.fixed.slice(0, 6);
   const bonus = frame.fixed.length >= 7 ? (frame.fixed[6] ?? null) : null;

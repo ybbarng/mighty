@@ -45,10 +45,11 @@ export function DemoUnlockSheet() {
   const [ask, setAsk] = useState<UnlockAsk | null>(null);
   useEffect(() => subscribeUnlock(setAsk), []);
   if (!ask) return null;
-  return <Sheet key={ask.id} ask={ask} />;
+  return <DemoUnlockPrompt key={ask.id} ask={ask} />;
 }
 
-function Sheet({ ask }: { ask: UnlockAsk }) {
+/** 흉내 시트 한 장(화면 둘러보기는 가짜 요청으로 바로 띄운다) */
+export function DemoUnlockPrompt({ ask }: { ask: UnlockAsk }) {
   const [phase, setPhase] = useState<"scan" | "done">("scan");
   const [{ method, name, prompt }] = useState(() =>
     methodOf(typeof navigator === "undefined" ? "" : navigator.userAgent),

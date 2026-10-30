@@ -29,7 +29,7 @@ import { SkyBoard } from "./SkyBoard";
 type Step = "pick" | "working" | "folding";
 
 /** 패스키를 쓸 수 있는 환경(첫 그리기 뒤에 잰다) */
-interface Env {
+export interface Env {
   inApp: string | null;
   api: boolean;
   /** 이 기기 잠금(얼굴·지문·PIN)으로 패스키를 쓸 수 있는지 */
@@ -380,7 +380,7 @@ function ErrorBox({ error }: { error: Failure }) {
  * 다른 기기에서 만든 패스키가 따라왔으면 「이미 패스키가 있어요」로 찾는다.
  * 패스키를 못 쓰는 환경(앱 안 브라우저·미지원)은 한두 줄로 안내한다. 데모는 흉내라 막지 않는다
  */
-function KeySetup({
+export function KeySetup({
   demo,
   env,
   working,

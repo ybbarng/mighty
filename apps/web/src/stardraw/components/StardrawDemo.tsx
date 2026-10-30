@@ -23,6 +23,7 @@ import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
 import type { MyTicket } from "../wallet";
 import { CheckPanel } from "./CheckPanel";
+import { type TourId, TourList, TourScreen, tourIdOf } from "./DemoTour";
 import { DemoUnlockSheet } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
@@ -36,6 +37,9 @@ import { Receipt } from "./Receipt";
  * 데모만의 기능: 지금 마감·지금 추첨, 미리 본 당첨 번호로 n등이 되게 고르기, 가짜 당첨자로 답하기.
  * 데모는 실제 패스키를 만들지 않는다: 서명 순간마다 화면 안 흉내 시트(`DemoUnlockSheet`)가 뜬다.
  */
+/** 화면 둘러보기에 목록을 눌러 들어왔는지 */
+let fromTourList = false;
+
 export function StardrawDemo() {
   const { services, status, version, refresh, reset } = useLedger(DEMO_NS);
   const [mine, setMine] = useState<MyTicket[]>([]);
@@ -56,6 +60,34 @@ export function StardrawDemo() {
   const [drawing, setDrawing] = useState<number | null>(null);
   const [pane, setPane] = useState<"winner" | "checker">("winner");
   const [busy, setBusy] = useState(false);
+  // 화면 둘러보기(#tour-<id>). 목록에서 들어왔으면 「화면 목록」은 뒤로가기다
+  const [tourId, setTourId] = useState<TourId | null>(null);
+  useEffect(() => {
+    const sync = () => {
+      const next = tourIdOf(window.location.hash);
+      setTourId((prev) => {
+        if (!prev && next) fromTourList = true;
+        return next;
+      });
+      if (next) window.scrollTo({ top: 0 });
+    };
+    setTourId(tourIdOf(window.location.hash));
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("popstate", sync);
+    };
+  }, []);
+  const leaveTour = () => {
+    if (fromTourList) {
+      fromTourList = false;
+      history.back();
+      return;
+    }
+    history.replaceState(null, "", window.location.pathname);
+    setTourId(null);
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 읽는다
   useEffect(() => {
@@ -137,196 +169,203 @@ export function StardrawDemo() {
             응모 → 추첨 → 당첨자 확인까지 혼자 끝까지 해 봅니다. 연습 참가자
             24명이 회차마다 함께 응모합니다.
           </p>
+          {!tourId && <TourList />}
         </header>
         <DemoUnlockSheet />
+        {tourId ? (
+          <TourScreen key={tourId} id={tourId} onBack={leaveTour} />
+        ) : (
+          <>
+            <Step n={1} title="회차 조작">
+              <div className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4">
+                <span
+                  className="font-bold tabular-nums"
+                  data-demo-round={status.round}
+                >
+                  제 {status.round}회
+                </span>
+                <span className="text-sm text-white/65">
+                  {status.phase === "open"
+                    ? `응모 받는 중 · 마감까지 ${formatLeft(status.times.entryDeadline - status.now)} · 추첨까지 ${formatLeft(status.times.closesAt + DRAND_DELAY - status.now)}`
+                    : status.phase === "closing"
+                      ? "곧 마감"
+                      : "앞 회차 추첨을 기다리는 중"}
+                </span>
+                <span className="ml-auto flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(() => practiceOf(services).skipToClose())
+                    }
+                    className="rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-40"
+                  >
+                    지금 마감
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(() => practiceOf(services).skipToNextDraw())
+                    }
+                    className="sd-cta rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm disabled:opacity-40"
+                  >
+                    지금 추첨
+                  </button>
+                </span>
+              </div>
+            </Step>
 
-        <Step n={1} title="회차 조작">
-          <div className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4">
-            <span
-              className="font-bold tabular-nums"
-              data-demo-round={status.round}
-            >
-              제 {status.round}회
-            </span>
-            <span className="text-sm text-white/65">
-              {status.phase === "open"
-                ? `응모 받는 중 · 마감까지 ${formatLeft(status.times.entryDeadline - status.now)} · 추첨까지 ${formatLeft(status.times.closesAt + DRAND_DELAY - status.now)}`
-                : status.phase === "closing"
-                  ? "곧 마감"
-                  : "앞 회차 추첨을 기다리는 중"}
-            </span>
-            <span className="ml-auto flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void act(() => practiceOf(services).skipToClose())
-                }
-                className="rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-40"
-              >
-                지금 마감
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void act(() => practiceOf(services).skipToNextDraw())
-                }
-                className="sd-cta rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm disabled:opacity-40"
-              >
-                지금 추첨
-              </button>
-            </span>
-          </div>
-        </Step>
-
-        <Step n={2} title="응모">
-          {current ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-white/70">
-                이번 회차에 응모했습니다. 「지금 추첨」을 눌러 보세요.
-              </p>
-              <Receipt
-                ticket={current.ticket}
-                receivedAt={current.receivedAt}
-                schedule={services.ledger.schedule}
-              />
-            </div>
-          ) : (
-            <div className="mx-auto w-full max-w-xl">
-              <EnterView
-                key={entering.key}
-                services={services}
-                status={status}
-                initialPicked={entering.picks}
-                onBack={() => setEntering({ key: Date.now(), picks: [] })}
-                onDone={(ticket, receivedAt) => {
-                  services.wallet.addTicket({ ticket, receivedAt });
-                  setMine(services.wallet.loadTickets());
-                  void refresh();
-                }}
-                extra={
-                  <RankPicker
+            <Step n={2} title="응모">
+              {current ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-white/70">
+                    이번 회차에 응모했습니다. 「지금 추첨」을 눌러 보세요.
+                  </p>
+                  <Receipt
+                    ticket={current.ticket}
+                    receivedAt={current.receivedAt}
+                    schedule={services.ledger.schedule}
+                  />
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-xl">
+                  <EnterView
+                    key={entering.key}
                     services={services}
-                    round={status.round}
-                    onPick={(picks, rank) =>
-                      setEntering({
-                        key: Date.now(),
-                        picks,
-                        rank,
-                        round: status.round,
-                      })
+                    status={status}
+                    initialPicked={entering.picks}
+                    onBack={() => setEntering({ key: Date.now(), picks: [] })}
+                    onDone={(ticket, receivedAt) => {
+                      services.wallet.addTicket({ ticket, receivedAt });
+                      setMine(services.wallet.loadTickets());
+                      void refresh();
+                    }}
+                    extra={
+                      <RankPicker
+                        services={services}
+                        round={status.round}
+                        onPick={(picks, rank) =>
+                          setEntering({
+                            key: Date.now(),
+                            picks,
+                            rank,
+                            round: status.round,
+                          })
+                        }
+                      />
                     }
                   />
-                }
-              />
-            </div>
-          )}
-        </Step>
+                </div>
+              )}
+            </Step>
 
-        <Step n={3} title="추첨">
-          {latest && latestRecord ? (
-            drawing === latest.ticket.round ? (
-              <div className="mx-auto w-full max-w-xl">
-                <DrawView
-                  record={latestRecord}
-                  ticket={latest.ticket}
-                  onClose={() => setDrawing(null)}
-                  clock={services.clock}
-                />
-              </div>
-            ) : (
-              <div className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4">
-                <span className="tabular-nums">
-                  제 {latest.ticket.round}회 내 응모권:{" "}
-                  <b data-demo-result>
-                    {latestRank ? `${RANK_LABEL[latestRank]} 당첨` : "낙첨"}
-                  </b>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDrawing(latest.ticket.round)}
-                  className="sd-cta ml-auto rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm"
-                >
-                  추첨 보기
-                </button>
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-white/60">
-              응모한 뒤 「지금 추첨」을 누르면 여기서 추첨을 봅니다.
-            </p>
-          )}
-        </Step>
+            <Step n={3} title="추첨">
+              {latest && latestRecord ? (
+                drawing === latest.ticket.round ? (
+                  <div className="mx-auto w-full max-w-xl">
+                    <DrawView
+                      record={latestRecord}
+                      ticket={latest.ticket}
+                      onClose={() => setDrawing(null)}
+                      clock={services.clock}
+                    />
+                  </div>
+                ) : (
+                  <div className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4">
+                    <span className="tabular-nums">
+                      제 {latest.ticket.round}회 내 응모권:{" "}
+                      <b data-demo-result>
+                        {latestRank ? `${RANK_LABEL[latestRank]} 당첨` : "낙첨"}
+                      </b>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDrawing(latest.ticket.round)}
+                      className="sd-cta ml-auto rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm"
+                    >
+                      추첨 보기
+                    </button>
+                  </div>
+                )
+              ) : (
+                <p className="text-sm text-white/60">
+                  응모한 뒤 「지금 추첨」을 누르면 여기서 추첨을 봅니다.
+                </p>
+              )}
+            </Step>
 
-        <Step n={4} title="당첨자 확인">
-          {latest && latestRecord && latestRank ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-2 lg:hidden" role="tablist">
-                {(
-                  [
-                    ["winner", "당첨자 폰"],
-                    ["checker", "확인하는 사람 화면"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={pane === id}
-                    onClick={() => setPane(id)}
-                    className={cn(
-                      "flex-1 rounded-xl border py-2 text-sm",
-                      pane === id
-                        ? "border-amber-200/60 bg-amber-200/15"
-                        : "border-white/15",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Pane
-                  title="당첨자 폰"
-                  hidden={pane !== "winner"}
-                  data="winner"
-                >
-                  <p className="text-sm text-white/65">
-                    확인 요청이 오면 여기에 뜹니다.
-                  </p>
-                  <Inbox
-                    services={services}
-                    tickets={mine.map((m) => m.ticket)}
-                  />
-                  <FakeWinner services={services} ticket={latest.ticket} />
-                </Pane>
-                <Pane
-                  title="확인하는 사람 화면"
-                  hidden={pane !== "checker"}
-                  data="checker"
-                >
-                  <CheckPanel
-                    services={services}
-                    round={latest.ticket.round}
-                    rank={latestRank}
-                    tickets={winnersOf(
-                      services,
-                      latest.ticket.round,
-                      latestRank,
-                    )}
-                    onClose={() => setPane("winner")}
-                  />
-                </Pane>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-white/60">
-              당첨된 응모권이 있으면 여기서 당첨자 폰과 확인하는 사람 화면을
-              나란히 놓고 확인해 봅니다. 응모할 때 「1등 되게」를 눌러 보세요.
-            </p>
-          )}
-        </Step>
+            <Step n={4} title="당첨자 확인">
+              {latest && latestRecord && latestRank ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-2 lg:hidden" role="tablist">
+                    {(
+                      [
+                        ["winner", "당첨자 폰"],
+                        ["checker", "확인하는 사람 화면"],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={pane === id}
+                        onClick={() => setPane(id)}
+                        className={cn(
+                          "flex-1 rounded-xl border py-2 text-sm",
+                          pane === id
+                            ? "border-amber-200/60 bg-amber-200/15"
+                            : "border-white/15",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <Pane
+                      title="당첨자 폰"
+                      hidden={pane !== "winner"}
+                      data="winner"
+                    >
+                      <p className="text-sm text-white/65">
+                        확인 요청이 오면 여기에 뜹니다.
+                      </p>
+                      <Inbox
+                        services={services}
+                        tickets={mine.map((m) => m.ticket)}
+                      />
+                      <FakeWinner services={services} ticket={latest.ticket} />
+                    </Pane>
+                    <Pane
+                      title="확인하는 사람 화면"
+                      hidden={pane !== "checker"}
+                      data="checker"
+                    >
+                      <CheckPanel
+                        services={services}
+                        round={latest.ticket.round}
+                        rank={latestRank}
+                        tickets={winnersOf(
+                          services,
+                          latest.ticket.round,
+                          latestRank,
+                        )}
+                        onClose={() => setPane("winner")}
+                      />
+                    </Pane>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-white/60">
+                  당첨된 응모권이 있으면 여기서 당첨자 폰과 확인하는 사람 화면을
+                  나란히 놓고 확인해 봅니다. 응모할 때 「1등 되게」를 눌러
+                  보세요.
+                </p>
+              )}
+            </Step>
+          </>
+        )}
 
         <footer className="pt-4 text-center text-[11px] text-white/40">
           <MadeWith />

@@ -36,18 +36,31 @@ export function CheckPanel({
   rank,
   tickets,
   onClose,
+  preset,
 }: {
   services: Services;
   round: number;
   rank: Rank;
   tickets: readonly Ticket[];
   onClose: () => void;
+  /** 끝난 묶음과 판정을 그대로 보여 준다(데모 화면 둘러보기의 성공·실패) */
+  preset?: { batch: CheckBatch; verdict: "ok" | "fail" } | undefined;
 }) {
-  const [batch, setBatch] = useState<CheckBatch | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [batch, setBatch] = useState<CheckBatch | null>(preset?.batch ?? null);
+  const [loaded, setLoaded] = useState(preset !== undefined);
   const [name, setName] = useState("");
   const [entered, setEntered] = useState<number[]>([]);
-  const [flash, setFlash] = useState<Flash | null>(null);
+  const [flash, setFlash] = useState<Flash | null>(() =>
+    !preset
+      ? null
+      : preset.verdict === "ok"
+        ? {
+            kind: "confirmed",
+            ticketId: preset.batch.tickets[0]?.ticketId ?? "",
+            of: preset.batch.tickets.length,
+          }
+        : { kind: "closed" },
+  );
   const [error, setError] = useState<string | null>(null);
   // 묶음 객체 하나를 고쳐 쓰고(응답 처리와 별 누르기가 같은 객체를 저장한다), 다시 그리기만 일으킨다
   const [, setVersion] = useState(0);
@@ -60,8 +73,10 @@ export function CheckPanel({
     [services],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: preset은 처음 한 번만 본다
   useEffect(() => {
     setName(savedName(services.ns));
+    if (preset) return;
     void checker.openBatch(round, rank).then((b) => {
       setBatch(b);
       setLoaded(true);

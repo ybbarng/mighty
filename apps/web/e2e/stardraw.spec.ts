@@ -568,3 +568,64 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
     timeout: 60_000,
   });
 });
+
+test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없이 열리고, 뒤로가기는 목록으로", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  await page.goto("/stardraw/demo");
+  const list = page.getByRole("navigation", { name: "화면 둘러보기" });
+  // 목록에서 들어가면 # 조각이 기록에 남아, 뒤로가기와 「화면 목록」이 목록으로 돌아온다
+  await list.getByRole("link", { name: "결과 봉투" }).click();
+  await expect(page).toHaveURL(/#tour-envelope$/);
+  const screen = page.locator("[data-tour-screen][data-tour-ready]");
+  await expect(screen.locator("[data-envelope='1']")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.goBack();
+  await expect(list).toBeVisible();
+  await list.getByRole("link", { name: "내 응모" }).click();
+  await expect(screen.getByText("제 1회").first()).toBeVisible();
+  await page.getByRole("button", { name: "← 화면 목록" }).click();
+  await expect(list).toBeVisible();
+  await expect(page).not.toHaveURL(/#tour/);
+
+  const expectations: [
+    string,
+    (s: typeof screen) => ReturnType<Page["locator"]>,
+  ][] = [
+    ["enter", (s) => s.getByText(/번호로 고르기/)],
+    ["receipt", (s) => s.locator("[data-receipt]")],
+    ["draw", (s) => s.locator("[data-draw-result]")],
+    ["envelope", (s) => s.locator("[data-envelope='1']")],
+    ["rank-1", (s) => s.getByText("1등 당첨")],
+    ["rank-2", (s) => s.getByText("2등 당첨")],
+    ["rank-3", (s) => s.getByText("3등 당첨")],
+    ["rank-4", (s) => s.getByText("4등 당첨")],
+    ["rank-5", (s) => s.getByText("5등 당첨")],
+    ["lose", (s) => s.getByText("아쉽게도 당첨되지 않았습니다")],
+    ["mine", (s) => s.getByText("제 1회").first()],
+    ["rounds", (s) => s.getByRole("heading", { name: "지난 회차" })],
+    ["winner", (s) => s.getByText(/Brice/).first()],
+    ["checker", (s) => s.getByText("당첨자의 응답을 기다리고 있습니다")],
+    ["check-ok", (s) => s.locator("[data-verdict='ok']")],
+    ["check-fail", (s) => s.locator("[data-verdict='fail']")],
+    ["sheet-create", () => page.locator("[data-demo-unlock='create']")],
+    ["sheet-sign", () => page.locator("[data-demo-unlock='sign']")],
+    ["in-app", (s) => s.getByText(/카카오톡 안에서는 패스키를 쓸 수 없어요/)],
+    ["no-passkey", (s) => s.getByText(/패스키를 지원하지 않아요/)],
+    ["trial", (s) => s.locator("[data-trial-banner]")],
+  ];
+  for (const [id, find] of expectations) {
+    await page.evaluate((h) => {
+      window.location.hash = h;
+    }, `#tour-${id}`);
+    await expect(page.locator(`[data-tour-screen='${id}']`)).toBeVisible();
+    await expect(find(screen)).toBeVisible();
+    await noSideScroll(page);
+    await page.screenshot({
+      path: info.outputPath(`stardraw-tour-${id}.png`),
+      fullPage: true,
+    });
+  }
+});
