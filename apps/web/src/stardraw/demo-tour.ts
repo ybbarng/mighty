@@ -6,6 +6,8 @@ import {
   makeRegistration,
   makeTicket,
   type Rank,
+  softCredentialId,
+  softPasskeySigner,
   type Ticket,
 } from "@mighty/stardraw-core";
 
@@ -102,8 +104,8 @@ export async function buildTour(): Promise<TourState> {
       ? undefined
       : await makeRegistration(
           { publicKey: signer.publicKey },
-          "raw",
-          new Uint8Array(),
+          // 데모 지갑과 둘러보기 참가자는 모두 흉내 패스키라 패스키 번호가 공개 열쇠에서 정해진다
+          softCredentialId(signer.publicKey),
           challenge,
           times.entry.registerPowTarget,
           { params: ledger.powParams },
@@ -129,7 +131,7 @@ export async function buildTour(): Promise<TourState> {
   byRank.set(1, drawn.ticket);
   for (const rank of [2, 3, 4, 5, null] as const) {
     const { ticket } = await enter(
-      await generateSigner(),
+      softPasskeySigner(await generateSigner(), { policy: sitePolicy() }),
       demoPick(draw, rank),
     );
     byRank.set(rank, ticket);

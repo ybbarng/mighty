@@ -1,8 +1,8 @@
 import { p256 } from "@noble/curves/nist.js";
 
-import { ByteWriter, concat, sha256, toBase64Url, toHex, utf8 } from "./bytes";
+import { concat, sha256, toHex, utf8 } from "./bytes";
 import { encodeDer, encodeInteger, encodeOid, TAG } from "./der";
-import { generateSigner, type Signer } from "./keys";
+import { generateSigner } from "./keys";
 import type { PowParams } from "./pow";
 import { type KeyRegistration, makeRegistration } from "./registration";
 import { spkiFromRaw } from "./rekor";
@@ -10,9 +10,10 @@ import type { Schedule } from "./schedule";
 import {
   type EntrantSigner,
   p1363ToDer,
-  passkeySigner,
   rawPublicKeyFromSpki,
-  type WebAuthnAssertion,
+  type SoftPasskey,
+  type SoftPasskeyOptions,
+  softPasskeySigner,
 } from "./signature";
 import { makeTicket, type Ticket } from "./ticket";
 import type { TsaAuthority } from "./tsa";
@@ -42,8 +43,13 @@ export const HOURLY: Schedule = {
   ],
 };
 
-export async function signers(n: number): Promise<Signer[]> {
-  return Promise.all(Array.from({ length: n }, () => generateSigner()));
+/** 흉내 패스키 n개(UP·UV 켬, 실제 사이트 정책) */
+export async function signers(n: number): Promise<SoftPasskey[]> {
+  return Promise.all(
+    Array.from({ length: n }, async () =>
+      softPasskeySigner(await generateSigner()),
+    ),
+  );
 }
 
 export async function ticketFor(
@@ -59,34 +65,27 @@ export async function ticketFor(
   return t;
 }
 
-/** 원시 열쇠 등록(쉬운 목표값). 시험은 1회차 문제 값으로 1회차에 등록한다 */
-export async function registerRaw(
-  keys: readonly { publicKey: Uint8Array }[],
+/** 흉내 패스키 여러 개 등록(쉬운 목표값). 시험은 1회차 문제 값으로 1회차에 등록한다 */
+export async function registerKeys(
+  keys: readonly { publicKey: Uint8Array; credentialId: Uint8Array }[],
   challenge: Uint8Array,
 ): Promise<KeyRegistration[]> {
   return Promise.all(
-    keys.map(async (key) => {
-      const r = await makeRegistration(
-        key,
-        "raw",
-        new Uint8Array(),
+    keys.map((key) =>
+      registerPasskey(
+        { credentialId: key.credentialId, signer: key },
         challenge,
-        EASY_TARGET,
-        { params: TEST_POW },
-      );
-      if (!r) throw new Error("등록을 만들지 못했다");
-      return r;
-    }),
+      ),
+    ),
   );
 }
 
 export async function registerPasskey(
-  passkey: { credentialId: Uint8Array; signer: EntrantSigner },
+  passkey: { credentialId: Uint8Array; signer: { publicKey: Uint8Array } },
   challenge: Uint8Array,
 ): Promise<KeyRegistration> {
   const r = await makeRegistration(
     passkey.signer,
-    "passkey",
     passkey.credentialId,
     challenge,
     EASY_TARGET,
@@ -96,64 +95,26 @@ export async function registerPasskey(
   return r;
 }
 
-export interface FakePasskeyOptions {
-  rpId?: string;
-  origin?: string;
-  /** authenticatorData flags. 기본 0x05(UP + UV) */
-  flags?: number;
-  type?: string;
-}
+export type FakePasskeyOptions = SoftPasskeyOptions;
 
 /**
- * 가짜 패스키 인증기. 브라우저가 돌려주는 것과 같은 모양으로 단언을 만든다:
- * authenticatorData = SHA-256(rpId) ‖ flags ‖ signCount(u32),
- * clientDataJSON = {"type","challenge"(base64url),"origin","crossOrigin"} 순서의 JSON,
- * signature = authenticatorData ‖ SHA-256(clientDataJSON)에 대한 ES256 DER 서명.
- * 공개 열쇠는 `getPublicKey()`처럼 SPKI로도 준다.
+ * 가짜 패스키 인증기(`softPasskeySigner`). 공개 열쇠는 `getPublicKey()`처럼 SPKI로도 주고,
+ * 패스키 번호는 브라우저처럼 무작위 16바이트다.
  */
 export async function fakePasskey(options: FakePasskeyOptions = {}) {
-  const rpId = options.rpId ?? "game.byb.kr";
-  const origin = options.origin ?? "https://game.byb.kr";
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign", "verify"],
-  );
+  const key = await generateSigner();
   const spki = new Uint8Array(
-    await crypto.subtle.exportKey("spki", keyPair.publicKey),
+    await crypto.subtle.exportKey("spki", key.keyPair.publicKey),
   );
-  let signCount = 0;
-  const getAssertion = async (
-    challenge: Uint8Array,
-  ): Promise<WebAuthnAssertion> => {
-    signCount++;
-    const authenticatorData = concat(
-      sha256(utf8(rpId)),
-      new Uint8Array([options.flags ?? 0x05]),
-      new ByteWriter().u32(signCount).done(),
-    );
-    const clientDataJSON = utf8(
-      JSON.stringify({
-        type: options.type ?? "webauthn.get",
-        challenge: toBase64Url(challenge),
-        origin,
-        crossOrigin: false,
-      }),
-    );
-    const raw = new Uint8Array(
-      await crypto.subtle.sign(
-        { name: "ECDSA", hash: "SHA-256" },
-        keyPair.privateKey,
-        new Uint8Array(concat(authenticatorData, sha256(clientDataJSON))),
-      ),
-    );
-    return { authenticatorData, clientDataJSON, signature: p1363ToDer(raw) };
-  };
   const credentialId = crypto.getRandomValues(new Uint8Array(16));
+  const soft = softPasskeySigner(
+    { publicKey: rawPublicKeyFromSpki(spki), sign: key.sign },
+    options,
+  );
   return {
     spki,
     credentialId,
-    signer: passkeySigner(rawPublicKeyFromSpki(spki), getAssertion),
+    signer: { publicKey: soft.publicKey, sign: soft.sign } as EntrantSigner,
   };
 }
 

@@ -8,6 +8,7 @@ import {
 } from "./bytes";
 import { PUBLIC_KEY_LENGTH } from "./keys";
 import { type SolveOptions, solvePow } from "./pow";
+import { RAW_KEY_KIND, RawKeyRejected } from "./signature";
 
 /**
  * 열쇠 등록(docs/36 5절, 11-2). 응모하려면 먼저 공개 열쇠를 장부에 등록한다.
@@ -19,20 +20,20 @@ import { type SolveOptions, solvePow } from "./pow";
  *   쓸모가 없고, 같은 열쇠·같은 패스키 번호는 장부에 한 번만 들어간다(먼저 들어간 것이 이긴다).
  *   열쇠를 가졌다는 것은 응모권 서명이 증명한다.
  *
- * 바이너리 형식: v(u8) ‖ kind(u8: 1 원시, 2 패스키) ‖ credentialId(u16 길이 + 바이트) ‖ pub(65) ‖ nonce(u32)
- * 원시 열쇠는 credentialId가 빈 바이트, 패스키는 1~1023바이트(WebAuthn 상한)다.
+ * 바이너리 형식: v(u8) ‖ kind(u8 = 2, 패스키) ‖ credentialId(u16 길이 + 바이트) ‖ pub(65) ‖ nonce(u32)
+ * credentialId는 1~1023바이트(WebAuthn 상한)다. kind 1(원시 열쇠, credentialId 빈 값)은
+ * 2026-10-30부터 받지 않는다(docs/36 11-11). kind 바이트는 이미 장부에 실린 등록과 맞추려고 남긴다.
  * 작업 증명 대상은 용도 이름 ‖ nonce를 뺀 앞부분이라 응모권 작업 증명과 섞이지 않는다.
  */
 
 export const REGISTRATION_VERSION = 1;
 export const MAX_CREDENTIAL_ID = 1023;
-
-export type KeyKind = "raw" | "passkey";
+/** 등록 바이트의 kind 값. 패스키만 받는다 */
+export const PASSKEY_KIND = 2;
 
 export interface KeyRegistration {
   v: number;
-  kind: KeyKind;
-  /** 패스키 번호. 원시 열쇠는 빈 바이트 */
+  /** 패스키 번호 */
   credentialId: Uint8Array;
   pub: Uint8Array;
   nonce: number;
@@ -44,12 +45,7 @@ export function checkRegistration(r: UnsolvedRegistration): string | null {
   if (r.v !== REGISTRATION_VERSION) return `모르는 등록 판: ${r.v}`;
   if (r.pub.length !== PUBLIC_KEY_LENGTH || r.pub[0] !== 0x04)
     return "공개 열쇠는 압축하지 않은 P-256 65바이트";
-  if (r.kind === "raw" && r.credentialId.length !== 0)
-    return "원시 열쇠는 패스키 번호가 없다";
-  if (
-    r.kind === "passkey" &&
-    (r.credentialId.length < 1 || r.credentialId.length > MAX_CREDENTIAL_ID)
-  ) {
+  if (r.credentialId.length < 1 || r.credentialId.length > MAX_CREDENTIAL_ID) {
     return `패스키 번호는 1~${MAX_CREDENTIAL_ID}바이트`;
   }
   return null;
@@ -60,7 +56,7 @@ function head(r: UnsolvedRegistration): ByteWriter {
   if (problem) throw new Error(problem);
   return new ByteWriter()
     .u8(r.v)
-    .u8(r.kind === "raw" ? 1 : 2)
+    .u8(PASSKEY_KIND)
     .bytes(r.credentialId)
     .fixed(r.pub, PUBLIC_KEY_LENGTH);
 }
@@ -82,11 +78,11 @@ export function decodeRegistration(bytes: Uint8Array): KeyRegistration {
   const reader = new ByteReader(bytes);
   const v = reader.u8();
   const kindByte = reader.u8();
-  if (kindByte !== 1 && kindByte !== 2)
+  if (kindByte === RAW_KEY_KIND) throw new RawKeyRejected();
+  if (kindByte !== PASSKEY_KIND)
     throw new Error(`모르는 열쇠 종류: ${kindByte}`);
   const r: KeyRegistration = {
     v,
-    kind: kindByte === 1 ? "raw" : "passkey",
     credentialId: reader.bytes(),
     pub: reader.fixed(PUBLIC_KEY_LENGTH),
     nonce: reader.u32(),
@@ -117,7 +113,6 @@ export function sortRegistrations(
  */
 export async function makeRegistration(
   key: { publicKey: Uint8Array },
-  kind: KeyKind,
   credentialId: Uint8Array,
   challenge: Uint8Array,
   registerPowTarget: number,
@@ -125,7 +120,6 @@ export async function makeRegistration(
 ): Promise<KeyRegistration | null> {
   const unsolved: UnsolvedRegistration = {
     v: REGISTRATION_VERSION,
-    kind,
     credentialId,
     pub: key.publicKey,
   };

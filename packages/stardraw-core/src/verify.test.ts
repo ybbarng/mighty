@@ -7,7 +7,6 @@ import {
   drandTime,
 } from "./drand";
 import { drawNumbers, drawSeed } from "./draw";
-import type { Signer } from "./keys";
 import { makeNickname, type Nickname } from "./nickname";
 import { checkPow } from "./pow";
 import {
@@ -30,13 +29,14 @@ import {
   type ScheduleEntry,
   withChange,
 } from "./schedule";
+import type { SoftPasskey } from "./signature";
 import {
   EASY_TARGET,
   fakePasskey,
   fakeSignature,
   HOURLY,
+  registerKeys,
   registerPasskey,
-  registerRaw,
   signers,
   TEST_POW,
   ticketFor,
@@ -85,7 +85,7 @@ interface Ledger {
   records: RoundRecord[];
   tickets: Ticket[][];
   registrations: KeyRegistration[][];
-  people: Signer[];
+  people: SoftPasskey[];
 }
 
 /**
@@ -113,10 +113,10 @@ async function buildLedger(
       miss.slice(0, 6),
     ];
     const roundTickets = await Promise.all(
-      picks.map((p, i) => ticketFor(people[i] as Signer, round, p, prev)),
+      picks.map((p, i) => ticketFor(people[i] as SoftPasskey, round, p, prev)),
     );
     // 4명 모두 1회차에 열쇠를 등록한다
-    const roundRegs = round === 1 ? await registerRaw(people, prev) : [];
+    const roundRegs = round === 1 ? await registerKeys(people, prev) : [];
     const record = closeRound({
       schedule,
       round,
@@ -198,7 +198,12 @@ describe("회차 닫기", () => {
   it("무효 회차는 drand 값 없이 닫히고 당첨이 없다", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
-    const t = await ticketFor(person as Signer, 1, [1, 2, 3, 4, 5, 6], prev);
+    const t = await ticketFor(
+      person as SoftPasskey,
+      1,
+      [1, 2, 3, 4, 5, 6],
+      prev,
+    );
     const record = closeRound({
       schedule: HOURLY,
       round: 1,
@@ -270,7 +275,7 @@ describe("장부 검사", () => {
     const [late] = await signers(1);
     const draw = drawFor(ledger.schedule, 2);
     const extra = await ticketFor(
-      late as Signer,
+      late as SoftPasskey,
       2,
       draw.numbers,
       ledger.records[1]?.prev as Uint8Array,
@@ -331,9 +336,19 @@ describe("장부 검사", () => {
   it("같은 열쇠가 한 회차에 두 장 내면 드러난다", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
-    const regs = await registerRaw([person as Signer], prev);
-    const a = await ticketFor(person as Signer, 1, [1, 2, 3, 4, 5, 6], prev);
-    const b = await ticketFor(person as Signer, 1, [7, 8, 9, 10, 11, 12], prev);
+    const regs = await registerKeys([person as SoftPasskey], prev);
+    const a = await ticketFor(
+      person as SoftPasskey,
+      1,
+      [1, 2, 3, 4, 5, 6],
+      prev,
+    );
+    const b = await ticketFor(
+      person as SoftPasskey,
+      1,
+      [7, 8, 9, 10, 11, 12],
+      prev,
+    );
     const record = closeRound({
       schedule: HOURLY,
       round: 1,
@@ -360,8 +375,12 @@ describe("장부 검사", () => {
   it("작업 증명이 틀린 응모권은 서명이 맞아도 드러난다(전부 검사)", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
-    const regs = await registerRaw([person as Signer], prev);
-    const unsigned = unsignedTicket(person as Signer, 1, [1, 2, 3, 4, 5, 6]);
+    const regs = await registerKeys([person as SoftPasskey], prev);
+    const unsigned = unsignedTicket(
+      person as SoftPasskey,
+      1,
+      [1, 2, 3, 4, 5, 6],
+    );
     let nonce = 0;
     while (
       await checkPow(
@@ -373,7 +392,7 @@ describe("장부 검사", () => {
       )
     )
       nonce++;
-    const bad = await signTicket(person as Signer, unsigned, nonce);
+    const bad = await signTicket(person as SoftPasskey, unsigned, nonce);
     const record = closeRound({
       schedule: HOURLY,
       round: 1,
@@ -598,7 +617,12 @@ describe("열쇠 등록", () => {
   it("등록하지 않은 열쇠의 응모권은 드러난다", async () => {
     const [person] = await signers(1);
     const prev = genesisHash(HOURLY);
-    const t = await ticketFor(person as Signer, 1, [1, 2, 3, 4, 5, 6], prev);
+    const t = await ticketFor(
+      person as SoftPasskey,
+      1,
+      [1, 2, 3, 4, 5, 6],
+      prev,
+    );
     const record = closeRound({
       schedule: HOURLY,
       round: 1,
@@ -633,12 +657,11 @@ describe("열쇠 등록", () => {
 
   it("같은 열쇠를 두 번 등록하거나, 같은 패스키 번호를 다른 열쇠로 등록하면 드러난다", async () => {
     const prev = genesisHash(HOURLY);
-    const [person] = (await signers(1)) as [Signer];
-    const [first] = await registerRaw([person], prev);
+    const [person] = (await signers(1)) as [SoftPasskey];
+    const [first] = await registerKeys([person], prev);
     const again = (await makeRegistration(
       person,
-      "raw",
-      new Uint8Array(),
+      person.credentialId,
       prev,
       EASY_TARGET,
       { params: TEST_POW, start: (first as KeyRegistration).nonce + 1 },
@@ -677,11 +700,10 @@ describe("열쇠 등록", () => {
 
   it("등록 작업 증명이 틀리면 드러난다", async () => {
     const prev = genesisHash(HOURLY);
-    const [person] = (await signers(1)) as [Signer];
+    const [person] = (await signers(1)) as [SoftPasskey];
     const unsolved = {
       v: 1,
-      kind: "raw" as const,
-      credentialId: new Uint8Array(),
+      credentialId: person.credentialId,
       pub: person.publicKey,
     };
     let nonce = 0;
@@ -785,7 +807,7 @@ describe("별명 남기기", () => {
               old.map((t) => {
                 const who = ledger.people.find(
                   (p) => toHex(p.publicKey) === toHex(t.pub),
-                ) as Signer;
+                ) as SoftPasskey;
                 return ticketFor(who, round, t.numbers, prev);
               }),
             );
@@ -822,7 +844,8 @@ describe("별명 남기기", () => {
     const list = ledger.tickets[0] as Ticket[];
     const byPerson = (k: number) =>
       list.find(
-        (t) => toHex(t.pub) === toHex((ledger.people[k] as Signer).publicKey),
+        (t) =>
+          toHex(t.pub) === toHex((ledger.people[k] as SoftPasskey).publicKey),
       ) as Ticket;
     return { first: byPerson(0), loser: byPerson(3) };
   }
@@ -831,7 +854,7 @@ describe("별명 남기기", () => {
     const ledger = await buildLedger(2);
     const { first } = round1(ledger);
     const nick = await makeNickname(
-      ledger.people[0] as Signer,
+      ledger.people[0] as SoftPasskey,
       first,
       "  철수 ",
     );
@@ -849,17 +872,17 @@ describe("별명 남기기", () => {
     const ledger = await buildLedger(2);
     const { first, loser } = round1(ledger);
     const loserNick = await makeNickname(
-      ledger.people[3] as Signer,
+      ledger.people[3] as SoftPasskey,
       loser,
       "영희",
     );
     const stolen = await makeNickname(
-      ledger.people[1] as Signer,
+      ledger.people[1] as SoftPasskey,
       first,
       "가로챔",
     );
     const sameRound = await makeNickname(
-      ledger.people[0] as Signer,
+      ledger.people[0] as SoftPasskey,
       first,
       "철수",
     );
@@ -877,7 +900,7 @@ describe("별명 남기기", () => {
   it("한 응모권에 별명은 한 번", async () => {
     const ledger = await buildLedger(3);
     const { first } = round1(ledger);
-    const signer = ledger.people[0] as Signer;
+    const signer = ledger.people[0] as SoftPasskey;
     const report = await check(ledger, [
       [],
       [await makeNickname(signer, first, "철수")],
@@ -891,7 +914,7 @@ describe("별명 남기기", () => {
   it("별명은 NFC로 맞추고, 20자를 넘거나 보이지 않는 글자가 있으면 만들지 않는다", async () => {
     const ledger = await buildLedger(1);
     const { first } = round1(ledger);
-    const signer = ledger.people[0] as Signer;
+    const signer = ledger.people[0] as SoftPasskey;
     // "철" 을 자모로 풀어 쓴(NFD) 글자도 NFC 한 글자로 맞춘다
     const nfd = "철수".normalize("NFD");
     expect(nfd).not.toBe("철수");

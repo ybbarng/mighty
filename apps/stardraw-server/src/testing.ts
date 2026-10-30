@@ -14,7 +14,6 @@ import {
   drandTime,
   drawNumbers,
   drawSeed,
-  type EntrantSigner,
   encodeRegistration,
   encodeTicket,
   fromBase64Url,
@@ -30,7 +29,9 @@ import {
   type RoundRecord,
   roundTimes,
   type Schedule,
+  type SoftPasskey,
   sha256,
+  softPasskeySigner,
   type Ticket,
   taggedHash,
   toHex,
@@ -229,12 +230,15 @@ export function drawTimeOf(round: number): number {
 }
 
 export interface Player {
-  signer: EntrantSigner & { publicKey: Uint8Array };
+  signer: SoftPasskey;
   registered: boolean;
 }
 
 export async function player(): Promise<Player> {
-  return { signer: await generateSigner(), registered: false };
+  return {
+    signer: softPasskeySigner(await generateSigner()),
+    registered: false,
+  };
 }
 
 /** 응모권(과 처음이면 열쇠 등록)을 만든다 */
@@ -251,8 +255,7 @@ export async function entryFor(
   if (p.registered) return { ticket };
   const registration = await makeRegistration(
     p.signer,
-    "raw",
-    new Uint8Array(),
+    p.signer.credentialId,
     challenge,
     EASY,
     { params: TEST_POW },

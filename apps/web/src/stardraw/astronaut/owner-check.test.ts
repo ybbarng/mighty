@@ -3,17 +3,22 @@ import {
   DEFAULT_WEBAUTHN_POLICY,
   type EntrantSigner,
   generateSigner,
+  type SignatureData,
+  softPasskeySigner,
   toHex,
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
 import { checkOwner, ownerMessage } from "./owner-check";
 
+/** 흉내 패스키(UP·UV 켬). 장부는 패스키 모양 서명만 받는다 */
+const passkey = async () => softPasskeySigner(await generateSigner());
+
 const AT = 1793324413;
 
 describe("주인 확인 문제 값", () => {
   it("공개 열쇠·무작위 값·시각이 하나라도 다르면 다른 내용", async () => {
-    const { publicKey } = await generateSigner();
+    const { publicKey } = await passkey();
     const nonce = new Uint8Array(32).fill(7);
     const base = toHex(ownerMessage(publicKey, nonce, AT));
     expect(toHex(ownerMessage(publicKey, nonce, AT))).toBe(base);
@@ -21,7 +26,7 @@ describe("주인 확인 문제 값", () => {
     expect(
       toHex(ownerMessage(publicKey, new Uint8Array(32).fill(8), AT)),
     ).not.toBe(base);
-    const other = await generateSigner();
+    const other = await passkey();
     expect(toHex(ownerMessage(other.publicKey, nonce, AT))).not.toBe(base);
     expect(() => ownerMessage(publicKey, new Uint8Array(16), AT)).toThrow();
   });
@@ -29,23 +34,23 @@ describe("주인 확인 문제 값", () => {
 
 describe("주인 확인", () => {
   it("그 등록증의 열쇠로 서명하면 통과", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     expect(
       await checkOwner(me.publicKey, me, DEFAULT_WEBAUTHN_POLICY, AT),
     ).toBe(true);
   });
 
   it("다른 사람의 등록증(이 기기에 그 열쇠가 없다)은 내 열쇠로 서명해도 실패", async () => {
-    const me = await generateSigner();
-    const other = await generateSigner();
+    const me = await passkey();
+    const other = await passkey();
     expect(
       await checkOwner(other.publicKey, me, DEFAULT_WEBAUTHN_POLICY, AT),
     ).toBe(false);
   });
 
   it("지난 서명을 다시 내밀어도 새 문제 값이라 실패", async () => {
-    const me = await generateSigner();
-    let saved: Uint8Array | null = null;
+    const me = await passkey();
+    let saved: SignatureData | null = null;
     const replay: EntrantSigner = {
       publicKey: me.publicKey,
       sign: async (message) => {
@@ -65,7 +70,7 @@ describe("주인 확인", () => {
   });
 
   it("서명을 취소하면 조용히 실패(오류를 던지지 않는다)", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const cancel: EntrantSigner = {
       publicKey: me.publicKey,
       sign: async () => {

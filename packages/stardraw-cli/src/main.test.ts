@@ -45,6 +45,21 @@ describe("장부 검사(받아 둔 실제 장부)", () => {
     expect(code).toBe(0);
   });
 
+  it("받아 둔 장부에는 응모권·열쇠 등록이 없어, 원시 열쇠를 받지 않는 규칙으로 바꿔도 걸리는 기록이 없다(docs/36 11-11)", () => {
+    const rounds = Object.entries(LIVE as Files).filter(([url]) =>
+      url.startsWith(`${BASE}/ledger/rounds/`),
+    );
+    expect(rounds.length).toBeGreaterThan(0);
+    for (const [, file] of rounds) {
+      const { tickets, registrations } = file as {
+        tickets: string[];
+        registrations: string[];
+      };
+      expect(tickets).toEqual([]);
+      expect(registrations).toEqual([]);
+    }
+  });
+
   it("장부 끝 해시를 바꾸면 실패로 끝난다(끝 상태 1)", async () => {
     const { code, out } = await run(
       [BASE],

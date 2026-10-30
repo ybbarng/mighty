@@ -1,37 +1,46 @@
 import {
   type ByteReader,
-  type ByteWriter,
+  ByteWriter,
   concat,
   equalBytes,
   sha256,
   toBase64Url,
   utf8,
 } from "./bytes";
-import { SIGNATURE_LENGTH, verifySignature } from "./keys";
+import { type Signer, verifySignature } from "./keys";
 
 /**
- * 응모자 서명(응모권·당첨 증명·별명)은 두 가지 모양이다(docs/36 11-2).
- * 1. 원시 P-256 서명(r‖s 64바이트): 연습 장부·데모의 기기 안 열쇠. 실제 게임 화면은 쓰지 않는다
- *    (응모는 브라우저 패스키로만, 터미널 도구는 검사 전용)
- * 2. 패스키(WebAuthn ES256) 단언: 인증기가 `authenticatorData ‖ SHA-256(clientDataJSON)`에
- *    DER 서명한다. clientDataJSON의 challenge가 서명할 내용의 해시(SHA-256)라서,
- *    결국 같은 내용에 대한 서명이 된다.
- * 어느 쪽이든 공개 열쇠는 P-256 압축하지 않은 65바이트라 응모자 id 규칙이 같다.
+ * 응모자 서명(응모권·당첨 증명·별명·확인 링크)은 패스키(WebAuthn ES256) 단언 하나뿐이다
+ * (docs/36 11-2, 11-11). 인증기가 `authenticatorData ‖ SHA-256(clientDataJSON)`에
+ * DER 서명한다. clientDataJSON의 challenge가 서명할 내용의 해시(SHA-256)라서,
+ * 결국 같은 내용에 대한 서명이 된다. 공개 열쇠는 P-256 압축하지 않은 65바이트다.
  *
- * 바이너리 형식: kind(u8)
- *   1 ‖ sig(64)
- *   2 ‖ authenticatorData(u16 길이 + 바이트) ‖ clientDataJSON(u16 길이 + 바이트) ‖ DER 서명(u16 길이 + 바이트)
+ * 바이너리 형식: kind(u8 = 2) ‖ authenticatorData(u16 길이 + 바이트)
+ *   ‖ clientDataJSON(u16 길이 + 바이트) ‖ DER 서명(u16 길이 + 바이트)
+ * kind 1(원시 P-256 서명 r‖s)은 2026-10-30부터 받지 않는다(11-11). UV 표시가 없는 서명이라
+ * 본인 확인 없이 응모하는 길이 됐다. kind 바이트는 이미 장부에 실린 패스키 서명과
+ * 맞추려고 남긴다.
  */
 
-export type SignatureData =
-  | { kind: "raw"; sig: Uint8Array }
-  | {
-      kind: "webauthn";
-      authenticatorData: Uint8Array;
-      clientDataJSON: Uint8Array;
-      /** ASN.1 DER로 감싼 ECDSA 서명 */
-      signature: Uint8Array;
-    };
+export const WEBAUTHN_SIGNATURE_KIND = 2;
+/** 받지 않는 원시 열쇠의 kind 값(등록·서명 모두 1이었다) */
+export const RAW_KEY_KIND = 1;
+
+/** 원시 열쇠 등록·서명을 만났을 때. 서버는 이 오류를 쉬운 문구로 바꿔 돌려준다 */
+export class RawKeyRejected extends Error {
+  constructor() {
+    super("원시 열쇠는 받지 않는다(패스키만)");
+    this.name = "RawKeyRejected";
+  }
+}
+
+export interface SignatureData {
+  kind: "webauthn";
+  authenticatorData: Uint8Array;
+  clientDataJSON: Uint8Array;
+  /** ASN.1 DER로 감싼 ECDSA 서명 */
+  signature: Uint8Array;
+}
 
 export type WebAuthnAssertion = Omit<
   Extract<SignatureData, { kind: "webauthn" }>,
@@ -55,20 +64,17 @@ const MAX_AUTH_DATA = 512;
 const MAX_CLIENT_DATA = 1024;
 const MAX_DER = 72;
 
-/**
- * 응모자 서명을 만드는 쪽. 원시 열쇠(`Signer`, 바이트를 돌려줌)도 패스키도 이 모양이다.
- */
+/** 응모자 서명을 만드는 쪽: 패스키(`passkeySigner`)나 흉내 패스키(`softPasskeySigner`) */
 export interface EntrantSigner {
   publicKey: Uint8Array;
-  sign(message: Uint8Array): Promise<Uint8Array | SignatureData>;
+  sign(message: Uint8Array): Promise<SignatureData>;
 }
 
-export async function signAsEntrant(
+export function signAsEntrant(
   signer: EntrantSigner,
   message: Uint8Array,
 ): Promise<SignatureData> {
-  const out = await signer.sign(message);
-  return out instanceof Uint8Array ? { kind: "raw", sig: out } : out;
+  return signer.sign(message);
 }
 
 /** 패스키에 넘길 challenge: 서명할 내용의 해시 */
@@ -93,10 +99,71 @@ export function passkeySigner(
   };
 }
 
+export interface SoftPasskeyOptions {
+  /** 이 정책의 rpId와 첫 origin으로 서명한다(기본 실제 사이트). rpId·origin을 따로 주면 그 값이 앞선다 */
+  policy?: WebAuthnPolicy;
+  rpId?: string;
+  origin?: string;
+  /** authenticatorData flags. 기본 UP + UV(0x05) */
+  flags?: number;
+  /** clientDataJSON.type. 기본 "webauthn.get" */
+  type?: string;
+}
+
+export type SoftPasskey = EntrantSigner & {
+  /** 공개 열쇠에서 정해지는 패스키 번호(16바이트). 열쇠 쌍만 저장해도 같은 값이 나온다 */
+  credentialId: Uint8Array;
+};
+
+/** 흉내 패스키의 패스키 번호: 공개 열쇠 해시 앞 16바이트(용도 이름을 붙여 응모자 id와 다르다) */
+export function softCredentialId(publicKey: Uint8Array): Uint8Array {
+  return sha256(
+    concat(utf8("stardraw/soft-passkey/v1"), new Uint8Array([0]), publicKey),
+  ).slice(0, 16);
+}
+
+/**
+ * 흉내 패스키: 기기 안 P-256 열쇠(`Signer`)로 브라우저 패스키와 같은 모양의 단언을 만든다.
+ * authenticatorData = SHA-256(rpId) ‖ flags ‖ signCount(u32),
+ * clientDataJSON = {"type","challenge"(base64url),"origin","crossOrigin"} 순서의 JSON,
+ * signature = authenticatorData ‖ SHA-256(clientDataJSON)에 대한 서명(DER).
+ * 연습 장부·데모·배우기·시험이 쓴다. 검사기는 진짜 인증기와 구별하지 못한다
+ * (가상 인증기와 같다, docs/36 11-10). 기본값은 실제 사이트 정책과 UP·UV를 켠 것이다.
+ */
+export function softPasskeySigner(
+  signer: Signer,
+  options: SoftPasskeyOptions = {},
+): SoftPasskey {
+  const policy = options.policy ?? DEFAULT_WEBAUTHN_POLICY;
+  const rpId = options.rpId ?? policy.rpId;
+  const origin = options.origin ?? policy.origins[0] ?? "";
+  let signCount = 0;
+  const inner = passkeySigner(signer.publicKey, async (challenge) => {
+    signCount++;
+    const authenticatorData = concat(
+      sha256(utf8(rpId)),
+      new Uint8Array([options.flags ?? FLAG_UP | FLAG_UV]),
+      new ByteWriter().u32(signCount).done(),
+    );
+    const clientDataJSON = utf8(
+      JSON.stringify({
+        type: options.type ?? "webauthn.get",
+        challenge: toBase64Url(challenge),
+        origin,
+        crossOrigin: false,
+      }),
+    );
+    const raw = await signer.sign(
+      concat(authenticatorData, sha256(clientDataJSON)),
+    );
+    return { authenticatorData, clientDataJSON, signature: p1363ToDer(raw) };
+  });
+  return { ...inner, credentialId: softCredentialId(signer.publicKey) };
+}
+
 export function writeSignature(w: ByteWriter, s: SignatureData): ByteWriter {
-  if (s.kind === "raw") return w.u8(1).fixed(s.sig, SIGNATURE_LENGTH);
   return w
-    .u8(2)
+    .u8(WEBAUTHN_SIGNATURE_KIND)
     .bytes(s.authenticatorData)
     .bytes(s.clientDataJSON)
     .bytes(s.signature);
@@ -104,8 +171,8 @@ export function writeSignature(w: ByteWriter, s: SignatureData): ByteWriter {
 
 export function readSignature(r: ByteReader): SignatureData {
   const kind = r.u8();
-  if (kind === 1) return { kind: "raw", sig: r.fixed(SIGNATURE_LENGTH) };
-  if (kind === 2) {
+  if (kind === RAW_KEY_KIND) throw new RawKeyRejected();
+  if (kind === WEBAUTHN_SIGNATURE_KIND) {
     const authenticatorData = r.bytes();
     const clientDataJSON = r.bytes();
     const signature = r.bytes();
@@ -128,7 +195,7 @@ export async function verifyEntrantSignature(
   s: SignatureData,
   policy: WebAuthnPolicy = DEFAULT_WEBAUTHN_POLICY,
 ): Promise<boolean> {
-  if (s.kind === "raw") return verifySignature(publicKey, message, s.sig);
+  if (s.kind !== "webauthn") return false;
   if (!checkClientData(s.clientDataJSON, message, policy)) return false;
   if (!checkAuthenticatorData(s.authenticatorData, policy.rpId)) return false;
   const raw = derToP1363(s.signature);

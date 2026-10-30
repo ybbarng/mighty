@@ -19,12 +19,13 @@ import {
   roundTimes,
   type SasKey,
   type Schedule,
-  type Signer,
+  type SoftPasskey,
   sasChallenge,
   sasSecret,
   sasStars,
   sha256,
   signTicket,
+  softPasskeySigner,
   type Ticket,
   type TimestampCheck,
   TSA_AUTHORITIES,
@@ -576,7 +577,7 @@ export function ChainToy() {
 /* ------------------------------------------------------------------ */
 
 interface SasWorld {
-  signer: Signer;
+  signer: SoftPasskey;
   ticket: Ticket;
   checker: SasKey;
   winner: SasKey;
@@ -596,7 +597,7 @@ const CHALLENGE = "K7Q2MX9PRA";
 const REQUESTER = CHECK_LINK_REQUESTER;
 
 async function makeSasWorld(): Promise<SasWorld> {
-  const signer = await generateSigner();
+  const signer = softPasskeySigner(await generateSigner());
   const ticket = await signTicket(
     signer,
     unsignedTicket(signer, 12, [5, 29, 37, 38, 41, 45]),

@@ -1,4 +1,12 @@
-import { concat, fromHex, sha256, toBase64Url, toHex, utf8 } from "./bytes";
+import {
+  ByteReader,
+  concat,
+  fromHex,
+  sha256,
+  toBase64Url,
+  toHex,
+  utf8,
+} from "./bytes";
 import {
   drandRandomness,
   drandRoundForClose,
@@ -10,6 +18,7 @@ import { merkleRoot } from "./merkle";
 import { POW_PARAMS, powHash } from "./pow";
 import { genesisHash } from "./record";
 import {
+  decodeRegistration,
   encodeRegistration,
   type KeyRegistration,
   registrationId,
@@ -24,13 +33,19 @@ import {
   type ScheduleEntry,
   withChange,
 } from "./schedule";
-import { checkAuthenticatorData, webauthnChallenge } from "./signature";
+import {
+  checkAuthenticatorData,
+  RawKeyRejected,
+  readSignature,
+  webauthnChallenge,
+} from "./signature";
 import {
   encodeTicket,
   type Ticket,
   ticketBody,
   ticketContent,
   ticketId,
+  verifyTicketSignature,
 } from "./ticket";
 
 /**
@@ -61,27 +76,54 @@ export interface VectorGroup {
 const PUB = Uint8Array.from([4, ...new Array<number>(64).fill(1)]);
 const PUB_TEXT = "04 ‖ 01 × 64";
 
-/** 고정 응모권: v 1, 7회차, 번호 3 11 19 27 38 44, 공개 열쇠 04‖01×64, nonce 258, 원시 서명 0×64 */
+/** authenticatorData = SHA-256("game.byb.kr") ‖ flags ‖ signCount 1 */
+function authData(flags: number): Uint8Array {
+  return concat(
+    sha256(utf8("game.byb.kr")),
+    Uint8Array.from([flags, 0, 0, 0, 1]),
+  );
+}
+
+/** 당첨자 열쇠(아래 WINNER_JWK)의 공개 열쇠 */
+const SIGNED_PUB = fromHex(
+  "04e6b8c7f758d23d0cbf488e121b23e128f5c7a3fd91e4f1774c4a110986f19a2d85a551eb86b62b3cd9ca979cc00d0402446b91613e6cf809c1bc75f18f4e0da8",
+);
+/** 아래 SIGNED_TICKET의 서명할 내용에 대한 clientDataJSON(브라우저와 같은 키 차례) */
+const SIGNED_CLIENT_DATA =
+  '{"type":"webauthn.get","challenge":"2p_BiR1wV4zFNR7VbqxVVTzTHs0-1gVKkomF_ZTsMEY","origin":"https://game.byb.kr","crossOrigin":false}';
+/** WINNER_JWK로 `authenticatorData ‖ SHA-256(clientDataJSON)`에 미리 한 ES256 서명(DER) */
+const SIGNED_DER = fromHex(
+  "304402206244d6740ffff6bf2a26f862caf3574f9e0cc35182787df3d4ee82d1bb44a33b02200d40fed91ad0f0bb91d2670f9c0bf4a336cfdea57db9fd838a9e4a323c31a066",
+);
+
+/**
+ * 고정 응모권: v 1, 7회차, 번호 3 11 19 27 38 44, 공개 열쇠 04‖01×64, nonce 258.
+ * 서명 앞부분 계산(내용·id·challenge)만 본다. 서명은 아래 SIGNED_TICKET에 있다
+ */
 const TICKET: Ticket = {
   v: 1,
   round: 7,
   numbers: [3, 11, 19, 27, 38, 44],
   pub: PUB,
   nonce: 258,
-  sig: { kind: "raw", sig: new Uint8Array(64) },
+  sig: {
+    kind: "webauthn",
+    authenticatorData: authData(0x05),
+    clientDataJSON: utf8(SIGNED_CLIENT_DATA),
+    signature: SIGNED_DER,
+  },
 };
 const TICKET_TEXT = `v 1, 7회차, 번호 3·11·19·27·38·44, 공개 열쇠 ${PUB_TEXT}, nonce 258`;
 
-const RAW_REG: KeyRegistration = {
-  v: 1,
-  kind: "raw",
-  credentialId: new Uint8Array(),
-  pub: PUB,
-  nonce: 258,
-};
+/** 같은 회차·번호·nonce를 당첨자 열쇠로 서명한 응모권(패스키 서명, flags 05) */
+const SIGNED_TICKET: Ticket = { ...TICKET, pub: SIGNED_PUB };
+const SIGNED_BODY_HEX = `0100000007030b131b262c${toHex(SIGNED_PUB)}00000102`;
+
+/** 등록 kind 1(원시 열쇠, 패스키 번호 없음). 2026-10-30부터 받지 않는다(docs/36 11-11) */
+const RAW_REG_HEX = `01010000${toHex(PUB)}00000102`;
+
 const PASSKEY_REG: KeyRegistration = {
   v: 1,
-  kind: "passkey",
   credentialId: fromHex("a1b2c3d4"),
   pub: PUB,
   nonce: 7,
@@ -162,15 +204,19 @@ async function sasSharedSecret(): Promise<Uint8Array> {
   return sasSecret(checker.privateKey, winner.publicKey);
 }
 
-/** authenticatorData = SHA-256("game.byb.kr") ‖ flags ‖ signCount 1 */
-function authData(flags: number): Uint8Array {
-  return concat(
-    sha256(utf8("game.byb.kr")),
-    Uint8Array.from([flags, 0, 0, 0, 1]),
-  );
-}
 const passOrReject = (flags: number) =>
   checkAuthenticatorData(authData(flags), "game.byb.kr") ? "통과" : "거절";
+
+/** 원시 열쇠라서 거절하면 "거절", 받으면 "받음" */
+function rejects(decode: () => unknown): string {
+  try {
+    decode();
+    return "받음";
+  } catch (e) {
+    if (e instanceof RawKeyRejected) return "거절";
+    throw e;
+  }
+}
 
 const DRAW = { numbers: [5, 29, 37, 38, 41, 45], bonus: 4 };
 
@@ -212,10 +258,27 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
         compute: () => toHex(ticketId(TICKET)),
       },
       {
-        title: "응모권 바이트(원시 서명)",
-        input: "body ‖ 01 ‖ 서명 64바이트(여기서는 0)",
-        expected: `0100000007030b131b262c04${"01".repeat(64)}0000010201${"00".repeat(64)}`,
-        compute: () => toHex(encodeTicket(TICKET)),
+        title: "응모권 바이트(패스키 서명)",
+        input:
+          "공개 열쇠만 당첨자 열쇠(04e6b8…0da8)로 바꾼 body ‖ 02 ‖ authenticatorData(flags 05) ‖ clientDataJSON ‖ DER 서명(각 u16 길이 + 바이트)",
+        expected: `${SIGNED_BODY_HEX}020025cbeb0bd2fd540b201a4aacf76ead7dbf18a929abe3ef560f2b7e8998e679144d05000000010084${toHex(utf8(SIGNED_CLIENT_DATA))}0046${toHex(SIGNED_DER)}`,
+        compute: () => toHex(encodeTicket(SIGNED_TICKET)),
+      },
+      {
+        title: "응모권 서명 확인",
+        input:
+          "위 응모권(challenge 2p_BiR1w…sMEY, origin https://game.byb.kr, rpId game.byb.kr)",
+        expected: "true",
+        compute: async () => String(await verifyTicketSignature(SIGNED_TICKET)),
+      },
+      {
+        title: "원시 서명(서명 종류 01)은 받지 않는다",
+        input: "서명 자리 01 ‖ r‖s 64바이트",
+        expected: "거절",
+        compute: () =>
+          rejects(() =>
+            readSignature(new ByteReader(fromHex(`01${"00".repeat(64)}`))),
+          ),
       },
       {
         title: "패스키 challenge = base64url(SHA-256(서명할 내용))",
@@ -281,12 +344,6 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
     title: "열쇠 등록",
     vectors: [
       {
-        title: "원시 열쇠 등록 바이트",
-        input: `v 1, 종류 1, 패스키 번호 없음, 공개 열쇠 ${PUB_TEXT}, nonce 258`,
-        expected: `01010000${toHex(PUB)}00000102`,
-        compute: () => toHex(encodeRegistration(RAW_REG)),
-      },
-      {
         title: "패스키 등록 바이트",
         input: `v 1, 종류 2, 패스키 번호 a1b2c3d4, 공개 열쇠 ${PUB_TEXT}, nonce 7`,
         expected: `01020004a1b2c3d4${toHex(PUB)}00000007`,
@@ -294,17 +351,16 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
       },
       {
         title: '등록 id = taggedHash("stardraw/registration/v1", 바이트)',
-        input: "원시 열쇠 등록",
-        expected:
-          "724d74a20c1ad29833e1f7e2ccc0c137cd2213d7daff33d61f9f7779aa23decc",
-        compute: () => toHex(registrationId(RAW_REG)),
-      },
-      {
-        title: "등록 id",
         input: "패스키 등록",
         expected:
           "5521351b77817285c2b5997f2ca94c5f18121515180056077723e783773f162e",
         compute: () => toHex(registrationId(PASSKEY_REG)),
+      },
+      {
+        title: "원시 열쇠 등록(종류 1)은 받지 않는다",
+        input: `v 1, 종류 1, 패스키 번호 없음, 공개 열쇠 ${PUB_TEXT}, nonce 258`,
+        expected: "거절",
+        compute: () => rejects(() => decodeRegistration(fromHex(RAW_REG_HEX))),
       },
     ],
   },

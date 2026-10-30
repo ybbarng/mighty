@@ -8,12 +8,12 @@ import {
   signInvite,
   verifyInvite,
 } from "./invite";
-import type { Signer } from "./keys";
 import { genesisHash } from "./record";
+import type { SoftPasskey } from "./signature";
 import { fakePasskey, HOURLY, signers, ticketFor } from "./testing";
 
 async function winnerAndTicket() {
-  const [winner, other] = (await signers(2)) as [Signer, Signer];
+  const [winner, other] = (await signers(2)) as [SoftPasskey, SoftPasskey];
   const ticket = await ticketFor(
     winner,
     1,

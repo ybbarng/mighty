@@ -148,8 +148,6 @@ export function EnterView({
         setWork("처음 한 번, 열쇠를 장부에 올릴 계산을 하고 있습니다");
         registration = await makeRegistration(
           { publicKey: key.pub },
-          // 데모 열쇠는 패스키가 아니라 원시 열쇠로 등록한다(연습 장부만 받는다)
-          key.kind === "passkey" ? "passkey" : "raw",
           key.credentialId,
           challenge,
           entry.registerPowTarget,

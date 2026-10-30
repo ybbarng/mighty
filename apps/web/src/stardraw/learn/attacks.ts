@@ -20,11 +20,12 @@ import {
   type RoundRecord,
   recordHash,
   type Schedule,
-  type Signer,
+  type SoftPasskey,
   sealDigest,
   sealImprint,
   signInvite,
   signTicket,
+  softPasskeySigner,
   sortRegistrations,
   sortTickets,
   type Ticket,
@@ -90,7 +91,7 @@ export const WINNING = [5, 29, 37, 38, 41, 45];
 
 export interface Person {
   name: string;
-  signer: Signer;
+  signer: SoftPasskey;
   numbers: number[];
 }
 
@@ -111,16 +112,15 @@ export interface MiniLedger {
 export interface World {
   people: Person[];
   /** 운영자의 열쇠(공격에 쓴다) */
-  operator: Signer;
+  operator: SoftPasskey;
   tsa: FakeTsa;
   ledger: MiniLedger;
 }
 
-async function register(signer: Signer, challenge: Uint8Array) {
+async function register(signer: SoftPasskey, challenge: Uint8Array) {
   const r = await makeRegistration(
     signer,
-    "raw",
-    new Uint8Array(),
+    signer.credentialId,
     challenge,
     POW_TARGET,
     { params: ATTACK_POW },
@@ -169,10 +169,10 @@ export async function buildWorld(): Promise<World> {
     names.map(async ([name, numbers]) => ({
       name,
       numbers,
-      signer: await generateSigner(),
+      signer: softPasskeySigner(await generateSigner()),
     })),
   );
-  const operator = await generateSigner();
+  const operator = softPasskeySigner(await generateSigner());
   const tsa = new FakeTsa("practice-tsa", () => CLOSE_1);
 
   const regs = sortRegistrations(

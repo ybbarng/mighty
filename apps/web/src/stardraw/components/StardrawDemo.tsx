@@ -8,6 +8,7 @@ import {
   makeChallengeClaim,
   type Rank,
   sasChallenge,
+  softPasskeySigner,
   type Ticket,
   ticketId,
 } from "@mighty/stardraw-core";
@@ -21,7 +22,7 @@ import { invitesOf } from "../invites";
 import type { LocalLedger } from "../local-ledger";
 import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
-import type { MyTicket } from "../wallet";
+import { type MyTicket, sitePolicy } from "../wallet";
 import { CheckLink } from "./CheckLink";
 import { type TourId, TourList, TourScreen, tourIdOf } from "./DemoTour";
 import { DemoUnlockSheet } from "./DemoUnlockSheet";
@@ -552,7 +553,9 @@ function FakeWinner({
             return;
           }
           // 응모권 열쇠가 없는 사람: 다른 열쇠로 서명한다
-          const stranger = await generateSigner();
+          const stranger = softPasskeySigner(await generateSigner(), {
+            policy: sitePolicy(),
+          });
           const key = await generateSasKey();
           const claim = await makeChallengeClaim(
             stranger,

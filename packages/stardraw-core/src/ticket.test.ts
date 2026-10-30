@@ -1,6 +1,6 @@
 import { argon2id } from "@noble/hashes/argon2.js";
 import { describe, expect, it } from "vitest";
-import { ByteWriter, fromHex, toHex } from "./bytes";
+import { ByteWriter, fromHex, toHex, utf8 } from "./bytes";
 import {
   entrantId,
   generateSigner,
@@ -14,6 +14,7 @@ import {
   powTargetForTries,
   solvePow,
 } from "./pow";
+import { softPasskeySigner } from "./signature";
 import { EASY_TARGET, fakePasskey, TEST_POW, ticketFor } from "./testing";
 import {
   checkNumbers,
@@ -27,14 +28,21 @@ import {
   verifyTicketSignature,
 } from "./ticket";
 
-// 고정 값 응모권: 공개 열쇠 자리에 04 ‖ 01×64, 서명 자리에 0×64
+// 고정 값 응모권: 공개 열쇠 자리에 04 ‖ 01×64. 서명은 형식만 보는 짧은 패스키 모양 값
+// (진짜 서명을 담은 시험 값은 vectors.ts)
+const FIXED_SIG = {
+  kind: "webauthn" as const,
+  authenticatorData: fromHex("0102"),
+  clientDataJSON: utf8("{}"),
+  signature: fromHex("3006020101020101"),
+};
 const FIXED: Ticket = {
   v: 1,
   round: 7,
   numbers: [3, 11, 19, 27, 38, 44],
   pub: Uint8Array.from([4, ...new Array<number>(64).fill(1)]),
   nonce: 258,
-  sig: { kind: "raw", sig: new Uint8Array(64) },
+  sig: FIXED_SIG,
 };
 
 describe("열쇠와 서명(WebCrypto P-256)", () => {
@@ -88,24 +96,22 @@ describe("응모권 형식", () => {
     expect(toHex(ticketId(FIXED))).toBe(
       "00319210354f9c7f5c03ed2a3ae21483b051a4595bbaef6fd7f2848d6091e321",
     );
-    // 앞부분 80바이트 ‖ 서명 종류 01 ‖ 원시 서명 64바이트
+    // 앞부분 80바이트 ‖ 서명 종류 02 ‖ authenticatorData ‖ clientDataJSON ‖ DER(각 u16 길이 + 바이트)
     expect(TICKET_BODY_LENGTH).toBe(80);
     expect(toHex(encodeTicket(FIXED))).toBe(
-      `${toHex(ticketBody(FIXED))}01${"00".repeat(64)}`,
+      `${toHex(ticketBody(FIXED))}02000201020002${toHex(utf8("{}"))}00083006020101020101`,
     );
   });
 
   it("바이트로 바꿨다 되돌리면 같은 응모권이다", () => {
     expect(decodeTicket(encodeTicket(FIXED))).toEqual(FIXED);
-    expect(() =>
-      decodeTicket(encodeTicket(FIXED).slice(0, TICKET_BODY_LENGTH + 64)),
-    ).toThrow();
+    expect(() => decodeTicket(encodeTicket(FIXED).slice(0, -1))).toThrow();
   });
 
   it("서명이 달라도 id는 같다(서명 모양 복제를 같은 응모권으로 거른다)", () => {
     const resigned: Ticket = {
       ...FIXED,
-      sig: { kind: "raw", sig: new Uint8Array(64).fill(9) },
+      sig: { ...FIXED_SIG, signature: fromHex("3006020102020102") },
     };
     expect(toHex(ticketId(resigned))).toBe(toHex(ticketId(FIXED)));
   });
@@ -184,7 +190,7 @@ describe("패스키로 낸 응모권", () => {
 
 describe("응모권 만들기", () => {
   it("작업 증명을 풀고 서명한다. 내용을 바꾸면 서명이 맞지 않는다", async () => {
-    const signer = await generateSigner();
+    const signer = softPasskeySigner(await generateSigner());
     const challenge = fromHex("22".repeat(32));
     const t = await ticketFor(signer, 3, [44, 3, 19, 11, 27, 38], challenge);
     expect(t.numbers).toEqual([3, 11, 19, 27, 38, 44]);

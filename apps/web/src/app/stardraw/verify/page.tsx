@@ -201,10 +201,15 @@ id    = taggedHash("stardraw/ticket/v1", body)       서명은 id에 들어가�
           </Rule>
 
           <Rule title="서명" file="signature.ts">
-            <Code>{`서명 = kind(u8)
-  1 ‖ r‖s(64)                                원시 P-256(ECDSA SHA-256)
-  2 ‖ authenticatorData ‖ clientDataJSON ‖ DER 서명   (각각 u16 길이 + 바이트) 패스키`}</Code>
+            <Code>{`서명 = kind(u8 = 2) ‖ authenticatorData ‖ clientDataJSON ‖ DER 서명
+       (각각 u16 길이 + 바이트, 패스키)`}</Code>
             <ul className={li}>
+              <li>
+                응모권·별명·당첨 증명·확인 링크의 서명은 모두 패스키 서명입니다.
+                kind 1(직접 만든 열쇠의 r‖s 64바이트 서명)은 받지 않습니다. 본인
+                확인 표시가 없어 지문·얼굴·PIN 없이 응모하는 길이 되기
+                때문입니다.
+              </li>
               <li>
                 패스키는{" "}
                 <code>authenticatorData ‖ SHA-256(clientDataJSON)</code>에 대한
@@ -230,11 +235,12 @@ id    = taggedHash("stardraw/ticket/v1", body)       서명은 id에 들어가�
           </Rule>
 
           <Rule title="열쇠 등록" file="registration.ts">
-            <Code>{`등록 = v(u8=1) ‖ kind(u8: 1 원시, 2 패스키) ‖ credentialId(u16 길이 + 바이트)
+            <Code>{`등록 = v(u8=1) ‖ kind(u8 = 2, 패스키) ‖ credentialId(u16 길이 + 1~1023바이트)
      ‖ pub(65) ‖ nonce(u32)
 id   = taggedHash("stardraw/registration/v1", 등록 바이트)
 작업 증명 대상 = utf8("stardraw/register/v1") ‖ 00 ‖ (nonce를 뺀 앞부분)`}</Code>
             <ul className={li}>
+              <li>kind 1(직접 만든 열쇠, 패스키 번호 없음)은 받지 않습니다.</li>
               <li>
                 응모권의 열쇠는 그 회차까지 등록돼 있어야 합니다. 같은 열쇠,
                 같은 패스키 번호는 장부에 한 번만 들어갑니다(먼저 들어간 것).

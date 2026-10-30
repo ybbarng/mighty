@@ -2,12 +2,14 @@
 import { ManualClock } from "@mighty/fair-play";
 import {
   DEFAULT_WEBAUTHN_POLICY,
+  type EntrantSigner,
   generateSigner,
   genesisHash,
   makeRegistration,
   makeTicket,
   rankOf,
-  type Signer,
+  softCredentialId,
+  softPasskeySigner,
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
@@ -19,6 +21,9 @@ import {
   PRACTICE_POW,
   randomPick,
 } from "./local-ledger";
+
+/** 흉내 패스키(UP·UV 켬). 장부는 패스키 모양 서명만 받는다 */
+const passkey = async () => softPasskeySigner(await generateSigner());
 
 // 2026-10-29 14:55 KST. 1회차 마감 15:55, 추첨 16:00(매시 정각 추첨 · 55분 마감)
 const START = 1793253300;
@@ -59,7 +64,7 @@ function setup(store: LedgerStore = memoryStore()) {
 
 async function enter(
   ledger: LocalLedger,
-  signer: Signer,
+  signer: EntrantSigner,
   numbers: number[],
   register = true,
 ) {
@@ -78,8 +83,7 @@ async function enter(
   const reg = register
     ? await makeRegistration(
         signer,
-        "raw",
-        new Uint8Array(),
+        softCredentialId(signer.publicKey),
         challenge,
         entry.registerPowTarget,
         { params: PRACTICE_POW },
@@ -118,7 +122,7 @@ describe("연습 장부: 회차 진행", () => {
 
   it("drand 시각 전에는 추첨하지 않고, 지나면 규칙대로 등수를 정한다", async () => {
     const { clock, ledger } = setup();
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await enter(ledger, me, [3, 11, 19, 27, 38, 44]);
     clock.advance(HOUR * 1000);
     await ledger.settle();
@@ -149,7 +153,7 @@ describe("연습 장부: 회차 진행", () => {
 describe("연습 장부: 응모 받기", () => {
   it("같은 열쇠는 회차마다 한 장, 다음 회차에는 등록 없이 낸다", async () => {
     const { clock, ledger } = setup();
-    const me = await generateSigner();
+    const me = await passkey();
     await enter(ledger, me, [1, 2, 3, 4, 5, 6]);
     await expect(
       enter(ledger, me, [7, 8, 9, 10, 11, 12], false),
@@ -163,7 +167,7 @@ describe("연습 장부: 응모 받기", () => {
 
   it("등록 회차: 첫 응모 회차이고, 닫힌 뒤에도 같다. 응모 전이면 없다", async () => {
     const { clock, ledger } = setup();
-    const me = await generateSigner();
+    const me = await passkey();
     expect(await ledger.registeredRound(me.publicKey)).toBeNull();
     await enter(ledger, me, [1, 2, 3, 4, 5, 6]);
     expect(await ledger.registeredRound(me.publicKey)).toBe(1);
@@ -175,7 +179,7 @@ describe("연습 장부: 응모 받기", () => {
 
   it("등록하지 않은 열쇠, 앞 회차 추첨 전, 마감 뒤 응모는 받지 않는다", async () => {
     const { clock, ledger } = setup();
-    const me = await generateSigner();
+    const me = await passkey();
     await expect(enter(ledger, me, [1, 2, 3, 4, 5, 6], false)).rejects.toThrow(
       "등록되지 않은",
     );
@@ -187,7 +191,7 @@ describe("연습 장부: 응모 받기", () => {
 
   it("마감 시각을 넘긴 1회차 응모권은 받지 않는다", async () => {
     const { clock, ledger } = setup();
-    const me = await generateSigner();
+    const me = await passkey();
     const entry = ledger.schedule.entries[0];
     if (!entry) throw new Error("일정표가 비었다");
     const ticket = await makeTicket(
@@ -210,7 +214,7 @@ describe("연습 장부: 저장과 건너뛰기", () => {
   it("다시 열어도 같은 장부다", async () => {
     const store = memoryStore();
     const { clock, ledger } = setup(store);
-    const me = await generateSigner();
+    const me = await passkey();
     await enter(ledger, me, [5, 10, 15, 20, 25, 30]);
     clock.advance((HOUR + DRAW_AFTER) * 1000);
     await ledger.settle();
@@ -223,6 +227,30 @@ describe("연습 장부: 저장과 건너뛰기", () => {
     expect(toHex(again.head())).toBe(toHex(ledger.head()));
     expect(again.isRegistered(me.publicKey)).toBe(true);
     expect((await again.verify()).problems).toEqual([]);
+  });
+
+  it("판 1로 저장된 장부(컴퓨터 참가자가 원시 열쇠로 등록했다)는 읽지 않고 새로 시작한다(docs/36 11-11)", async () => {
+    const store = memoryStore();
+    const { clock, ledger } = setup(store);
+    await ledger.skipToNextDraw();
+    const saved = JSON.parse(store.text ?? "{}");
+    // 예전 판: 1회차 마감이 한 시간 이른 장부, 기록 하나와 원시 열쇠 등록(종류 01)
+    store.save(
+      JSON.stringify({
+        ...saved,
+        v: 1,
+        epoch: saved.epoch - HOUR,
+        registrations: [[`AQEAAA${"A".repeat(90)}`]],
+      }),
+    );
+    const fresh = new LocalLedger({
+      clock,
+      store,
+      policy: DEFAULT_WEBAUTHN_POLICY,
+      bots: 2,
+    });
+    expect(fresh.schedule.epoch).not.toBe(saved.epoch - HOUR);
+    expect(fresh.record(1)).toBeUndefined();
   });
 
   it("건너뛰기는 다음 추첨 시각까지 시간을 옮겨 추첨한다", async () => {

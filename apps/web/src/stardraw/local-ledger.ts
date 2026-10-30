@@ -36,6 +36,7 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  softPasskeySigner,
   sortRegistrations,
   sortTickets,
   type Ticket,
@@ -103,8 +104,14 @@ export interface LocalLedgerOptions {
   bots?: number;
 }
 
+/**
+ * 저장 판. 2(2026-10-30): 원시 열쇠를 받지 않게 되며(docs/36 11-11) 컴퓨터 참가자가 원시 열쇠로
+ * 등록했던 판 1 장부는 읽지 않고 새로 시작한다(새 epoch라 장부 표시도 바뀐다)
+ */
+const SAVE_VERSION = 2;
+
 interface Saved {
-  v: 1;
+  v: typeof SAVE_VERSION;
   epoch: number;
   /** 건너뛴 시간(초) */
   skipped: number;
@@ -264,17 +271,18 @@ export class LocalLedger implements Ledger {
     if (changed) this.write();
   }
 
-  /** 연습 참가자: 회차마다 새 열쇠를 등록하고 무작위 번호로 한 장씩 낸다 */
+  /** 연습 참가자: 회차마다 새 흉내 패스키(UP·UV 켬)를 등록하고 무작위 번호로 한 장씩 낸다 */
   private async botEntries(round: number, challenge: Uint8Array) {
     const tickets: Ticket[] = [];
     const registrations: KeyRegistration[] = [];
     const entry = roundTimes(this.schedule, round).entry;
     for (let i = 0; i < this.bots; i++) {
-      const signer = await generateSigner();
+      const signer = softPasskeySigner(await generateSigner(), {
+        policy: this.policy,
+      });
       const reg = await makeRegistration(
         signer,
-        "raw",
-        new Uint8Array(),
+        signer.credentialId,
         challenge,
         entry.registerPowTarget,
         { params: PRACTICE_POW },
@@ -325,8 +333,7 @@ export class LocalLedger implements Ledger {
   async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {
     const id = toHex(credentialId);
     for (const list of [...this.registrations, this.pending.registrations])
-      for (const r of list)
-        if (r.kind === "passkey" && toHex(r.credentialId) === id) return r.pub;
+      for (const r of list) if (toHex(r.credentialId) === id) return r.pub;
     return null;
   }
 
@@ -480,7 +487,7 @@ export class LocalLedger implements Ledger {
       const text = this.store?.load();
       if (!text) return null;
       const saved = JSON.parse(text) as Saved;
-      return saved.v === 1 ? saved : null;
+      return saved.v === SAVE_VERSION ? saved : null;
     } catch {
       return null;
     }
@@ -488,7 +495,7 @@ export class LocalLedger implements Ledger {
 
   private write(): void {
     const saved: Saved = {
-      v: 1,
+      v: SAVE_VERSION,
       epoch: this.schedule.epoch,
       skipped: this.skipped,
       secret: enc(this.secret),

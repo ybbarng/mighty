@@ -11,8 +11,9 @@ import {
   passkeySigner,
   powHash,
   powTargetForTries,
-  type Signer,
+  type SoftPasskey,
   signTicket,
+  softPasskeySigner,
   sortLeaves,
   type Ticket,
   ticketBody,
@@ -124,14 +125,15 @@ function BodyHex({ body, base }: { body: Uint8Array; base: Uint8Array }) {
 /* ------------------------------------------------------------------ */
 
 export function SignToy() {
-  const [signer, setSigner] = useState<Signer | null>(null);
+  const [signer, setSigner] = useState<SoftPasskey | null>(null);
   const [numbers, setNumbers] = useState(START_NUMBERS);
   const [signed, setSigned] = useState<Ticket | null>(null);
   const [arrived, setArrived] = useState<Ticket | null>(null);
   const [ok, setOk] = useState<boolean | null>(null);
 
   useEffect(() => {
-    void generateSigner().then(setSigner);
+    // 흉내 패스키(UP·UV 켬): 장부는 패스키 모양 서명만 받는다
+    void generateSigner().then((key) => setSigner(softPasskeySigner(key)));
   }, []);
 
   useEffect(() => {
@@ -152,10 +154,11 @@ export function SignToy() {
   };
 
   const flipSig = () => {
-    if (arrived?.sig.kind !== "raw") return;
-    const sig = arrived.sig.sig.slice();
-    sig[10] = (sig[10] ?? 0) ^ 0x01;
-    setArrived({ ...arrived, sig: { kind: "raw", sig } });
+    if (!arrived) return;
+    // DER 서명의 r 값 가운데 한 바이트
+    const signature = arrived.sig.signature.slice();
+    signature[10] = (signature[10] ?? 0) ^ 0x01;
+    setArrived({ ...arrived, sig: { ...arrived.sig, signature } });
   };
 
   return (
@@ -216,13 +219,8 @@ export function SignToy() {
             <Btn onClick={() => setArrived(signed)}>처음대로</Btn>
           </div>
           <BodyHex body={ticketBody(arrived)} base={ticketBody(signed)} />
-          <Row label="서명(64바이트)">
-            <Mono>
-              {arrived.sig.kind === "raw"
-                ? toHex(arrived.sig.sig).slice(0, 48)
-                : ""}
-              …
-            </Mono>
+          <Row label="서명(패스키 서명, DER)">
+            <Mono>{toHex(arrived.sig.signature).slice(0, 48)}…</Mono>
           </Row>
           <Row label="응모권 id">
             <Mono

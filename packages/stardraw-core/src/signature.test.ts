@@ -5,9 +5,12 @@ import {
   DEFAULT_WEBAUTHN_POLICY,
   derToP1363,
   p1363ToDer,
+  RawKeyRejected,
   readSignature,
   type SignatureData,
   signAsEntrant,
+  softCredentialId,
+  softPasskeySigner,
   verifyEntrantSignature,
   writeSignature,
 } from "./signature";
@@ -15,13 +18,33 @@ import { fakePasskey } from "./testing";
 
 const MESSAGE = utf8("stardraw/test\u0000하늘의 별 따기 12회 응모권");
 
-describe("원시 P-256 서명", () => {
-  it("원시 열쇠(Signer)의 바이트 서명은 raw 서명이 되고 확인을 통과한다", async () => {
-    const signer = await generateSigner();
+describe("원시 P-256 서명은 받지 않는다(docs/36 11-11)", () => {
+  it("서명 종류 01(r‖s 64바이트)은 읽는 단계에서 거절한다", () => {
+    const bytes = new ByteWriter().u8(1).fixed(new Uint8Array(64), 64).done();
+    expect(() => readSignature(new ByteReader(bytes))).toThrow(RawKeyRejected);
+  });
+});
+
+describe("흉내 패스키(softPasskeySigner)", () => {
+  it("기기 안 열쇠로 패스키 모양 서명을 만들고, UP·UV가 켜져 확인을 통과한다", async () => {
+    const signer = softPasskeySigner(await generateSigner());
     const sig = await signAsEntrant(signer, MESSAGE);
-    expect(sig.kind).toBe("raw");
+    expect(sig.kind).toBe("webauthn");
+    expect(sig.authenticatorData[32]).toBe(0x05);
     expect(await verifyEntrantSignature(signer.publicKey, MESSAGE, sig)).toBe(
       true,
+    );
+  });
+
+  it("패스키 번호는 공개 열쇠에서 정해진다(열쇠 쌍만 저장해도 같다)", async () => {
+    const key = await generateSigner();
+    const a = softPasskeySigner(key);
+    const b = softPasskeySigner(key);
+    expect(a.credentialId).toHaveLength(16);
+    expect(toHex(a.credentialId)).toBe(toHex(b.credentialId));
+    expect(toHex(a.credentialId)).toBe(toHex(softCredentialId(key.publicKey)));
+    expect(toHex(a.credentialId)).not.toBe(
+      toHex(softCredentialId((await generateSigner()).publicKey)),
     );
   });
 });

@@ -2,6 +2,7 @@ import { ManualClock } from "@mighty/fair-play";
 import {
   CHECK_LINK_REQUESTER,
   DEFAULT_WEBAUTHN_POLICY,
+  type EntrantSigner,
   encodeClaim,
   encodeInvite,
   generateSigner,
@@ -9,9 +10,9 @@ import {
   makeTicket,
   newInviteToken,
   powTargetForTries,
-  type Signer,
   sasChallenge,
   signInvite,
+  softPasskeySigner,
   type Ticket,
   ticketId,
   toHex,
@@ -30,6 +31,9 @@ import {
   USED_LINK,
 } from "./confirm-relay";
 import { PRACTICE_POW } from "./local-ledger";
+
+/** 흉내 패스키(UP·UV 켬). 장부는 패스키 모양 서명만 받는다 */
+const passkey = async () => softPasskeySigner(await generateSigner());
 
 /** 두 탭이 같은 localStorage를 보는 것처럼: 한쪽이 쓰면 다른 쪽에 알린다 */
 function sharedStore() {
@@ -54,7 +58,7 @@ function sharedStore() {
 }
 
 async function ticketOf(
-  signer: Signer,
+  signer: EntrantSigner,
   round: number,
   numbers = [1, 7, 14, 22, 33, 45],
 ): Promise<Ticket> {
@@ -88,7 +92,7 @@ function setup(ledgerTickets: Ticket[]) {
 /** 당첨자 기기: 응모권 열쇠로 서명해 확인 링크를 만든다 */
 async function makeLink(
   s: ReturnType<typeof setup>,
-  signer: Signer,
+  signer: EntrantSigner,
   ticket: Ticket,
 ) {
   const token = newInviteToken();
@@ -109,7 +113,7 @@ async function startAndWatch(s: ReturnType<typeof setup>, token: string) {
 /** 당첨자 기기: 내 응모권에 온 요청을 찾아 서명하고, 별 세 개를 얻는다 */
 async function winnerAnswers(
   s: ReturnType<typeof setup>,
-  signer: Signer,
+  signer: EntrantSigner,
   ticket: Ticket,
 ) {
   const [open] = await s.winnerRelay.openFor([ticketId(ticket)]);
@@ -126,7 +130,7 @@ async function winnerAnswers(
 
 describe("확인 링크", () => {
   it("열어 보면 회차·응모권이 보이고, 「확인 시작」하면 쓰여 닫힌다", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 12);
     const s = setup([ticket]);
     const token = await makeLink(s, me, ticket);
@@ -149,7 +153,7 @@ describe("확인 링크", () => {
   });
 
   it("없는 링크·7일 지난 링크는 missing, 열린 링크는 응모권마다 상한", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 13);
     const s = setup([ticket]);
     expect(await s.winnerRelay.peek(newInviteToken())).toEqual({
@@ -167,7 +171,7 @@ describe("확인 링크", () => {
 
 describe("당첨자 확인: 별 세 개", () => {
   it("서명이 맞고 상대가 보낸 별 세 개가 맞으면 초록불, 당첨자도 결과를 본다", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 12);
     const s = setup([ticket]);
     const { session } = await startAndWatch(s, await makeLink(s, me, ticket));
@@ -183,7 +187,7 @@ describe("당첨자 확인: 별 세 개", () => {
   });
 
   it("별 세 개를 세 번 틀리면 닫고 당첨자에게 알린다", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 3);
     const s = setup([ticket]);
     const { session } = await startAndWatch(s, await makeLink(s, me, ticket));
@@ -207,8 +211,8 @@ describe("당첨자 확인: 별 세 개", () => {
   });
 
   it("남의 당첨 응모권에 내 열쇠로 서명하면 빨간불과 이유", async () => {
-    const owner = await generateSigner();
-    const other = await generateSigner();
+    const owner = await passkey();
+    const other = await passkey();
     const ticket = await ticketOf(owner, 4);
     const s = setup([ticket]);
     const { session } = await startAndWatch(
@@ -217,7 +221,7 @@ describe("당첨자 확인: 별 세 개", () => {
     );
     const [open] = await s.winnerRelay.openFor([ticketId(ticket)]);
     if (!open) throw new Error("요청을 찾지 못했다");
-    const winnerKey = (await generateSigner()).publicKey;
+    const winnerKey = (await passkey()).publicKey;
     const claim = await makeChallengeClaim(
       other,
       ticket,
@@ -233,7 +237,7 @@ describe("당첨자 확인: 별 세 개", () => {
   });
 
   it("거절하면 거절로 남는다", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 5);
     const s = setup([ticket]);
     const { session } = await startAndWatch(s, await makeLink(s, me, ticket));
@@ -244,7 +248,7 @@ describe("당첨자 확인: 별 세 개", () => {
   });
 
   it("당첨자는 24시간 안에 답해야 하고, 요청은 한 번만 답할 수 있다", async () => {
-    const me = await generateSigner();
+    const me = await passkey();
     const ticket = await ticketOf(me, 6);
     const s = setup([ticket]);
     await startAndWatch(s, await makeLink(s, me, ticket));

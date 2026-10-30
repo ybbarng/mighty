@@ -9,6 +9,8 @@ import {
   passkeySigner,
   rawPublicKeyFromSpki,
   signerFromKeyPair,
+  softCredentialId,
+  softPasskeySigner,
   type Ticket,
   toBase64Url,
   type WebAuthnAssertion,
@@ -30,9 +32,9 @@ import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
 export const PASSKEY_NAME = "하늘의 별 따기";
 
 export interface KeyInfo {
-  /** passkey: 실제 게임. demo: 데모만 쓰는 기기 안 열쇠(패스키 흉내, 장부에는 원시 열쇠로 등록) */
+  /** passkey: 실제 게임. demo: 데모만 쓰는 기기 안 열쇠(흉내 패스키, 장부에도 패스키 모양으로 등록) */
   kind: "passkey" | "demo";
-  /** 패스키 번호(데모 열쇠는 비어 있다) */
+  /** 패스키 번호(데모 열쇠는 공개 열쇠에서 정한 값, `softCredentialId`) */
   credentialId: Uint8Array;
   pub: Uint8Array;
 }
@@ -277,7 +279,8 @@ export function createWallet(
  * 데모 지갑: 실제 패스키를 만들지 않는다(`navigator.credentials`를 부르지 않는다).
  * 실제 게임의 "브라우저 응모는 패스키로만" 규칙의 데모만의 예외다. 데모와 실제 게임이 같은 주소라
  * 데모 패스키가 비밀번호 관리 앱에 남으면 실제 게임의 패스키 목록에 섞이기 때문이다(2026-10-29 사용자).
- * 대신 이 기기 안 임시 P-256 열쇠로 원시 서명을 하고, 서명마다 화면의 흉내 시트(`requestUnlock`)로 확인받는다.
+ * 대신 이 기기 안 임시 P-256 열쇠로 흉내 패스키 서명(`softPasskeySigner`, UP·UV 켬, 이 페이지 주소)을 하고,
+ * 서명마다 화면의 흉내 시트(`requestUnlock`)로 확인받는다. 장부는 패스키 모양 서명만 받는다(docs/36 11-11).
  * 응모권·확인 기록은 실제 지갑과 같은 방식으로 이 이름공간에만 둔다.
  */
 export function createDemoWallet(
@@ -328,7 +331,7 @@ export function createDemoWallet(
       return saved
         ? {
             kind: "demo",
-            credentialId: new Uint8Array(),
+            credentialId: softCredentialId(fromBase64Url(saved.raw)),
             pub: fromBase64Url(saved.raw),
           }
         : null;
@@ -350,7 +353,7 @@ export function createDemoWallet(
         pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
       });
       writeJson(`${DEMO_KEY}-pub`, { raw: toBase64Url(pub) });
-      return { kind: "demo", credentialId: new Uint8Array(), pub };
+      return { kind: "demo", credentialId: softCredentialId(pub), pub };
     },
 
     async recoverPasskey() {
@@ -365,27 +368,33 @@ export function createDemoWallet(
           "데모 열쇠가 없습니다. 「데모 처음부터」를 눌러 주세요",
         );
       const signer = await signerFromKeyPair(pair);
-      return {
-        publicKey: key.pub,
-        sign: async (message) => {
-          await confirm("sign");
-          return signer.sign(message);
+      return softPasskeySigner(
+        {
+          publicKey: key.pub,
+          sign: async (message) => {
+            await confirm("sign");
+            return signer.sign(message);
+          },
         },
-      };
+        { policy: sitePolicy() },
+      );
     },
 
     async ownerSigner(pub) {
       const pair = await loadPair();
       const signer = pair ? await signerFromKeyPair(pair) : null;
-      return {
-        publicKey: pub,
-        sign: async (message) => {
-          await confirm("check");
-          if (!signer)
-            throw new DOMException("데모 열쇠가 없습니다", "NotAllowedError");
-          return signer.sign(message);
+      return softPasskeySigner(
+        {
+          publicKey: pub,
+          sign: async (message) => {
+            await confirm("check");
+            if (!signer)
+              throw new DOMException("데모 열쇠가 없습니다", "NotAllowedError");
+            return signer.sign(message);
+          },
         },
-      };
+        { policy: sitePolicy() },
+      );
     },
 
     async clear() {

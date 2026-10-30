@@ -13,6 +13,7 @@ import {
   isInviteToken,
   newChallengeText,
   RANKS,
+  RawKeyRejected,
   sasChallenge,
   type Ticket,
   ticketId,
@@ -131,7 +132,9 @@ export class Relay {
     try {
       if (input.invite.length > MAX_INVITE) throw new Error();
       invite = decodeInvite(input.invite);
-    } catch {
+    } catch (err) {
+      if (err instanceof RawKeyRejected)
+        throw new EntryError("패스키로 서명한 확인 링크만 받습니다");
       throw new EntryError("확인 링크 형식이 맞지 않습니다");
     }
     const ticket = this.winningTicket(invite.round, invite.ticketId);

@@ -184,7 +184,7 @@ export async function verifyLedger(
         fail(`등록 ${short(id)}: 이미 등록된 열쇠`);
         continue;
       }
-      if (reg.kind === "passkey" && keyByCredential.has(credential)) {
+      if (keyByCredential.has(credential)) {
         fail(`등록 ${short(id)}: 이미 등록된 패스키 번호`);
         continue;
       }
@@ -200,7 +200,7 @@ export async function verifyLedger(
         continue;
       }
       keyByEntrant.add(who);
-      if (reg.kind === "passkey") keyByCredential.add(credential);
+      keyByCredential.add(credential);
       keys.push(reg);
     }
     if (record.registrationCount !== registrations.length)

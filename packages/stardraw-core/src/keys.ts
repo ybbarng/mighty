@@ -2,7 +2,8 @@ import { equalBytes, sha256 } from "./bytes";
 
 /**
  * 열쇠는 ECDSA P-256(docs/36 4절). 브라우저·Node 모두 WebCrypto(`crypto.subtle`)로 다룬다.
- * 원시 열쇠는 연습 장부·데모·시험이 쓴다. 실제 응모는 브라우저 패스키(인증기 안 열쇠)로만 한다.
+ * 응모자 서명은 패스키 모양만 받는다(signature.ts). 여기 `Signer`는 서버 영수증 열쇠와,
+ * 연습 장부·데모·시험의 흉내 패스키(`softPasskeySigner`) 속 열쇠가 쓴다.
  * 서명은 r‖s 64바이트(IEEE P1363), 공개 열쇠는 압축하지 않은 65바이트다.
  */
 

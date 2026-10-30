@@ -99,8 +99,7 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     const challenge = ledger.head();
     const registration = await makeRegistration(
       me.signer,
-      "raw",
-      new Uint8Array(),
+      me.signer.credentialId,
       challenge,
       EASY,
       {

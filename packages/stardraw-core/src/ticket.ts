@@ -14,7 +14,7 @@ import {
 /**
  * 응모권(docs/36 4절). 바이너리 형식:
  *   v(u8) ‖ round(u32) ‖ numbers(6바이트) ‖ pub(65) ‖ nonce(u32) = 80바이트 ‖ 서명(signature.ts)
- * 서명은 원시 P-256(65바이트) 또는 패스키 단언(가변)이다.
+ * 서명은 패스키 단언(가변)이다(원시 P-256 서명은 받지 않는다, docs/36 11-11).
  * - 작업 증명 대상은 v·round·numbers·pub(= `ticketContent`)
  * - 서명 대상과 응모권 id는 서명을 뺀 앞부분(= `ticketBody`). id에 서명이 빠져
  *   서명 모양만 바꾼 복제(ECDSA 변형)도 같은 id로 걸러진다(8-1 P3)

@@ -20,6 +20,7 @@ import {
   liveStart,
   type PowParams,
   phaseOf,
+  RawKeyRejected,
   type Receipt,
   type RoundRecord,
   recordHash,
@@ -230,7 +231,12 @@ export class StardrawServer {
       ticket = decodeTicket(input.ticket);
       if (input.registration)
         registration = decodeRegistration(input.registration);
-    } catch {
+    } catch (err) {
+      // 원시 열쇠(직접 만든 열쇠 쌍)는 본인 확인(UV) 없이 서명할 수 있어 받지 않는다(docs/36 11-11)
+      if (err instanceof RawKeyRejected)
+        throw new EntryError(
+          "패스키로만 응모할 수 있습니다. 직접 만든 열쇠는 받지 않습니다",
+        );
       throw new EntryError("응모권 형식이 맞지 않습니다");
     }
     const numbersProblem = checkNumbers(ticket.numbers);
@@ -256,11 +262,9 @@ export class StardrawServer {
         throw new EntryError("응모권과 다른 열쇠의 등록입니다");
       const problem = checkRegistration(registration);
       if (problem) throw new EntryError(problem);
-      if (registration.kind === "passkey") {
-        credentialHex = toHex(registration.credentialId);
-        if (store.credentialTaken(credentialHex))
-          throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");
-      }
+      credentialHex = toHex(registration.credentialId);
+      if (store.credentialTaken(credentialHex))
+        throw new EntryError("이미 다른 열쇠로 등록된 패스키입니다");
       const day = String(Math.floor(receivedAt / 86400));
       if (
         this.counters.count("register", day, prefix) >=

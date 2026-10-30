@@ -13,7 +13,7 @@ import {
   newConfirmRequest,
   verifyClaim,
 } from "./claim";
-import type { Signer } from "./keys";
+import { generateSigner } from "./keys";
 import {
   decodeReceipt,
   encodeReceipt,
@@ -23,11 +23,12 @@ import {
 } from "./receipt";
 import { genesisHash } from "./record";
 import { roundTimes } from "./schedule";
+import type { SoftPasskey } from "./signature";
 import { fakePasskey, HOURLY, signers, ticketFor } from "./testing";
 import { ticketId } from "./ticket";
 
 async function winnerAndTicket() {
-  const [winner, other] = (await signers(2)) as [Signer, Signer];
+  const [winner, other] = (await signers(2)) as [SoftPasskey, SoftPasskey];
   const ticket = await ticketFor(
     winner,
     1,
@@ -202,7 +203,7 @@ describe("확인 요청과 확인 문구 증명(초록불)", () => {
 describe("응모 영수증", () => {
   it("서버 서명을 확인하고, 받은 시각이 응모 기간 안인지 본다", async () => {
     const { ticket } = await winnerAndTicket();
-    const [server] = (await signers(1)) as [Signer];
+    const server = await generateSigner();
     const { opensAt, closesAt } = roundTimes(HOURLY, 1);
     const receipt = await signReceipt(server, {
       round: 1,

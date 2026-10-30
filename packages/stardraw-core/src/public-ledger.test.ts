@@ -12,7 +12,7 @@ import {
 import { encodeRecord, genesisHash, recordHash } from "./record";
 import { closeRound, sealDigest, sortTickets } from "./round";
 import { roundTimes, type Schedule } from "./schedule";
-import { FakeTsa, registerRaw, signers, ticketFor } from "./testing";
+import { FakeTsa, registerKeys, signers, ticketFor } from "./testing";
 import { ticketId } from "./ticket";
 import { sealImprint, type TsaProof } from "./tsa";
 
@@ -243,7 +243,7 @@ describe("내 응모권 찾기", () => {
   }> {
     const keys = await signers(2);
     const prev = genesisHash(SCHEDULE);
-    const registrations = await registerRaw(keys, prev);
+    const registrations = await registerKeys(keys, prev);
     const tickets = await Promise.all(
       keys.map((k, i) => ticketFor(k, 1, [1, 2, 3, 4, 5, 6 + i], prev)),
     );

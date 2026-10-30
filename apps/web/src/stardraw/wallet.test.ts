@@ -1,12 +1,20 @@
 import {
   encodeTicket,
+  fromHex,
+  softCredentialId,
   toBase64Url,
-  verifySignature,
+  utf8,
+  verifyEntrantSignature,
 } from "@mighty/stardraw-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { UnlockPurpose } from "./demo-unlock";
-import { createDemoWallet, createWallet, hasUserVerification } from "./wallet";
+import {
+  createDemoWallet,
+  createWallet,
+  hasUserVerification,
+  sitePolicy,
+} from "./wallet";
 
 afterEach(() => {
   localStorage.clear();
@@ -14,7 +22,7 @@ afterEach(() => {
 });
 
 describe("데모 지갑: 실제 패스키 대신 흉내 확인과 기기 안 데모 열쇠", () => {
-  it("확인하면 데모 열쇠를 만들고, 서명마다 다시 확인받아 원시 서명을 한다", async () => {
+  it("확인하면 데모 열쇠를 만들고, 서명마다 다시 확인받아 흉내 패스키 서명(UP·UV, 이 페이지 주소)을 한다", async () => {
     const asked: UnlockPurpose[] = [];
     const wallet = createDemoWallet("test-demo", async (purpose) => {
       asked.push(purpose);
@@ -22,17 +30,20 @@ describe("데모 지갑: 실제 패스키 대신 흉내 확인과 기기 안 데
     });
     const key = await wallet.createPasskey();
     expect(key.kind).toBe("demo");
-    expect(key.credentialId).toHaveLength(0);
+    // 패스키 번호는 공개 열쇠에서 정해진다(장부에 패스키 모양으로 등록한다)
+    expect(key.credentialId).toEqual(softCredentialId(key.pub));
+    expect(wallet.loadKey()?.credentialId).toEqual(key.credentialId);
     // 다시 열어도 같은 열쇠
     expect(wallet.loadKey()?.pub).toEqual(key.pub);
 
     const signer = await wallet.signerFor(key);
     const message = new TextEncoder().encode("stardraw demo");
     const sig = await signer.sign(message);
-    expect(sig).toBeInstanceOf(Uint8Array);
-    expect(await verifySignature(key.pub, message, sig as Uint8Array)).toBe(
-      true,
-    );
+    expect(sig.kind).toBe("webauthn");
+    expect(sig.authenticatorData[32]).toBe(0x05);
+    expect(
+      await verifyEntrantSignature(key.pub, message, sig, sitePolicy()),
+    ).toBe(true);
     expect(asked).toEqual(["create", "sign"]);
   });
 
@@ -84,7 +95,12 @@ describe("응모권은 그 장부의 것으로만 센다", () => {
       numbers: [1, 2, 3, 4, 5, 6],
       pub: new Uint8Array(65).fill(4),
       nonce: 7,
-      sig: { kind: "raw" as const, sig: new Uint8Array(64).fill(1) },
+      sig: {
+        kind: "webauthn" as const,
+        authenticatorData: fromHex("0102"),
+        clientDataJSON: utf8("{}"),
+        signature: fromHex("3006020101020101"),
+      },
     },
     receivedAt: 100,
   });

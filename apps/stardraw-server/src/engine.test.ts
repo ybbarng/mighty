@@ -1,15 +1,22 @@
 import {
+  concat,
   decodeReceipt,
   drandRoundForClose,
   encodeReceipt,
+  encodeRegistration,
   encodeTicket,
+  generateSigner,
   genesisHash,
+  type KeyRegistration,
   type RoundRecord,
   receiptInTime,
   roundTimes,
+  softPasskeySigner,
   type Ticket,
+  ticketBody,
   ticketId,
   toHex,
+  utf8,
   verifyLedger,
   verifyReceipt,
 } from "@mighty/stardraw-core";
@@ -271,6 +278,51 @@ describe("응모 받기: 싼 확인부터, 규칙에 어긋나면 거절", () =>
       rig.engine.submit({ ticket: encodeTicket(late.ticket), ip: "1.2.3.4" }),
       "마감됐어요(서버 시각 15:55:00)",
     );
+  });
+
+  it("원시 열쇠(직접 만든 열쇠 쌍)의 등록·서명은 쉬운 말로 거절한다(docs/36 11-11)", async () => {
+    rig = await makeRig();
+    await rig.at(EPOCH + 10);
+    const key = await generateSigner();
+    const p = { signer: softPasskeySigner(key), registered: false };
+    const { ticket, registration } = await entryFor(
+      p,
+      1,
+      [1, 2, 3, 4, 5, 6],
+      rig.engine.head(),
+    );
+    const body = ticketBody(ticket);
+    // 예전 원시 서명: 서명 종류 01 ‖ 같은 열쇠의 r‖s 64바이트
+    const rawSig = await key.sign(
+      concat(utf8("stardraw/ticket-sig/v1"), new Uint8Array([0]), body),
+    );
+    const rawTicket = concat(body, new Uint8Array([1]), rawSig);
+    // 예전 원시 열쇠 등록: 종류 01 ‖ 패스키 번호 없음(0000)
+    const rawRegistration = concat(
+      new Uint8Array([1, 1, 0, 0]),
+      ticket.pub,
+      new Uint8Array(4),
+    );
+    const message = "패스키로만 응모할 수 있습니다";
+    await rejects(
+      rig.engine.submit({
+        ticket: rawTicket,
+        registration: encodeRegistration(registration as KeyRegistration),
+        ip: "1.2.3.4",
+      }),
+      message,
+    );
+    await rejects(
+      rig.engine.submit({
+        ticket: encodeTicket(ticket),
+        registration: rawRegistration,
+        ip: "1.2.3.4",
+      }),
+      message,
+    );
+    // 같은 열쇠라도 패스키 모양이면 받는다
+    await enter(rig, p, [1, 2, 3, 4, 5, 6]);
+    expect(rig.engine.state().entries).toBe(1);
   });
 
   it("서명한 뒤 번호를 바꾼 응모권은 서명이 맞지 않는다", async () => {

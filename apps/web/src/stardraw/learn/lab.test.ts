@@ -8,6 +8,7 @@ import {
   merkleRoot,
   passkeySigner,
   signTicket,
+  softPasskeySigner,
   sortLeaves,
   toHex,
   unsignedTicket,
@@ -46,6 +47,9 @@ import {
   tryExportPrivateKey,
   writeRoundAnchors,
 } from "./lab";
+
+/** 흉내 패스키(UP·UV 켬). 장부는 패스키 모양 서명만 받는다 */
+const passkey = async () => softPasskeySigner(await generateSigner());
 
 describe("흉내 패스키", () => {
   it("비밀 열쇠는 꺼낼 수 없고, 진짜 주소에서 한 서명만 통과한다", async () => {
@@ -231,7 +235,7 @@ describe("공격해 보기", () => {
 });
 
 it("서명: 번호를 바꾸면 확인이 실패한다", async () => {
-  const signer = await generateSigner();
+  const signer = await passkey();
   const t = await signTicket(
     signer,
     unsignedTicket(signer, 7, [3, 11, 19, 27, 38, 44]),
