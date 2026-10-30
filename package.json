@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "e2e": "pnpm --filter @mighty/web e2e"
+    "e2e": "pnpm --filter @mighty/web e2e",
+    "stardraw-verify": "pnpm --filter @mighty/stardraw-cli build > /dev/null && node packages/stardraw-cli/dist/stardraw-verify.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -16,8 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "build": "rolldown -c rolldown.config.mjs",
-    "verify": "rolldown -c rolldown.config.mjs > /dev/null && node dist/stardraw-verify.mjs"
+    "build": "rolldown -c rolldown.config.mjs"
   },
   "dependencies": {
     "@mighty/stardraw-core": "workspace:*"
