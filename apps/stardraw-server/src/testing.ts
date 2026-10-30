@@ -18,20 +18,27 @@ import {
   encodeRegistration,
   encodeTicket,
   fromBase64Url,
+  fromHex,
   generateSigner,
   type KeyRegistration,
+  leafHash,
   makeRegistration,
   makeTicket,
   type PowParams,
+  p1363ToDer,
+  type RekorLog,
   type RoundRecord,
   roundTimes,
   type Schedule,
+  sha256,
   type Ticket,
   taggedHash,
+  toHex,
 } from "@mighty/stardraw-core";
 
 import { StardrawServer } from "./engine";
 import {
+  type Anchor,
   type DrandSource,
   LocalRootLog,
   type LogResult,
@@ -134,6 +141,12 @@ export async function makeRig(
     dir?: string;
     /** 시계를 놓을 시각(초, 기본 EPOCH) */
     at?: number;
+    /** 투명성 로그(기본: 지금 시각을 적는 가짜). 서버 열쇠·시계를 받아 만든다 */
+    rootLog?: (serverKey: ServerKey, clock: ManualClock) => RootLog;
+    /** 앵커(기본: 남기지 않음) */
+    anchor?: Anchor;
+    /** 서버 열쇠(기본: 새로 만듦) */
+    serverKey?: ServerKey;
   } = {},
 ): Promise<Rig> {
   const dir = limits.dir ?? mkdtempSync(join(tmpdir(), "stardraw-"));
@@ -141,10 +154,13 @@ export async function makeRig(
   clock.advance((limits.at ?? EPOCH) * 1000);
   const store = new Store(join(dir, "stardraw.sqlite"));
   const drand = new FakeDrand();
+  const serverKey =
+    limits.serverKey ?? (await serverKeyFromPkcs8(await newServerKeyPkcs8()));
   const log = new SwitchLog(
-    new LocalRootLog(() => Math.floor(clock.now() / 1000)),
+    limits.rootLog
+      ? limits.rootLog(serverKey, clock)
+      : new LocalRootLog(() => Math.floor(clock.now() / 1000)),
   );
-  const serverKey = await serverKeyFromPkcs8(await newServerKeyPkcs8());
   const logs: string[] = [];
   const engine = new StardrawServer({
     store,
@@ -156,7 +172,7 @@ export async function makeRig(
     serverKey,
     drand,
     rootLog: log,
-    anchor: noAnchor,
+    anchor: limits.anchor ?? noAnchor,
     limits: {
       entriesPerPrefixPerRound: limits.entriesPerPrefixPerRound ?? 20,
       registrationsPerPrefixPerDay: limits.registrationsPerPrefixPerDay ?? 10,
@@ -287,4 +303,155 @@ export function readLedger(dir: string) {
   }
   const seals = readdirSync(join(ledger, "seals")).length;
   return { genesis, carried, head, records, tickets, registrations, seals };
+}
+
+/** 장부 seals/N 파일의 로그 증거(Rekor 항목 등) */
+export function readSealLog(dir: string, round: number): unknown {
+  const file = JSON.parse(
+    readFileSync(join(dir, "ledger", "seals", `${pad(round)}.json`), "utf8"),
+  ) as { log: unknown };
+  return file.log;
+}
+
+const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
+
+/**
+ * 가짜 Rekor: 자기 로그 열쇠(P-256)로 진짜와 같은 모양의 응답을 만든다(SET·체크포인트 서명, 잎 하나짜리 트리).
+ * 검사기는 이 로그 정의(`log`)를 받아 진짜와 같은 규칙으로 확인한다.
+ */
+export class FakeRekor {
+  /** 다음 응답 상태(201이 정상) */
+  status = 201;
+  /** SET을 일부러 틀리게 */
+  tamperSet = false;
+  posts = 0;
+
+  private constructor(
+    readonly log: RekorLog,
+    private readonly key: CryptoKeyPair,
+    private readonly nowSeconds: () => number,
+  ) {}
+
+  static async create(nowSeconds: () => number): Promise<FakeRekor> {
+    const key = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const spki = new Uint8Array(
+      await crypto.subtle.exportKey("spki", key.publicKey),
+    );
+    return new FakeRekor(
+      {
+        name: "fake.rekor.test",
+        url: "https://fake.rekor.test",
+        publicKeySpki: b64(spki),
+        logID: toHex(sha256(spki)),
+      },
+      key,
+      nowSeconds,
+    );
+  }
+
+  private async signDer(message: Uint8Array): Promise<Uint8Array> {
+    const raw = new Uint8Array(
+      await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        this.key.privateKey,
+        new Uint8Array(message),
+      ),
+    );
+    return p1363ToDer(raw);
+  }
+
+  fetch: typeof fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
+    const url = String(input);
+    if (!url.endsWith("/api/v1/log/entries") || init?.method !== "POST")
+      return new Response("not found", { status: 404 });
+    this.posts++;
+    if (this.status !== 201)
+      return new Response("오류", { status: this.status });
+    const body = new TextEncoder().encode(String(init.body));
+    const bodyB64 = b64(body);
+    const integratedTime = this.nowSeconds();
+    const logIndex = this.posts;
+    const root = leafHash(body);
+    const text = `${this.log.name} - 1\n1\n${b64(root)}\n`;
+    const cpSig = concat(
+      fromHex(this.log.logID).slice(0, 4),
+      await this.signDer(new TextEncoder().encode(text)),
+    );
+    const checkpoint = `${text}\n— ${this.log.name} ${b64(cpSig)}\n`;
+    const setPayload = `{"body":${JSON.stringify(bodyB64)},"integratedTime":${integratedTime + (this.tamperSet ? 1 : 0)},"logID":${JSON.stringify(this.log.logID)},"logIndex":${logIndex}}`;
+    const set = await this.signDer(new TextEncoder().encode(setPayload));
+    const uuid = toHex(sha256(body));
+    return new Response(
+      JSON.stringify({
+        [uuid]: {
+          body: bodyB64,
+          integratedTime,
+          logID: this.log.logID,
+          logIndex,
+          verification: {
+            inclusionProof: {
+              checkpoint,
+              hashes: [],
+              logIndex: 0,
+              rootHash: toHex(root),
+              treeSize: 1,
+            },
+            signedEntryTimestamp: b64(set),
+          },
+        },
+      }),
+      { status: 201 },
+    );
+  }) as typeof fetch;
+}
+
+/** 가짜 GitHub Contents API(앵커): 경로 → base64 내용. `failures`번은 500으로 실패한다 */
+export class FakeGitHub {
+  files = new Map<string, string>();
+  failures = 0;
+  puts = 0;
+  /** 마지막 요청에 토큰 머리글이 있었는지(값은 보지 않는다) */
+  sawAuth = false;
+
+  fetch: typeof fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
+    const url = new URL(String(input));
+    const m = /^\/repos\/[^/]+\/[^/]+\/contents\/(.+)$/.exec(url.pathname);
+    if (!m) return new Response("not found", { status: 404 });
+    const path = decodeURIComponent(m[1] as string);
+    const headers = new Headers(init?.headers);
+    this.sawAuth = (headers.get("authorization") ?? "").startsWith("Bearer ");
+    if (init?.method === "PUT") {
+      this.puts++;
+      if (this.failures > 0) {
+        this.failures--;
+        return new Response("오류", { status: 500 });
+      }
+      if (this.files.has(path))
+        return new Response(JSON.stringify({ message: "sha" }), {
+          status: 422,
+        });
+      const body = JSON.parse(String(init.body)) as { content: string };
+      this.files.set(path, body.content);
+      return new Response("{}", { status: 201 });
+    }
+    const content = this.files.get(path);
+    return content === undefined
+      ? new Response("not found", { status: 404 })
+      : new Response(JSON.stringify({ content }), { status: 200 });
+  }) as typeof fetch;
+
+  text(path: string): string | undefined {
+    const c = this.files.get(path);
+    return c === undefined ? undefined : Buffer.from(c, "base64").toString();
+  }
 }

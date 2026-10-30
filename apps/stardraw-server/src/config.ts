@@ -3,6 +3,9 @@ import {
   POW_PARAMS,
   type PowParams,
   powTargetForTries,
+  REKOR_PRODUCTION,
+  REKOR_STAGING,
+  rekorLogFor,
   type Schedule,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
@@ -15,8 +18,8 @@ import {
 
 /**
  * 운영 모드(docs/36 11-6).
- * - trial: 시험 운영. 장부 genesis에 시험 표시(꼬리표가 달라 정식 장부와 섞이지 않는다), Rekor·GitHub 앵커는 늘 꺼짐,
- *   화면 위에 "시험 운영 중" 띠. 회차 길이 기본 10분
+ * - trial: 시험 운영. 장부 genesis에 시험 표시(꼬리표가 달라 정식 장부와 섞이지 않는다), Rekor는 시험용 로그만,
+ *   GitHub 앵커는 `trial` 브랜치, 화면 위에 "시험 운영 중" 띠. 회차 길이 기본 10분
  * - live: 정식 운영. `start-live` 명령으로 만든 장부로만 띄운다
  */
 export type ServerMode = "trial" | "live";
@@ -101,10 +104,7 @@ export function loadConfig(): ServerConfig {
   const epoch = env("STARDRAW_EPOCH");
   const lengthEnv = env("STARDRAW_ROUND_SECONDS");
   const length = lengthEnv ? Number(lengthEnv) : mode === "trial" ? 600 : 3600;
-  // 시험 운영은 바깥 기록(Rekor·GitHub 앵커)을 남기지 않는다
-  const rekorUrl = mode === "trial" ? undefined : env("STARDRAW_REKOR_URL");
-  const ghRepo = mode === "trial" ? undefined : env("STARDRAW_ANCHOR_REPO");
-  const ghToken = env("STARDRAW_ANCHOR_TOKEN");
+  const outside = outsideConfig(mode, env);
   return {
     mode,
     port: int("PORT", 8080),
@@ -138,14 +138,44 @@ export function loadConfig(): ServerConfig {
       env("STARDRAW_DRAND_URLS") ??
       "https://api.drand.sh,https://drand.cloudflare.com"
     ).split(","),
-    rekor: rekorUrl ? { url: rekorUrl } : null,
-    github:
-      ghRepo && ghToken
-        ? {
-            repo: ghRepo,
-            branch: env("STARDRAW_ANCHOR_BRANCH") ?? "main",
-            token: ghToken,
-          }
-        : null,
+    ...outside,
   };
+}
+
+/**
+ * 바깥 기록 설정(docs/36 11-6).
+ * - Rekor(`STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만. 시험 운영은 시험용(rekor.sigstage.dev)만,
+ *   정식은 실제(rekor.sigstore.dev)만 받는다. 시험 기록을 영구 공개 로그에 남기지 않고, 정식 장부의 시각 증명을
+ *   시험용 로그로 대신하지 못하게 하려는 것이다. 맞지 않는 주소면 서버를 띄우지 않는다.
+ * - GitHub 앵커(`STARDRAW_ANCHOR_REPO`, `STARDRAW_ANCHOR_TOKEN`): 저장소와 토큰이 둘 다 있을 때만.
+ *   브랜치(`STARDRAW_ANCHOR_BRANCH`) 기본은 시험 운영 `trial`, 정식 `main`
+ */
+export function outsideConfig(
+  mode: ServerMode,
+  get: (name: string) => string | undefined,
+): Pick<ServerConfig, "rekor" | "github"> {
+  const rekorUrl = get("STARDRAW_REKOR_URL");
+  let rekor: ServerConfig["rekor"] = null;
+  if (rekorUrl) {
+    const log = rekorLogFor(rekorUrl);
+    const allowed = mode === "trial" ? REKOR_STAGING : REKOR_PRODUCTION;
+    if (log !== allowed)
+      throw new Error(
+        `${mode === "trial" ? "시험 운영" : "정식 운영"}의 Rekor는 ${allowed.url}만 쓸 수 있다: ${rekorUrl}`,
+      );
+    rekor = { url: log.url };
+  }
+  const repo = get("STARDRAW_ANCHOR_REPO");
+  const token = get("STARDRAW_ANCHOR_TOKEN");
+  const github =
+    repo && token
+      ? {
+          repo,
+          branch:
+            get("STARDRAW_ANCHOR_BRANCH") ??
+            (mode === "trial" ? "trial" : "main"),
+          token,
+        }
+      : null;
+  return { rekor, github };
 }

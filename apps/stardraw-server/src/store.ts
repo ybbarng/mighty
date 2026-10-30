@@ -238,6 +238,24 @@ export class Store {
     }
   }
 
+  // ── 앵커 ──
+
+  /** 앵커를 남긴 마지막 회차(차례대로 남긴다). 없으면 0 */
+  anchored(): number {
+    const row = this.db
+      .prepare("SELECT v FROM meta WHERE k = 'anchored'")
+      .get();
+    return row ? Number(row.v) : 0;
+  }
+
+  setAnchored(round: number): void {
+    this.db
+      .prepare(
+        "INSERT INTO meta (k, v) VALUES ('anchored', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+      )
+      .run(String(round));
+  }
+
   // ── 봉인 ──
 
   seal(round: number): Seal | null {

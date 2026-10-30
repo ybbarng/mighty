@@ -45,7 +45,7 @@ async function main(): Promise<void> {
 
   // 투명성 로그: 설정이 없으면 이 서버의 시계를 적는다(시각 증명 없음. 개발용)
   const rootLog: RootLog = config.rekor
-    ? new RekorRootLog(config.rekor.url, serverKey)
+    ? new RekorRootLog(config.rekor.url, serverKey, fetch, log)
     : new LocalRootLog(() => Math.floor(clock.now() / 1000));
   const anchor: Anchor = config.github
     ? new GitHubAnchor(
@@ -54,15 +54,17 @@ async function main(): Promise<void> {
         config.github.token,
       )
     : noAnchor;
-  if (config.mode === "trial")
-    log(
-      "시험 운영: 투명성 로그·앵커를 남기지 않고, 장부는 정식 시작 때 버린다",
-    );
-  else {
-    if (!config.rekor)
-      log("투명성 로그 설정이 없어 서버 시계로 봉인 시각을 적는다");
-    if (!config.github) log("앵커 저장소 설정이 없어 앵커를 남기지 않는다");
-  }
+  if (config.mode === "trial") log("시험 운영: 장부는 정식 시작 때 버린다");
+  log(
+    config.rekor
+      ? `투명성 로그: ${config.rekor.url}`
+      : "투명성 로그 설정이 없어 서버 시계로 봉인 시각을 적는다(시각 증명 없음)",
+  );
+  log(
+    config.github
+      ? `앵커: ${config.github.repo}(${config.github.branch} 브랜치)`
+      : "앵커 저장소 설정이 없어 앵커를 남기지 않는다",
+  );
 
   const engine = new StardrawServer({
     store,

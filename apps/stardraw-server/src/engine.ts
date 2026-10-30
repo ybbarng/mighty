@@ -14,6 +14,7 @@ import {
   genesisHash,
   isVoidRound,
   type KeyRegistration,
+  ledgerId,
   type PowParams,
   type Receipt,
   type RoundRecord,
@@ -336,6 +337,7 @@ export class StardrawServer {
   private async tickNow(): Promise<void> {
     await this.sealDue();
     await this.drawDue();
+    this.startAnchoring();
   }
 
   private async sealDue(): Promise<void> {
@@ -415,16 +417,59 @@ export class StardrawServer {
       this.applyChanges(record);
       this.o.publisher.round(record, tickets, registrations);
       this.publishHead();
-      void this.anchor(record);
     }
   }
 
-  private async anchor(record: RoundRecord): Promise<void> {
-    try {
-      await this.o.anchor.anchor(record.round, toHex(recordHash(record)));
-    } catch (err) {
-      this.o.log?.(`${record.round}회차 앵커를 남기지 못했다: ${String(err)}`);
+  /**
+   * 앵커: 닫힌 회차를 차례대로 바깥에 남긴다. 회차 진행(봉인 기한)을 막지 않게 tick과 따로 돈다.
+   * 한 번에 하나만 돌고, 실패하면 1분 쉰 뒤 그 회차부터 다시 보낸다(재시작해도 저장소의 표시로 이어진다)
+   */
+  private anchoring: Promise<void> | null = null;
+  private nextAnchorTry = 0;
+
+  private startAnchoring(): void {
+    if (this.anchoring || this.now() < this.nextAnchorTry) return;
+    if (this.o.store.anchored() >= this.o.store.recordCount()) return;
+    this.anchoring = this.anchorDue().finally(() => {
+      this.anchoring = null;
+    });
+  }
+
+  private async anchorDue(): Promise<void> {
+    const { store } = this.o;
+    const ledger = ledgerId(this.genesis);
+    for (
+      let round = store.anchored() + 1;
+      round <= store.recordCount();
+      round++
+    ) {
+      const record = store.record(round);
+      if (!record) return;
+      const log = store.seal(round)?.log as
+        | { uuid?: unknown }
+        | null
+        | undefined;
+      try {
+        await this.o.anchor.anchor({
+          ledger,
+          round,
+          record: toHex(recordHash(record)),
+          rekor: typeof log?.uuid === "string" ? log.uuid : "-",
+        });
+        store.setAnchored(round);
+      } catch (err) {
+        this.nextAnchorTry = this.now() + 60;
+        this.o.log?.(
+          `${round}회차 앵커를 남기지 못해 1분 뒤 다시 시도한다: ${String(err)}`,
+        );
+        return;
+      }
     }
+  }
+
+  /** 시험용: 돌고 있는 앵커 보내기가 끝날 때까지 */
+  async anchorIdle(): Promise<void> {
+    await this.anchoring;
   }
 
   private alertDrand(round: number): void {
