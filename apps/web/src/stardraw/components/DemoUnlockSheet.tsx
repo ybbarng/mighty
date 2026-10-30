@@ -37,12 +37,6 @@ const TITLE: Record<UnlockPurpose, string> = {
   sign: "패스키로 서명할까요?",
 };
 
-const FOOT: Record<UnlockPurpose, string> = {
-  create:
-    "데모라서 흉내만 냅니다. 실제 게임에서는 이 순간 기기의 Face ID·지문 창이 뜨고, 패스키가 만들어집니다.",
-  sign: "데모라서 흉내만 냅니다. 실제 게임에서는 이 순간 기기의 Face ID·지문 창이 뜨고, 패스키로 서명합니다.",
-};
-
 /**
  * 데모의 패스키 흉내 시트: 휴대폰 시스템 창을 닮은 작은 창. 데모 지갑이 서명하기 전에 뜬다(`demo-unlock.ts`).
  * 데모 페이지에 하나만 둔다.
@@ -121,9 +115,6 @@ function Sheet({ ask }: { ask: UnlockAsk }) {
             확인
           </button>
         </div>
-        <p className="break-keep text-[11px] text-white/50 leading-relaxed">
-          {FOOT[ask.purpose]}
-        </p>
       </div>
     </div>
   );

@@ -105,8 +105,7 @@ export function StardrawDemo() {
         role="note"
         className="sticky top-0 z-20 border-amber-300/40 border-b bg-amber-300/95 px-4 py-2 text-center font-semibold text-slate-950 text-sm"
       >
-        데모입니다 · 실제 게임과 따로 저장되고, 당첨 번호를 미리 보고 고를 수
-        있습니다
+        데모 · 실제 게임과 따로 저장돼요
       </div>
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 pt-6">
         <header className="flex flex-col gap-2">
@@ -137,10 +136,6 @@ export function StardrawDemo() {
           <p className="break-keep text-white/70">
             응모 → 추첨 → 당첨자 확인까지 혼자 끝까지 해 봅니다. 연습 참가자
             24명이 회차마다 함께 응모합니다.
-          </p>
-          <p className="break-keep text-sm text-white/60">
-            데모는 패스키를 만들지 않습니다. 실제 게임에서 Face ID·지문 창이
-            뜨는 순간에는 흉내 창이 뜹니다.
           </p>
         </header>
         <DemoUnlockSheet />
@@ -298,8 +293,7 @@ export function StardrawDemo() {
                   data="winner"
                 >
                   <p className="text-sm text-white/65">
-                    확인 요청이 오면 여기에 뜹니다. [확인]을 누르면 패스키 흉내
-                    창이 뜨고, 확인하면 서명합니다.
+                    확인 요청이 오면 여기에 뜹니다.
                   </p>
                   <Inbox
                     services={services}

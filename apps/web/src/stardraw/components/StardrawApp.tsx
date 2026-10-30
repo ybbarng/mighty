@@ -769,10 +769,8 @@ function RecoverKey({
       </button>
       {state === "missing" && (
         <p className="break-keep text-amber-100/85 text-xs">
-          장부에서 이 패스키를 찾지 못했어요. 응모한 적이 있는 패스키인지 확인해
-          주세요.
-          {services.practice &&
-            " 지금은 연습 장부라 기기마다 장부가 따로여서, 다른 기기에서 낸 응모는 찾을 수 없어요."}
+          장부에서 이 패스키를 찾지 못했어요.
+          {services.practice && " 연습 장부는 기기마다 따로예요."}
         </p>
       )}
       {state === "cancelled" && (
@@ -857,7 +855,6 @@ function RoundsView({
           더 보기
         </button>
       )}
-      <MemoTools services={services} />
     </section>
   );
 }
@@ -917,9 +914,10 @@ function RoundDetail({
   const record = services.ledger.record(round);
   const [report, setReport] = useState<VerifyReport | null>(null);
   const [checking, setChecking] = useState(false);
-  const [memos, setMemos] = useState<Map<string, CheckTicket>>(new Map());
+  /** 이 기기에서 당첨자 확인을 마친 응모권 */
+  const [checked, setChecked] = useState<Map<string, CheckTicket>>(new Map());
   useEffect(() => {
-    void services.checker.confirmed().then(setMemos);
+    void services.checker.confirmed().then(setChecked);
   }, [services]);
   if (!record) return null;
   const counts = winnerCounts(record);
@@ -973,7 +971,7 @@ function RoundDetail({
             </span>
             {record.winners[rank].map((id) => {
               const hex = toHex(id);
-              const memo = memos.get(hex);
+              const done = checked.get(hex);
               const nickname = record.nicknames.find(
                 (n) => toHex(n.ticketId) === hex,
               )?.nickname;
@@ -988,14 +986,15 @@ function RoundDetail({
                   <span className="text-white/80">
                     {myIds.has(hex) ? "내 응모권" : (nickname ?? "익명")}
                   </span>
-                  {memo && (
-                    <span className="w-full text-emerald-200/90 text-xs">
+                  {done && (
+                    <span
+                      data-checked={hex}
+                      className="w-full text-emerald-200/90 text-xs"
+                    >
                       확인함
-                      {memo.memo ? ` · ${memo.memo}` : ""}
-                      {memo.confirmedAt
-                        ? ` · ${formatTime(memo.confirmedAt / 1000)}`
+                      {done.confirmedAt
+                        ? ` · ${monthDay(done.confirmedAt)}`
                         : ""}
-                      {memo.prize ? " · 상품 드림" : ""}
                     </span>
                   )}
                 </span>
@@ -1062,58 +1061,8 @@ function closesOf(services: Services, round: number): number {
   return roundTimes(services.ledger.schedule, round).closesAt;
 }
 
-/** 확인 메모 옮기기(기기를 바꿀 때) */
-function MemoTools({ services }: { services: Services }) {
-  const [message, setMessage] = useState<string | null>(null);
-  return (
-    <details className="rounded-xl border border-white/10 px-4 py-3 text-sm text-white/70">
-      <summary className="cursor-pointer">확인 메모 옮기기</summary>
-      <div className="mt-3 flex flex-col gap-2">
-        <p className="text-xs">
-          당첨자 확인 기록과 메모는 이 기기에만 있습니다. 다른 기기로 옮길 때
-          파일로 내보냈다가 들여옵니다.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={async () => {
-              const text = await services.checker.exportMemos();
-              const url = URL.createObjectURL(
-                new Blob([text], { type: "application/json" }),
-              );
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "stardraw-check-memos.json";
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
-          >
-            내보내기
-          </button>
-          <label className="cursor-pointer rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10">
-            들여오기
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const n = await services.checker.importMemos(
-                    await file.text(),
-                  );
-                  setMessage(`${n}건을 들여왔습니다`);
-                } catch (err) {
-                  setMessage(err instanceof Error ? err.message : String(err));
-                }
-              }}
-            />
-          </label>
-        </div>
-        {message && <p role="status">{message}</p>}
-      </div>
-    </details>
-  );
+/** 확인한 날짜(예: 10/30) */
+function monthDay(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }

@@ -165,9 +165,6 @@ export function Receipt({
           추첨을 기다리고 있습니다
         </p>
       )}
-      <p className="mt-3 break-keep text-center text-[11px] text-slate-400">
-        당첨 확인은 응모한 열쇠(패스키)로만 할 수 있습니다.
-      </p>
     </article>
   );
 }

@@ -233,8 +233,8 @@ describe("당첨자 확인: 별 세 개", () => {
   });
 });
 
-describe("확인 메모", () => {
-  it("초록불 뒤 메모·상품 드림을 남기고, 내보내 다른 기기로 들여온다", async () => {
+describe("이미 확인한 응모권", () => {
+  it("확인한 날짜와 함께 남고, 그 응모권만 남은 등수에는 새 요청을 보내지 않는다", async () => {
     const me = await generateSigner();
     const ticket = await ticketOf(me, 9);
     const s = setup([ticket]);
@@ -242,23 +242,10 @@ describe("확인 메모", () => {
     const { stars } = await winnerAnswers(s, me, ticket);
     await expect.poll(() => batch.tickets[0]?.status).toBe("signed");
     await s.checker.enterStars(batch, stars);
-    await s.checker.remember(
-      batch,
-      toHex(ticketId(ticket)),
-      "철수 · 카톡",
-      true,
-    );
-    const exported = await s.checker.exportMemos();
-
-    const other = setup([ticket]);
-    expect(await other.checker.importMemos(exported)).toBe(1);
-    const memo = (await other.checker.confirmed()).get(toHex(ticketId(ticket)));
-    expect(memo).toMatchObject({ memo: "철수 · 카톡", prize: true });
-    // 같은 파일을 또 들여와도 겹치지 않는다
-    expect(await other.checker.importMemos(exported)).toBe(0);
-    await expect(other.checker.importMemos("{}")).rejects.toThrow("메모 파일");
-    // 이미 확인한 응모권만 남은 등수에는 새 요청을 보내지 않는다
-    await expect(other.checker.start(9, 1, [ticket], "Brice")).rejects.toThrow(
+    const done = (await s.checker.confirmed()).get(toHex(ticketId(ticket)));
+    expect(done).toMatchObject({ status: "confirmed" });
+    expect(done?.confirmedAt).toBe(s.clock.now());
+    await expect(s.checker.start(9, 1, [ticket], "Brice")).rejects.toThrow(
       "모두 확인",
     );
   });

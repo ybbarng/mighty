@@ -168,11 +168,6 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   const setup = page.locator("[data-key-setup]");
   await expect(setup).toContainText("응모하려면 패스키가 필요해요");
   await expect(
-    setup.getByText(
-      "비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요",
-    ),
-  ).toBeVisible();
-  await expect(
     setup.getByRole("link", { name: "패스키가 뭐예요?" }),
   ).toHaveAttribute("href", "/stardraw/about#passkey");
   await page.screenshot({ path: info.outputPath("stardraw-key-setup.png") });
@@ -346,10 +341,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   // 데모는 실제 패스키를 만들지 않는다: 가상 인증기 없이 흉내 시트로만 끝까지 간다
   await watchCredentials(page);
   await page.goto("/stardraw/demo");
-  await expect(page.getByRole("note")).toContainText("데모입니다");
-  await expect(
-    page.getByText("데모는 패스키를 만들지 않습니다", { exact: false }).first(),
-  ).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("데모 · 실제 게임과 따로");
 
   // 처음엔 별을 고르기 전에 패스키부터 만든다(흉내 시트 한 번). 먼저 취소해 본다
   const setup = page.locator("[data-key-setup]");
@@ -464,12 +456,6 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   await expect(checker.locator("[data-verdict='ok']")).toHaveText(
     "1회 1등 당첨자 본인이 맞습니다",
   );
-  await checker.getByLabel("누구로 기억할까요?").fill("철수 · 카톡");
-  await checker.getByLabel("상품 드림").check();
-  await checker.getByRole("button", { name: "적어 두기" }).click();
-  await expect(
-    checker.getByRole("button", { name: "이 기기에 적어 두었습니다" }),
-  ).toBeVisible();
   await page.screenshot({
     path: info.outputPath("stardraw-demo-checker.png"),
     fullPage: true,

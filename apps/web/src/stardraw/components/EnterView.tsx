@@ -350,11 +350,6 @@ export function EnterView({
                 ? `별을 ${6 - picked.length}개 더 골라 주세요`
                 : "이 별 6개로 응모하기"}
         </button>
-        {demo && (
-          <p className="break-keep text-center text-white/60 text-xs">
-            데모는 패스키를 만들지 않습니다. 확인 창은 흉내예요.
-          </p>
-        )}
       </div>
     </section>
   );
@@ -410,9 +405,6 @@ function KeySetup({
     >
       <KeyIcon className="size-9 text-amber-100" />
       <h2 className="font-bold text-xl">응모하려면 패스키가 필요해요</h2>
-      <p className="break-keep text-sm text-white/75">
-        비밀번호 없이, 휴대폰을 바꿔도 내 응모권을 증명할 수 있어요
-      </p>
       {blocked ? (
         env?.inApp ? (
           <InAppNotice app={env.inApp} />
@@ -448,11 +440,6 @@ function KeySetup({
             >
               {working === "recover" ? "찾고 있습니다" : "이미 패스키가 있어요"}
             </button>
-          )}
-          {demo && (
-            <p className="break-keep text-white/55 text-xs">
-              데모는 패스키를 만들지 않습니다. 확인 창은 흉내예요.
-            </p>
           )}
         </>
       )}

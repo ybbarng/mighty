@@ -227,14 +227,6 @@ export function CheckPanel({
 
           {flash && <Verdict flash={flash} title={title} />}
 
-          {green && flash?.kind === "confirmed" && (
-            <MemoForm
-              batch={batch}
-              ticketIdHex={flash.ticketId}
-              services={services}
-            />
-          )}
-
           {!isActive(batch) && !green && (
             <button
               type="button"
@@ -286,11 +278,6 @@ function TicketState({ t }: { t: CheckTicket }) {
           {r}
         </span>
       ))}
-      {t.memo || t.prize ? (
-        <span className="text-emerald-100/80 text-xs">
-          {[t.memo, t.prize ? "상품 드림" : ""].filter(Boolean).join(" · ")}
-        </span>
-      ) : null}
     </li>
   );
 }
@@ -330,65 +317,5 @@ function Verdict({ flash, title }: { flash: Flash; title: string }) {
           : "별 세 개가 세 번 맞지 않아 요청을 닫았습니다"}
       </p>
     </div>
-  );
-}
-
-function MemoForm({
-  batch,
-  ticketIdHex,
-  services,
-}: {
-  batch: CheckBatch;
-  ticketIdHex: string;
-  services: Services;
-}) {
-  const [memo, setMemo] = useState("");
-  const [prize, setPrize] = useState(false);
-  const [saved, setSaved] = useState(false);
-  return (
-    <form
-      className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/5 p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void services.checker
-          .remember(batch, ticketIdHex, memo, prize)
-          .then(() => setSaved(true));
-      }}
-    >
-      <label className="flex flex-col gap-1 text-sm">
-        누구로 기억할까요?
-        <input
-          value={memo}
-          maxLength={60}
-          onChange={(e) => {
-            setMemo(e.target.value);
-            setSaved(false);
-          }}
-          placeholder="예: 철수 · 카톡"
-          className="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-base"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={prize}
-          onChange={(e) => {
-            setPrize(e.target.checked);
-            setSaved(false);
-          }}
-          className="size-4 accent-amber-300"
-        />
-        상품 드림
-      </label>
-      <button
-        type="submit"
-        className="rounded-xl border border-white/20 py-2 text-sm hover:bg-white/10"
-      >
-        {saved ? "이 기기에 적어 두었습니다" : "적어 두기"}
-      </button>
-      <p className="text-white/50 text-xs">
-        메모는 이 기기에만 남고, 서버나 장부에는 올리지 않습니다.
-      </p>
-    </form>
   );
 }

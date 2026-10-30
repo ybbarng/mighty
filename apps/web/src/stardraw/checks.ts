@@ -22,7 +22,7 @@ import type { ConfirmAnswer, ConfirmRelay } from "./confirm-relay";
  *   (임시 ECDH 열쇠는 묶음에 하나, 요청 id는 응모권마다). 같은 회차·등수에 열린 묶음은 하나뿐이다
  * - 당첨자는 24시간 안에 답한다. 서명이 맞으면 별 세 개를 기다리고, 그 뒤에는 기한이 없다
  * - 상대가 보낸 별 세 개를 누르면 묶음의 응모권 중 어느 것의 별인지 찾는다. 세 번 틀리면 묶음을 닫는다
- * - 초록불이 켜진 응모권에는 "누구로 기억할까요?" 메모와 「상품 드림」을 남길 수 있다(이 기기에만)
+ * - 초록불이 켜진 응모권은 확인한 날짜와 함께 남아, 이 기기의 지난 회차 화면에 "확인함 · 10/30"으로 보인다
  * 임시 비밀 열쇠는 꺼낼 수 없는 CryptoKey라 IndexedDB에 그대로 둔다. 화면을 닫았다 열어도 이어서 확인한다.
  */
 
@@ -56,8 +56,6 @@ export interface CheckTicket {
   /** 서명이 맞은 뒤 계산한 별 세 개(이 기기에만) */
   stars?: number[];
   confirmedAt?: number;
-  memo?: string;
-  prize?: boolean;
 }
 
 export interface CheckBatch {
@@ -277,84 +275,6 @@ export class Checker {
   async close(batch: CheckBatch): Promise<void> {
     batch.closed = true;
     await this.store.put(batch);
-  }
-
-  /** 초록불 뒤 메모(이 기기에만) */
-  async remember(
-    batch: CheckBatch,
-    ticketIdHex: string,
-    memo: string,
-    prize: boolean,
-  ): Promise<void> {
-    const t = batch.tickets.find((x) => x.ticketId === ticketIdHex);
-    if (t?.status !== "confirmed") return;
-    t.memo = memo.trim().slice(0, 60);
-    t.prize = prize;
-    await this.store.put(batch);
-  }
-
-  /** 기기를 옮길 때: 확인한 응모권과 메모만 JSON으로(임시 열쇠는 넣지 않는다) */
-  async exportMemos(): Promise<string> {
-    const rows = [...(await this.confirmed()).values()].map((t) => ({
-      round: t.round,
-      rank: t.rank,
-      ticketId: t.ticketId,
-      confirmedAt: t.confirmedAt ?? 0,
-      memo: t.memo ?? "",
-      prize: t.prize ?? false,
-    }));
-    return JSON.stringify(
-      { v: 1, kind: "stardraw-check-memos", rows },
-      null,
-      2,
-    );
-  }
-
-  /** 내보낸 메모를 들여온다. 들여온 줄 수를 돌려준다 */
-  async importMemos(text: string): Promise<number> {
-    const data = JSON.parse(text) as {
-      v?: number;
-      kind?: string;
-      rows?: {
-        round: number;
-        rank: Rank;
-        ticketId: string;
-        confirmedAt: number;
-        memo: string;
-        prize: boolean;
-      }[];
-    };
-    if (data.kind !== "stardraw-check-memos" || !Array.isArray(data.rows))
-      throw new Error("하늘의 별 따기 확인 메모 파일이 아닙니다");
-    const done = await this.confirmed();
-    const rows = data.rows.filter(
-      (r) => /^[0-9a-f]{64}$/.test(r.ticketId) && !done.has(r.ticketId),
-    );
-    if (rows.length === 0) return 0;
-    // 들여온 기록은 닫힌 묶음 하나로 둔다(임시 열쇠는 쓰지 않으니 새로 만든다)
-    const key = await generateSasKey();
-    await this.store.put({
-      key: `import-${this.clock.now()}`,
-      round: 0,
-      rank: 1,
-      requester: "",
-      createdAt: this.clock.now(),
-      answerBy: 0,
-      checkerKey: key.publicKey,
-      privateKey: key.privateKey,
-      tickets: rows.map((r) => ({
-        requestId: "",
-        ticketId: r.ticketId,
-        request: "",
-        status: "confirmed" as const,
-        confirmedAt: r.confirmedAt,
-        memo: String(r.memo).slice(0, 60),
-        prize: Boolean(r.prize),
-      })),
-      wrongTries: 0,
-      closed: true,
-    });
-    return rows.length;
   }
 }
 
