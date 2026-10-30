@@ -3,49 +3,46 @@
 import { roundTimes } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { AstronautCard, type Registered } from "../astronaut/AstronautCard";
+import { AstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { checkOwner } from "../astronaut/owner-check";
-import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { sitePolicy } from "../wallet";
 
-/** 날짜 "2026. 10. 30." */
-function dateOf(seconds: number): string {
-  const d = new Date(seconds * 1000);
+/** 날짜 "2026. 10. 30."(ms) */
+export function dateOf(ms: number): string {
+  const d = new Date(ms);
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 }
 
-/** 등록 일자 칸: 장부의 등록 회차(첫 응모 회차)의 날짜. 아직 응모 전이면 pending */
-export function useRegistered(services: Services, pub: Uint8Array): Registered {
-  const [registered, setRegistered] = useState<Registered>({
-    state: "loading",
-  });
+/**
+ * 등록증 발급일(ms)을 정하는 한 곳. 장부의 등록 회차(첫 응모 회차) 날짜 > 이 기기에 저장된 발급 시각(패스키를 만든 때,
+ * 없으면 처음 등록증을 본 때를 저장) > 지금(둘러보기 견본처럼 이 기기 열쇠가 아닌 경우).
+ * 우주인 등록을 바로 서버에 올리게 되면 서버 날짜 하나로 바꾼다
+ */
+export async function issuedAtOf(
+  services: Services,
+  pub: Uint8Array,
+): Promise<number> {
+  const round = await services.ledger.registeredRound(pub).catch(() => null);
+  if (round !== null)
+    return roundTimes(services.ledger.schedule, round).closesAt * 1000;
+  return services.wallet.issuedAt(pub) ?? services.clock.now();
+}
 
+/** 등록증 발급일 "2026. 10. 30."(읽는 중이면 null) */
+export function useIssued(services: Services, pub: Uint8Array): string | null {
+  const [issued, setIssued] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    void services.ledger
-      .registeredRound(pub)
-      .then((round) => {
-        if (!alive) return;
-        const schedule = services.ledger.schedule;
-        setRegistered(
-          round === null
-            ? { state: "pending" }
-            : {
-                state: "done",
-                date: dateOf(roundTimes(schedule, round).closesAt),
-                round: roundShort(schedule, round),
-              },
-        );
-      })
-      .catch(() => alive && setRegistered({ state: "pending" }));
+    void issuedAtOf(services, pub).then((ms) => {
+      if (alive) setIssued(dateOf(ms));
+    });
     return () => {
       alive = false;
     };
   }, [services, pub]);
-
-  return registered;
+  return issued;
 }
 
 /**
@@ -54,7 +51,7 @@ export function useRegistered(services: Services, pub: Uint8Array): Registered {
  * 인사 문구와 첫 화면 주소만 보낸다.
  * 공개 열쇠는 앞면·공유에 넣지 않고 카드 뒷면에 가려 둔다(꺼내 보기 전에 본인 확인, `AstronautCard`).
  * 등록증 그림을 나눠도 글자 검색으로 장부 속 응모가 바로 찾히지 않게 하는 실수 방지다. 등록번호로도 계산하면 찾을 수 있다는 한계는 남는다.
- * 등록 일자는 장부의 등록 회차(첫 응모 회차)의 날짜다. 아직 응모 전이면 "첫 응모 때 기록".
+ * 발급일은 `issuedAtOf`가 정한다.
  */
 export function AstronautPanel({
   services,
@@ -70,7 +67,7 @@ export function AstronautPanel({
   children?: ReactNode;
 }) {
   const a = useMemo(() => astronautOf(pub), [pub]);
-  const registered = useRegistered(services, pub);
+  const issued = useIssued(services, pub);
   const [copied, setCopied] = useState(false);
   // 앞면 주인 확인과 뒷면 열쇠 꺼내 보기가 같은 본인 확인을 쓴다(그 등록증의 패스키, 기기 안에서 확인)
   const confirmOwner = async () =>
@@ -109,7 +106,7 @@ export function AstronautPanel({
       {greeting}
       <AstronautCard
         astronaut={a}
-        registered={registered}
+        issued={issued}
         clock={services.clock}
         onCheck={confirmOwner}
         pub={pub}

@@ -2,7 +2,7 @@
 
 import type { Clock } from "@mighty/fair-play";
 import { toHex } from "@mighty/stardraw-core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -11,13 +11,13 @@ import type { Astronaut } from "./identity";
 import { ART_H, ART_W, keyArt } from "./key-art";
 import { PasskeyMark, Seal } from "./marks";
 import { OWNER_CHECK_SECONDS } from "./owner-check";
-import { CardSecurity, Kinegram } from "./security";
-
-/** 등록 일자 칸: 장부에서 읽는 중, 아직 첫 응모 전, 등록 회차의 날짜 */
-export type Registered =
-  | { state: "loading" }
-  | { state: "pending" }
-  | { state: "done"; date: string; round: string };
+import {
+  CardSecurity,
+  FoilPatch,
+  Guilloche,
+  HoloFilm,
+  Kinegram,
+} from "./security";
 
 /** 발급 기관(지어낸 기관). 하늘의 별 따기는 카노푸스 우주국이 여는 추첨이라는 설정이다 */
 export const AGENCY = "카노푸스 우주국장";
@@ -26,28 +26,66 @@ type Owner = "idle" | "checking" | "ok" | "fail";
 /** 뒷면 공개 열쇠: 가림, 본인 확인 중, 보임 */
 type Reveal = "hidden" | "checking" | "shown";
 
-/** 최대 기울기(도) */
-const TILT = 12;
 /** 이만큼 움직이지 않고 떼면 누른 것으로 본다(px) */
 const TAP_SLOP = 8;
-/** 가로로 카드 너비의 이만큼 넘게 밀고 떼면 뒤집는다 */
+/** 가로로 카드 너비의 이만큼 넘게 밀고 떼면 그 방향으로 뒤집는다 */
 const FLIP_RATIO = 0.35;
+/** 가로로 카드 너비만큼 밀 때 도는 각(도). 뒤집는 문턱(35%)이 약 45도 */
+const DRAG_DEG = 130;
+/** 뒤집지 못하는 카드(뒷면 없음)의 좌우 최대 기울기(도) */
+const TILT_Y = 32;
+/** 위아래 최대 기울기(도). 이 축으로는 뒤집지 않는다 */
+const TILT_X = 22;
+/** 마우스를 올려만 둘 때의 기울기(도) */
+const HOVER_Y = 9;
+const HOVER_X = 6;
+/** 카드 두께(cqw, 실제 ID-1 카드보다 조금 두껍게) 와 옆면 층 수 */
+const THICK = 1.4;
+const EDGE_LAYERS = 9;
+
+/** 기울기·빛 상태(돌림판의 CSS 변수로 옮긴다) */
+type Pose = { ry: number; rx: number; px: number; py: number; ht: number };
+const REST: Pose = { ry: 0, rx: 0, px: 0.5, py: 0.5, ht: 0 };
+
+/** 천체 이름 묶음: 이름 안에서 끊지 않고 › 뒤에서만 줄을 바꾼다(한 이름이 줄보다 길 때만 이름 안에서) */
+function PathNames({
+  names,
+  lead,
+}: {
+  names: readonly string[];
+  lead?: string;
+}) {
+  return names.map((n, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: 주소 차례가 곧 자리다(같은 이름이 두 번 나올 수 있다)
+    <Fragment key={`${i}-${n}`}>
+      <span className="inline-block max-w-full break-keep [overflow-wrap:anywhere]">
+        {i === 0 ? lead : ""}
+        {n}
+        {i < names.length - 1 ? " ›" : ""}
+      </span>{" "}
+    </Fragment>
+  ));
+}
 
 /**
- * 우주인 등록증 앞면(docs/36 11-9). 실제 신분증처럼 칸을 나눈다: 성명, 등록번호, 주소(줄여 보이고 누르면 전체), 등록일.
- * - 마우스를 올리거나 끌면 좌우로 살짝 기울고 홀로그램 빛이 지나간다. 움직임 줄이기면 기울지 않는다.
- * - 누르면 주인 확인(`onCheck`): 통과하면 "본인 확인됨"과 지금 시각이 초 단위로 흐르고 홀로그램이 움직인다(캡처와 구분).
+ * 우주인 등록증(docs/36 11-9). 실제 신분증처럼 칸을 나눈다: 성명, 등록번호, 주소(줄여 보이고 누르면 전체), 왼쪽 아래 발급일.
+ * - 카드는 두께가 있는 판 하나다: 앞면·뒷면을 옆면 층 사이에 띄워, 돌려도 가장자리 띠가 보인다.
+ * - 끌기: 가로로 끌면 민 만큼 좌우로 돌고(홀로그램이 그 각도만큼 빛난다), 너비 35%를 넘겨 떼면 그 방향으로 뒤집힌다.
+ *   세로로 끌면 위아래로만 기울고 뒤집히지 않는다. 떼면 제자리로. 마우스는 올려만 둬도 살짝 기운다.
+ *   움직임 줄이기면 돌지 않고, 문턱을 넘겨 떼면 바로 바뀐다.
+ * - 홀로그램(은박 패치·기요셰·무지개 필름·반짝이)은 가만히 있어도 천천히 일렁이고, 기울이면 강해진다.
+ * - 누르면 주인 확인(`onCheck`): 통과하면 "이 기기에서 확인됨"과 지금 시각이 초 단위로 흐르고 홀로그램이 더 세게 흐른다(캡처와 구분).
  *   30초 뒤 원래대로. 실패·취소면 조용히 "확인하지 못했습니다".
  *   "내 패스키가 이 카드 열쇠와 맞다"를 나에게 보여 주는 체험일 뿐, 남에게 보여 주는 증명이 아니다
  *   (가짜 페이지도 같은 표시를 흉내 낼 수 있다). 남에게 당첨을 증명하는 길은 당첨자 확인(별 세 개)이다.
- * - 뒷면(`pub`·`onReveal`이 있을 때): 옆으로 세게 밀거나 「뒷면 보기」로 뒤집는다. 공개 열쇠로 그린 별 무늬와 가린 공개 열쇠 줄.
+ * - 뒷면(`pub`·`onReveal`이 있을 때): 옆으로 밀거나 「뒷면 보기」로 뒤집는다. 공개 열쇠로 그린 별 무늬와 가린 공개 열쇠 줄.
  *   가린 줄을 누르면 본인 확인 뒤 공개 열쇠와 복사 단추를 보인다. 30초 뒤나 다시 뒤집으면 가린다.
  *   공개 열쇠는 비밀이 아니다(장부와 기기에 있다). 캡처·어깨너머로 장부 속 내 응모가 바로 찾히지 않게 하는 실수 방지다.
  *   앞면은 주인 확인, 뒷면은 열쇠 꺼내 보기로 역할을 나눈다. 앞면과 공유에는 공개 열쇠를 넣지 않는다.
  */
 export function AstronautCard({
   astronaut: a,
-  registered,
+  issued,
   clock,
   onCheck,
   forced,
@@ -55,7 +93,8 @@ export function AstronautCard({
   onReveal,
 }: {
   astronaut: Astronaut;
-  registered: Registered;
+  /** 발급일 "2026. 10. 30."(읽는 중이면 null) */
+  issued: string | null;
   clock: Clock;
   onCheck?: (() => Promise<boolean>) | undefined;
   /** 바깥에서 정한 확인 상태(당첨자 확인 승인 때 등록증이 같은 움직임으로 확인되는 모습) */
@@ -65,14 +104,26 @@ export function AstronautCard({
   /** 뒷면 공개 열쇠를 꺼내기 전 본인 확인 */
   onReveal?: (() => Promise<boolean>) | undefined;
 }) {
-  const card = useRef<HTMLDivElement>(null);
+  /** 돌림판(앞뒷면과 옆면 층을 함께 돌린다) */
+  const turn = useRef<HTMLDivElement>(null);
   const press = useRef<{
+    id: number;
     x: number;
     y: number;
+    left: number;
+    top: number;
     w: number;
-    dx: number;
-    moved: boolean;
+    h: number;
+    /** 문턱을 넘어 끌기로 잡았는가(아니면 누르기) */
+    dragging: boolean;
+    target: EventTarget | null;
   } | null>(null);
+  /** 끌고 난 뒤의 click은 안쪽 단추에 보내지 않는다 */
+  const dragged = useRef(false);
+  const pose = useRef<Pose>(REST);
+  const frame = useRef(0);
+  /** 쌓인 뒤집기 각(180의 배수). 왼쪽으로 밀면 줄고 오른쪽이면 는다 */
+  const base = useRef(0);
   const canFlip = pub !== undefined && onReveal !== undefined;
   const [flipped, setFlipped] = useState(false);
   const [reveal, setReveal] = useState<Reveal>("hidden");
@@ -90,6 +141,7 @@ export function AstronautCard({
 
   useEffect(() => {
     reduce.current = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return () => cancelAnimationFrame(frame.current);
   }, []);
 
   // 본인 확인이 이어지는 동안 1초마다 시각을 새로 쓰고, 30초 뒤 원래대로
@@ -120,46 +172,51 @@ export function AstronautCard({
     });
   }, [reveal, clock]);
 
-  const flip = () => {
+  /** 지금 자세를 돌림판의 CSS 변수로(각도·빛 위치·세기). 변수 하나하나가 transform과 홀로그램을 움직인다 */
+  const apply = () => {
+    frame.current = 0;
+    const el = turn.current;
+    if (!el) return;
+    const p = pose.current;
+    el.style.setProperty("--ang", (base.current + p.ry).toFixed(2));
+    el.style.setProperty("--rx", p.rx.toFixed(2));
+    el.style.setProperty("--px", p.px.toFixed(3));
+    el.style.setProperty("--py", p.py.toFixed(3));
+    el.style.setProperty("--ht", p.ht.toFixed(3));
+  };
+  /** 포인터가 화면 주사율보다 자주 와도 한 장면에 한 번만 쓴다 */
+  const schedule = (p: Pose) => {
+    pose.current = p;
+    if (!frame.current) frame.current = requestAnimationFrame(apply);
+  };
+  /** 손을 떼면 제자리(또는 뒤집힌 자리)로 부드럽게 */
+  const settle = () => {
+    cancelAnimationFrame(frame.current);
+    pose.current = REST;
+    const el = turn.current;
+    if (el) delete el.dataset.dragging;
+    apply();
+  };
+
+  /** dir: 1이면 오른쪽으로, -1이면 왼쪽으로 뒤집는다 */
+  const flip = (dir: 1 | -1 = 1) => {
     if (!canFlip) return;
+    base.current += dir * 180;
     flipTurn.current += 1;
-    setFlipped((v) => !v);
+    setFlipped((Math.round(base.current / 180) & 1) === 1);
     setReveal("hidden");
     setKeyCopied(false);
+    settle();
   };
 
   const revealKey = async () => {
     if (!onReveal || reveal !== "hidden") return;
-    const turn = flipTurn.current;
+    const t = flipTurn.current;
     setReveal("checking");
     const ok = await onReveal();
-    if (flipTurn.current !== turn) return;
+    if (flipTurn.current !== t) return;
     // 실패·취소면 조용히 그대로 가린다
     setReveal(ok ? "shown" : "hidden");
-  };
-
-  /** 가로로 충분히 밀고 뗐는가 */
-  const swiped = (p: { w: number; dx: number; moved: boolean } | null) =>
-    canFlip && p?.moved === true && Math.abs(p.dx) > p.w * FLIP_RATIO;
-
-  const tilt = (ry: number, rx: number, hx: number) => {
-    const el = card.current;
-    if (!el || reduce.current) return;
-    el.style.transform = `rotateY(${ry}deg) rotateX(${rx}deg)`;
-    el.style.setProperty("--hx", `${hx}%`);
-    // 기울기 세기(0~1): 무지개 필름과 키네그램이 이 값으로 빛난다
-    el.style.setProperty(
-      "--ht",
-      Math.min(1, Math.hypot(ry, rx) / TILT).toFixed(3),
-    );
-  };
-  const settle = () => {
-    const el = card.current;
-    if (!el) return;
-    delete el.dataset.tilting;
-    el.style.transform = "";
-    el.style.removeProperty("--hx");
-    el.style.removeProperty("--ht");
   };
 
   const check = async () => {
@@ -168,35 +225,86 @@ export function AstronautCard({
     setOwner((await onCheck()) ? "ok" : "fail");
   };
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    const el = card.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const p = press.current;
-    if (p) {
-      // 끌기: 가로로 끈 만큼 기운다(세로는 화면 넘기기에 맡긴다)
-      const dx = e.clientX - p.x;
-      p.dx = dx;
-      if (Math.abs(dx) > TAP_SLOP || Math.abs(e.clientY - p.y) > TAP_SLOP)
-        p.moved = true;
-      el.dataset.tilting = "";
-      const k = Math.max(-1, Math.min(1, dx / (r.width / 2)));
-      tilt(k * TILT, 0, 50 - k * 40);
-      return;
-    }
-    if (e.pointerType !== "mouse") return;
-    const x = (e.clientX - r.left) / r.width - 0.5;
-    const y = (e.clientY - r.top) / r.height - 0.5;
-    el.dataset.tilting = "";
-    tilt(x * TILT * 2, -y * TILT, 50 - x * 80);
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary || e.button !== 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    dragged.current = false;
+    press.current = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: r.left,
+      top: r.top,
+      w: r.width,
+      h: r.height,
+      dragging: false,
+      target: e.target,
+    };
   };
 
-  const regText =
-    registered.state === "done"
-      ? `${registered.date} · ${registered.round}`
-      : registered.state === "pending"
-        ? "첫 응모 때 기록"
-        : "…";
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = turn.current;
+    if (!el) return;
+    const p = press.current;
+    if (p && p.id === e.pointerId) {
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      if (!p.dragging) {
+        if (Math.hypot(dx, dy) <= TAP_SLOP) return;
+        // 문턱을 넘으면 끌기로 잡는다: 카드 밖으로 나가도 따라오고, 안쪽 단추는 눌리지 않는다
+        p.dragging = true;
+        dragged.current = true;
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }
+      if (reduce.current) return;
+      el.dataset.dragging = "";
+      const ry = canFlip
+        ? Math.max(-180, Math.min(180, (dx / p.w) * DRAG_DEG))
+        : TILT_Y * Math.tanh(((dx / p.w) * DRAG_DEG) / TILT_Y);
+      // 위아래는 끝으로 갈수록 덜 기우는 고무줄처럼, 최대 TILT_X도
+      const rx = TILT_X * Math.tanh(((-dy / p.h) * 50) / TILT_X);
+      schedule({
+        ry,
+        rx,
+        px: Math.max(0, Math.min(1, (e.clientX - p.left) / p.w)),
+        py: Math.max(0, Math.min(1, (e.clientY - p.top) / p.h)),
+        ht: Math.min(1, Math.max(Math.abs(ry), Math.abs(rx) * 1.3) / 22),
+      });
+      return;
+    }
+    // 마우스를 올려만 둘 때: 살짝 기울고 빛이 포인터를 따라온다
+    if (e.pointerType !== "mouse" || reduce.current || press.current) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    el.dataset.dragging = "";
+    schedule({
+      ry: (x - 0.5) * 2 * HOVER_Y,
+      rx: -(y - 0.5) * 2 * HOVER_X,
+      px: x,
+      py: y,
+      ht: Math.min(1, Math.hypot(x - 0.5, y - 0.5) * 1.6),
+    });
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = press.current;
+    if (!p || p.id !== e.pointerId) return;
+    press.current = null;
+    if (p.dragging) {
+      const dx = e.clientX - p.x;
+      if (canFlip && Math.abs(dx) > p.w * FLIP_RATIO) flip(dx > 0 ? 1 : -1);
+      else settle();
+      return;
+    }
+    settle();
+    // 안쪽 단추(주소·패스키 표시·열쇠 꺼내기)는 그 단추의 click이 맡는다
+    const t = p.target as Element | null;
+    if (t?.closest?.("button, a")) return;
+    if (!flipped) void check();
+  };
+
+  const regDate = issued ?? "…";
   const time = new Date(now);
   const hms = [time.getHours(), time.getMinutes(), time.getSeconds()]
     .map((n) => String(n).padStart(2, "0"))
@@ -205,14 +313,49 @@ export function AstronautCard({
   return (
     <div className="flex flex-col items-center gap-2">
       {/* 카드 너비가 cqw의 기준(카드 자신의 container-type은 자기 모서리에 쓰이지 않고, 없으면 화면 너비가 기준이 된다) */}
-      <div className="w-full max-w-md [container-type:inline-size] [perspective:900px]">
+      <div
+        data-idcard-stage
+        className="sd-idcard-stage w-full max-w-md [container-type:inline-size] [perspective:1100px]"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          press.current = null;
+          settle();
+        }}
+        onPointerLeave={() => {
+          if (!press.current) settle();
+        }}
+        onClickCapture={(e) => {
+          if (!dragged.current) return;
+          dragged.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
         <div
+          ref={turn}
           className="sd-idcard-flip relative"
           data-flipped={flipped ? "" : undefined}
         >
+          {/* 옆면: 앞뒷면 사이에 쌓은 얇은 층. 돌리면 가장자리 띠로 보인다 */}
+          {Array.from({ length: EDGE_LAYERS }, (_, i) => {
+            const z = -THICK / 2 + (THICK * (i + 0.5)) / EDGE_LAYERS;
+            return (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: 고정된 층
+                key={i}
+                aria-hidden="true"
+                className={cn(
+                  "sd-idcard-edge",
+                  (i === 0 || i === EDGE_LAYERS - 1) && "sd-idcard-edge-ink",
+                )}
+                style={{ transform: `translateZ(${z.toFixed(3)}cqw)` }}
+              />
+            );
+          })}
           {/* biome-ignore lint/a11y/useSemanticElements: 카드 안에 다른 단추(주소·패스키 마크)가 있어 button으로 감쌀 수 없다 */}
           <div
-            ref={card}
             role="button"
             tabIndex={0}
             aria-label={`우주인 등록증 ${a.name}. ${onCheck ? "누르면 본인 확인" : ""}`}
@@ -220,32 +363,9 @@ export function AstronautCard({
             data-owner={owner}
             inert={flipped}
             className={cn(
-              "sd-idcard sd-idcard-face sd-idcard-sweep relative aspect-[1.586] w-full cursor-pointer select-none overflow-hidden rounded-[3.7cqw] text-white outline-none focus-visible:ring-2 focus-visible:ring-sky-300",
+              "sd-idcard sd-idcard-face sd-idcard-front relative aspect-[1.586] w-full cursor-pointer select-none overflow-hidden rounded-[3.7cqw] text-white outline-none focus-visible:ring-2 focus-visible:ring-sky-300",
+              flipped && "pointer-events-none",
             )}
-            onPointerDown={(e) => {
-              press.current = {
-                x: e.clientX,
-                y: e.clientY,
-                w: e.currentTarget.getBoundingClientRect().width,
-                dx: 0,
-                moved: false,
-              };
-            }}
-            onPointerMove={onPointerMove}
-            onPointerUp={() => {
-              const p = press.current;
-              press.current = null;
-              settle();
-              if (swiped(p)) flip();
-              else if (p && !p.moved) void check();
-            }}
-            onPointerCancel={() => {
-              press.current = null;
-              settle();
-            }}
-            onPointerLeave={() => {
-              if (!press.current) settle();
-            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -254,24 +374,18 @@ export function AstronautCard({
             }}
           >
             <CardSecurity />
+            <Guilloche />
 
             {/* 머리 */}
-            <div className="absolute inset-x-[5cqw] top-[4cqw] flex items-start justify-between">
-              <div className="flex flex-col leading-none">
-                <span className="font-black text-[6cqw] tracking-[0.06em]">
-                  우주인 등록증
-                </span>
-                <span className="mt-[1.2cqw] text-[2.3cqw] text-sky-100/60 tracking-[0.28em]">
-                  STARDRAW · ASTRONAUT ID
-                </span>
-              </div>
+            <div className="absolute inset-x-[5cqw] top-[4.4cqw] flex items-center justify-between">
+              <span className="font-black text-[6cqw] leading-none tracking-[0.06em]">
+                우주인 등록증
+              </span>
               <button
                 type="button"
                 aria-label="패스키 표시: 무엇인가요?"
                 aria-expanded={aboutMark}
                 data-passkey-badge
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setAboutMark((v) => !v);
@@ -284,7 +398,7 @@ export function AstronautCard({
             </div>
 
             {/* 사진 */}
-            <div className="absolute top-[17cqw] right-[5cqw] w-[23cqw]">
+            <div className="absolute top-[14.5cqw] right-[5cqw] w-[23cqw]">
               <Avatar
                 face={a.face}
                 egg={a.egg}
@@ -298,7 +412,7 @@ export function AstronautCard({
               {a.egg && (
                 <span
                   data-egg={a.egg}
-                  className="-bottom-[1.6cqw] absolute inset-x-0 mx-auto w-max rounded-full bg-amber-300 px-[1.6cqw] py-[0.3cqw] font-bold text-[2cqw] text-slate-950"
+                  className="-bottom-[1.6cqw] absolute inset-x-0 z-10 mx-auto w-max rounded-full bg-amber-300 px-[1.6cqw] py-[0.3cqw] font-bold text-[2cqw] text-slate-950"
                 >
                   ★ 드문 사진
                 </span>
@@ -320,7 +434,7 @@ export function AstronautCard({
             </div>
 
             {/* 칸 */}
-            <dl className="absolute top-[17cqw] right-[31cqw] left-[5cqw] grid grid-cols-[auto_1fr] items-baseline gap-x-[3cqw] gap-y-[1.6cqw]">
+            <dl className="absolute top-[15cqw] right-[31cqw] left-[5cqw] grid grid-cols-[auto_1fr] items-baseline gap-x-[3cqw] gap-y-[2cqw]">
               <dt className="text-[2.6cqw] text-sky-100/55">성명</dt>
               <dd className="font-bold text-[5.6cqw] leading-none tracking-[0.12em]">
                 {a.name}
@@ -338,25 +452,30 @@ export function AstronautCard({
                   type="button"
                   aria-expanded={fullAddress}
                   aria-label={`주소: ${a.short.join(", ")}. 누르면 전체 주소`}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onPointerUp={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setFullAddress((v) => !v);
                   }}
-                  className="line-clamp-2 break-keep text-left text-[2.9cqw] leading-snug underline decoration-white/25 decoration-dotted underline-offset-2"
+                  className="line-clamp-2 text-left text-[2.9cqw] leading-snug underline decoration-white/25 decoration-dotted underline-offset-2"
                 >
-                  {a.otherGalaxy ? "… › " : ""}
-                  {a.short.join(" › ")}
+                  <PathNames
+                    names={a.short}
+                    lead={a.otherGalaxy ? "… › " : ""}
+                  />
                 </button>
-              </dd>
-              <dt className="text-[2.6cqw] text-sky-100/55">등록일</dt>
-              <dd className="text-[3cqw] tabular-nums" data-registered>
-                {regText}
               </dd>
             </dl>
 
-            {/* 발급 */}
+            <Kinegram />
+            <FoilPatch className="top-[36.5cqw] left-[66cqw] size-[13.5cqw]" />
+
+            {/* 발급일(왼쪽 아래)과 발급 기관·직인(오른쪽 아래) */}
+            <span
+              data-issue-date
+              className="absolute bottom-[4.2cqw] left-[5cqw] text-[3.1cqw] text-sky-50/90 tabular-nums tracking-[0.04em]"
+            >
+              {regDate}
+            </span>
             <div className="absolute right-[5cqw] bottom-[3.6cqw] left-[5cqw] flex items-end justify-end gap-[2cqw]">
               <span className="mr-[14cqw] text-right text-[2.6cqw] text-sky-50/85 leading-tight">
                 {AGENCY}
@@ -364,14 +483,13 @@ export function AstronautCard({
               <Seal className="-right-[1cqw] absolute bottom-[-1.5cqw] size-[13cqw] opacity-95" />
             </div>
 
-            <Kinegram />
-            <div className="sd-idcard-holo" />
+            <HoloFilm />
 
             {owner === "ok" && (
               <div
                 role="status"
                 data-owner-ok
-                className="absolute bottom-[4cqw] left-[5cqw] flex items-center gap-[1.4cqw] rounded-full bg-emerald-400/90 px-[2.6cqw] py-[0.8cqw] font-bold text-[2.8cqw] text-emerald-950 shadow-lg"
+                className="absolute bottom-[9.6cqw] left-[5cqw] flex items-center gap-[1.4cqw] rounded-full bg-emerald-400/90 px-[2.6cqw] py-[0.8cqw] font-bold text-[2.8cqw] text-emerald-950 shadow-lg"
               >
                 ✓ 이 기기에서 확인됨
                 <span className="font-mono tabular-nums" data-owner-time>
@@ -379,6 +497,7 @@ export function AstronautCard({
                 </span>
               </div>
             )}
+            <div aria-hidden="true" className="sd-idcard-shade" />
           </div>
           {canFlip && art && (
             // biome-ignore lint/a11y/useSemanticElements: 뒷면은 묶음일 뿐 입력 양식이 아니라 fieldset을 쓰지 않는다
@@ -387,30 +506,10 @@ export function AstronautCard({
               inert={!flipped}
               aria-label="우주인 등록증 뒷면"
               role="group"
-              className="sd-idcard sd-idcard-face sd-idcard-back absolute inset-0 select-none overflow-hidden rounded-[3.7cqw] text-white"
-              onPointerDown={(e) => {
-                press.current = {
-                  x: e.clientX,
-                  y: e.clientY,
-                  w: e.currentTarget.getBoundingClientRect().width,
-                  dx: 0,
-                  moved: false,
-                };
-              }}
-              onPointerMove={(e) => {
-                const p = press.current;
-                if (!p) return;
-                p.dx = e.clientX - p.x;
-                if (Math.abs(p.dx) > TAP_SLOP) p.moved = true;
-              }}
-              onPointerUp={() => {
-                const p = press.current;
-                press.current = null;
-                if (swiped(p)) flip();
-              }}
-              onPointerCancel={() => {
-                press.current = null;
-              }}
+              className={cn(
+                "sd-idcard sd-idcard-face sd-idcard-back absolute inset-0 select-none overflow-hidden rounded-[3.7cqw] text-white",
+                !flipped && "pointer-events-none",
+              )}
             >
               {/* 공개 열쇠에서 정해지는 별 무늬 */}
               <svg
@@ -457,19 +556,14 @@ export function AstronautCard({
                   />
                 ))}
               </svg>
-              <div className="sd-idcard-holo" />
+              <HoloFilm />
 
-              <div className="absolute inset-x-[5cqw] top-[4cqw] flex items-start justify-between">
-                <span className="text-[2.3cqw] text-sky-100/60 tracking-[0.28em]">
-                  STARDRAW · PUBLIC KEY
-                </span>
-                <span className="text-[2.6cqw] text-sky-50/80">
-                  카노푸스 우주국
-                </span>
-              </div>
+              <span className="absolute top-[4.4cqw] left-[5cqw] text-[2.8cqw] text-sky-50/80 tracking-[0.08em]">
+                카노푸스 우주국
+              </span>
 
-              <div className="absolute inset-x-[5cqw] bottom-[5cqw] flex flex-col gap-[1.2cqw] rounded-[2.4cqw] border border-white/15 bg-slate-950/55 px-[3cqw] py-[2.4cqw]">
-                <div className="flex items-center justify-between">
+              <div className="absolute inset-x-[5cqw] bottom-[5cqw] flex flex-col gap-[1cqw] rounded-[2.4cqw] border border-white/15 bg-slate-950/85 px-[3cqw] py-[2.2cqw]">
+                <div className="flex h-[4.6cqw] items-center justify-between">
                   <span className="text-[2.6cqw] text-sky-100/60">
                     공개 열쇠
                   </span>
@@ -488,33 +582,37 @@ export function AstronautCard({
                     </button>
                   )}
                 </div>
-                {reveal === "shown" ? (
-                  <code
-                    data-public-key
-                    className="break-all font-mono text-[2.25cqw] text-white/90 leading-snug"
-                  >
-                    {hex}
-                  </code>
-                ) : (
-                  <button
-                    type="button"
-                    data-key-mask
-                    aria-label="공개 열쇠 꺼내 보기(본인 확인)"
-                    disabled={reveal === "checking"}
-                    onClick={() => void revealKey()}
-                    className="flex items-center justify-between gap-[2cqw] rounded-[1.4cqw] bg-white/5 px-[2cqw] py-[1.2cqw] text-left hover:bg-white/10"
-                  >
-                    <span className="font-mono text-[3.2cqw] text-white/70 tracking-[0.2em]">
-                      ●●●● ●●●● ●●●● ●●●●
-                    </span>
-                    <span className="shrink-0 text-[2.5cqw] text-sky-100/80">
-                      {reveal === "checking"
-                        ? "확인하는 중…"
-                        : "눌러서 꺼내 보기"}
-                    </span>
-                  </button>
-                )}
+                {/* 가린 줄과 꺼낸 값이 같은 높이(130자 세 줄)를 차지해, 꺼내도 상자 높이가 변하지 않는다 */}
+                <div className="h-[9.6cqw]" data-key-slot>
+                  {reveal === "shown" ? (
+                    <code
+                      data-public-key
+                      className="block break-all font-mono text-[2.25cqw] text-white/90 leading-[3.2cqw]"
+                    >
+                      {hex}
+                    </code>
+                  ) : (
+                    <button
+                      type="button"
+                      data-key-mask
+                      aria-label="공개 열쇠 꺼내 보기(본인 확인)"
+                      disabled={reveal === "checking"}
+                      onClick={() => void revealKey()}
+                      className="flex size-full items-center justify-between gap-[2cqw] rounded-[1.4cqw] bg-white/5 px-[2cqw] text-left hover:bg-white/10"
+                    >
+                      <span className="font-mono text-[3.2cqw] text-white/70 tracking-[0.2em]">
+                        ●●●● ●●●● ●●●● ●●●●
+                      </span>
+                      <span className="shrink-0 text-[2.5cqw] text-sky-100/80">
+                        {reveal === "checking"
+                          ? "확인하는 중…"
+                          : "눌러서 꺼내 보기"}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
+              <div aria-hidden="true" className="sd-idcard-shade" />
             </div>
           )}
         </div>
@@ -524,7 +622,7 @@ export function AstronautCard({
         <button
           type="button"
           data-flip-card
-          onClick={flip}
+          onClick={() => flip(1)}
           className="rounded-full border border-white/15 px-3 py-1 text-white/70 text-xs hover:bg-white/10"
         >
           {flipped ? "앞면 보기" : "뒷면 보기"}
@@ -540,16 +638,14 @@ export function AstronautCard({
             ? "이 값으로 장부 속 내 응모를 찾을 수 있습니다"
             : reveal === "checking"
               ? "꺼내 보기 전에 본인 확인을 하고 있습니다"
-              : "공개 열쇠는 꺼내 보기 전에 본인 확인을 합니다"
+              : ""
           : owner === "checking"
             ? "등록증을 확인하고 있습니다"
             : owner === "fail"
               ? "확인하지 못했습니다"
               : owner === "ok"
                 ? "이 기기의 패스키가 이 등록증의 열쇠와 맞습니다"
-                : onCheck
-                  ? "등록증을 누르면 본인 확인"
-                  : ""}
+                : ""}
       </p>
 
       {!flipped && (aboutMark || (owner === "ok" && !forced)) && (
@@ -570,9 +666,9 @@ export function AstronautCard({
       {!flipped && fullAddress && (
         <p
           data-full-address
-          className="break-keep text-center text-white/80 text-xs leading-relaxed"
+          className="text-center text-white/80 text-xs leading-relaxed"
         >
-          {a.address.join(" › ")}
+          <PathNames names={a.address} />
           {a.ly !== undefined && (
             <span className="block text-white/55">
               지구에서 약 {a.ly.toLocaleString("ko-KR")}광년

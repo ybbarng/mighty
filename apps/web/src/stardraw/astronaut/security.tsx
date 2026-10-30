@@ -1,10 +1,11 @@
 /**
- * 등록증 앞면의 보안 무늬 흉내(docs/36 11-9). 실제 신분증의 기요셰·키네그램·마이크로 문자를 꾸밈으로 흉내 낸다.
- * 추첨 화면의 크고 하얀 별과 겹쳐 보이지 않게 "무지개 필름" 결로 은은하게 둔다. 무엇을 판정하는 데 쓰지 않는다.
- * 모두 정적인 SVG·CSS 그라디언트이고 움직임은 CSS(기울기 변수 --hx·--ht, 주인 확인 뒤 애니메이션)만 쓴다.
+ * 등록증의 보안 무늬 흉내(docs/36 11-9). 실제 신분증의 기요셰·은박 홀로그램·키네그램·반짝이·마이크로 문자를 꾸밈으로 흉내 낸다.
+ * 추첨 화면의 크고 하얀 별과 겹쳐 보이지 않게 "무지개 필름" 결로 둔다. 무엇을 판정하는 데 쓰지 않는다.
+ * 그림은 한 번 만든 SVG·CSS 그라디언트이고, 움직임은 카드 돌림판의 CSS 변수(빛 위치 --lx·--ly, 색 각 --la, 세기 --li)와
+ * 가만히 있을 때의 일렁임(--drift)으로만 바뀐다(globals.css `.sd-idcard`).
  */
 
-import { useId } from "react";
+import { type CSSProperties, useId } from "react";
 
 import { ART_H, ART_W } from "./key-art";
 
@@ -221,8 +222,8 @@ const KINE_MASK = (() => {
 })();
 
 /**
- * 무지개 필름 속 용골자리(키네그램): 기울이면 무지개빛이 지나가며 떠올랐다 사라진다.
- * 투명도와 빛의 위치는 CSS 변수(--ht 기울기 세기, --hx 빛 위치)로만 바뀐다.
+ * 사진 위에 겹친 투명 무지개 용골자리(키네그램): 기울이면 무지개빛이 지나가며 또렷해진다.
+ * 투명도와 빛의 위치는 CSS 변수(--li 세기, --lx 빛 위치)로만 바뀐다.
  */
 export function Kinegram() {
   return (
@@ -231,6 +232,169 @@ export function Kinegram() {
       data-kinegram
       className="sd-idcard-kine pointer-events-none absolute"
       style={{ maskImage: KINE_MASK, WebkitMaskImage: KINE_MASK }}
+    />
+  );
+}
+
+/** 짧은 숫자(SVG 길이를 줄인다) */
+const f1 = (n: number) => n.toFixed(1);
+
+/** SVG 문자열을 CSS url()로 */
+const svgUrl = (viewBox: string, body: string) =>
+  `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`,
+  )}")`;
+
+/**
+ * 기요셰 가면 그림: 아래쪽을 가로지르는 물결 띠와 아래 가운데 꽃무늬(rosette).
+ * 선 색은 CSS 무지개 그라디언트가 채우고, 기울기(--lx)에 따라 색이 바뀐다
+ */
+const GUILLOCHE_MASK = (() => {
+  const paths: string[] = [];
+  // 물결 띠: 두 주기의 사인을 겹친 선 열두 줄
+  for (let i = 0; i < 12; i++) {
+    let d = "";
+    for (let x = -2; x <= ART_W + 2; x += 1.6) {
+      const t = (x / ART_W) * Math.PI * 2;
+      const y =
+        68 +
+        i * 0.9 +
+        4 * Math.sin(t * 2 + i * 0.32) +
+        2 * Math.sin(t * 7 + i * 0.6);
+      d += `${d ? "L" : "M"}${f1(x)} ${f1(y)}`;
+    }
+    paths.push(d);
+  }
+  // 꽃무늬: 꽃잎 여섯 장짜리 고리를 조금씩 돌려 열여섯 겹
+  const cx = 64;
+  const cy = 84;
+  for (let j = 0; j < 16; j++) {
+    let d = "";
+    for (let k = 0; k <= 120; k++) {
+      const a = (k / 120) * Math.PI * 2;
+      const r = 10 + 4 * Math.sin(6 * a + (j * Math.PI * 2) / 16);
+      d += `${d ? "L" : "M"}${f1(cx + r * Math.cos(a))} ${f1(cy + r * Math.sin(a))}`;
+    }
+    paths.push(`${d}Z`);
+  }
+  const body = paths
+    .map(
+      (d) => `<path d="${d}" fill="none" stroke="#fff" stroke-width="0.22"/>`,
+    )
+    .join("");
+  return svgUrl(`0 0 ${ART_W} ${ART_H}`, body);
+})();
+
+/** 기요셰: 가는 선에 무지개빛이 기울기를 따라 미끄러진다 */
+export function Guilloche() {
+  return (
+    <div
+      aria-hidden="true"
+      data-guilloche
+      className="sd-guilloche pointer-events-none absolute inset-0"
+      style={{ maskImage: GUILLOCHE_MASK, WebkitMaskImage: GUILLOCHE_MASK }}
+    />
+  );
+}
+
+/** 정해진 차례로 흩는 수(시드 고정, 화면마다 같은 반짝이 자리) */
+function scatter(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 1103515245 + 12345) % 2147483648;
+    return s / 2147483648;
+  };
+}
+
+/** 반짝이 무리 셋. 무리마다 빛나는 기울기가 달라 기울이면 반짝임이 옮겨 다닌다 */
+const GLITTER: string[] = [1, 2, 3].map((seed) => {
+  const r = scatter(seed * 7919);
+  let body = "";
+  for (let i = 0; i < 11; i++) {
+    const x = r() * 100;
+    const y = r() * 100;
+    const k = 0.5 + r() * 0.9;
+    // 작은 네 갈래 반짝이와 점
+    if (r() < 0.3) {
+      const L = k * 2.4;
+      const w = k * 0.5;
+      const pt = (dx: number, dy: number) => `${f1(x + dx)} ${f1(y + dy)}`;
+      body += `<path d="M${pt(0, -L)}L${pt(w, 0)}L${pt(0, L)}L${pt(-w, 0)}ZM${pt(-L, 0)}L${pt(0, w)}L${pt(L, 0)}L${pt(0, -w)}Z" fill="#fff"/>`;
+    } else
+      body += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${k.toFixed(2)}" fill="#fff"/>`;
+  }
+  return svgUrl("0 0 100 100", body);
+});
+
+/** 무지개 필름과 반짝이(앞뒷면 맨 위에 덮는다) */
+export function HoloFilm() {
+  return (
+    <>
+      <div aria-hidden="true" className="sd-holo-film" data-holo-film>
+        <div className="sd-holo-band" />
+      </div>
+      <div aria-hidden="true" className="sd-holo-glitter">
+        {GLITTER.map((g, i) => (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: 고정된 셋
+            key={i}
+            style={{ backgroundImage: g, "--k": i } as CSSProperties}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** 은박 패치의 새김 무늬: 두 고리, 고리 글자, 카노푸스(여덟 갈래 별), 작은 용골자리 */
+const FOIL_ART = (() => {
+  const ink = "rgba(18,28,58,0.5)";
+  const rings = [22, 27, 32]
+    .map(
+      (r) =>
+        `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${ink}" stroke-width="0.5" stroke-dasharray="1.2 1.4"/>`,
+    )
+    .join("");
+  const star = Array.from({ length: 16 }, (_, i) => {
+    const a = (i / 16) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 === 0 ? (i % 4 === 0 ? 17 : 10) : 3.6;
+    return `${f1(50 + r * Math.cos(a))},${f1(50 + r * Math.sin(a))}`;
+  }).join(" ");
+  const mini = placed(30, 60, 40);
+  const lines = CARINA_LINES.map(([p, q]) => {
+    const a = mini[p] as Pt;
+    const b = mini[q] as Pt;
+    return `<line x1="${f1(a.x)}" y1="${f1(a.y)}" x2="${f1(b.x)}" y2="${f1(b.y)}" stroke="${ink}" stroke-width="0.6"/>`;
+  }).join("");
+  const dots = mini
+    .map(
+      (s) =>
+        `<circle cx="${f1(s.x)}" cy="${f1(s.y)}" r="${(s.r * 1.4).toFixed(2)}" fill="${ink}"/>`,
+    )
+    .join("");
+  const body =
+    `<defs><path id="r" d="M50 50m-41 0a41 41 0 1 1 82 0a41 41 0 1 1 -82 0"/></defs>` +
+    `<circle cx="50" cy="50" r="47.5" fill="none" stroke="${ink}" stroke-width="1"/>` +
+    `<circle cx="50" cy="50" r="36" fill="none" stroke="${ink}" stroke-width="0.8"/>` +
+    `<text font-family="sans-serif" font-size="7.2" font-weight="700" letter-spacing="1.2" fill="${ink}"><textPath href="#r">CANOPUS SPACE AGENCY · CANOPUS ·</textPath></text>` +
+    rings +
+    `<polygon points="${star}" fill="rgba(255,255,255,0.55)" stroke="${ink}" stroke-width="0.6"/>` +
+    lines +
+    dots;
+  return svgUrl("0 0 100 100", body);
+})();
+
+/**
+ * 은박 홀로그램 패치(실제 신분증의 은빛 무지개 필름 조각). 카노푸스 우주국 상징과 용골자리를 새기고,
+ * 은빛 바탕 위 무지개빛이 기울기(--la·--lx·--ly)에 따라 돌고 반사광이 미끄러진다. 가만히 있어도 천천히 일렁인다
+ */
+export function FoilPatch({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-foil
+      className={`sd-foil pointer-events-none absolute ${className ?? ""}`}
+      style={{ "--foil-art": FOIL_ART } as CSSProperties}
     />
   );
 }

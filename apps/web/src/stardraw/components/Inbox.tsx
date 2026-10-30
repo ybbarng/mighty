@@ -13,7 +13,7 @@ import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
-import { useRegistered } from "./AstronautPanel";
+import { useIssued } from "./AstronautPanel";
 import { formatTime, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -355,12 +355,12 @@ function ApprovingCard({
   phase: "checking" | "ok";
 }) {
   const a = useMemo(() => astronautOf(keyInfo.pub), [keyInfo.pub]);
-  const registered = useRegistered(services, keyInfo.pub);
+  const issued = useIssued(services, keyInfo.pub);
   return (
     <div className="sd-rise" data-approving={phase}>
       <AstronautCard
         astronaut={a}
-        registered={registered}
+        issued={issued}
         clock={services.clock}
         forced={phase}
       />

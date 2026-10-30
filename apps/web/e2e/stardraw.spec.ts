@@ -208,7 +208,10 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(card).toBeVisible();
   const number = (await card.getAttribute("data-idcard")) as string;
   expect(number).toMatch(/^SD-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
-  await expect(card.locator("[data-registered]")).toHaveText("첫 응모 때 기록");
+  // 발급일은 실제 신분증처럼 날짜 하나(아직 응모 전이라 이 기기가 패스키를 만든 날)
+  await expect(card.locator("[data-issue-date]")).toHaveText(
+    /^\d{4}\. \d{1,2}\. \d{1,2}\.$/,
+  );
   // 앞면에는 공개 열쇠가 없다(뒷면에 가려 둔다)
   await expect(page.locator("[data-public-key]")).toHaveCount(0);
   await expect(card).not.toContainText(/04[0-9a-f]{20}/);
@@ -315,13 +318,13 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.reload();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
 
-  // 내 응모 머리에 이름, 누르면 내 등록증. 같은 공개 열쇠라 같은 등록증이고, 이제 등록일이 있다
+  // 내 응모 머리에 이름, 누르면 내 등록증. 같은 공개 열쇠라 같은 등록증이고, 발급일은 이제 등록 회차의 날짜다
   await page.locator("[data-my-name]").click();
   await expect(page).toHaveURL(/\/stardraw\/id$/);
   const myCard = page.locator(`[data-idcard="${number}"]`);
   await expect(myCard).toBeVisible();
-  await expect(myCard.locator("[data-registered]")).toHaveText(
-    /^\d{4}\. \d{1,2}\. \d{1,2}\. · 1회$/,
+  await expect(myCard.locator("[data-issue-date]")).toHaveText(
+    /^\d{4}\. \d{1,2}\. \d{1,2}\.$/,
   );
   // 누르면 주인 확인: 패스키로 새 문제 값에 서명하고 이 기기에서 확인한다. 시각이 초 단위로 흐른다
   await myCard.click({ position: CARD_TAP });
@@ -815,4 +818,88 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
   const own = screen.locator("[data-idcard]");
   await own.click({ position: CARD_TAP });
   await expect(own.locator("[data-owner-ok]")).toBeVisible();
+});
+
+test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제자리, 세로는 기울기만, 단추는 그대로", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === "phone-landscape", "PC와 휴대폰 세로로");
+  // 끄는 동안 따라 도는 모습까지 보려고 움직임을 켠다. 판정은 각도 변수와 뒤집힘 표시로만(시간을 기다리지 않는다)
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/stardraw/demo#tour-id-card");
+  const screen = page.locator("[data-tour-screen][data-tour-ready]");
+  const stage = screen.locator("[data-idcard-stage]");
+  await expect(stage.locator("[data-idcard]")).toBeVisible({ timeout: 30_000 });
+  const turn = stage.locator(".sd-idcard-flip");
+  const angle = (name: "--ang" | "--rx") =>
+    turn.evaluate(
+      (el, n) => Number.parseFloat(el.style.getPropertyValue(n) || "0"),
+      name,
+    );
+  const box = (await stage.boundingBox()) as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  /** 가운데에서 (fx, fy)만큼(카드 너비·높이 비율) 끈다. 떼기 전 할 일은 `during` */
+  const drag = async (fx: number, fy: number, during?: () => Promise<void>) => {
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + box.width * fx, cy + box.height * fy, {
+      steps: 5,
+    });
+    await during?.();
+    await page.mouse.up();
+  };
+
+  // 조금 밀면 민 만큼 돌고(너비 20% = 26도) 떼면 제자리
+  await drag(0.2, 0, async () => {
+    await expect.poll(() => angle("--ang")).toBeGreaterThan(20);
+    expect(await angle("--ang")).toBeLessThan(32);
+  });
+  await expect(turn).not.toHaveAttribute("data-flipped");
+  expect(await angle("--ang")).toBe(0);
+
+  // 문턱을 넘겨 오른쪽으로 밀면 오른쪽으로(+180) 뒤집힌다
+  await drag(0.5, 0);
+  await expect(turn).toHaveAttribute("data-flipped", "");
+  expect(await angle("--ang")).toBe(180);
+  await expect(screen.locator("[data-key-mask]")).toBeVisible();
+  // 뒷면에서 왼쪽으로 밀면 왼쪽으로 돌아 앞면, 한 번 더 왼쪽이면 -180(각이 쌓인다)
+  await drag(-0.5, 0);
+  await expect(turn).not.toHaveAttribute("data-flipped");
+  expect(await angle("--ang")).toBe(0);
+  await drag(-0.5, 0);
+  await expect(turn).toHaveAttribute("data-flipped", "");
+  expect(await angle("--ang")).toBe(-180);
+  // 「앞면 보기」 단추는 그대로
+  await page.locator("[data-flip-card]").click();
+  await expect(turn).not.toHaveAttribute("data-flipped");
+  expect(await angle("--ang")).toBe(0);
+
+  // 세로로 크게 끌어도 위아래로 기울 뿐(최대 22도) 뒤집히지 않는다
+  await drag(0, 0.45, async () => {
+    await expect.poll(() => angle("--rx")).toBeLessThan(-10);
+    expect(await angle("--rx")).toBeGreaterThanOrEqual(-22);
+    expect(await angle("--ang")).toBe(0);
+  });
+  await expect(turn).not.toHaveAttribute("data-flipped");
+  expect(await angle("--rx")).toBe(0);
+
+  // 주소 단추 위에서 시작해 끌면 단추가 눌리지 않고, 짧게 누르면 눌린다
+  const address = stage.getByRole("button", { name: /^주소:/ });
+  const at = (await address.boundingBox()) as { x: number; y: number };
+  await page.mouse.move(at.x + 4, at.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 40, at.y + 4, { steps: 4 });
+  await page.mouse.up();
+  await expect(screen.locator("[data-full-address]")).toHaveCount(0);
+  await address.click();
+  await expect(screen.locator("[data-full-address]")).toBeVisible();
+  // 카드를 짧게 누르면 본인 확인(둘러보기는 확인을 바로 통과시킨다)
+  await stage.locator("[data-idcard]").click({ position: CARD_TAP });
+  await expect(stage.locator("[data-owner-ok]")).toBeVisible();
 });
