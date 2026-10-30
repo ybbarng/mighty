@@ -24,6 +24,12 @@ import {
   verifyOperationSignature,
 } from "./operations";
 import { POW_PARAMS, powHash } from "./pow";
+import {
+  qualDisplayId,
+  qualKeyFromSeed,
+  recoveryCode,
+  stampMessage,
+} from "./qualification";
 import { genesisHash, recordVersionFor } from "./record";
 import {
   decodeRegistration,
@@ -264,6 +270,16 @@ const opSignedBy = (body: OpBody) =>
       },
     },
   } as Parameters<typeof verifyOperationSignature>[0]);
+
+/** 상품 자격 시험 값의 씨앗 00‖01‖…‖0f(파이썬으로 따로 계산해 맞췄다, qualification.test.ts) */
+const QUAL_SEED = Uint8Array.from({ length: 16 }, (_, i) => i);
+const QUAL_SEED_TEXT = "씨앗 00‖01‖…‖0f";
+const QUAL_PERIOD = taggedHashOf("stardraw/op/v1", "period");
+const QUAL_PERIOD_TEXT = '기간 id = taggedHash("stardraw/op/v1", "period")';
+
+function taggedHashOf(tag: string, text: string): Uint8Array {
+  return sha256(utf8(tag), new Uint8Array([0]), utf8(text));
+}
 
 export const TEST_VECTORS: readonly VectorGroup[] = [
   {
@@ -660,6 +676,78 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
         expected: "1 · 2",
         compute: () =>
           `${recordVersionFor([])} · ${recordVersionFor([{} as never])}`,
+      },
+    ],
+  },
+  {
+    id: "qualification",
+    title: "상품 자격 증서(docs/36 11-13)",
+    vectors: [
+      {
+        title:
+          '자격 공개 열쇠 = P-256 압축(스칼라 = taggedHash("stardraw/qual-key/v1", 씨앗) mod (n−1) + 1)',
+        input: QUAL_SEED_TEXT,
+        expected:
+          "03f996dc8c9d8e2c3b06f1b9ab721c6125bd53a36036c4819cc41de06b9fc47db6",
+        compute: () => toHex(qualKeyFromSeed(QUAL_SEED).publicKey),
+      },
+      {
+        title:
+          'SHA-256(도장 받을 메시지 "stardraw/qual/v1" ‖ 00 ‖ 기간 id ‖ 자격 공개 열쇠)',
+        input: `${QUAL_PERIOD_TEXT}, 위 자격 공개 열쇠`,
+        expected:
+          "d2fbebcf4bf7ef8959b24550ccb08a3a839645ededc610c72e01b19cbf802e25",
+        compute: () =>
+          toHex(
+            sha256(
+              stampMessage(QUAL_PERIOD, qualKeyFromSeed(QUAL_SEED).publicKey),
+            ),
+          ),
+      },
+      {
+        title:
+          "복구 코드 = SDQ1- ‖ Crockford base32(01 ‖ 기간 id 앞 8바이트 ‖ 씨앗 ‖ 도장)",
+        input: `${QUAL_PERIOD_TEXT}, ${QUAL_SEED_TEXT}, 도장 자리 ab × 48`,
+        expected:
+          "SDQ1-060SXC7N9XCJ78R0041061050R3GG28A1C60T3GFNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTQAXBNENTP",
+        compute: () =>
+          recoveryCode({
+            periodId: QUAL_PERIOD,
+            seed: QUAL_SEED,
+            stamp: new Uint8Array(48).fill(0xab),
+          }),
+      },
+      {
+        title:
+          '보이는 자격 번호 = Q- ‖ taggedHash("stardraw/qual-id/v1", 기간 id ‖ 자격 공개 열쇠) 앞 40비트',
+        input: `${QUAL_PERIOD_TEXT}, 위 자격 공개 열쇠`,
+        expected: "Q-8W62-KQGE",
+        compute: () =>
+          qualDisplayId(QUAL_PERIOD, qualKeyFromSeed(QUAL_SEED).publicKey),
+      },
+      {
+        title: "응모권 v2 id(증서 113바이트와 자격 서명 64바이트가 nonce 앞에)",
+        input: `v 2, 7회차, 번호 3·11·19·27·38·44, 공개 열쇠 ${PUB_TEXT}, 위 증서(도장 자리 ab × 48), 자격 서명 자리 5c × 64, nonce 258`,
+        expected:
+          "fba0e1bef80b0d92a0fe7e790faa57e6693ac00ca088de4cbacafe16844b3d0c",
+        compute: () =>
+          toHex(
+            ticketId({
+              v: 2,
+              round: 7,
+              numbers: [3, 11, 19, 27, 38, 44],
+              pub: PUB,
+              qual: {
+                cert: {
+                  periodId: QUAL_PERIOD,
+                  qualPub: qualKeyFromSeed(QUAL_SEED).publicKey,
+                  stamp: new Uint8Array(48).fill(0xab),
+                },
+                sig: new Uint8Array(64).fill(0x5c),
+              },
+              nonce: 258,
+            }),
+          ),
       },
     ],
   },

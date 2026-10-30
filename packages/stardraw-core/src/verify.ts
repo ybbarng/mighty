@@ -26,6 +26,7 @@ import {
   type OpsState,
 } from "./operations";
 import { checkPow, POW_PARAMS, type PowParams } from "./pow";
+import { countUsed, judgeRound, type QualRoundResult } from "./prize";
 import {
   genesisHash,
   type RoundRecord,
@@ -43,6 +44,7 @@ import { checkSchedule, roundTimes, type Schedule } from "./schedule";
 import type { WebAuthnPolicy } from "./signature";
 import {
   TICKET_VERSION,
+  TICKET_VERSION_QUAL,
   type Ticket,
   ticketContent,
   ticketId,
@@ -107,6 +109,11 @@ export interface VerifyReport {
   nicknames: Nickname[];
   /** 운영 기록(국장·관인)을 모두 반영한 상태(docs/36 11-12). operationsView·directorHistory로 읽는다 */
   operations: OpsState;
+  /** 상품 자격(docs/36 11-13): 회차·기간마다 상품 대상, 기간마다 응모권에 쓰인 서로 다른 자격 수 */
+  qualification: {
+    rounds: QualRoundResult[];
+    used: Record<string, number>;
+  };
 }
 
 export async function verifyLedger(
@@ -129,6 +136,7 @@ export async function verifyLedger(
       keys: [],
       nicknames: [],
       operations: newOpsState(genesis),
+      qualification: { rounds: [], used: {} },
     };
   }
   const beaconVerifier = options.beaconVerifier ?? verifyQuicknetBeacon;
@@ -143,6 +151,10 @@ export async function verifyLedger(
   /** 당첨 응모권 id → 그 회차와 공개 열쇠(별명 확인용) */
   const winnerKeys = new Map<string, { round: number; pub: Uint8Array }>();
   const accepted: Nickname[] = [];
+  const qualRounds: QualRoundResult[] = [];
+  /** 기간 id(hex) → 응모권에 쓰인 자격 번호(hex) */
+  const used = new Map<string, Set<string>>();
+  const overIssued = new Set<string>();
 
   // 바깥 앵커의 처음 일정표(선택): 장부를 다시 시작하지 않았는지
   if (options.genesisAnchorVerifier) {
@@ -228,7 +240,8 @@ export async function verifyLedger(
     for (let k = 0; k < tickets.length; k++) {
       const t = tickets[k] as Ticket;
       const id = ids[k] as Uint8Array;
-      if (t.v !== TICKET_VERSION) fail(`응모권 ${short(id)}: 모르는 판`);
+      if (t.v !== TICKET_VERSION && t.v !== TICKET_VERSION_QUAL)
+        fail(`응모권 ${short(id)}: 모르는 판`);
       if (t.round !== round)
         fail(`응모권 ${short(id)}: 다른 회차(${t.round})의 응모권`);
       if (k > 0 && compareBytes(ids[k - 1] as Uint8Array, id) >= 0) {
@@ -380,6 +393,29 @@ export async function verifyLedger(
     for (const p of opProblems) fail(p);
     schedule = ops.schedule;
 
+    // 8. 상품 자격: 증서, 같은 회차 같은 자격 두 장 이상 제외, 쓰인 자격 수 ≤ 발급 수(이 기록까지 실린 발급 수)
+    const judged = judgeRound(
+      ops,
+      round,
+      closesAt,
+      tickets,
+      ids,
+      record.winners,
+    );
+    for (const p of judged.problems) fail(p);
+    qualRounds.push(...judged.results);
+    countUsed(used, tickets);
+    for (const period of ops.periods) {
+      const key = toHex(period.id);
+      const n = used.get(key)?.size ?? 0;
+      if (n > period.issued && !overIssued.has(key)) {
+        overIssued.add(key);
+        fail(
+          `자격 기간 ${key.slice(0, 12)}: 응모권에 쓰인 자격 ${n}개가 발급 수 ${period.issued}개보다 많다`,
+        );
+      }
+    }
+
     head = recordHash(record);
 
     // 7. 바깥 앵커(선택)
@@ -399,6 +435,10 @@ export async function verifyLedger(
     keys,
     nicknames: accepted,
     operations: ops,
+    qualification: {
+      rounds: qualRounds,
+      used: Object.fromEntries([...used].map(([key, set]) => [key, set.size])),
+    },
   };
 }
 

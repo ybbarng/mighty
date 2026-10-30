@@ -16,6 +16,11 @@ import {
   type Signer,
   verifySignature,
 } from "./keys";
+import {
+  checkIssuerKey,
+  ISSUER_KEY_LENGTH,
+  STAMP_SCHEME_BLS,
+} from "./qualification";
 import type { RoundRecord } from "./record";
 import {
   checkScheduleChange,
@@ -51,6 +56,8 @@ import {
  *   5 소속 끝내기     대상 소속 id(32)
  *   6 예고 취소       대상 운영 기록 id(32)
  *   7 일정 바꾸기     일정표 한 줄(schedule.ts writeScheduleEntry)
+ *   8 자격 기간 열기  소속 id(32) ‖ 기간 번호(u16) ‖ startsAt(u64) ‖ endsAt(u64) ‖ 도장 방식(u8 = 1) ‖ 도장 열쇠(bytes, 96)
+ *   9 발급 수         기간 id(32) ‖ 누적 발급 수(u32). 관인만, 실리는 즉시 효력(docs/36 11-13)
  * 운영 기록 = 본문 ‖ 서명자(u8: 1 관인, 2 국장) ‖ pub(65) ‖ 서명(관인 r‖s 64, 국장 패스키 서명)
  * 서명 대상 = "stardraw/op-sig/v1" ‖ 0x00 ‖ 본문, 운영 기록 id = taggedHash("stardraw/op/v1", 본문)
  *
@@ -68,8 +75,23 @@ export const OP_KINDS = [
   "affiliation-end",
   "cancel",
   "schedule",
+  "qual-period",
+  "qual-issued",
 ] as const;
 export type OpKind = (typeof OP_KINDS)[number];
+
+/** 운영 기록 종류의 이름(관리 화면·서버 기록·검증 페이지) */
+export const OP_NAMES: Record<OpKind, string> = {
+  "director-add": "국장 열쇠 지정",
+  "director-remove": "국장 열쇠 빼기",
+  "affiliation-add": "소속 추가",
+  "affiliation-update": "소속 바꾸기",
+  "affiliation-end": "소속 끝내기",
+  cancel: "예고 취소",
+  schedule: "일정 바꾸기",
+  "qual-period": "자격 기간 열기",
+  "qual-issued": "발급 수",
+};
 
 /** 배지 종류(소속의 모양). 값은 바이트 */
 export const BADGES = { 1: "별", 2: "성단", 3: "성운", 4: "은하" } as const;
@@ -85,9 +107,9 @@ export interface AffiliationFields {
   badge: Badge;
   /** 신원 확인 방법 이름("기관 계정", "초대 코드"). 실제 값(도메인 등)은 서버 설정에만 둔다 */
   method: string;
-  /** 소속 자격 열쇠의 공개 열쇠(나중에 채운다). 비면 0바이트 */
+  /** 늘 0바이트(자격 열쇠는 기간마다 kind 8에 둔다, docs/36 11-13) */
   issuerKey: Uint8Array;
-  /** 공개한 발급 수. 소속 추가 때 0 */
+  /** 늘 0(발급 수는 기간마다 kind 9에 둔다) */
   issued: number;
 }
 
@@ -102,7 +124,17 @@ export type OpPayload =
     }
   | { kind: "affiliation-end"; target: Uint8Array }
   | { kind: "cancel"; target: Uint8Array }
-  | { kind: "schedule"; entry: ScheduleEntry };
+  | { kind: "schedule"; entry: ScheduleEntry }
+  | {
+      kind: "qual-period";
+      affiliation: Uint8Array;
+      number: number;
+      startsAt: number;
+      endsAt: number;
+      scheme: number;
+      issuerKey: Uint8Array;
+    }
+  | { kind: "qual-issued"; period: Uint8Array; issued: number };
 
 export type OpBody = OpPayload & {
   v: number;
@@ -163,6 +195,17 @@ function writeBody(w: ByteWriter, b: OpBody): void {
     case "schedule":
       writeScheduleEntry(w, b.entry);
       break;
+    case "qual-period":
+      w.fixed(b.affiliation, 32)
+        .u16(b.number)
+        .u64(b.startsAt)
+        .u64(b.endsAt)
+        .u8(b.scheme)
+        .bytes(b.issuerKey);
+      break;
+    case "qual-issued":
+      w.fixed(b.period, 32).u32(b.issued);
+      break;
   }
 }
 
@@ -192,6 +235,19 @@ function readBody(r: ByteReader): OpBody {
       return { ...head, kind, target: r.fixed(32) };
     case "schedule":
       return { ...head, kind, entry: readScheduleEntry(r) };
+    case "qual-period":
+      return {
+        ...head,
+        kind,
+        affiliation: r.fixed(32),
+        number: r.u16(),
+        startsAt: r.u64(),
+        endsAt: r.u64(),
+        scheme: r.u8(),
+        issuerKey: r.bytes(),
+      };
+    case "qual-issued":
+      return { ...head, kind, period: r.fixed(32), issued: r.u32() };
   }
 }
 
@@ -340,6 +396,21 @@ export interface OpEntry {
   cancelledIn: number | null;
 }
 
+/** 자격 기간(kind 8). 효력이 생긴 것만 */
+export interface QualPeriodState {
+  /** 자격 기간 열기의 운영 기록 id = 기간 id */
+  id: Uint8Array;
+  affiliation: Uint8Array;
+  number: number;
+  startsAt: number;
+  endsAt: number;
+  issuerKey: Uint8Array;
+  /** 효력 회차(이 회차부터 도장을 받고 응모권에 붙인다) */
+  from: number;
+  /** 장부에 실린 최신 누적 발급 수(kind 9) */
+  issued: number;
+}
+
 export interface AffiliationState {
   /** 소속 추가의 운영 기록 id */
   id: Uint8Array;
@@ -362,6 +433,8 @@ export interface OpsState {
   ops: OpEntry[];
   directors: DirectorKey[];
   affiliations: AffiliationState[];
+  /** 효력이 생긴 자격 기간 */
+  periods: QualPeriodState[];
   /** 예고 중인 일정 바꾸기 운영 기록 id(hex) */
   pendingSchedule: string | null;
   /** 효력을 맞춘 마지막 회차 */
@@ -382,6 +455,7 @@ export function newOpsState(genesis: Schedule): OpsState {
     ops: [],
     directors: [],
     affiliations: [],
+    periods: [],
     pendingSchedule: null,
     matured: 0,
   };
@@ -475,6 +549,20 @@ export function matureOps(state: OpsState, round: number): void {
       case "schedule":
         if (state.pendingSchedule === hex(e.id)) state.pendingSchedule = null;
         break;
+      case "qual-period":
+        state.periods.push({
+          id: e.id,
+          affiliation: op.affiliation,
+          number: op.number,
+          startsAt: op.startsAt,
+          endsAt: op.endsAt,
+          issuerKey: op.issuerKey,
+          from: E,
+          issued: 0,
+        });
+        break;
+      case "qual-issued":
+        break;
     }
   }
   state.matured = round;
@@ -497,10 +585,9 @@ export function checkAffiliationFields(f: AffiliationFields): string | null {
   const method = checkLabel(f.method, "확인 방법은");
   if (method) return method;
   if (!(f.badge in BADGES)) return "모르는 배지";
-  if (f.issuerKey.length !== 0 && f.issuerKey.length !== PUBLIC_KEY_LENGTH)
-    return "자격 열쇠는 비우거나 65바이트 공개 열쇠";
-  if (!Number.isInteger(f.issued) || f.issued < 0 || f.issued > 0xffffffff)
-    return "발급 수가 맞지 않는다";
+  // 자격 열쇠·발급 수는 기간마다 kind 8·9에 둔다(docs/36 11-13). 소속 칸은 비워 둔다
+  if (f.issuerKey.length !== 0) return "소속의 자격 열쇠 칸은 비워 둔다";
+  if (f.issued !== 0) return "소속의 발급 수 칸은 0";
   return null;
 }
 
@@ -551,13 +638,16 @@ export async function checkOperation(
   if (!equalBytes(op.after, prev))
     return "다른 자리(장부 끝 해시)에서 서명한 운영 기록이다(예전 서명 재사용)";
 
-  // 서명자: 국장 열쇠 지정·빼기는 관인이나 국장, 취소는 국장(관인은 자기가 한 지정만), 나머지는 국장
+  // 서명자: 국장 열쇠 지정·빼기는 관인이나 국장, 취소는 국장(관인은 자기가 한 지정만), 발급 수는 관인만, 나머지는 국장
   const role = op.signer.role;
+  if (op.kind === "qual-issued" && role !== "seal")
+    return "발급 수는 관인만 싣는다";
   if (role === "seal") {
     const sealAllowed =
       op.kind === "director-add" ||
       op.kind === "director-remove" ||
-      op.kind === "cancel";
+      op.kind === "cancel" ||
+      op.kind === "qual-issued";
     if (!sealAllowed) return "관인은 이 운영 기록에 서명할 수 없다";
     if (state.sealKey && !equalBytes(state.sealKey, op.signer.pub))
       return "관인 열쇠가 장부에 처음 실린 관인과 다르다";
@@ -567,10 +657,10 @@ export async function checkOperation(
   if (!(await verifyOperationSignature(op, ctx.policy)))
     return "서명이 맞지 않는다";
 
-  // 효력 회차: 3회차 예고와 회차 경계. 취소는 0
-  if (op.kind === "cancel") {
+  // 효력 회차: 3회차 예고와 회차 경계. 취소·발급 수는 0
+  if (op.kind === "cancel" || op.kind === "qual-issued") {
     if (op.effectiveRound !== 0)
-      return "예고 취소의 효력 회차는 0(실리는 즉시)";
+      return "예고 취소·발급 수의 효력 회차는 0(실리는 즉시)";
   } else {
     const earliest = earliestEffectiveRound(state, round);
     if (op.effectiveRound < earliest)
@@ -649,8 +739,70 @@ export async function checkOperation(
       const problem = checkScheduleChange(state.schedule, op.entry, round);
       return problem ? `일정 바꾸기: ${problem}` : null;
     }
+    case "qual-period":
+      return checkQualPeriod(state, op);
+    case "qual-issued": {
+      const p = state.periods.find((x) => equalBytes(x.id, op.period));
+      if (!p) return "효력이 생긴 자격 기간이 아니다";
+      if (!Number.isInteger(op.issued) || op.issued <= p.issued)
+        return "발급 수는 늘기만 한다";
+      return null;
+    }
   }
 }
+
+/** 자격 기간 열기 확인: 쓰는 소속, 기간 길이, 겹치지 않음, 도장 열쇠 */
+function checkQualPeriod(
+  state: OpsState,
+  op: Extract<Operation, { kind: "qual-period" }>,
+): string | null {
+  const a = state.affiliations.find((x) => equalBytes(x.id, op.affiliation));
+  if (!a || a.until !== null) return "효력이 생긴, 끝나지 않은 소속이 아니다";
+  if (
+    pendingOn(
+      state,
+      "affiliation-end",
+      (o) =>
+        o.kind === "affiliation-end" && equalBytes(o.target, op.affiliation),
+    )
+  )
+    return "끝내기 예고 중인 소속이다";
+  if (op.scheme !== STAMP_SCHEME_BLS) return "모르는 도장 방식";
+  if (op.issuerKey.length !== ISSUER_KEY_LENGTH) return "도장 열쇠는 96바이트";
+  const keyProblem = checkIssuerKey(op.issuerKey);
+  if (keyProblem) return keyProblem;
+  if (op.number < 1) return "기간 번호는 1부터";
+  if (op.endsAt <= op.startsAt) return "기간은 시작보다 끝이 뒤";
+  if (op.endsAt - op.startsAt > MAX_PERIOD_SECONDS)
+    return "기간은 2년을 넘지 않는다";
+  if (op.endsAt <= roundTimes(state.schedule, op.effectiveRound).opensAt)
+    return "효력이 생기기 전에 끝나는 기간이다";
+  // 같은 소속의 기간(예고 중 포함, 취소 빼고)과 번호·열쇠·시각이 겹치지 않는다
+  const others = [
+    ...state.periods.map((p) => ({
+      affiliation: p.affiliation,
+      number: p.number,
+      startsAt: p.startsAt,
+      endsAt: p.endsAt,
+      issuerKey: p.issuerKey,
+    })),
+    ...state.ops.flatMap((e) =>
+      e.status === "pending" && e.op.kind === "qual-period" ? [e.op] : [],
+    ),
+  ];
+  for (const o of others) {
+    if (equalBytes(o.issuerKey, op.issuerKey))
+      return "다른 기간에 쓴 도장 열쇠다";
+    if (!equalBytes(o.affiliation, op.affiliation)) continue;
+    if (o.number === op.number) return "이미 있는 기간 번호다";
+    if (op.startsAt < o.endsAt && o.startsAt < op.endsAt)
+      return "같은 소속의 다른 기간과 겹친다";
+  }
+  return null;
+}
+
+/** 자격 기간 최대 길이(2년) */
+export const MAX_PERIOD_SECONDS = 2 * 366 * 24 * 3600;
 
 /** 확인을 통과한 운영 기록을 상태에 넣는다(취소는 바로 효력) */
 export function acceptOperation(
@@ -678,6 +830,12 @@ export function acceptOperation(
       };
       state.pendingSchedule = null;
     }
+    return;
+  }
+  if (op.kind === "qual-issued") {
+    state.ops.push({ id, op, round, status: "applied", cancelledIn: null });
+    const p = state.periods.find((x) => equalBytes(x.id, op.period));
+    if (p) p.issued = op.issued;
     return;
   }
   state.ops.push({ id, op, round, status: "pending", cancelledIn: null });
@@ -845,7 +1003,7 @@ export interface OperationView {
   /** 실린 회차 */
   round: number;
   effectiveRound: number;
-  /** 효력 회차가 열리는 시각(초). 취소는 실린 회차 마감 */
+  /** 효력 회차가 열리는 시각(초). 취소·발급 수는 실린 회차 마감 */
   effectiveAt: number;
   status: OpStatus;
   cancelledIn: number | null;
@@ -877,6 +1035,19 @@ export interface AffiliationView {
   until: number | null;
 }
 
+export interface QualPeriodView {
+  id: string;
+  affiliation: string;
+  affiliationName: string;
+  number: number;
+  startsAt: number;
+  endsAt: number;
+  /** 도장 열쇠(base64url) */
+  issuerKey: string;
+  from: number;
+  issued: number;
+}
+
 export interface OperationsView {
   sealKey: string | null;
   /** 다음에 닫히는 기록 */
@@ -891,6 +1062,8 @@ export interface OperationsView {
   directors: DirectorView[];
   operations: OperationView[];
   affiliations: AffiliationView[];
+  /** 효력이 생긴 자격 기간 */
+  periods: QualPeriodView[];
   /** 예고 중인 일정 바꾸기가 있는지 */
   schedulePending: boolean;
 }
@@ -918,6 +1091,19 @@ function describe(state: OpsState, op: Operation): string {
       const phase =
         e.phase === "live" ? "정식 " : e.phase === "trial" ? "시험 " : "";
       return `일정 바꾸기: ${e.fromRound}회차부터 ${phase}${e.length / 60}분 회차`;
+    }
+    case "qual-period": {
+      const a = state.affiliations.find((x) =>
+        equalBytes(x.id, op.affiliation),
+      );
+      return `자격 기간 열기: ${a?.fields.name ?? hex(op.affiliation).slice(0, 12)} ${op.number}기`;
+    }
+    case "qual-issued": {
+      const p = state.periods.find((x) => equalBytes(x.id, op.period));
+      const a = p
+        ? state.affiliations.find((x) => equalBytes(x.id, p.affiliation))
+        : undefined;
+      return `발급 수: ${a?.fields.name ?? "자격"} ${p?.number ?? "?"}기 ${op.issued}개`;
     }
   }
 }
@@ -957,7 +1143,7 @@ export function operationsView(
       round: e.round,
       effectiveRound: e.op.effectiveRound,
       effectiveAt:
-        e.op.kind === "cancel"
+        e.op.kind === "cancel" || e.op.kind === "qual-issued"
           ? roundTimes(s.schedule, e.round).closesAt
           : opensAt(e.op.effectiveRound),
       status: e.status,
@@ -968,7 +1154,14 @@ export function operationsView(
           ? "관인"
           : directorFingerprint(e.op.signer.pub),
       summary: describe(s, e.op),
-      target: "target" in e.op ? hex(e.op.target) : null,
+      target:
+        "target" in e.op
+          ? hex(e.op.target)
+          : e.op.kind === "qual-period"
+            ? hex(e.op.affiliation)
+            : e.op.kind === "qual-issued"
+              ? hex(e.op.period)
+              : null,
     })),
     affiliations: s.affiliations.map((a) => ({
       id: hex(a.id),
@@ -982,7 +1175,26 @@ export function operationsView(
       from: a.from,
       until: a.until,
     })),
+    periods: s.periods.map((p) => periodView(s, p)),
     schedulePending: s.pendingSchedule !== null,
+  };
+}
+
+export function periodView(
+  state: OpsState,
+  p: QualPeriodState,
+): QualPeriodView {
+  const a = state.affiliations.find((x) => equalBytes(x.id, p.affiliation));
+  return {
+    id: hex(p.id),
+    affiliation: hex(p.affiliation),
+    affiliationName: a?.fields.name ?? "",
+    number: p.number,
+    startsAt: p.startsAt,
+    endsAt: p.endsAt,
+    issuerKey: toBase64Url(p.issuerKey),
+    from: p.from,
+    issued: p.issued,
   };
 }
 

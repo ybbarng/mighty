@@ -26,6 +26,7 @@ import {
   liveStart,
   mirrorCommitMessage,
   newOpsState,
+  OP_NAMES,
   type Operation,
   type OperationsView,
   type OpsContext,
@@ -1069,15 +1070,7 @@ export class StardrawServer {
 }
 
 function describeOp(op: Operation): string {
-  const kind = {
-    "director-add": "국장 열쇠 지정",
-    "director-remove": "국장 열쇠 빼기",
-    "affiliation-add": "소속 추가",
-    "affiliation-update": "소속 바꾸기",
-    "affiliation-end": "소속 끝내기",
-    cancel: "예고 취소",
-    schedule: "일정 바꾸기",
-  }[op.kind];
+  const kind = OP_NAMES[op.kind];
   const who =
     op.signer.role === "seal" ? "관인" : directorFingerprint(op.signer.pub);
   const what =

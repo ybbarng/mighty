@@ -32,6 +32,7 @@ import {
   makeRegistration,
   makeTicket,
   newOpsState,
+  OP_NAMES,
   type Operation,
   type OpsContext,
   type OpsState,
@@ -147,15 +148,7 @@ interface Saved {
   directorOps?: string[];
 }
 
-const OP_NAME: Record<Operation["kind"], string> = {
-  "director-add": "국장 열쇠 지정",
-  "director-remove": "국장 열쇠 빼기",
-  "affiliation-add": "소속 추가",
-  "affiliation-update": "소속 바꾸기",
-  "affiliation-end": "소속 끝내기",
-  cancel: "예고 취소",
-  schedule: "일정 바꾸기",
-};
+const OP_NAME = OP_NAMES;
 
 /** 관리 화면이 보는 상태(서버 GET /api/director/state와 같은 모양) */
 export interface DirectorState {
