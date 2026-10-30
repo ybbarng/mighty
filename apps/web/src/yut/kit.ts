@@ -1,6 +1,7 @@
 import { botKnowsChain, expertValues, yutBotFor } from "@mighty/yut-ai";
 import {
   type Action,
+  clockTurn,
   createMatch,
   DONE,
   decodeYutRules,
@@ -143,6 +144,8 @@ function describe(action: unknown): string {
       return "기권";
     case "retire":
       return "끝내기";
+    case "timeout":
+      return "시간패";
   }
 }
 
@@ -213,8 +216,9 @@ export const yutKit: YutKit = {
   decodeRules: decodeYutRules,
   startEvents: (view) => [{ type: "gameStarted", turn: view.turn }],
   isOver: (view) => view.phase === "gameOver",
-  // 끝내기는 방장 기기만 기록한다.
-  guestMayAct: (action) => action.type !== "retire",
+  // 끝내기와 시간패는 방장 기기만 기록한다.
+  guestMayAct: (action) =>
+    action.type !== "retire" && action.type !== "timeout",
   // 내 차례가 아니어도 기권할 수 있다(받아들일지는 엔진이 정한다).
   offTurn: (view, action) =>
     action.type === "resign" && view.phase !== "gameOver",
@@ -246,6 +250,21 @@ export const yutKit: YutKit = {
     explain: explainYut,
   },
   botFor: (level) => yutBotFor(level),
+  // 던지기·말 움직이기마다 따로 잰다. 한 번 더 던질 때도 결정 하나씩 깎아 keepsTurn은 두지 않는다(docs/37 4절).
+  timing: {
+    turn: clockTurn,
+    stamp: (action, spent) =>
+      action.type === "throw" || action.type === "move"
+        ? { ...action, spent }
+        : action,
+    timeout: (spent) => ({ type: "timeout", spent }),
+    strip: (action) => {
+      if (action.type === "timeout") return null;
+      if (!("spent" in action)) return action;
+      const { spent: _spent, ...rest } = action;
+      return rest as Action;
+    },
+  },
 };
 
 /* ---------- 지표(내 기록) ---------- */

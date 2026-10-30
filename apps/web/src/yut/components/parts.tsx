@@ -1,9 +1,16 @@
 "use client";
 
 import type { Sticks, ThrowValue, YutView } from "@mighty/yut-engine";
-import { sideCount, sideOf, throwName } from "@mighty/yut-engine";
+import {
+  clockTurn,
+  sideCount,
+  sideOf,
+  throwName,
+  timeControlOf,
+} from "@mighty/yut-engine";
 import { useEffect, useState } from "react";
 
+import { GameClock } from "@/components/GameClock";
 import { cn } from "@/lib/cn";
 
 /** 편 색(말 색): 홍·청·녹·황 */
@@ -299,6 +306,39 @@ export function SideTray({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** 자리마다 개인 시간(docs/37 4절). 던지기·말 움직이기 때만 차례인 사람 시계가 간다 */
+export function SeatClocks({
+  view,
+  name,
+}: {
+  view: YutView;
+  name: (seat: number) => string;
+}) {
+  const control = timeControlOf(view.rules);
+  if (!control || !view.clocks) return null;
+  const running = clockTurn({ ...view, keys: [] })?.seat ?? null;
+  return (
+    <div className="flex w-full flex-wrap justify-center gap-1.5">
+      {view.clocks.map((clock, seat) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: 자리 번호는 게임 내내 바뀌지 않는다
+          key={seat}
+          data-clock-seat={seat}
+          className="flex items-center gap-1.5 rounded-xl bg-black/25 px-2 py-1 text-xs"
+        >
+          <PieceToken side={sideOf(view.rules, seat)} size={10} />
+          <span className="max-w-20 truncate">{name(seat)}</span>
+          <GameClock
+            clock={clock}
+            control={control}
+            running={running === seat}
+          />
+        </span>
+      ))}
     </div>
   );
 }

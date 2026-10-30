@@ -30,6 +30,7 @@ import { useYut } from "../store";
 import {
   PendingChips,
   PieceToken,
+  SeatClocks,
   SideTray,
   seatLabel,
   sideLabel,
@@ -67,6 +68,10 @@ function resultText(
       return result.seat === view.mySeat
         ? "던지기 고리를 공개하지 않아 졌어요"
         : `${name(result.seat)}이(가) 공개하지 않아 끝났어요`;
+    case "time":
+      return result.seat === view.mySeat
+        ? "시간을 다 써서 졌어요"
+        : `${name(result.seat)}이(가) 시간을 다 썼어요`;
   }
 }
 
@@ -79,7 +84,9 @@ function bannerOf(result: GameResult | null, view: YutView): Banner {
         ? "기권"
         : result?.kind === "forfeit"
           ? "공개하지 않음"
-          : null;
+          : result?.kind === "time"
+            ? "시간패"
+            : null;
   return { won: outcome === "win", draw: outcome === "draw", detail };
 }
 
@@ -366,6 +373,7 @@ export function YutGame({
           name={name}
           turnSide={sideOf(view.rules, view.turn)}
         />
+        <SeatClocks view={view} name={name} />
       </div>
 
       <div className="relative w-full max-w-xl split:col-start-2">

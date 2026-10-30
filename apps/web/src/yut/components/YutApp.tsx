@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
+import {
+  TimePresetPicker,
+  timePresetLabel,
+} from "@/components/TimePresetPicker";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
 import { useScreenHistory } from "@/game/screen-history";
@@ -183,6 +187,9 @@ function YutOptions({ onBack }: { onBack: () => void }) {
           </Chip>
         </div>
       </Section>
+      <Section title="개인 시간">
+        <TimePresetPicker value={s.time} onChange={(time) => s.set({ time })} />
+      </Section>
       <Section title="컴퓨터 실력">
         <div className="flex flex-wrap gap-1.5">
           {YUT_LEVELS.map((l) => (
@@ -289,7 +296,11 @@ function YutHome({
       solo={{
         icon: "🪵",
         title: "나홀로 윷놀이",
-        detail: [yutRulesSummary(rules), `컴퓨터 ${level ?? ""}`]
+        detail: [
+          yutRulesSummary(rules),
+          timePresetLabel(rules.time),
+          `컴퓨터 ${level ?? ""}`,
+        ]
           .filter(Boolean)
           .join(" · "),
         onClick: () => onStart(),

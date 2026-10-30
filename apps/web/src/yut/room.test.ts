@@ -218,4 +218,42 @@ describe("윷놀이 온라인 방", () => {
     await until(() => room.audits.length === 1);
     expect(room.audits).toEqual([{ ok: true }]);
   });
+
+  it("개인 시간: 방장 시계가 던지기에 쓴 시간을 깎고, 공개를 기다리는 시간은 재지 않으며, 참가자 시간패를 기록한다", async () => {
+    const room = await setup({ ...ROOM_RULES, time: "fast" });
+    const seat = room.guest.seat as number;
+    // 시계가 가는 결정(던지기·움직이기)
+    const guestDecides = (kinds = ["throw", "move"]) =>
+      kinds.includes(room.guest.match?.current().decision?.kind ?? "");
+    const guestClock = () => room.host.match?.rawState().clocks?.[seat];
+    // 참가자가 던질 차례까지(다른 행동은 시계가 서 있는 채로 바로 낸다).
+    await play(room, () => guestDecides(["throw"]));
+    const before = guestClock()?.main as number;
+    room.clock.advance(5_000);
+    room.guestDevice.act();
+    await until(() => guestClock()?.main === before - 5_000);
+    // 방장 기기가 공개를 미루는 동안 시간이 한참 지나도 참가자 시계는 그대로다.
+    room.hostDevice.hold = (view) => view.decision?.kind === "reveal";
+    await play(room, () => {
+      const v = room.host.match?.current();
+      return v?.phase === "reveal" && v.reveals[seat] !== null;
+    });
+    room.clock.advance(400_000);
+    await flush();
+    expect(room.host.match?.current().result).toBeNull();
+    room.hostDevice.hold = null;
+    // 다시 참가자가 결정할 때 시간을 다 쓰게 한다.
+    await play(room, () => guestDecides());
+    expect(guestClock()?.main).toBe(before - 5_000);
+    room.clock.advance(270_000);
+    await until(() => room.host.match?.current().result != null);
+    expect(room.host.match?.current().result).toEqual({
+      kind: "time",
+      seat,
+      side: 1 - seat,
+    });
+    room.host.finish();
+    await until(() => room.audits.length === 1);
+    expect(room.audits).toEqual([{ ok: true }]);
+  });
 });

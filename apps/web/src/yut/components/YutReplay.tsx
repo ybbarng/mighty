@@ -93,7 +93,9 @@ export function YutReplay({
               ? "말을 모두 냄"
               : result.kind === "resign"
                 ? "기권"
-                : "공개하지 않음"
+                : result.kind === "time"
+                  ? "시간패"
+                  : "공개하지 않음"
           })`;
 
   return (

@@ -1,3 +1,4 @@
+import type { TimePreset } from "@mighty/engine";
 import type { YutRules } from "@mighty/yut-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -15,6 +16,8 @@ interface YutSettings {
   backDo: boolean;
   flatPercent: 50 | 60;
   landOnHome: boolean;
+  /** 개인 시간(docs/24·docs/37 4절). 기본은 없음 */
+  time: TimePreset;
   level: YutLevel;
   set(patch: Partial<Omit<YutSettings, "set">>): void;
 }
@@ -27,6 +30,7 @@ export const useYutSettings = create<YutSettings>()(
       backDo: true,
       flatPercent: 60,
       landOnHome: false,
+      time: "none",
       level: 0,
       set: (patch) => set(patch),
     }),
@@ -42,7 +46,7 @@ export const useYutSettings = create<YutSettings>()(
 export function rulesFromSettings(
   s: Pick<
     YutSettings,
-    "lineup" | "pieces" | "backDo" | "flatPercent" | "landOnHome"
+    "lineup" | "pieces" | "backDo" | "flatPercent" | "landOnHome" | "time"
   >,
 ): YutRules {
   return {
@@ -52,6 +56,7 @@ export function rulesFromSettings(
     backDo: s.backDo,
     flatPercent: s.flatPercent,
     landOnHome: s.landOnHome,
+    ...(s.time && s.time !== "none" ? { time: s.time } : {}),
   };
 }
 
