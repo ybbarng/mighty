@@ -7,12 +7,14 @@ import { type CelebrationPlan, LINE_MS, METEOR_MS } from "../celebrate";
 import { starOf } from "../sky";
 
 /**
- * 당첨 축하의 하늘 쪽(SkyBoard `overlay`): 나만의 별자리(별이 하나씩 켜지고 선이 그어진다), 짧은 반짝임, 별똥별.
+ * 당첨 축하의 하늘 쪽(SkyBoard `overlay`): 나만의 별자리(별이 하나씩 켜지고 선이 그어진다), 빛줄기 반짝임, 별똥별.
  * 움직임은 모두 CSS 지연으로 낸다(시각은 `celebrationPlan`). 움직임 줄이기면 별자리가 처음부터 다 보이고 별똥별은 없다.
  */
 export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
   const ms = (v: number): CSSProperties => ({ animationDelay: `${v}ms` });
-  const glow = `sd-cel-glow-${useId().replace(/:/g, "")}`;
+  const id = useId().replace(/:/g, "");
+  const glow = `sd-cel-glow-${id}`;
+  const ray = `sd-cel-ray-${id}`;
   return (
     <div
       aria-hidden="true"
@@ -28,8 +30,14 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
       >
         <defs>
           <filter id={glow} x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="1.1" />
+            <feGaussianBlur stdDeviation="0.7" />
           </filter>
+          {/* 빛줄기: 가운데 흰색 → 금빛 → 투명(가는 마름모에 채워 끝으로 갈수록 가늘고 흐리다) */}
+          <radialGradient id={ray}>
+            <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
+            <stop offset="0.3" stopColor="#fde68a" stopOpacity="0.55" />
+            <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+          </radialGradient>
         </defs>
         {plan.edges.map(([a, b], i) => {
           const p = starOf(a);
@@ -50,37 +58,40 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
             />
           );
         })}
+        {/* 별: 작고 또렷한 점 + 흐린 빛 번짐 + 가는 십자 빛줄기(하늘의 별과 같은 결) */}
         {plan.order.map((n, i) => {
           const s = starOf(n);
+          const x = s.x * 100;
+          const y = s.y * 100;
           return (
             <g key={n} className="sd-cel-star" style={ms(plan.starAt[i] ?? 0)}>
               <circle
-                cx={s.x * 100}
-                cy={s.y * 100}
-                r={2.6}
+                cx={x}
+                cy={y}
+                r={1.5}
                 fill="#fde68a"
-                opacity={0.55}
+                opacity={0.5}
                 filter={`url(#${glow})`}
               />
-              <circle cx={s.x * 100} cy={s.y * 100} r={0.9} fill="#fffbea" />
+              <Rays x={x} y={y} len={2.8} fill={`url(#${ray})`} />
+              <circle cx={x} cy={y} r={0.42} fill="#fffbea" />
             </g>
           );
         })}
-        {/* 별자리가 다 생기면 별마다 빛 고리가 한 번(등수가 높으면 두 번) 퍼진다 */}
+        {/* 별자리가 다 생기면 별마다 빛줄기가 한 번(등수가 높으면 두 번) 길게 뻗었다 사라진다 */}
         {plan.order.map((n) => {
           const s = starOf(n);
           return (
-            <circle
-              key={`ring-${n}`}
-              cx={s.x * 100}
-              cy={s.y * 100}
-              r={4}
+            <g
+              key={`flare-${n}`}
               className="sd-cel-ring"
               style={{
                 ...ms(plan.sparkleAt),
                 animationIterationCount: plan.rank <= 3 ? 2 : 1,
               }}
-            />
+            >
+              <Rays x={s.x * 100} y={s.y * 100} len={6} fill={`url(#${ray})`} />
+            </g>
           );
         })}
       </svg>
@@ -102,6 +113,34 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
         />
       ))}
     </div>
+  );
+}
+
+/** 가는 십자 빛줄기(가로 len, 세로는 1.15배). 가늘고 긴 마름모 둘에 방사 그라디언트를 채운다 */
+function Rays({
+  x,
+  y,
+  len,
+  fill,
+}: {
+  x: number;
+  y: number;
+  len: number;
+  fill: string;
+}) {
+  const w = len * 0.06;
+  const v = len * 1.15;
+  return (
+    <>
+      <polygon
+        points={`${x - len},${y} ${x},${y - w} ${x + len},${y} ${x},${y + w}`}
+        fill={fill}
+      />
+      <polygon
+        points={`${x},${y - v} ${x + w},${y} ${x},${y + v} ${x - w},${y}`}
+        fill={fill}
+      />
+    </>
   );
 }
 

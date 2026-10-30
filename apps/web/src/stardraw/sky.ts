@@ -54,32 +54,31 @@ export function ballColor(n: number): string {
   return "#6cc58a";
 }
 
-const TEMP_STOPS: readonly [number, [number, number, number]][] = [
-  [3000, [255, 170, 120]],
-  [4500, [255, 205, 150]],
-  [6000, [255, 240, 220]],
-  [8000, [235, 240, 255]],
-  [12000, [205, 220, 255]],
-  [30000, [170, 195, 255]],
-];
+/** 별빛 색의 채도를 얼마나 낮출지(0이면 흑체 색 그대로, 1이면 흰색). 실제 별은 눈에 아주 옅은 색으로만 보인다 */
+const STAR_PALE = 0.3;
 
-/** 표면 온도 → 별 색(붉은 별 ~ 푸른 별) */
+/**
+ * 표면 온도 → 별빛 색(흑체 근사, 채도를 낮춘 sRGB). 붉은 별 ~ 푸른 별.
+ * 흑체 색은 Tanner Helland의 근사식(1000~40000 K)을 쓰고, 흰색 쪽으로 STAR_PALE만큼 섞는다.
+ */
 export function tempColor(k: number): [number, number, number] {
-  const first = TEMP_STOPS[0] as (typeof TEMP_STOPS)[number];
-  if (k <= first[0]) return first[1];
-  for (let i = 1; i < TEMP_STOPS.length; i++) {
-    const [k1, c1] = TEMP_STOPS[i] as (typeof TEMP_STOPS)[number];
-    if (k <= k1) {
-      const [k0, c0] = TEMP_STOPS[i - 1] as (typeof TEMP_STOPS)[number];
-      const t = (k - k0) / (k1 - k0);
-      return c0.map((v, j) => Math.round(v + ((c1[j] as number) - v) * t)) as [
-        number,
-        number,
-        number,
-      ];
-    }
-  }
-  return (TEMP_STOPS.at(-1) as (typeof TEMP_STOPS)[number])[1];
+  const t = Math.min(40000, Math.max(1000, k)) / 100;
+  const r = t <= 66 ? 255 : 329.698727446 * (t - 60) ** -0.1332047592;
+  const g =
+    t <= 66
+      ? 99.4708025861 * Math.log(t) - 161.1195681661
+      : 288.1221695283 * (t - 60) ** -0.0755148492;
+  const b =
+    t >= 66
+      ? 255
+      : t <= 19
+        ? 0
+        : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  const pale = (v: number) => {
+    const c = Math.min(255, Math.max(0, v));
+    return Math.round(c + (255 - c) * STAR_PALE);
+  };
+  return [pale(r), pale(g), pale(b)];
 }
 
 export function tempWord(k: number): string {
@@ -90,9 +89,12 @@ export function tempWord(k: number): string {
   return "푸른 별";
 }
 
-/** 등급 → 그릴 반지름(판 너비 360px 기준). 밝을수록 크다 */
+/**
+ * 등급 → 고리·번호 공 자리를 정하는 반지름(판 너비 360px 기준). 밝을수록 조금 크다.
+ * 별 그림 자체는 이보다 훨씬 작은 점과 빛 번짐이다(sky-draw.ts). 누르는 자리도 이 값으로 정한다.
+ */
 export function starRadius(mag: number): number {
-  return Math.max(2.2, 3.4 * 10 ** ((-0.4 * (mag - 2.2)) / 2.4));
+  return Math.max(2.4, 2.6 * 10 ** ((-0.4 * (mag - 2.2)) / 4));
 }
 
 /** 별 하나를 부르는 말: "7 베텔게우스 · 오리온자리" */

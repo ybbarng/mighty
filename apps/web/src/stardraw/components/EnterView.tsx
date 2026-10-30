@@ -10,7 +10,6 @@ import { type ReactNode, useEffect, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
-import { CALM_GLOWS } from "../hdr-glow";
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -309,7 +308,6 @@ export function EnterView({
         <SkyBoard
           state={{ mode: "pick", picked, focus, lit: [], bonus: null }}
           onPick={step === "pick" ? toggle : undefined}
-          hdr={CALM_GLOWS}
           label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
         />
       </div>

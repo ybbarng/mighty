@@ -5,7 +5,12 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { cn } from "@/lib/cn";
 
-import { HDR_GLOW_SRC, type HdrGlow, useHdrScreen } from "../hdr-glow";
+import {
+  HDR_GLOW_SRC,
+  HDR_GLOWS_ON,
+  type HdrGlow,
+  useHdrScreen,
+} from "../hdr-glow";
 import { SKY_STARS, starOf } from "../sky";
 import { drawSky, FAINT_STARS, type SkyState, starAt } from "../sky-draw";
 import { type SkyEffects, startSkyEffects } from "../sky-effects";
@@ -81,6 +86,7 @@ export function SkyBoard({
           now: clock.now(),
           twinkles: effectsRef.current?.twinkles() ?? [],
           meteor: effectsRef.current?.meteor() ?? null,
+          still: !animate,
         });
       } catch (err) {
         // 한 장면에서 오류가 나도 다음 장면은 그린다
@@ -157,18 +163,14 @@ export function SkyBoard({
           if (n !== null) onPick(n);
         }}
       />
-      {hdrScreen && hdr.length > 0 && (
+      {HDR_GLOWS_ON && hdrScreen && hdr.length > 0 && (
         <div
           className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
           aria-hidden="true"
           data-hdr-glows={hdr.length}
         >
-          {hdr.map((g, i) => (
-            <HdrGlowSprite
-              key={`${g.kind}-${g.n}-${g.delay ?? 0}`}
-              glow={g}
-              index={i}
-            />
+          {hdr.map((g) => (
+            <HdrGlowSprite key={`${g.kind}-${g.n}-${g.delay ?? 0}`} glow={g} />
           ))}
         </div>
       )}
@@ -177,20 +179,19 @@ export function SkyBoard({
   );
 }
 
-/** 빛 그림 크기(판 너비에 대한 %) */
-const GLOW_SIZE: Record<HdrGlow["kind"], number> = {
-  flash: 20,
-  hit: 17,
-  calm: 9,
-};
+/**
+ * 빛 그림 크기(판 너비에 대한 %). 그림 가운데 원판이 캔버스의 켜진 별 가운데(작은 점 + 흰빛 번짐)와 같은 크기가 되게 맞췄다
+ * (작은 HDR 핵만 밝으면 넓이까지 합쳐 느끼는 눈에는 오히려 SDR보다 어둡게 보인다. scripts/build-stardraw-hdr-glow.mjs)
+ */
+const GLOW_SIZE = 18;
 
 /**
  * 빛 그림 하나. Safari 26.0은 position·transform이 걸린 img의 HDR을 SDR로 그린 적이 있어(WebKit 301398)
  * img에는 위치를 걸지 않고 감싸는 칸을 백분율 여백으로 별 가운데에 놓는다(판은 정사각형이라 여백 %도 너비 기준이다).
  */
-function HdrGlowSprite({ glow, index }: { glow: HdrGlow; index: number }) {
+function HdrGlowSprite({ glow }: { glow: HdrGlow }) {
   const s = starOf(glow.n);
-  const size = GLOW_SIZE[glow.kind];
+  const size = GLOW_SIZE;
   return (
     <span
       className="absolute block"
@@ -211,13 +212,7 @@ function HdrGlowSprite({ glow, index }: { glow: HdrGlow; index: number }) {
         data-hdr-glow={glow.kind}
         data-hdr-star={glow.n}
         className={`sd-hdr sd-hdr-${glow.kind} block h-auto w-full`}
-        style={
-          glow.kind === "calm"
-            ? { animationDelay: `${-index * 2.1}s` }
-            : glow.delay
-              ? { animationDelay: `${glow.delay}ms` }
-              : undefined
-        }
+        style={glow.delay ? { animationDelay: `${glow.delay}ms` } : undefined}
       />
     </span>
   );

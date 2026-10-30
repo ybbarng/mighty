@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CALM_GLOWS, drawGlows } from "./hdr-glow";
+import { drawGlows } from "./hdr-glow";
 
 describe("HDR 별빛을 겹칠 별", () => {
   const fixed = [3, 9, 14, 22, 30, 41, 7];
@@ -37,9 +37,5 @@ describe("HDR 별빛을 겹칠 별", () => {
     expect(
       drawGlows({ fixed, mine: [1, 2], done: true, animated: false }),
     ).toEqual([]);
-  });
-
-  it("응모 하늘은 가장 밝은 별 셋만 은은하게", () => {
-    expect(CALM_GLOWS.map((g) => g.n)).toEqual([1, 2, 3]);
   });
 });

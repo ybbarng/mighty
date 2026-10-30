@@ -761,6 +761,7 @@ button {
 
 /*
  * HDR 별빛(stardraw/hdr-glow.ts): HDR 화면에서만 겹치는 흰색보다 밝은 빛 그림.
+ * 전체를 끄는 스위치는 hdr-glow.ts의 HDR_GLOWS_ON(끄면 그림을 받지도 않는다).
  * --sd-hdr-strength: 전체 강도. 1이 기본, 더 밝게는 1.3쯤, 덜 밝게는 0.6쯤(불투명도에 곱한다. 1을 넘으면 번쩍임이 더 오래 밝다)
  * --sd-hdr-limit: dynamic-range-limit 값. no-limit(기본, 화면·OS가 허락하는 만큼)·constrained(Chrome만)·standard(HDR 끔)
  * 기기나 브라우저가 HDR 밝기를 낮추면(배터리 절약, 밝기 설정) 브라우저가 그대로 따른다.
@@ -800,23 +801,9 @@ button {
     opacity: calc(var(--sd-hdr-strength) * 0.85);
   }
 }
-.sd-hdr-calm {
-  opacity: calc(var(--sd-hdr-strength) * 0.2);
-  animation: sd-hdr-calm 6.3s ease-in-out infinite;
-}
-@keyframes sd-hdr-calm {
-  0%,
-  100% {
-    opacity: calc(var(--sd-hdr-strength) * 0.12);
-  }
-  50% {
-    opacity: calc(var(--sd-hdr-strength) * 0.28);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   /* 반짝임 없이 멈춘 빛(번쩍임은 아예 없다) */
-  .sd-hdr-hit,
-  .sd-hdr-calm {
+  .sd-hdr-hit {
     animation: none;
   }
   .sd-hdr-flash {
@@ -857,10 +844,8 @@ button {
     stroke-dashoffset: 1;
   }
 }
+/* 별자리가 다 생기면 별마다 십자 빛줄기가 길게 뻗었다 사라진다 */
 .sd-cel-ring {
-  fill: none;
-  stroke: rgba(255, 246, 214, 0.9);
-  stroke-width: 0.5;
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
@@ -869,11 +854,11 @@ button {
 @keyframes sd-cel-ring {
   from {
     opacity: 1;
-    transform: scale(0.2);
+    transform: scale(0.25);
   }
   to {
     opacity: 0;
-    transform: scale(1.8);
+    transform: scale(1.3);
   }
 }
 .sd-cel-meteor {

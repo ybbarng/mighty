@@ -252,11 +252,16 @@ export function DrawView({
 
           <p className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-white/65 text-xs">
             <span className="flex items-center gap-1.5">
-              <span className="size-3 rounded-full border-2 border-amber-200" />
+              {/* 하늘에서 당첨 별은 고리 없이 금빛으로 번지고, 보너스는 하늘빛으로 번진다 */}
+              <span className="flex size-3 items-center justify-center">
+                <span className="size-1.5 rounded-full bg-amber-50 shadow-[0_0_5px_3px_rgba(255,224,140,0.85)]" />
+              </span>
               당첨 번호
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="size-3 rounded-full border-2 border-sky-300 border-dashed" />
+              <span className="flex size-3 items-center justify-center">
+                <span className="size-1.5 rounded-full bg-sky-50 shadow-[0_0_5px_3px_rgba(140,212,255,0.85)]" />
+              </span>
               보너스
             </span>
             {mine.length > 0 && (

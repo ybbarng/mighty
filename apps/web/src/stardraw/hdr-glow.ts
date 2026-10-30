@@ -4,17 +4,22 @@ import { useEffect, useState } from "react";
  * HDR 별빛(docs/36 화면 절): HDR 화면에서만 몇몇 별 위에 "흰색보다 밝은" 빛 그림을 겹친다.
  * 그림은 `public/stardraw/star-glow-hdr.avif`(BT.2020 PQ, `scripts/build-stardraw-hdr-glow.mjs`).
  * 캔버스(2D)는 SDR이라 HDR 그림을 그려도 잘리므로 캔버스 위에 img로 겹친다.
- * 쓰는 곳은 셋뿐이다(눈부시지 않게).
+ * 쓰는 곳은 드물고 뜻있는 두 순간뿐이다(늘 켜진 HDR은 배터리를 쓰고 화면 밝기가 출렁일 수 있다).
  *  - flash: 추첨 룰렛이 멈춰 뽑힌 별이 켜지는 순간 한 번 번쩍이고 사라진다
  *  - hit:   추첨 결과에서 내가 고른 별이 맞은 별(보너스 포함)을 은은하게 맥동
- *  - calm:  응모 하늘에서 가장 밝은 별 셋(1 시리우스·2 아크투루스·3 직녀성)을 아주 은은하게
  *  당첨 축하에서 나만의 별자리 별이 하나씩 켜질 때도 flash를 그 순간(delay)에 한 번 쓴다
  * 강도는 CSS 변수 `--sd-hdr-strength`(globals.css)로 한 번에 바꾼다.
  */
 
 export const HDR_GLOW_SRC = "/stardraw/star-glow-hdr.avif";
 
-export type HdrGlowKind = "flash" | "hit" | "calm";
+/**
+ * HDR 별빛 전체 스위치. false면 HDR 화면에서도 그림을 겹치지도 받지도 않고 예전(SDR) 그대로다.
+ * 사용자가 "기존 방식으로 충분하다"고 하면 이것 하나만 바꾼다.
+ */
+export const HDR_GLOWS_ON = true;
+
+export type HdrGlowKind = "flash" | "hit";
 
 export interface HdrGlow {
   n: number;
@@ -22,14 +27,6 @@ export interface HdrGlow {
   /** 번쩍임을 늦출 시간(ms). 당첨 축하에서 별자리 별이 켜지는 순간에 맞춘다 */
   delay?: number;
 }
-
-/** 응모 하늘에서 은은하게 빛나는 가장 밝은 별(번호는 밝은 순서) */
-export const CALM_STARS: readonly number[] = [1, 2, 3];
-
-export const CALM_GLOWS: readonly HdrGlow[] = CALM_STARS.map((n) => ({
-  n,
-  kind: "calm",
-}));
 
 /**
  * 추첨 화면의 HDR 별빛.

@@ -1028,7 +1028,7 @@ test("당첨 축하 연출: 1등은 별똥별 비, 직인이 찍히는 순간 �
   await page.screenshot({ path: info.outputPath("stardraw-win-1-motion.png") });
 });
 
-test("HDR 별빛: HDR 화면에서만 맞은 내 별과 가장 밝은 별 셋 위에 HDR 그림을 겹친다", async ({
+test("HDR 별빛: HDR 화면에서만 맞은 내 별 위에 HDR 그림을 겹치고, 응모 하늘에는 늘 켜진 HDR이 없다", async ({
   page,
 }, info) => {
   test.skip(info.project.name !== "desktop", "데스크톱 한 크기로");
@@ -1061,7 +1061,7 @@ test("HDR 별빛: HDR 화면에서만 맞은 내 별과 가장 밝은 별 셋 �
   // 1등: 맞은 별 6개만 은은하게(움직임 줄이기라 번쩍임은 없다)
   await expect(page.locator("img[data-hdr-glow='hit']")).toHaveCount(6);
   await expect(page.locator("img[data-hdr-glow='flash']")).toHaveCount(0);
-  // 그림이 실제로 풀린다(AVIF 160px)
+  // 그림이 실제로 풀린다(AVIF 256px)
   await expect
     .poll(() =>
       page
@@ -1069,18 +1069,14 @@ test("HDR 별빛: HDR 화면에서만 맞은 내 별과 가장 밝은 별 셋 �
         .first()
         .evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth),
     )
-    .toBe(160);
+    .toBe(256);
   await page.screenshot({ path: info.outputPath("stardraw-hdr-hit.png") });
 
-  // 응모 하늘: 가장 밝은 별 1·2·3
+  // 응모 하늘: 늘 켜진 HDR은 없다(배터리·화면 밝기 출렁임)
   await page.evaluate(() => {
     window.location.hash = "#tour-enter";
   });
   await expect(page.locator("[data-tour-screen='enter']")).toBeVisible();
-  await expect(page.locator("img[data-hdr-glow='calm']")).toHaveCount(3);
-  expect(
-    await page
-      .locator("img[data-hdr-glow='calm']")
-      .evaluateAll((els) => els.map((e) => e.getAttribute("data-hdr-star"))),
-  ).toEqual(["1", "2", "3"]);
+  await expect(page.locator("canvas[data-sky='pick']")).toBeVisible();
+  await expect(page.locator("img[data-hdr-glow]")).toHaveCount(0);
 });
