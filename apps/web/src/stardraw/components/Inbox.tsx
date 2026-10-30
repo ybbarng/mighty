@@ -1,15 +1,19 @@
 "use client";
 
 import { equalBytes, type Ticket, ticketId } from "@mighty/stardraw-core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
+import { AstronautCard } from "../astronaut/AstronautCard";
+import { astronautOf } from "../astronaut/identity";
 import { myTicketFor, prepareAnswer } from "../confirm";
 import type { ConfirmOutcome, OpenRequest } from "../confirm-relay";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
+import type { KeyInfo } from "../wallet";
+import { useRegistered } from "./AstronautPanel";
 import { RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -43,7 +47,8 @@ function saveAnswered(ns: string, list: Answered[]): void {
 
 /**
  * 당첨자 쪽 확인: 내 응모권에 온 요청을 스스로 찾아(열 때, 열려 있는 동안) 띄운다.
- * [확인]이면 패스키로 서명하고 별 세 개를 ①②③ 차례로 보여 준다.
+ * 「등록증으로 승인」이면 내 등록증 카드가 나타나 패스키 확인을 받고(등록증 본인 확인과 같은 움직임), 별 세 개가 ①②③ 차례로 빛난다.
+ * 요청은 아무나 보낼 수 있고 이름은 보낸 사람이 적는다. 카노푸스 우주국(서버)은 전달만 한다(확인 요청에는 우주국 관인이 없다).
  */
 export function Inbox({
   services,
@@ -55,6 +60,12 @@ export function Inbox({
   const [open, setOpen] = useState<OpenRequest[]>([]);
   const [answered, setAnswered] = useState<Answered[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  /** 승인 중인 요청과 내 등록증 카드 모습(확인 중 → 확인됨 → 잠시 뒤 닫힘) */
+  const [approving, setApproving] = useState<{
+    id: string;
+    key: KeyInfo;
+    phase: "checking" | "ok";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ids = tickets.map(ticketId);
   const idKey = ids.length;
@@ -116,8 +127,9 @@ export function Inbox({
       const key = services.wallet.loadKey();
       if (!key || !equalBytes(key.pub, ticket.pub))
         throw new Error(
-          "이 응모권을 낸 열쇠가 이 기기에 없어 서명할 수 없습니다",
+          "이 응모권을 낸 등록증이 이 기기에 없어 승인할 수 없습니다",
         );
+      setApproving({ id: req.id, key, phase: "checking" });
       const { answer, stars } = await prepareAnswer(
         await services.wallet.signerFor(key),
         ticket,
@@ -136,8 +148,11 @@ export function Inbox({
       ];
       saveAnswered(services.ns, list);
       setAnswered(list);
+      setApproving({ id: req.id, key, phase: "ok" });
+      services.clock.after(1600, () => setApproving(null));
       await refresh();
     } catch (err) {
+      setApproving(null);
       setError(
         err instanceof DOMException && err.name === "NotAllowedError"
           ? "등록증 확인을 취소했습니다"
@@ -156,7 +171,7 @@ export function Inbox({
   };
 
   const shown = answered.filter((a) => !a.outcome || a.outcome);
-  if (open.length === 0 && shown.length === 0) return null;
+  if (open.length === 0 && shown.length === 0 && !approving) return null;
 
   return (
     <section className="flex flex-col gap-3" aria-label="당첨자 확인 요청">
@@ -167,6 +182,13 @@ export function Inbox({
         >
           {error}
         </p>
+      )}
+      {approving && (
+        <ApprovingCard
+          services={services}
+          keyInfo={approving.key}
+          phase={approving.phase}
+        />
       )}
       {open.map((req) => {
         const rank = rankOfRequest(req);
@@ -179,7 +201,10 @@ export function Inbox({
             <p className="font-bold">
               {req.request.requester}님이{" "}
               {roundShort(services.ledger.schedule, req.request.round)}{" "}
-              {rank ? RANK_LABEL[rank] : ""} 당첨자 확인을 요청했습니다
+              {rank ? RANK_LABEL[rank] : ""} 당첨 확인을 요청했습니다
+            </p>
+            <p className="text-amber-100/60 text-xs">
+              이름은 보낸 분이 직접 적은 것입니다 · 전달: 카노푸스 우주국
             </p>
             <p className="text-sm text-amber-100/80">
               모르는 분의 요청이면 거절하세요.
@@ -191,7 +216,7 @@ export function Inbox({
                 onClick={() => void accept(req)}
                 className="sd-cta rounded-xl py-2.5 font-bold text-slate-950 disabled:opacity-50"
               >
-                {busy === req.id ? "서명하고 있습니다" : "확인"}
+                {busy === req.id ? "확인하고 있습니다" : "등록증으로 승인"}
               </button>
               <button
                 type="button"
@@ -276,6 +301,9 @@ function AnsweredCard({
             확인을 요청한 {answered.requester}님께, 당첨을 알렸던 그
             메신저·메일로 이 세 별 이름을 차례대로 보내 주세요
           </p>
+          <p className="break-keep text-amber-100/85 text-sm" data-sas-warning>
+            별 세 개는 내가 당첨을 알린 그 사람에게만 보내세요.
+          </p>
           <SkyBoard
             state={{
               mode: "receipt",
@@ -306,9 +334,34 @@ function AnsweredCard({
           </ol>
           <p className="text-white/55 text-xs">
             확인하는 분이 세 별을 하늘에서 차례로 누르면 결과가 여기 나옵니다.
+            전달: 카노푸스 우주국 · 우주국은 전달만 하고 별 세 개는 모릅니다.
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+/** 승인할 때 나타나는 내 등록증(이 기기의 내 것만). 패스키 확인 동안 확인 중, 서명이 끝나면 확인됨 */
+function ApprovingCard({
+  services,
+  keyInfo,
+  phase,
+}: {
+  services: Services;
+  keyInfo: KeyInfo;
+  phase: "checking" | "ok";
+}) {
+  const a = useMemo(() => astronautOf(keyInfo.pub), [keyInfo.pub]);
+  const registered = useRegistered(services, keyInfo.pub);
+  return (
+    <div className="sd-rise" data-approving={phase}>
+      <AstronautCard
+        astronaut={a}
+        registered={registered}
+        clock={services.clock}
+        forced={phase}
+      />
     </div>
   );
 }

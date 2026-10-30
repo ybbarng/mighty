@@ -126,9 +126,14 @@ export function DrawView({
         >
           ← 돌아가기
         </button>
-        <h2 className="font-bold text-lg tabular-nums">
-          {label ?? `제 ${record.round}회`} 추첨
-        </h2>
+        <div className="flex flex-col items-center leading-tight">
+          <h2 className="font-bold text-lg tabular-nums">
+            {label ?? `제 ${record.round}회`} 추첨
+          </h2>
+          <span className="text-[11px] text-white/45">
+            카노푸스 우주국 정시 추첨
+          </span>
+        </div>
         <button
           type="button"
           disabled={done}

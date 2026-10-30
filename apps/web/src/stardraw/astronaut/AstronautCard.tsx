@@ -39,15 +39,19 @@ export function AstronautCard({
   registered,
   clock,
   onCheck,
+  forced,
 }: {
   astronaut: Astronaut;
   registered: Registered;
   clock: Clock;
   onCheck?: (() => Promise<boolean>) | undefined;
+  /** 바깥에서 정한 확인 상태(당첨자 확인 승인 때 등록증이 같은 움직임으로 확인되는 모습) */
+  forced?: "checking" | "ok" | undefined;
 }) {
   const card = useRef<HTMLDivElement>(null);
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const [owner, setOwner] = useState<Owner>("idle");
+  const [inner, setOwner] = useState<Owner>("idle");
+  const owner: Owner = forced ?? inner;
   const [now, setNow] = useState(() => clock.now());
   const [fullAddress, setFullAddress] = useState(false);
   const [aboutMark, setAboutMark] = useState(false);
@@ -294,7 +298,7 @@ export function AstronautCard({
                 : ""}
       </p>
 
-      {(aboutMark || owner === "ok") && (
+      {(aboutMark || (owner === "ok" && !forced)) && (
         <p className="break-keep text-center text-sky-100/85 text-xs">
           {owner === "ok"
             ? "나에게 보여 주는 확인이에요. 남에게 당첨을 증명할 때는 당첨자 확인을 씁니다"

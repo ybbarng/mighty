@@ -16,30 +16,11 @@ function dateOf(seconds: number): string {
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 }
 
-/**
- * 우주인 등록증 한 장과 공개 열쇠, 공유(docs/36 11-9). 등록 직후·내 등록증·데모가 같이 쓴다.
- * 우리 화면은 남의 등록증을 그리지 않는다: 이 기기의 내 등록증만(데모는 가짜 우주인). 그래서 공유도 공개 열쇠 주소 대신
- * 인사 문구와 첫 화면 주소만 보낸다.
- * 등록 일자는 장부의 등록 회차(첫 응모 회차)의 날짜다. 아직 응모 전이면 "첫 응모 때 기록".
- */
-export function AstronautPanel({
-  services,
-  pub,
-  greeting,
-  children,
-}: {
-  services: Services;
-  pub: Uint8Array;
-  /** 카드 위 인사(등록 직후 등) */
-  greeting?: ReactNode;
-  /** 카드 아래 더 둘 것(예: 별 고르러 가기) */
-  children?: ReactNode;
-}) {
-  const a = useMemo(() => astronautOf(pub), [pub]);
+/** 등록 일자 칸: 장부의 등록 회차(첫 응모 회차)의 날짜. 아직 응모 전이면 pending */
+export function useRegistered(services: Services, pub: Uint8Array): Registered {
   const [registered, setRegistered] = useState<Registered>({
     state: "loading",
   });
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +44,32 @@ export function AstronautPanel({
       alive = false;
     };
   }, [services, pub]);
+
+  return registered;
+}
+
+/**
+ * 우주인 등록증 한 장과 공개 열쇠, 공유(docs/36 11-9). 등록 직후·내 등록증·데모가 같이 쓴다.
+ * 우리 화면은 남의 등록증을 그리지 않는다: 이 기기의 내 등록증만(데모는 가짜 우주인). 그래서 공유도 공개 열쇠 주소 대신
+ * 인사 문구와 첫 화면 주소만 보낸다.
+ * 등록 일자는 장부의 등록 회차(첫 응모 회차)의 날짜다. 아직 응모 전이면 "첫 응모 때 기록".
+ */
+export function AstronautPanel({
+  services,
+  pub,
+  greeting,
+  children,
+}: {
+  services: Services;
+  pub: Uint8Array;
+  /** 카드 위 인사(등록 직후 등) */
+  greeting?: ReactNode;
+  /** 카드 아래 더 둘 것(예: 별 고르러 가기) */
+  children?: ReactNode;
+}) {
+  const a = useMemo(() => astronautOf(pub), [pub]);
+  const registered = useRegistered(services, pub);
+  const [copied, setCopied] = useState(false);
 
   const tickets = services.ledger
     .closed()

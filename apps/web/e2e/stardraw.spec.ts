@@ -539,8 +539,12 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   ).toBeVisible();
   await toWinner();
   await expect(
-    winner.getByText(/Brice님이 1회 1등 당첨자 확인을 요청했습니다/),
+    winner.getByText(/Brice님이 1회 1등 당첨 확인을 요청했습니다/),
   ).toBeVisible();
+  // 이름은 보낸 사람이 적고, 우주국은 전달만 한다
+  await expect(winner).toContainText(
+    "이름은 보낸 분이 직접 적은 것입니다 · 전달: 카노푸스 우주국",
+  );
   await winner.getByRole("button", { name: "가짜 당첨자로 답하기" }).click();
   await toChecker();
   await expect(checker.locator("[data-status='failed']")).toContainText(
@@ -555,7 +559,9 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     .getByRole("button", { name: "당첨자 확인 요청 보내기" })
     .click();
   await toWinner();
-  await winner.getByRole("button", { name: "확인", exact: true }).click();
+  // 「등록증으로 승인」: 내 등록증이 나타나 확인을 받고 별 세 개가 빛난다
+  await winner.getByRole("button", { name: "등록증으로 승인" }).click();
+  await expect(winner.locator("[data-approving='checking']")).toBeVisible();
   await demoUnlock(page, "sign");
   const sas = winner.locator("[data-sas]");
   await expect(sas).toBeVisible({ timeout: 30_000 });
@@ -565,6 +571,9 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   expect(stars).toHaveLength(3);
   await expect(winner).toContainText(
     "당첨을 알렸던 그 메신저·메일로 이 세 별 이름을 차례대로 보내 주세요",
+  );
+  await expect(winner.locator("[data-sas-warning]")).toHaveText(
+    "별 세 개는 내가 당첨을 알린 그 사람에게만 보내세요.",
   );
   await page.screenshot({
     path: info.outputPath("stardraw-demo-winner.png"),
