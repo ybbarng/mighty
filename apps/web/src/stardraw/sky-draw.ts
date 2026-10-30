@@ -1,6 +1,6 @@
 import { createRng, nextFloat } from "@mighty/engine";
 
-import { SKY_LINES, SKY_STARS, starRadius, tempColor } from "./sky";
+import { ballColor, SKY_LINES, SKY_STARS, starRadius, tempColor } from "./sky";
 import { type Meteor, type Twinkle, twinkleLevel } from "./sky-effects";
 
 /**
@@ -94,6 +94,11 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const al = (a: number) => Math.round(clamp01(a) * 1000) / 1000;
 const rgba = (c: Rgb | string, a: number) =>
   `rgba(${typeof c === "string" ? c : c.join(",")},${al(a)})`;
+/** "#rrggbb" → [r, g, b] */
+const hexRgb = (hex: string): Rgb =>
+  [1, 3, 5].map((i) =>
+    Number.parseInt(hex.slice(i, i + 2), 16),
+  ) as unknown as Rgb;
 const whiter = (c: Rgb, t: number): Rgb =>
   c.map((v) => Math.round(v + (255 - v) * t)) as unknown as Rgb;
 
@@ -137,16 +142,27 @@ function cross(
   len: number,
   a: number,
   width: number,
+  /** 대각선(✕) 빛줄기: 보너스 별 */
+  diag = false,
 ) {
   if (!(len > 0.5) || a <= 0.01) return;
   g.lineWidth = width;
   g.lineCap = "round";
-  for (const [dx, dy, m] of [
-    [1, 0, 1],
-    [-1, 0, 1],
-    [0, 1, 1.15],
-    [0, -1, 1.15],
-  ] as const) {
+  const d = Math.SQRT1_2;
+  const rays = diag
+    ? ([
+        [d, d, 1],
+        [-d, -d, 1],
+        [d, -d, 1],
+        [-d, d, 1],
+      ] as const)
+    : ([
+        [1, 0, 1],
+        [-1, 0, 1],
+        [0, 1, 1.15],
+        [0, -1, 1.15],
+      ] as const);
+  for (const [dx, dy, m] of rays) {
     const ex = x + dx * len * m;
     const ey = y + dy * len * m;
     const lg = g.createLinearGradient(x, y, ex, ey);
@@ -235,6 +251,8 @@ function sceneOf(W: number, state: SkyState) {
       x: s.x * W,
       y: s.y * W,
       c: tempColor(s.k) as Rgb,
+      /** 진한 별빛 색(번호 공과 같은 색). 룰렛 불빛·당첨 별의 빛 */
+      v: hexRgb(ballColor(s.n)),
       look: starLook(s.mag, scale),
       /** 고리 자리를 정하는 반지름 */
       r: starRadius(s.mag) * scale,
@@ -434,18 +452,28 @@ function paintLive(g: Ctx, sc: Scene, f: FrameInput) {
       g.fill();
     }
 
-    // 추첨: 룰렛 불빛이 지나는 별은 하얗게 번지고 빛줄기가 뻗는다
+    // 추첨: 룰렛 불빛이 지나는 별은 그 별빛 색으로 밝게 번지고 빛줄기가 뻗는다
     if (st.passing && !st.drawn && !st.isBonus) {
-      halo(g, x, y, 30 * scale, "255,246,225", 0.9);
-      cross(g, x, y, "255,240,205", 15 * scale, 0.9, lw);
+      halo(g, x, y, 30 * scale, whiter(st.v, 0.45), 0.9);
+      cross(g, x, y, whiter(st.v, 0.3), 15 * scale, 0.9, lw);
       bright(g, x, y, look);
     }
-    // 켜진 당첨 별은 금빛, 보너스는 하늘빛. 내 별과 맞으면 빛 번짐과 빛줄기가 맥동한다
+    // 켜진 당첨 별은 그 별빛 색으로 빛난다. 보너스는 같은 색에 빛줄기만 대각선(✕)으로.
+    // 내 별과 맞으면 빛 번짐과 빛줄기가 맥동한다
     if (st.drawn || st.isBonus) {
       const p = st.hit && !still ? 0.8 + 0.2 * Math.sin(now / 260 + s.n) : 1;
-      const tone = st.isBonus ? "140,212,255" : "255,224,140";
-      halo(g, x, y, (st.hit ? 36 : 28) * scale * p, tone, st.hit ? 0.9 : 0.7);
-      cross(g, x, y, tone, (st.hit ? 22 : 15) * scale * p, 0.9, lw * 1.1);
+      const tone = whiter(st.v, 0.25);
+      halo(g, x, y, (st.hit ? 36 : 28) * scale * p, tone, st.hit ? 0.9 : 0.75);
+      cross(
+        g,
+        x,
+        y,
+        tone,
+        (st.hit ? 22 : 15) * scale * p,
+        0.9,
+        lw * 1.1,
+        st.isBonus,
+      );
       bright(g, x, y, look);
     } else if (st.mine && !dark) {
       // 내가 고른 별(응모·영수증): 큰 원 대신 빛 번짐이 커지고 가는 빛줄기

@@ -1,5 +1,6 @@
 // 하늘의 별 따기 HDR 별빛 그림(docs/36 화면 절). 캔버스의 별과 같은 모양(작은 원판 + 가는 십자 빛줄기 + 흐린 빛 번짐)을
-// 보통 흰색보다 밝게 그린 그림 하나를 만든다.
+// 보통 흰색보다 밝게 그린 그림 두 장을 만든다: 가로세로(＋) 빛줄기, 보너스 별용 대각선(✕) 빛줄기.
+// 보너스를 CSS로 돌리지 않는 것은 Safari가 transform이 걸린 HDR 그림을 SDR로 그린 적이 있어서다(아래).
 //
 //   node apps/web/scripts/build-stardraw-hdr-glow.mjs
 //
@@ -42,9 +43,13 @@ const SPIKE_LEN = 0.62;
 const SPIKE_HALF = 0.016;
 const SPIKE_A = 0.85;
 
-const OUT = fileURLToPath(
-  new URL("../public/stardraw/star-glow-hdr.avif", import.meta.url),
-);
+const OUTS = [
+  { diag: false, name: "star-glow-hdr.avif" },
+  { diag: true, name: "star-glow-hdr-diag.avif" },
+].map((o) => ({
+  ...o,
+  path: fileURLToPath(new URL(`../public/stardraw/${o.name}`, import.meta.url)),
+}));
 
 /** SMPTE ST 2084(PQ): 밝기(nit) → 0~1 신호 */
 function pq(nits) {
@@ -71,7 +76,11 @@ function spike(along, perp, len) {
 }
 
 /** 한 점(가운데에서 dx, dy, 그림 반지름 1 기준)의 알파. 색은 늘 NITS다 */
-function alphaAt(dx, dy) {
+function alphaAt(dx0, dy0, diag) {
+  // 대각선(✕)은 좌표를 45도 돌려 같은 빛줄기를 그린다(가로세로 길이는 같게)
+  const k = Math.SQRT1_2;
+  const dx = diag ? (dx0 + dy0) * k : dx0;
+  const dy = diag ? (dy0 - dx0) * k : dy0;
   const r = Math.hypot(dx, dy);
   const disc = 1 - smoothstep(DISC * 0.7, DISC * 1.25, r);
   const glow =
@@ -79,14 +88,14 @@ function alphaAt(dx, dy) {
     TAIL_A / (1 + (r / TAIL_R) ** 2);
   const spikes = Math.max(
     spike(Math.abs(dx), dy, SPIKE_LEN),
-    spike(Math.abs(dy), dx, SPIKE_LEN * 1.15),
+    spike(Math.abs(dy), dx, SPIKE_LEN * (diag ? 1 : 1.15)),
   );
   // 겹친 빛은 "덮어 칠하기"로 합친다. 가장자리는 그림 끝에서 0이 되게
   const a = 1 - (1 - disc) * (1 - glow) * (1 - spikes);
   return a * (1 - smoothstep(0.85, 1, r));
 }
 
-function rgba16() {
+function rgba16(diag) {
   const stride = 1 + SIZE * 8;
   const raw = Buffer.alloc(stride * SIZE);
   const c = (SIZE - 1) / 2;
@@ -94,7 +103,7 @@ function rgba16() {
   for (let y = 0; y < SIZE; y++) {
     raw[y * stride] = 0; // 줄 필터 없음
     for (let x = 0; x < SIZE; x++) {
-      const alpha = alphaAt((x - c) / (SIZE / 2), (y - c) / (SIZE / 2));
+      const alpha = alphaAt((x - c) / (SIZE / 2), (y - c) / (SIZE / 2), diag);
       const o = y * stride + 1 + x * 8;
       for (let ch = 0; ch < 3; ch++) raw.writeUInt16BE(signal[ch], o + ch * 2);
       raw.writeUInt16BE(Math.round(alpha * 65535), o + 6);
@@ -112,7 +121,7 @@ function chunk(type, data) {
   return Buffer.concat([len, body, crc]);
 }
 
-function png16() {
+function png16(diag) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(SIZE, 0);
   ihdr.writeUInt32BE(SIZE, 4);
@@ -121,16 +130,20 @@ function png16() {
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(rgba16(), { level: 9 })),
+    chunk("IDAT", deflateSync(rgba16(diag), { level: 9 })),
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
 
 function main() {
+  for (const out of OUTS) build(out.diag, out.path);
+}
+
+function build(diag, OUT) {
   const dir = mkdtempSync(join(tmpdir(), "stardraw-hdr-"));
   try {
     const png = join(dir, "glow.png");
-    writeFileSync(png, png16());
+    writeFileSync(png, png16(diag));
     execFileSync(
       "avifenc",
       [

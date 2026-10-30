@@ -21,13 +21,25 @@ describe("HDR 별빛을 겹칠 별", () => {
     expect(end.filter((g) => g.kind === "hit").map((g) => g.n)).toEqual([3, 7]);
   });
 
-  it("바로 보기·움직임 줄이기는 번쩍임 없이 맞은 별(보너스 포함)만", () => {
+  it("바로 보기·움직임 줄이기는 번쩍임 없이 맞은 별(보너스 포함)만, 보너스는 대각선 빛줄기", () => {
     expect(
       drawGlows({ fixed, mine: [7, 22, 45], done: true, animated: false }),
     ).toEqual([
       { n: 22, kind: "hit" },
-      { n: 7, kind: "hit" },
+      { n: 7, kind: "hit", diag: true },
     ]);
+  });
+
+  it("연출 중 번쩍임과 별자리 별도 보너스는 대각선 빛줄기", () => {
+    const glows = drawGlows({
+      fixed,
+      mine: [7],
+      done: true,
+      animated: true,
+      lights: [{ n: 7, at: 300 }],
+    });
+    expect(glows.filter((g) => g.n === 7).every((g) => g.diag)).toBe(true);
+    expect(glows.filter((g) => g.n !== 7).some((g) => g.diag)).toBe(false);
   });
 
   it("응모하지 않았거나 맞은 별이 없으면 결과에 HDR 빛이 없다", () => {

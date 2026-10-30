@@ -215,7 +215,7 @@ export function DrawView({
                     }))
                   : [],
             })}
-            overlay={party && <SkyCelebration plan={party} />}
+            overlay={party && <SkyCelebration plan={party} bonus={bonus} />}
             label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
           />
 
@@ -252,15 +252,15 @@ export function DrawView({
 
           <p className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-white/65 text-xs">
             <span className="flex items-center gap-1.5">
-              {/* 하늘에서 당첨 별은 고리 없이 금빛으로 번지고, 보너스는 하늘빛으로 번진다 */}
-              <span className="flex size-3 items-center justify-center">
-                <span className="size-1.5 rounded-full bg-amber-50 shadow-[0_0_5px_3px_rgba(255,224,140,0.85)]" />
+              {/* 하늘에서 당첨 별은 그 별빛 색으로 번지며 빛줄기가 가로세로(＋), 보너스는 대각선(✕)으로 뻗는다 */}
+              <span className="flex size-3 items-center justify-center font-bold text-[11px] text-white leading-none [text-shadow:0_0_4px_rgba(255,255,255,0.9)]">
+                ＋
               </span>
               당첨 번호
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="flex size-3 items-center justify-center">
-                <span className="size-1.5 rounded-full bg-sky-50 shadow-[0_0_5px_3px_rgba(140,212,255,0.85)]" />
+              <span className="flex size-3 items-center justify-center font-bold text-[11px] text-white leading-none [text-shadow:0_0_4px_rgba(255,255,255,0.9)]">
+                ✕
               </span>
               보너스
             </span>
@@ -271,7 +271,10 @@ export function DrawView({
                   내 별
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="size-3 rounded-full border-2 border-emerald-300" />
+                  {/* 하늘에서 맞은 별은 파란 고리 안의 별이 그 별빛 색으로 빛난다 */}
+                  <span className="flex size-3 items-center justify-center rounded-full border-2 border-sky-300">
+                    <span className="size-1 rounded-full bg-white shadow-[0_0_4px_2px_rgba(255,255,255,0.8)]" />
+                  </span>
                   맞은 별
                 </span>
               </>

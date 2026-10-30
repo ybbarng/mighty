@@ -4,13 +4,20 @@ import { type CSSProperties, useId } from "react";
 
 import { Seal } from "../astronaut/marks";
 import { type CelebrationPlan, LINE_MS, METEOR_MS } from "../celebrate";
-import { starOf } from "../sky";
+import { ballColor, starOf } from "../sky";
 
 /**
  * 당첨 축하의 하늘 쪽(SkyBoard `overlay`): 나만의 별자리(별이 하나씩 켜지고 선이 그어진다), 빛줄기 반짝임, 별똥별.
  * 움직임은 모두 CSS 지연으로 낸다(시각은 `celebrationPlan`). 움직임 줄이기면 별자리가 처음부터 다 보이고 별똥별은 없다.
  */
-export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
+export function SkyCelebration({
+  plan,
+  bonus = null,
+}: {
+  plan: CelebrationPlan;
+  /** 보너스 번호: 별자리에 들어가면 빛줄기를 대각선(✕)으로(하늘과 같은 표시) */
+  bonus?: number | null;
+}) {
   const ms = (v: number): CSSProperties => ({ animationDelay: `${v}ms` });
   const id = useId().replace(/:/g, "");
   const glow = `sd-cel-glow-${id}`;
@@ -32,12 +39,14 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
           <filter id={glow} x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="0.7" />
           </filter>
-          {/* 빛줄기: 가운데 흰색 → 금빛 → 투명(가는 마름모에 채워 끝으로 갈수록 가늘고 흐리다) */}
-          <radialGradient id={ray}>
-            <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
-            <stop offset="0.3" stopColor="#fde68a" stopOpacity="0.55" />
-            <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-          </radialGradient>
+          {/* 빛줄기: 가운데 흰색 → 그 별의 진한 별빛 색 → 투명(가는 마름모에 채워 끝으로 갈수록 가늘고 흐리다) */}
+          {plan.order.map((n) => (
+            <radialGradient key={n} id={`${ray}-${n}`}>
+              <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
+              <stop offset="0.3" stopColor={ballColor(n)} stopOpacity="0.6" />
+              <stop offset="1" stopColor={ballColor(n)} stopOpacity="0" />
+            </radialGradient>
+          ))}
         </defs>
         {plan.edges.map(([a, b], i) => {
           const p = starOf(a);
@@ -69,11 +78,17 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
                 cx={x}
                 cy={y}
                 r={1.5}
-                fill="#fde68a"
+                fill={ballColor(n)}
                 opacity={0.5}
                 filter={`url(#${glow})`}
               />
-              <Rays x={x} y={y} len={2.8} fill={`url(#${ray})`} />
+              <Rays
+                x={x}
+                y={y}
+                len={2.8}
+                fill={`url(#${ray}-${n})`}
+                diag={n === bonus}
+              />
               <circle cx={x} cy={y} r={0.42} fill="#fffbea" />
             </g>
           );
@@ -90,7 +105,13 @@ export function SkyCelebration({ plan }: { plan: CelebrationPlan }) {
                 animationIterationCount: plan.rank <= 3 ? 2 : 1,
               }}
             >
-              <Rays x={s.x * 100} y={s.y * 100} len={6} fill={`url(#${ray})`} />
+              <Rays
+                x={s.x * 100}
+                y={s.y * 100}
+                len={6}
+                fill={`url(#${ray}-${n})`}
+                diag={s.n === bonus}
+              />
             </g>
           );
         })}
@@ -122,14 +143,30 @@ function Rays({
   y,
   len,
   fill,
+  diag = false,
 }: {
   x: number;
   y: number;
   len: number;
   fill: string;
+  /** 대각선(✕): 보너스 별 */
+  diag?: boolean;
 }) {
   const w = len * 0.06;
   const v = len * 1.15;
+  if (diag)
+    return (
+      <g transform={`rotate(45 ${x} ${y})`}>
+        <polygon
+          points={`${x - len},${y} ${x},${y - w} ${x + len},${y} ${x},${y + w}`}
+          fill={fill}
+        />
+        <polygon
+          points={`${x},${y - len} ${x + w},${y} ${x},${y + len} ${x - w},${y}`}
+          fill={fill}
+        />
+      </g>
+    );
   return (
     <>
       <polygon

@@ -12,6 +12,8 @@ import { useEffect, useState } from "react";
  */
 
 export const HDR_GLOW_SRC = "/stardraw/star-glow-hdr.avif";
+/** 보너스 별용: 빛줄기가 대각선(✕). 하늘 그림과 같은 표시. CSS로 돌리지 않는다(Safari가 transform 걸린 HDR을 SDR로 그린 적이 있다) */
+export const HDR_GLOW_DIAG_SRC = "/stardraw/star-glow-hdr-diag.avif";
 
 /**
  * HDR 별빛 전체 스위치. false면 HDR 화면에서도 그림을 겹치지도 받지도 않고 예전(SDR) 그대로다.
@@ -26,6 +28,8 @@ export interface HdrGlow {
   kind: HdrGlowKind;
   /** 번쩍임을 늦출 시간(ms). 당첨 축하에서 별자리 별이 켜지는 순간에 맞춘다 */
   delay?: number;
+  /** 보너스 별: 빛줄기를 대각선(✕)으로 */
+  diag?: boolean;
 }
 
 /**
@@ -50,12 +54,17 @@ export function drawGlows({
   lights?: readonly { n: number; at: number }[];
 }): HdrGlow[] {
   const glows: HdrGlow[] = [];
-  if (animated) for (const n of fixed) glows.push({ n, kind: "flash" });
+  // 보너스(일곱째)는 빛줄기를 대각선으로
+  const bonus = fixed[6];
+  const mark = (g: HdrGlow): HdrGlow =>
+    g.n === bonus ? { ...g, diag: true } : g;
+  if (animated) for (const n of fixed) glows.push(mark({ n, kind: "flash" }));
   if (done)
-    for (const l of lights) glows.push({ n: l.n, kind: "flash", delay: l.at });
+    for (const l of lights)
+      glows.push(mark({ n: l.n, kind: "flash", delay: l.at }));
   if (done) {
     const own = new Set(mine);
-    for (const n of fixed) if (own.has(n)) glows.push({ n, kind: "hit" });
+    for (const n of fixed) if (own.has(n)) glows.push(mark({ n, kind: "hit" }));
   }
   return glows;
 }

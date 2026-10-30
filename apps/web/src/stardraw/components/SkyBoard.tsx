@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 
 import {
+  HDR_GLOW_DIAG_SRC,
   HDR_GLOW_SRC,
   HDR_GLOWS_ON,
   type HdrGlow,
@@ -218,7 +219,7 @@ function HdrGlowSprite({ glow }: { glow: HdrGlow }) {
     >
       {/* biome-ignore lint/performance/noImgElement: 정적 내보내기의 작은 HDR 그림이라 next/image가 필요 없다 */}
       <img
-        src={HDR_GLOW_SRC}
+        src={glow.diag ? HDR_GLOW_DIAG_SRC : HDR_GLOW_SRC}
         alt=""
         draggable={false}
         decoding="async"
