@@ -155,13 +155,21 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     };
   }, [page]);
 
-  /** 다른 화면으로: 주소를 바꿔 기록에 남긴다(replace면 지금 기록을 바꾼다) */
+  /**
+   * 다른 화면으로: 주소를 바꿔 기록에 남긴다(replace면 지금 기록을 바꾼다).
+   * 같은 페이지 안(# 조각만 바뀜)은 라우터를 거치지 않는다. 라우터가 이를 페이지 이동으로 처리하면 화면을 처음부터
+   * 다시 그리며 # 조각을 놓쳐 목록으로 돌아갔다(2026-10-31 안드로이드 폰, 지난 회차에서 회차를 누르면
+   * "하늘을 펴고 있습니다" 뒤 목록). 다른 페이지로 갈 때만 라우터를 쓴다
+   */
   const go = (v: View, replace = false) => {
     const url = urlOf(v);
     navigated = true;
-    if (replace) router.replace(url);
+    if (url.split("#")[0] === PATH[page]) {
+      if (replace) window.history.replaceState(window.history.state, "", url);
+      else window.history.pushState(window.history.state, "", url);
+      setView(v);
+    } else if (replace) router.replace(url);
     else router.push(url);
-    if (url.split("#")[0] === PATH[page]) setView(v);
     window.scrollTo({ top: 0 });
   };
   /** 화면의 "돌아가기": 옮겨 왔으면 바로 전 화면, 주소로 바로 열었으면 정한 화면으로 */
