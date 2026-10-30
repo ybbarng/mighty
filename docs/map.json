@@ -974,7 +974,8 @@
             "③ 회사 Supabase SSO"
           ],
           "recommend": "보류(사용자). 정하기 전에는 초대 코드 방식으로 같은 흐름을 시험할 수 있다",
-          "status": "open"
+          "status": "decided",
+          "decided": "① 별 따기 전용 구글 로그인 + hd 확인(2026-10-31, 사용자 개인 GCP 클라이언트로 회사 계정 로그인 성공 확인)"
         },
         {
           "id": "stardraw-qual-period",
@@ -986,7 +987,8 @@
             "반년"
           ],
           "recommend": "분기(증서·백업을 모두 잃은 사람이 기다리는 시간과 떠난 사람의 자격이 남는 시간이 짧다)",
-          "status": "open"
+          "status": "decided",
+          "decided": "1년(2026-10-31 사용자)"
         },
         {
           "id": "stardraw-qual-backup",
@@ -998,7 +1000,8 @@
             "백업도 늘 PRF로 잠금(패스키를 잃으면 복구 불가)"
           ],
           "recommend": "기기 안 저장본만 잠그기(문서 기본값)",
-          "status": "open"
+          "status": "decided",
+          "decided": "기기 안 저장본만 잠그고 내보내는 백업은 평문 복구 코드 + 보관 안내(2026-10-31)"
         }
       ]
     }
