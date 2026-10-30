@@ -1,6 +1,6 @@
-# 앵커 저장소 README 초안(ybbarng/stardraw-ledger)
+# 앵커 저장소 README(ybbarng/stardraw-ledger)
 
-> 이 파일은 초안이다. 서버는 README를 쓰지 않는다. 사용자가 확인한 뒤 앵커 저장소 main 브랜치에 손으로 올린다(docs/36 11-16).
+> 2026-10-30 앵커 저장소 main에 올린 README와 같은 내용이다. 서버는 README를 쓰지 않으므로 바꿀 때는 이 파일과 앵커 저장소를 함께 손으로 고친다(docs/36 11-16).
 > 아래 줄부터가 README 본문이다.
 
 ---
@@ -9,7 +9,9 @@
 
 [하늘의 별 따기](https://game.byb.kr/stardraw)(정시 로또)의 회차 기록을 바깥에 남기는 저장소입니다. 회차 서버가 회차를 닫을 때마다 커밋 하나를 남깁니다. 사람이 손으로 고치지 않습니다.
 
-규칙과 설계는 [게임 센터 저장소 docs/36](https://github.com/ybbarng/mighty/blob/main/docs/36-hourly-lotto-design.md)에 있습니다.
+- 계산 규칙과 브라우저에서 검사하기: https://game.byb.kr/stardraw/verify
+- 규칙과 설계: [게임 센터 저장소 docs/36](https://github.com/ybbarng/mighty/blob/main/docs/36-hourly-lotto-design.md)
+- 서버·검사기 소스: https://github.com/ybbarng/mighty (`apps/stardraw-server`, `packages/stardraw-core`, `packages/stardraw-cli`)
 
 ## 브랜치
 
@@ -34,7 +36,7 @@ ledgers/<장부 id>/ledger/bundles/100/000001.json ┘
 - 장부 id는 처음 일정표 해시 앞 16자리입니다(`genesis.txt`의 `ledger` 줄).
 - 회차 앵커와 그 회차의 장부 사본은 같은 커밋에 들어갑니다. 커밋 메시지: `하늘의 별 따기 {회차}회 기록 {기록 해시 앞 12자리} (장부 {id})`.
 - `head.json`은 그 브랜치에 올라간 마지막 회차를 가리킵니다. 회차는 닫힌 뒤에 올라오므로 서버보다 한두 회차 늦을 수 있습니다.
-- 사본을 올리기 전에 닫힌 회차는 `하늘의 별 따기 장부 파일 1~36회 (장부 {id})` 같은 커밋으로 채웠습니다.
+- 사본을 올리기 전에 닫힌 회차는 `하늘의 별 따기 장부 파일 1~N회 (장부 {id})` 커밋 하나로 채웠습니다.
 
 ## 서버 없이 검사하기
 

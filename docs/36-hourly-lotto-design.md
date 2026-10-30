@@ -965,6 +965,6 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 사본만 따로 커밋: 회차당 커밋이 둘이 되고, 앵커와 사본이 어긋나는 순간이 생긴다.
 - 서버의 head.json을 그대로: 다음 회차 봉인 수가 앞서 있을 수 있고, 지난 회차를 채울 때는 그 시점의 head가 없다.
 
-**앵커 저장소 README**: 서버가 쓰지 않는다. 손으로 올릴 초안은 [36-stardraw-ledger-readme.md](36-stardraw-ledger-readme.md).
+**앵커 저장소 README**: 서버가 쓰지 않는다. 2026-10-30 손으로 올렸고, 같은 내용을 [36-stardraw-ledger-readme.md](36-stardraw-ledger-readme.md)에 둔다.
 
 **배포**: 서버를 새 판으로 올리면 첫 진행 때 trial 브랜치에 지난 회차 사본을 채운다. 화면·검사기는 서버보다 먼저 올라가도 된다(사본이 없으면 검사기는 `--source server`를 쓰라고 알리고, 화면은 서버가 응답할 때 사본을 보지 않는다).
