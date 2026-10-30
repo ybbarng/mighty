@@ -1,6 +1,6 @@
 "use client";
 
-import { equalBytes, roundTimes, toHex } from "@mighty/stardraw-core";
+import { roundTimes } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { AstronautCard, type Registered } from "../astronaut/AstronautCard";
@@ -49,9 +49,11 @@ export function useRegistered(services: Services, pub: Uint8Array): Registered {
 }
 
 /**
- * 우주인 등록증 한 장과 공개 열쇠, 공유(docs/36 11-9). 등록 직후·내 등록증·데모가 같이 쓴다.
+ * 우주인 등록증 한 장과 공유(docs/36 11-9). 등록 직후·내 등록증·데모가 같이 쓴다.
  * 우리 화면은 남의 등록증을 그리지 않는다: 이 기기의 내 등록증만(데모는 가짜 우주인). 그래서 공유도 공개 열쇠 주소 대신
  * 인사 문구와 첫 화면 주소만 보낸다.
+ * 공개 열쇠는 앞면·공유에 넣지 않고 카드 뒷면에 가려 둔다(꺼내 보기 전에 본인 확인, `AstronautCard`).
+ * 등록증 그림을 나눠도 글자 검색으로 장부 속 응모가 바로 찾히지 않게 하는 실수 방지다. 등록번호로도 계산하면 찾을 수 있다는 한계는 남는다.
  * 등록 일자는 장부의 등록 회차(첫 응모 회차)의 날짜다. 아직 응모 전이면 "첫 응모 때 기록".
  */
 export function AstronautPanel({
@@ -70,13 +72,13 @@ export function AstronautPanel({
   const a = useMemo(() => astronautOf(pub), [pub]);
   const registered = useRegistered(services, pub);
   const [copied, setCopied] = useState(false);
-
-  const tickets = services.ledger
-    .closed()
-    .reduce(
-      (n, { tickets }) =>
-        n + tickets.filter((t) => equalBytes(t.pub, pub)).length,
-      0,
+  // 앞면 주인 확인과 뒷면 열쇠 꺼내 보기가 같은 본인 확인을 쓴다(그 등록증의 패스키, 기기 안에서 확인)
+  const confirmOwner = async () =>
+    checkOwner(
+      pub,
+      await services.wallet.ownerSigner(pub),
+      sitePolicy(),
+      Math.floor(services.clock.now() / 1000),
     );
 
   const share = async () => {
@@ -109,14 +111,9 @@ export function AstronautPanel({
         astronaut={a}
         registered={registered}
         clock={services.clock}
-        onCheck={async () =>
-          checkOwner(
-            pub,
-            await services.wallet.ownerSigner(pub),
-            sitePolicy(),
-            Math.floor(services.clock.now() / 1000),
-          )
-        }
+        onCheck={confirmOwner}
+        pub={pub}
+        onReveal={confirmOwner}
       />
       {children}
       <button
@@ -126,20 +123,9 @@ export function AstronautPanel({
       >
         {copied ? "링크를 복사했어요" : "등록증 공유"}
       </button>
-      <div className="flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <span className="text-white/60 text-xs">공개 열쇠</span>
-        <code
-          data-public-key
-          className="break-all font-mono text-[11px] text-white/85 leading-relaxed"
-        >
-          {toHex(pub)}
-        </code>
-        <p className="break-keep text-white/60 text-xs">
-          공개 열쇠는 원래 공개하는 값이라 보여 줘도 안전합니다. 다만 등록증을
-          보여 주면 장부 속 응모가 내 것인 줄 알 수 있습니다.
-          {tickets > 0 && ` 지금 장부에 ${tickets}장.`}
-        </p>
-      </div>
+      <p className="-mt-2 break-keep text-center text-white/55 text-xs">
+        등록증을 보여 주면 장부 속 응모가 내 것인 줄 알 수 있습니다.
+      </p>
     </section>
   );
 }

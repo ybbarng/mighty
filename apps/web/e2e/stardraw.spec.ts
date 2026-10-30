@@ -209,9 +209,9 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   const number = (await card.getAttribute("data-idcard")) as string;
   expect(number).toMatch(/^SD-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
   await expect(card.locator("[data-registered]")).toHaveText("첫 응모 때 기록");
-  await expect(page.locator("[data-public-key]")).toHaveText(
-    /^04[0-9a-f]{128}$/,
-  );
+  // 앞면에는 공개 열쇠가 없다(뒷면에 가려 둔다)
+  await expect(page.locator("[data-public-key]")).toHaveCount(0);
+  await expect(card).not.toContainText(/04[0-9a-f]{20}/);
   // 주소는 줄여 보이고, 누르면 전체(우리 우주부터)
   await card.getByRole("button", { name: /^주소:/ }).click();
   await expect(page.locator("[data-full-address]")).toContainText(
@@ -336,6 +336,28 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-id-owner.png"),
     fullPage: true,
   });
+  // 뒷면: 뒤집으면 공개 열쇠는 가려 있고, 가린 줄을 누르면 본인 확인 뒤 꺼내 보인다
+  await page.locator("[data-flip-card]").click();
+  const back = page.locator("[data-idcard-back]");
+  await expect(back.locator("[data-key-mask]")).toBeVisible();
+  await expect(back.locator("[data-public-key]")).toHaveCount(0);
+  await back.locator("[data-key-mask]").click();
+  await expect(back.locator("[data-public-key]")).toHaveText(
+    /^04[0-9a-f]{128}$/,
+  );
+  await expect(
+    page.getByText("이 값으로 장부 속 내 응모를 찾을 수 있습니다"),
+  ).toBeVisible();
+  await expect(back.getByRole("button", { name: "복사" })).toBeVisible();
+  expect(await passkeyCalls(page)).toEqual({ create: 0, get: 2 });
+  await noSideScroll(page);
+  await page.screenshot({
+    path: info.outputPath("stardraw-id-back.png"),
+    fullPage: true,
+  });
+  // 다시 뒤집으면 가린다
+  await page.locator("[data-flip-card]").click();
+  await expect(back.locator("[data-public-key]")).toHaveCount(0);
   // 등록증 공유: "끝 천체에 거주하는 이름"과 첫 화면 주소(남의 화면이 등록증을 그리지 않게 공개 열쇠는 넣지 않는다)
   await page.getByRole("button", { name: "등록증 공유" }).click();
   await expect

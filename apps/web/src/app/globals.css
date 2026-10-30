@@ -849,6 +849,41 @@ button {
   animation: sd-holo-run 2.2s linear infinite;
   opacity: 0.75;
 }
+/* 등록증 뒤집기: 앞면(주인 확인)과 뒷면(열쇠 꺼내 보기). 앞면의 기울기는 앞면 안에서만 움직인다 */
+.sd-idcard-flip {
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
+  /* 기운 앞면의 반쪽은 이 상자의 평면 뒤로 들어가므로, 상자 자신은 누름을 받지 않는다 */
+  pointer-events: none;
+}
+.sd-idcard-flip > .sd-idcard-face {
+  pointer-events: auto;
+}
+.sd-idcard-flip[data-flipped] {
+  transform: rotateY(180deg);
+}
+.sd-idcard-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.sd-idcard-back {
+  transform: rotateY(180deg);
+}
+/* 보이지 않는 면은 돌기 반쯤에 숨겨, 기울어진 앞면과 뒷면이 겹쳐 누름을 가로채지 않게 한다 */
+.sd-idcard-flip > .sd-idcard-face {
+  transition-property: transform, box-shadow, visibility;
+  transition-duration: 0.5s, 0.3s, 0s;
+  transition-delay: 0s, 0s, 0.35s;
+}
+.sd-idcard-flip > .sd-idcard-face[data-tilting] {
+  transition-property: box-shadow, visibility;
+  transition-duration: 0.3s, 0s;
+  transition-delay: 0s, 0.35s;
+}
+.sd-idcard-flip:not([data-flipped]) > .sd-idcard-back,
+.sd-idcard-flip[data-flipped] > .sd-idcard-face:not(.sd-idcard-back) {
+  visibility: hidden;
+}
 @keyframes sd-holo-sweep {
   from {
     background-position: 100% 50%;
@@ -867,6 +902,10 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sd-idcard-flip,
+  .sd-idcard-flip > .sd-idcard-face {
+    transition: none;
+  }
   .sd-idcard-sweep .sd-idcard-holo,
   .sd-idcard[data-owner="ok"] .sd-idcard-holo,
   .sd-fold,
