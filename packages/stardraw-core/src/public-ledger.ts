@@ -61,7 +61,11 @@ import {
 /** 앵커 저장소(docs/36 11-7). 시험 단계 회차는 trial, 정식 단계 회차와 처음 일정표는 main 브랜치 */
 export const STARDRAW_ANCHOR_REPO = "ybbarng/stardraw-ledger";
 
-export type CheckStatus = "pass" | "fail" | "skip";
+/**
+ * 검사 항목 상태. warn(주의)은 규칙에 어긋나지 않지만 사람이 꼭 보아야 하는 것(예: 무효 회차).
+ * 장부가 통과했는지는 fail만으로 정한다(warn은 통과를 바꾸지 않는다)
+ */
+export type CheckStatus = "pass" | "fail" | "skip" | "warn";
 
 export interface CheckItem {
   id: string;
@@ -544,6 +548,7 @@ export async function checkPublicLedger(
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
     sealKeyItem(report, head),
+    voidRoundsItem(records, report.schedule),
     await timestampItem(
       records,
       seals,
@@ -601,6 +606,35 @@ function sealKeyItem(report: VerifyReport, head: PublicHeadFile): CheckItem {
       detail: "장부의 관인 열쇠가 head.json의 서버 공개 열쇠와 다르다",
     };
   return { id: "seal-key", label, status: "pass" };
+}
+
+export const VOID_ROUNDS_LABEL =
+  "무효 회차(봉인 증명 없이 닫혀 당첨이 없는 회차)";
+
+/**
+ * 무효 회차를 "통과"에 묻히지 않게 따로 보인다(2026-10-31 보안 검토). 무효 회차는 규칙상 허용되지만
+ * 운영자가 결과를 본 뒤 봉인 증명을 싣지 않아 회차를 지우는 데 쓰일 수 있으므로, 수와 목록을 주의로 남긴다.
+ * 정식 단계 회차가 있으면 따로 적는다. 통과 여부는 바꾸지 않는다
+ */
+export function voidRoundsItem(
+  records: readonly RoundRecord[],
+  schedule: Schedule,
+): CheckItem {
+  const voids = records.filter((r) => r.void).map((r) => r.round);
+  if (voids.length === 0)
+    return {
+      id: "void-rounds",
+      label: VOID_ROUNDS_LABEL,
+      status: "pass",
+      detail: "없음",
+    };
+  const live = voids.filter((n) => phaseOf(schedule, n) !== "trial");
+  return {
+    id: "void-rounds",
+    label: VOID_ROUNDS_LABEL,
+    status: "warn",
+    detail: `${voids.length}회: ${voids.join(", ")}${live.length > 0 ? ` · 정식 단계 ${live.length}회: ${live.join(", ")}` : ""}`,
+  };
 }
 
 export const TIMESTAMP_LABEL =

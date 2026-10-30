@@ -116,6 +116,7 @@ const STATUS_TEXT: Record<CheckStatus, string> = {
   pass: "통과",
   fail: "실패",
   skip: "건너뜀",
+  warn: "주의",
 };
 
 /** 「장부 전체 검사」와 콘솔 함수 `stardraw.verify()`·`stardraw.vectors()` */
@@ -183,6 +184,18 @@ export function LedgerCheck() {
               ? "규칙에 어긋나는 곳이 있습니다"
               : "모든 확인을 통과했습니다"}
           </p>
+          {result.items
+            .filter((i) => i.status === "warn")
+            .map((w) => (
+              <p
+                key={w.id}
+                data-check-warn={w.id}
+                className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-amber-100"
+              >
+                주의: {w.label}
+                {w.detail ? ` — ${w.detail}` : ""}
+              </p>
+            ))}
           <p className="text-white/65">
             {result.source === "server"
               ? `서버 ${result.mode === "trial" ? "시험" : "정식"} 장부`
@@ -205,6 +218,7 @@ export function LedgerCheck() {
                       item.status === "pass" && "text-emerald-300",
                       item.status === "fail" && "text-rose-300",
                       item.status === "skip" && "text-white/50",
+                      item.status === "warn" && "text-amber-300",
                     )}
                   >
                     {STATUS_TEXT[item.status]}

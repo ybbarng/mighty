@@ -16,6 +16,7 @@ const STATUS: Record<string, string> = {
   pass: "통과  ",
   fail: "실패  ",
   skip: "건너뜀",
+  warn: "주의  ",
 };
 
 const PARTS = new Intl.DateTimeFormat("en-US", {
@@ -116,6 +117,10 @@ export function ledgerReport(
         ? "결과: 장부는 모든 확인을 통과했지만, 확인하려던 응모권을 장부에서 찾지 못했습니다"
         : "결과: 모든 확인을 통과했습니다(건너뜀은 확인할 수단이 없거나 표본 밖인 것)",
   );
+  // 주의(예: 무효 회차)는 통과를 바꾸지 않지만 결과 줄에 묻히지 않게 한 번 더 적는다
+  const warns = result.items.filter((i) => i.status === "warn");
+  for (const w of warns)
+    out.push(`주의: ${w.label}${w.detail ? ` — ${w.detail}` : ""}`);
   return out.join("\n");
 }
 

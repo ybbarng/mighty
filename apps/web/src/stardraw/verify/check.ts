@@ -13,6 +13,7 @@ import {
   type TsaAuthority,
   toHex,
   type VerifyReport,
+  voidRoundsItem,
   withPowDetail,
   withQualDetail,
 } from "@mighty/stardraw-core";
@@ -78,6 +79,10 @@ export async function checkPracticeLedger(ledger: {
       checkItemsFrom(
         report.problems,
         [
+          voidRoundsItem(
+            closed.map((c) => c.record),
+            report.schedule,
+          ),
           {
             id: "timestamp",
             label: TIMESTAMP_LABEL,

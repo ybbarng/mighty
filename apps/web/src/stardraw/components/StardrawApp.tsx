@@ -745,7 +745,7 @@ function LastRound({
           )}
         </span>
         {record.void ? (
-          <span className="text-sm text-white/60">무효 회차</span>
+          <span className="text-amber-300/90 text-sm">무효 회차</span>
         ) : (
           <span className="flex flex-wrap items-center gap-1">
             {record.numbers.map((n) => (
@@ -1220,7 +1220,7 @@ function RoundRow({
         </span>
       </span>
       {record.void ? (
-        <span className="text-sm text-white/60">무효 회차</span>
+        <span className="text-amber-300/90 text-sm">무효 회차</span>
       ) : (
         <span className="flex flex-wrap items-center gap-1">
           {record.numbers.map((n) => (

@@ -24,7 +24,9 @@ import {
   parseTicketQuery,
   roundFilePath,
   sealFilePath,
+  voidRoundsItem,
 } from "./public-ledger";
+import type { RoundRecord } from "./record";
 import { encodeRecord, genesisHash, recordHash } from "./record";
 import { closeRound, sealDigest, sortTickets } from "./round";
 import { roundTimes, type Schedule } from "./schedule";
@@ -549,5 +551,33 @@ describe("장부 받기 — 묶음 파일과 낱개", () => {
     await expect(loadPublicLedger("", f)).rejects.toThrow(
       "/ledger/genesis.json를 받지 못했습니다. 서버가 요청이 많다며 잠시 막았습니다(429)",
     );
+  });
+});
+
+describe("무효 회차를 따로 보인다(통과에 묻히지 않게)", () => {
+  const rec = (round: number, isVoid: boolean) =>
+    ({ round, void: isVoid }) as unknown as RoundRecord;
+  const withLive: Schedule = {
+    ...SCHEDULE,
+    entries: [
+      ...SCHEDULE.entries,
+      {
+        ...(SCHEDULE.entries[0] as Schedule["entries"][number]),
+        fromRound: 3,
+        phase: "live",
+      },
+    ],
+  };
+
+  it("무효 회차가 없으면 통과, 있으면 주의로 회차 목록과 정식 단계 회차를 적는다", () => {
+    expect(voidRoundsItem([rec(1, false)], SCHEDULE)).toMatchObject({
+      status: "pass",
+    });
+    expect(
+      voidRoundsItem([rec(1, true), rec(2, false), rec(3, true)], withLive),
+    ).toMatchObject({
+      status: "warn",
+      detail: "2회: 1, 3 · 정식 단계 1회: 3",
+    });
   });
 });
