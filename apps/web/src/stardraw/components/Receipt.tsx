@@ -33,7 +33,8 @@ export function Receipt({
   printing = false,
 }: {
   ticket: Ticket;
-  receivedAt: number;
+  /** 장부가 받은 시각(초). 공유받은 남의 응모권은 모른다 */
+  receivedAt?: number | undefined;
   schedule: Schedule;
   record?: RoundRecord | undefined;
   /** 막 응모해 영수증이 인쇄되어 나오는 중 */
@@ -70,8 +71,12 @@ export function Receipt({
         <dd className="text-right font-bold">제 {ticket.round} 회</dd>
         <dt className="text-slate-400">추첨</dt>
         <dd className="text-right">{formatTime(drawAt)}</dd>
-        <dt className="text-slate-400">응모</dt>
-        <dd className="text-right">{formatTime(receivedAt)}</dd>
+        {receivedAt !== undefined && (
+          <>
+            <dt className="text-slate-400">응모</dt>
+            <dd className="text-right">{formatTime(receivedAt)}</dd>
+          </>
+        )}
         <dt className="flex items-center gap-1 text-slate-400">
           일련번호
           <button

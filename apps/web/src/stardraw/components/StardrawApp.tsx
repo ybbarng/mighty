@@ -2,6 +2,8 @@
 
 import {
   DRAND_DELAY,
+  drandRoundForClose,
+  drandTime,
   equalBytes,
   RANKS,
   type Rank,
@@ -40,6 +42,7 @@ import {
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
+import { ticketUrl } from "./TicketView";
 
 type View =
   | { name: "home" }
@@ -587,6 +590,7 @@ function ReceiptView({
         record={record}
         printing={printing}
       />
+      <ShareTicket services={services} ticket={mine.ticket} />
       {record && (
         <button
           type="button"
@@ -597,6 +601,56 @@ function ReceiptView({
         </button>
       )}
     </section>
+  );
+}
+
+/** 추첨 시각 "오후 3시", 분이 있으면 "오후 3시 20분" */
+function koreanHour(seconds: number): string {
+  const d = new Date(seconds * 1000);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  return `${h < 12 ? "오전" : "오후"} ${h % 12 || 12}시${m ? ` ${m}분` : ""}`;
+}
+
+/** 응모권 공유: 공유 시트(Web Share)가 있으면 그것으로, 없으면 링크를 복사한다 */
+function ShareTicket({
+  services,
+  ticket,
+}: {
+  services: Services;
+  ticket: Ticket;
+}) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const closesAt = roundTimes(
+      services.ledger.schedule,
+      ticket.round,
+    ).closesAt;
+    const text = `하늘의 별 따기 ${ticket.round}회에 응모했어요. 추첨은 ${koreanHour(drandTime(drandRoundForClose(closesAt)))}!`;
+    const url = ticketUrl(window.location.origin, ticket);
+    if (navigator.share) {
+      try {
+        await navigator.share({ text, url });
+      } catch {
+        // 공유 시트를 닫았다
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setCopied(true);
+    } catch {
+      // 복사를 못 하면 아무 일도 하지 않는다
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void share()}
+      className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
+    >
+      {copied ? "링크를 복사했어요" : "응모권 공유"}
+    </button>
   );
 }
 

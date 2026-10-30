@@ -148,6 +148,15 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   if (motion) await page.emulateMedia({ reducedMotion: "no-preference" });
   await virtualAuthenticator(page);
   await countPasskeyCalls(page);
+  // 공유 시트 대신 보낸 내용을 남긴다
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        (window as unknown as { __shared: ShareData }).__shared = data;
+      },
+    });
+  });
   await page.goto("/");
   await page.getByRole("link", { name: /하늘의 별 따기/ }).click();
   await expect(page).toHaveURL(/\/stardraw$/);
@@ -202,6 +211,31 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     fullPage: true,
   });
 
+  // 응모권 공유: 보낸 링크를 열면 같은 응모권이 읽기 전용으로 보인다
+  const id = (await receipt.getAttribute("data-receipt")) as string;
+  await page.getByRole("button", { name: "응모권 공유" }).click();
+  const shared = () =>
+    page.evaluate(
+      () => (window as unknown as { __shared?: ShareData }).__shared ?? null,
+    );
+  await expect.poll(shared).not.toBeNull();
+  const { text, url } = (await shared()) as { text: string; url: string };
+  expect(text).toMatch(
+    /^하늘의 별 따기 1회에 응모했어요\. 추첨은 오[전후] \d+시( \d+분)?!$/,
+  );
+  expect(url).toMatch(new RegExp(`/stardraw/ticket#1-${id}$`));
+  await page.goto(url);
+  await expect(page.locator(`[data-receipt="${id}"]`)).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("추첨까지");
+  await expect(page.getByRole("link", { name: "나도 응모하기" })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({
+    path: info.outputPath("stardraw-ticket.png"),
+    fullPage: true,
+  });
+  await page.goBack();
+  await expect(receipt).toBeVisible();
+
   await page.getByRole("button", { name: "← 처음으로" }).click();
   await expect(page.getByText("이번 회차에 응모했습니다")).toBeVisible();
   await page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ }).click();
@@ -234,6 +268,15 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(page).toHaveURL(/\/stardraw\/mine$/);
   await page.reload();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
+
+  // 추첨 뒤 공유 링크는 장부에서 찾아 결과까지 보여 준다
+  await page.goto(url);
+  const shown = page.locator(`[data-receipt="${id}"]`);
+  await expect(shown).toBeVisible();
+  await expect(shown).toContainText(/당첨|낙첨|당첨되지 않았습니다/);
+  await expect(page.getByText("추첨까지")).toHaveCount(0);
+  await page.goto(`/stardraw/ticket#1-${"0".repeat(64)}`);
+  await expect(page.getByText("이 응모권을 찾을 수 없어요")).toBeVisible();
 });
 
 test("패스키 만들기를 취소하면 만들어지지 않았다고 알리고 설명으로 이어 준다", async ({
