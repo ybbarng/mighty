@@ -824,23 +824,36 @@ button {
     0 22px 44px rgba(0, 0, 0, 0.5),
     0 0 36px rgba(110, 231, 183, 0.3);
 }
+/* 무지개 필름: 가는 회절 결 위로 무지개 띠. 평소엔 은은하고 기울일수록(--ht) 밝아진다 */
 .sd-idcard-holo {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 22%,
-    rgba(255, 120, 210, 0.3) 36%,
-    rgba(120, 225, 255, 0.34) 46%,
-    rgba(255, 238, 140, 0.3) 56%,
-    transparent 70%
-  );
-  background-size: 260% 260%;
-  background-position: var(--hx, 30%) var(--hy, 50%);
+  background:
+    repeating-linear-gradient(
+      62deg,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(
+      115deg,
+      transparent 18%,
+      rgba(255, 110, 199, 0.32) 30%,
+      rgba(255, 211, 110, 0.32) 38%,
+      rgba(123, 255, 176, 0.3) 46%,
+      rgba(110, 203, 255, 0.34) 54%,
+      rgba(177, 140, 255, 0.32) 62%,
+      transparent 74%
+    );
+  background-size:
+    auto,
+    260% 260%;
+  background-position:
+    0 0,
+    var(--hx, 30%) var(--hy, 50%);
   mix-blend-mode: color-dodge;
-  opacity: 0.5;
+  opacity: calc(0.22 + var(--ht, 0) * 0.5);
 }
 .sd-idcard-sweep .sd-idcard-holo {
   animation: sd-holo-sweep 1.6s ease-out 0.2s both;
@@ -849,19 +862,69 @@ button {
   animation: sd-holo-run 2.2s linear infinite;
   opacity: 0.75;
 }
+/* 키네그램: 무지개빛 속 용골자리. 가운데쯤 기울였을 때 떠올랐다 끝까지 기울이면 사라진다 */
+.sd-idcard-kine {
+  right: 12cqw;
+  top: 31cqw;
+  width: 28cqw;
+  aspect-ratio: 100 / 60;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  background: linear-gradient(
+    100deg,
+    #ff6ec7,
+    #ffd36e,
+    #7bffb0,
+    #6ecbff,
+    #b18cff,
+    #ff6ec7
+  );
+  background-size: 300% 100%;
+  background-position: var(--hx, 50%) 50%;
+  mix-blend-mode: screen;
+  opacity: calc(var(--ht, 0) * (1 - var(--ht, 0)) * 3.2);
+  transition: opacity 0.25s;
+}
+.sd-idcard[data-owner="ok"] .sd-idcard-kine {
+  animation: sd-kine-run 3s ease-in-out infinite;
+}
+/* 용골자리 선 위 작은 별: 평소엔 희미하고, 본인 확인 뒤 짧고 작게 고르게 반짝인다 */
+.sd-twinkle {
+  fill: #e6f0ff;
+  opacity: 0.12;
+}
+.sd-idcard[data-owner="ok"] .sd-twinkle {
+  animation-name: sd-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes sd-twinkle {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+@keyframes sd-kine-run {
+  0% {
+    background-position: 100% 50%;
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.15;
+  }
+}
 /* 등록증 뒤집기: 앞면(주인 확인)과 뒷면(열쇠 꺼내 보기). 앞면의 기울기는 앞면 안에서만 움직인다 */
-.sd-idcard-flip {
-  transform-style: preserve-3d;
-  transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
-  /* 기운 앞면의 반쪽은 이 상자의 평면 뒤로 들어가므로, 상자 자신은 누름을 받지 않는다 */
-  pointer-events: none;
-}
-.sd-idcard-flip > .sd-idcard-face {
-  pointer-events: auto;
-}
-.sd-idcard-flip[data-flipped] {
-  transform: rotateY(180deg);
-}
 .sd-idcard-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -869,8 +932,18 @@ button {
 .sd-idcard-back {
   transform: rotateY(180deg);
 }
+.sd-idcard-flip {
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
+  /* 기운 앞면의 반쪽은 이 상자의 평면 뒤로 들어가므로, 상자 자신은 누름을 받지 않는다 */
+  pointer-events: none;
+}
+.sd-idcard-flip[data-flipped] {
+  transform: rotateY(180deg);
+}
 /* 보이지 않는 면은 돌기 반쯤에 숨겨, 기울어진 앞면과 뒷면이 겹쳐 누름을 가로채지 않게 한다 */
 .sd-idcard-flip > .sd-idcard-face {
+  pointer-events: auto;
   transition-property: transform, box-shadow, visibility;
   transition-duration: 0.5s, 0.3s, 0s;
   transition-delay: 0s, 0s, 0.35s;
@@ -908,6 +981,8 @@ button {
   }
   .sd-idcard-sweep .sd-idcard-holo,
   .sd-idcard[data-owner="ok"] .sd-idcard-holo,
+  .sd-idcard[data-owner="ok"] .sd-idcard-kine,
+  .sd-idcard[data-owner="ok"] .sd-twinkle,
   .sd-fold,
   .sd-print,
   .sd-unlock-in,

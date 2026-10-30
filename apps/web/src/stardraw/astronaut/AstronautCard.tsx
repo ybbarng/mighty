@@ -11,6 +11,7 @@ import type { Astronaut } from "./identity";
 import { ART_H, ART_W, keyArt } from "./key-art";
 import { PasskeyMark, Seal } from "./marks";
 import { OWNER_CHECK_SECONDS } from "./owner-check";
+import { CardSecurity, Kinegram } from "./security";
 
 /** 등록 일자 칸: 장부에서 읽는 중, 아직 첫 응모 전, 등록 회차의 날짜 */
 export type Registered =
@@ -146,6 +147,11 @@ export function AstronautCard({
     if (!el || reduce.current) return;
     el.style.transform = `rotateY(${ry}deg) rotateX(${rx}deg)`;
     el.style.setProperty("--hx", `${hx}%`);
+    // 기울기 세기(0~1): 무지개 필름과 키네그램이 이 값으로 빛난다
+    el.style.setProperty(
+      "--ht",
+      Math.min(1, Math.hypot(ry, rx) / TILT).toFixed(3),
+    );
   };
   const settle = () => {
     const el = card.current;
@@ -153,6 +159,7 @@ export function AstronautCard({
     delete el.dataset.tilting;
     el.style.transform = "";
     el.style.removeProperty("--hx");
+    el.style.removeProperty("--ht");
   };
 
   const check = async () => {
@@ -245,6 +252,8 @@ export function AstronautCard({
               }
             }}
           >
+            <CardSecurity />
+
             {/* 머리 */}
             <div className="absolute inset-x-[5cqw] top-[4cqw] flex items-start justify-between">
               <div className="flex flex-col leading-none">
@@ -295,6 +304,20 @@ export function AstronautCard({
               )}
             </div>
 
+            {/* 고스트 이미지: 같은 얼굴을 흐리고 작게 한 번 더 */}
+            <div
+              data-ghost
+              aria-hidden="true"
+              className="absolute right-[41cqw] bottom-[3.5cqw] w-[8cqw] opacity-25 mix-blend-luminosity grayscale"
+            >
+              <Avatar
+                face={a.face}
+                egg={a.egg}
+                label=""
+                className="block h-auto w-full rounded-[1cqw]"
+              />
+            </div>
+
             {/* 칸 */}
             <dl className="absolute top-[17cqw] right-[31cqw] left-[5cqw] grid grid-cols-[auto_1fr] items-baseline gap-x-[3cqw] gap-y-[1.6cqw]">
               <dt className="text-[2.6cqw] text-sky-100/55">성명</dt>
@@ -340,6 +363,7 @@ export function AstronautCard({
               <Seal className="-right-[1cqw] absolute bottom-[-1.5cqw] size-[13cqw] opacity-95" />
             </div>
 
+            <Kinegram />
             <div className="sd-idcard-holo" />
 
             {owner === "ok" && (
