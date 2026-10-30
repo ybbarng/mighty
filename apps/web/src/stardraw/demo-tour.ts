@@ -25,14 +25,14 @@ import { createDemoWallet, type MyTicket, sitePolicy } from "./wallet";
  */
 export const TOUR_NS = "stardraw-tour";
 
-/** 화면 둘러보기의 드문 사진 등록증(공개 열쇠 모양 값, 해시에서 그 사진이 나오도록 찾아 둔 것) */
+/** 화면 둘러보기의 드문 사진 등록증(공개 열쇠 모양 값, 등록증 v2 계산에서 그 사진이 나오도록 찾아 둔 것) */
 export const TOUR_EGG_PUBS = {
   laika:
-    "BL3UWS4OYjmKBKyAKxL6XjXj_XbfcqTyLtoGCclVMJhetYpciRRBzyNx37IzXClOLAUCSK8nicUg78X9qiZI4Hs",
+    "BNrCcijjEZC4OvsxAnJtSVm1AAlJD7lxWQqLpYxFme10hX-ueXiLZN0N4Hx82Q_tBvh-5XVtcyrNy74HokjNcBU",
   prince:
-    "BC3leY9-NqapJKb2EHG1zpSAI9aBU-Pyn0BQq3JTZyxotAl_ESlBuaP7Y800sh5p0Im6zCzYz2feXm3QiTOvgT0",
+    "BFeUz7XaAUYLwglDWxKftQ0BEwv-YdHnylFK09DBMSJjlTwCfNEJmXNVFy_roU2GkwQmB6STIvLd_BL5W_5ybOw",
   rabbit:
-    "BJLkECD-zokJb7FxUXWny0vzNc8NfkzI-qbqoXL7jSUmJjzayGftd7ynu_AhMRHODE01HxAGJAo3EvAJTfCfipE",
+    "BKvETKGV-q5fqfPRMMiO3d7E-s06JSIUK6OanREJZAMBNICgITGMUAqH1tHFKVSYMofisWE-xv8or65zYoUNlpc",
 } as const;
 
 export interface TourState {
