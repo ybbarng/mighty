@@ -172,6 +172,8 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 
 **장부 받기**(2026-10-30, 11-15): 공개 장부는 회차마다 파일이라, 받는 쪽은 다 찬 10·100회차 묶음 파일(`bundles/10/000001.json` 등)이 있으면 묶음으로, 없으면 낱개로 받는다. 한꺼번에 4개까지, 서버가 막으면(429·503) 기다렸다 다시 받는다.
 
+**서버 없이 받기**(2026-10-30, 11-16): 같은 장부 파일이 앵커 저장소(`ybbarng/stardraw-ledger`)의 `ledgers/<장부 id>/ledger/` 아래에도 같은 바이트로 올라간다. 터미널 검사기는 이 사본을 기본으로 받고, 화면은 우리 서버가 응답하지 않을 때 지난 회차를 여기서 받는다.
+
 ## 8. 신뢰: 무엇을 믿고 무엇을 안 믿나
 
 | 운영자가 하려 하면 | 결과 |
@@ -470,7 +472,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - Rekor(`rekor.ts`, `RekorRootLog`)는 꺼 둔 선택지로 남긴다: `STARDRAW_TSA=off`이고 `STARDRAW_REKOR_URL`이 있을 때만 쓴다(시험 운영은 rekor.sigstage.dev만, 정식은 rekor.sigstore.dev만). 2026-10-30 시험용 로그에 실제로 한 번 올려(uuid `71d46696…0e3`, integratedTime 1793324413) 검사기가 맞는 것을 확인했다.
 
 **GitHub 앵커**(사용자 승인, 저장소 `ybbarng/stardraw-ledger` 공개)
-- 회차가 닫힐 때마다 파일 하나를 Contents API로 커밋한다: `ledgers/{장부 id}/{회차 6자리}.txt`. 장부 id는 genesis 해시 앞 16자리라 시험 장부를 새로 시작해도 섞이지 않는다.
+- 회차가 닫힐 때마다 커밋 하나를 남긴다: `ledgers/{장부 id}/{회차 6자리}.txt`. 장부 id는 genesis 해시 앞 16자리라 시험 장부를 새로 시작해도 섞이지 않는다. 같은 커밋에 그 회차의 장부 JSON 사본도 함께 올린다(11-16, git tree/commit API. 사본이 없으면 예전처럼 Contents API 한 번).
 - 본문: `stardraw-anchor v1` / `ledger <장부 id>` / `round <회차>` / `record <기록 해시 hex>` / `seal <봉인 증거 요약>`(`tsa:digicert@<genTime>,sectigo@<genTime>`, 없으면 `-`).
 - 커밋 메시지: `하늘의 별 따기 {회차}회 기록 {기록 해시 앞 12자리} (장부 {장부 id})`.
 - 브랜치는 회차의 단계로 정한다: 시험 단계 `trial`, 정식 단계 `main`(`anchorBranch`). 처음 일정표 파일 `genesis.txt`는 늘 `main`(11-6 "다시 시작 막기").
@@ -486,7 +488,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 계산은 core의 `checkPublicLedger` 하나로 검증 페이지와 같다(`verifyLedger`, quicknet BLS, TSA `verifyTsaProof`, 앵커 `githubAnchorVerifier`·`githubGenesisVerifier`). 페이지에 있던 공개 장부 검사 코드를 core로 옮겼다.
 - 앵커는 서버를 거치지 않고 raw.githubusercontent.com에서 `ybbarng/stardraw-ledger`를 직접 읽는다(처음 일정표 main, 시험 회차 trial, 정식 회차 main).
 - 명령
-  - `stardraw-verify [서버 주소]`(기본 `https://game.byb.kr/stardraw-api`): 회차별 한 줄(보이는 회차, 마감, 응모 수, 당첨 번호 또는 무효, 그 회차의 문제·건너뜀)과 항목별 통과·실패·건너뜀. `--pow-sample n`, `--pow-all`, `--anchor-repo`, `--no-anchor`, `--json`.
+  - `stardraw-verify [서버 주소]`(기본 `https://game.byb.kr/stardraw-api`, 장부는 기본으로 앵커 저장소 사본에서 받는다. `--source server|<폴더>`, `--compare`, 11-16): 회차별 한 줄(보이는 회차, 마감, 응모 수, 당첨 번호 또는 무효, 그 회차의 문제·건너뜀)과 항목별 통과·실패·건너뜀. `--pow-sample n`, `--pow-all`, `--anchor-repo`, `--no-anchor`, `--json`.
   - `--ticket <회차-일련번호>`(여러 번): 영수증 앞 12자리나 공유 주소를 그대로 받는다. 장부에서 찾아 머클 증명, 등수, 작업 증명(전부)을 본다.
   - `stardraw-verify site [사이트]`(기본 `https://game.byb.kr`): 아래 해시 목록과 사이트 파일, `--build <out>`이면 직접 빌드한 파일을 비교한다. 기본 범위는 하늘의 별 따기 페이지(HTML·화면 전환용 .txt), 모든 화면 코드(`_next/`), 서비스 워커. `--all`은 목록 전부(그림 포함).
   - 끝 상태: 0 통과(건너뜀 포함), 1 어긋남, 2 사용법·네트워크 오류.
@@ -933,3 +935,36 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 묶음 하나 크기만(예: 100): 다 차지 않은 구간이 최대 99회차라 처음 받기가 다시 길어진다. 1000 단계는 회차가 그만큼 쌓이면 더한다(받는 쪽은 `BUNDLE_SIZES`만 고치면 된다. 옛 받는 쪽은 모르는 묶음을 묻지 않을 뿐이다).
 
 **배포**: 서버와 화면을 같은 커밋으로 올릴 필요는 없다. 새 받는 쪽은 옛 서버에서 묶음 404 → 낱개로 돌고(2026-10-30 운영 34회차 검사 통과로 확인), 옛 받는 쪽은 묶음을 묻지 않는다. 새 서버는 띄울 때 지난 구간 묶음을 채운다.
+
+### 11-16. 장부 JSON 사본을 앵커 저장소에도(2026-10-30, 사용자와 합의)
+
+**왜**: 장부 내용(회차 기록·응모권·등록·봉인 시각 인증 토큰)은 우리 서버 `/stardraw-api/ledger/`에만 있었다. 서버가 멈추거나 사라지면 아무도 검사할 수 없고, 앵커(`.txt`)에는 기록 해시만 있다. 같은 파일을 공개 GitHub 저장소에도 두면 우리 서버 없이 받아 처음부터 검사할 수 있다.
+
+**올리는 것**(서버 `engine.ts` 앵커 흐름, `outside.ts` `GitHubAnchor`)
+- 경로: `ledgers/{장부 id}/ledger/{서버와 같은 상대 경로}` — `genesis.json`, `head.json`, `rounds/NNNNNN.json`, `seals/NNNNNN.json`, `bundles/10/NNNNNN.json`, `bundles/100/NNNNNN.json`. 받는 쪽은 기준 주소만 `https://raw.githubusercontent.com/ybbarng/stardraw-ledger/{브랜치}/ledgers/{장부 id}`로 바꾸면 된다(core `githubLedgerBase`, `loadPublicLedger` 그대로).
+- 회차·봉인·묶음·genesis 파일은 서버가 공개한 파일을 **같은 바이트로** 읽어 올린다. `head.json`만은 그 커밋까지 오른 회차를 가리키게 새로 쓴다(`rounds`·`sealed` = 그 회차, `head` = 그 회차 기록 해시, `serverKey`). 서버의 head.json은 다음 회차 봉인 수가 앞설 수 있어서다. 형식은 같다.
+- 회차 앵커 커밋 하나에 앵커 파일(`.txt`), 그 회차 회차·봉인 파일, 그 회차에서 끝나는 묶음, head.json(1회차면 genesis.json도)을 담는다. API는 앵커 파일 확인, 브랜치 끝, 트리, 커밋, 브랜치 옮기기 다섯 번(회차당 커밋 하나 유지). 앵커 파일이 이미 같은 내용이면 사본도 같은 커밋에 들어간 것이라 성공으로 본다(응답만 잃은 경우). 기존 `.txt` 형식·경로는 그대로다.
+- 브랜치: 회차의 단계를 따른다(시험 trial, 정식 main). 정식 첫 회차를 남기기 전에 지난 시험 회차 사본을 main에도 채워, 정식 시작 뒤에는 **main 하나로 장부 전체**를 받는다. 브랜치가 없으면 main 끝에서 만든다.
+- 서버는 브랜치마다 "사본을 올린 마지막 회차"를 저장소(meta `mirrored:<브랜치>`)에 적어 둔다. 회차 사본은 그 브랜치에 바로 앞 회차까지 있을 때만 앵커 커밋에 싣는다(빈틈 없게).
+
+**지난 회차 채우기**
+- 띄울 때(그리고 앵커를 남길 때마다) 마지막 앵커 회차의 브랜치에 빠진 사본이 있으면, 커밋 하나에 글 2MB까지 회차를 묶어 차례로 채운다(커밋 메시지 `하늘의 별 따기 장부 파일 1~36회 (장부 …)`). 회차 하나가 2MB를 넘으면 그 회차만 담는다. 이미 같은 내용이면 커밋하지 않는다.
+- 크기 어림(2026-10-30 시험 운영): 봉인 파일이 시각 인증 토큰 둘로 약 17KB, 회차 파일은 응모가 적으면 1KB 안쪽이라 회차당 약 18KB, 10회차 묶음 약 180KB. 36회차는 묶음 3개를 더해 약 1.2MB라 **채우기 커밋 1개**다. 100회차 묶음은 약 1.8MB.
+- GitHub 상한: 인증 요청 1시간 5천 번, 쓰기(내용을 만드는 요청) 1분 80번·1시간 500번. 회차마다 쓰기 3번(트리·커밋·브랜치), 채우기 커밋도 3번이라 넉넉하다.
+- 실패해도 막지 않는다: 사본을 만들지·올리지 못하면 기록을 남기고 앵커 파일만 따로 남긴 뒤(Contents API) 10분 뒤 다시 채운다. 회차 진행(봉인·추첨)은 원래대로 앵커와 따로 돈다.
+
+**받는 쪽**
+- core `findGitHubLedger`: main의 `genesis.txt`에서 장부 id를 읽고, main → trial 순으로 `head.json`이 있는 브랜치를 쓴다. 장부 id를 알면(화면) 그것으로 찾는다.
+- 터미널 검사기(11-8): 기본 원천이 앵커 저장소다. `--source server`면 우리 서버, `--source <폴더>`면 앵커 저장소를 `git clone` 받은 폴더(장부 id는 `genesis.txt`, 없으면 사본이 하나뿐인 장부. trial 사본은 `git clone -b trial`). 원천이 앵커 저장소여도 서버 `head.json`을 한 번 물어 "아직 앵커에 오르지 않은 회차"를 보인다(앵커는 회차가 닫힌 뒤 오르고 raw는 약 5분 캐시). 서버에 닿지 못해도 검사는 한다. `--compare`는 두 원천을 겹치는 회차까지 대조한다(처음 일정표, 기록 해시, 응모권·등록 목록, 봉인 파일). 다르면 끝 상태 1.
+- 화면(`remote-ledger.ts`): 우리 서버를 먼저 쓰고, 서버가 응답하지 않을 때(네트워크 오류·5xx)만 처음 일정표와 지난 회차를 사본에서 받는다. 서버가 4xx처럼 틀린 응답이면 넘어가지 않는다. 서버는 10초마다 다시 묻고 닿으면 서버로 이어 받는다. 사본 위치는 1분마다만 다시 찾는다. raw.githubusercontent.com은 `Access-Control-Allow-Origin: *`(없는 파일 404에도)와 `Cache-Control: max-age=300`을 준다(2026-10-30 확인).
+
+**믿음**: 사본은 운영자가 올리는 것이라 그 자체로 증거가 아니다(강제 push로 고칠 수 있다). 받는 쪽은 늘 처음부터 다시 계산하고, 시각은 시각 인증 토큰이, 다시 시작하지 않음은 `genesis.txt`가 지킨다. 서버와 사본이 다르면 `--compare`로 드러난다.
+
+**고르지 않은 것**
+- 파일마다 Contents API로 올리기: 회차당 커밋이 서너 개로 늘고 API도 그만큼 는다.
+- 사본만 따로 커밋: 회차당 커밋이 둘이 되고, 앵커와 사본이 어긋나는 순간이 생긴다.
+- 서버의 head.json을 그대로: 다음 회차 봉인 수가 앞서 있을 수 있고, 지난 회차를 채울 때는 그 시점의 head가 없다.
+
+**앵커 저장소 README**: 서버가 쓰지 않는다. 손으로 올릴 초안은 [36-stardraw-ledger-readme.md](36-stardraw-ledger-readme.md).
+
+**배포**: 서버를 새 판으로 올리면 첫 진행 때 trial 브랜치에 지난 회차 사본을 채운다. 화면·검사기는 서버보다 먼저 올라가도 된다(사본이 없으면 검사기는 `--source server`를 쓰라고 알리고, 화면은 서버가 응답할 때 사본을 보지 않는다).
