@@ -236,9 +236,8 @@ export function DrawView({
                       {RANK_LABEL[rank]} 당첨
                     </span>
                     <span className="text-sm text-white/75">
-                      내 별 {mine.filter((n) => main.includes(n)).length}개가
-                      당첨 번호와 같습니다
-                      {rank === 2 ? "(보너스까지)" : ""}
+                      맞은 별 {mine.filter((n) => main.includes(n)).length}개
+                      {rank === 2 ? " + 보너스" : ""}
                     </span>
                   </>
                 ) : (
@@ -247,9 +246,7 @@ export function DrawView({
                       아쉽게도 당첨되지 않았습니다
                     </span>
                     <span className="text-sm text-white/65">
-                      맞은 별 {mine.filter((n) => main.includes(n)).length}개.
-                      로또 1등은 눈에 보이는 별 하나 맞히기보다 약 900배
-                      어렵습니다
+                      맞은 별 {mine.filter((n) => main.includes(n)).length}개
                     </span>
                   </>
                 )

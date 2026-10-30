@@ -42,17 +42,17 @@ const REGISTER = { name: "우주인 등록", exact: true } as const;
 /** 등록증에서 누를 자리(제목 부분. 가운데는 주소 단추라 피한다) */
 const CARD_TAP = { x: 40, y: 30 } as const;
 /** 등록증을 받은 뒤 별 고르기로 */
-const TO_PICK = "별 6개 고르러 가기";
+const TO_PICK = "별 6개 고르기";
 
 /** 응모 화면까지 간다. 등록증(패스키)이 없으면 먼저 "우주인 등록" 단계가 나온다 */
 async function toEntry(page: Page) {
   await page.goto("/stardraw");
-  await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  await page.getByRole("button", { name: "별 6개 고르기" }).click();
 }
 
 /**
  * 실제 패스키 호출(navigator.credentials의 만들기·단언)을 센다. 가상 인증기 위에서 원래 동작은 그대로 하고
- * 횟수만 남긴다(첫 방문: 만들기 1·단언 1, 두 번째 응모: 단언 1)
+ * 횟수만 남긴다(우주인 등록: 만들기 1·등록 증명 단언 1, 응모: 단언 1)
  */
 async function countPasskeyCalls(page: Page) {
   await page.addInitScript(() => {
@@ -174,15 +174,16 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     page.getByText("로또 1등과 하늘의 별 따기, 어느 게 더 쉬울까요?"),
   ).toBeVisible();
   await noSideScroll(page);
-  // 매시 정각 추첨 · 55분 마감, 마감까지와 추첨까지를 따로 센다
-  await expect(page.locator("[data-schedule-line]")).toHaveText(
-    "매시 정각 추첨 · 55분 마감",
+  // 처음 온 사람: 인사 대신 「우주인 등록」, 카드에는 지금 단계의 시계 하나(마감까지)와 할 일 하나
+  await expect(page.locator("[data-greeting='none']")).toHaveText(
+    "우주인 등록",
   );
+  await expect(page.locator("[data-card='open']")).toBeVisible();
   await expect(page.locator("[data-countdown='close']")).toBeVisible();
-  await expect(page.locator("[data-countdown='draw']")).toBeVisible();
-  await page.screenshot({ path: info.outputPath("home-countdowns.png") });
+  await expect(page.locator("[data-countdown='draw']")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("home-first.png") });
 
-  await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  await page.getByRole("button", { name: TO_PICK }).click();
   // 처음엔 별을 고르기 전에 우주인 등록(= 패스키 만들기, 인증기 한 번)
   const setup = page.locator("[data-key-setup]");
   await expect(setup).toContainText(
@@ -199,7 +200,8 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.screenshot({ path: info.outputPath("stardraw-key-setup.png") });
   await setup.getByRole("button", REGISTER).click();
   await expect(setup).toHaveCount(0);
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
+  // 만들자마자 그 패스키로 등록 증명에 서명해 장부에 바로 등록한다
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
   // 등록 직후 등록증을 발급해 보여 준다. 아직 응모 전이라 등록일은 비어 있다
   await expect(page.locator("[data-issued='new']")).toContainText(
     /^.+에 거주하는 .+ 님, 우주인으로 등록되었습니다$/,
@@ -208,7 +210,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(card).toBeVisible();
   const number = (await card.getAttribute("data-idcard")) as string;
   expect(number).toMatch(/^SD-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
-  // 발급일은 실제 신분증처럼 날짜 하나(아직 응모 전이라 이 기기가 패스키를 만든 날)
+  // 발급일은 실제 신분증처럼 날짜 하나(장부 등록 회차의 날짜)
   await expect(card.locator("[data-issue-date]")).toHaveText(
     /^\d{4}\. \d{1,2}\. \d{1,2}\.$/,
   );
@@ -230,7 +232,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-id-issued.png"),
     fullPage: true,
   });
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
   await page.getByRole("button", { name: TO_PICK }).click();
   // 칸에서 하나, 하늘에서 하나 고르고 나머지는 자동
   await page.getByRole("button", { name: "7 베텔게우스" }).click();
@@ -251,7 +253,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await page.getByRole("button", { name: ENTER }).click();
   const receipt = page.locator("[data-receipt]");
   await expect(receipt).toBeVisible({ timeout: 30_000 });
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 2 });
   await expect(receipt).toContainText("베텔게우스");
   await expect(receipt).toContainText("시리우스");
   await expect(receipt.locator("[data-passkey-mark]")).toBeVisible();
@@ -286,10 +288,31 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(receipt).toBeVisible();
 
   await page.getByRole("button", { name: "← 처음으로" }).click();
-  await expect(page.getByText("이번 회차에 응모했습니다")).toBeVisible();
+  // 등록한 사람: 인사와 작은 등록증, 응모한 회차는 추첨까지 시계와 고른 별·「영수증」
+  await expect(page.locator(`[data-greeting="${number}"]`)).toContainText(
+    /^.+에 거주하는 .+ 님, 안녕하세요$/,
+  );
+  await expect(page.locator(`[data-greeting="${number}"]`)).toHaveAttribute(
+    "href",
+    "/stardraw/id",
+  );
+  await expect(page.locator("[data-card='entered']")).toContainText(
+    "응모 완료",
+  );
+  await expect(page.locator("[data-countdown='draw']")).toBeVisible();
+  await expect(page.getByRole("button", { name: "영수증" })).toBeVisible();
+  await noSideScroll(page);
+  await page.screenshot({
+    path: info.outputPath("home-entered.png"),
+    fullPage: true,
+  });
   await page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ }).click();
   const envelope = page.locator("[data-envelope]").first();
   await expect(envelope).toBeVisible({ timeout: 60_000 });
+  await page.screenshot({
+    path: info.outputPath("home-result.png"),
+    fullPage: true,
+  });
   await envelope.click();
   if (motion)
     await expect(
@@ -305,6 +328,8 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     fullPage: true,
   });
   await page.getByRole("button", { name: "← 돌아가기" }).click();
+  // 결과를 본 뒤에는 지난 회차 한 줄에 내 등수와 「다시 보기」
+  await expect(page.locator("[data-last-round='1']")).toBeVisible();
   await page.getByRole("button", { name: /내 응모/ }).click();
   await expect(page.getByRole("button", { name: /제 1회/ })).toBeVisible();
   // 게임 화면은 단순하게: 열쇠 칩·"서버가 가진 것" 비교는 설명 페이지에만
@@ -433,6 +458,8 @@ test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고
 }, info) => {
   test.skip(isPhone(info.project.name), "주소·기록은 한 크기로");
   await page.goto("/stardraw");
+  // 지난 회차 한 줄은 추첨한 회차가 있어야 보인다(연습 장부를 한 회차 넘긴다)
+  await page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ }).click();
   await page.getByRole("button", { name: /지난 회차/ }).click();
   await expect(page).toHaveURL(/\/stardraw\/rounds$/);
   await expect(page.getByRole("region", { name: "지난 회차" })).toBeVisible();
@@ -442,14 +469,7 @@ test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고
   // 뒤로가기는 게임 목록이 아니라 별 따기 첫 화면
   await page.goBack();
   await expect(page).toHaveURL(/\/stardraw$/);
-  await expect(
-    page.getByRole("button", { name: "별 6개 고르러 가기" }),
-  ).toBeVisible();
-  // 내 응모도 같다. 화면 안 「돌아가기」도 바로 전 화면으로
-  await page.getByRole("button", { name: /내 응모/ }).click();
-  await expect(page).toHaveURL(/\/stardraw\/mine$/);
-  await page.goBack();
-  await expect(page).toHaveURL(/\/stardraw$/);
+  await expect(page.getByRole("button", { name: TO_PICK })).toBeVisible();
   // 주소로 바로 연 화면의 「처음으로」는 사이트 밖이 아니라 첫 화면으로
   await page.goto("/stardraw/rounds");
   await page.getByRole("button", { name: /처음으로/ }).click();
@@ -457,7 +477,7 @@ test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고
   // 당겨서 새로고침은 응모(하늘에서 별 고르기)와 추첨 화면에서만 막는다
   const noPull = page.locator("html[data-no-pull]");
   await expect(noPull).toHaveCount(0);
-  await page.getByRole("button", { name: "별 6개 고르러 가기" }).click();
+  await page.getByRole("button", { name: TO_PICK }).click();
   await expect(page).toHaveURL(/\/stardraw\/enter$/);
   await expect(noPull).toHaveCount(1);
   await page.goBack();
@@ -515,6 +535,8 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   ).toBeVisible();
   await setup.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
+  // 이어서 등록 증명 서명(장부에 바로 등록)
+  await demoUnlock(page, "sign");
   await expect(setup).toHaveCount(0);
   // 등록증을 누르면 흉내 시트로 주인 확인
   const demoCard = page.locator("[data-idcard]");
@@ -561,9 +583,7 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   // 0) 당첨자 폰: 카노푸스 우주국 당첨 안내(장부로 기기가 계산) → 확인 링크 만들기(서명 시트 한 번)
   const notice = winner.locator("[data-win-notice]");
   await expect(notice).toContainText("카노푸스 우주국 당첨 안내");
-  await expect(notice).toContainText(
-    "1회 1등입니다. 당첨을 알리고 싶은 사람에게 확인 링크를 보내세요",
-  );
+  await expect(notice).toContainText("1회 1등입니다");
   await notice.getByRole("button", { name: "확인 링크 만들기" }).click();
   await demoUnlock(page, "sign");
   await expect(notice.locator("[data-check-url]")).toHaveAttribute(
@@ -693,6 +713,7 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   // 이미 해 본 기기: 한 회차 응모·추첨을 거쳐 열쇠와 장부가 저장된 상태(「데모 처음부터」를 누르지 않는다)
   await page.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
+  await demoUnlock(page, "sign");
   await page.getByRole("button", { name: TO_PICK }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", { name: ENTER }).click();
@@ -755,7 +776,7 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     string,
     (s: typeof screen) => ReturnType<Page["locator"]>,
   ][] = [
-    ["enter", (s) => s.getByText(/번호로 고르기/)],
+    ["enter", (s) => s.getByRole("group", { name: "번호 칸" })],
     ["receipt", (s) => s.locator("[data-receipt]")],
     ["draw", (s) => s.locator("[data-draw-result]")],
     ["envelope", (s) => s.locator("[data-envelope='1']")],

@@ -20,10 +20,12 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
-import { astronautOf } from "../astronaut/identity";
+import { Avatar } from "../astronaut/Avatar";
+import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
+import { ensureRegistered } from "../registrar";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
 import { GAME_NS, type Services, useLedger } from "../services";
@@ -37,7 +39,6 @@ import {
   formatTime,
   LottoBall,
   RANK_LABEL,
-  scheduleLine,
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
@@ -298,7 +299,7 @@ export function TrialBanner() {
       data-trial-banner
       className="rounded-xl border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-center text-amber-50 text-sm"
     >
-      시험 운영 중 · 정식 시작 뒤에도 시험 회차는 장부에 그대로 남습니다
+      시험 운영 중
     </p>
   );
 }
@@ -319,6 +320,7 @@ export function Home({
   status: LedgerStatus;
   mine: MyTicket[];
   opened: Set<number>;
+  /** 응모 화면(등록증이 없으면 우주인 등록부터) */
   onEnter: () => void;
   onReceipt: (m: MyTicket) => void;
   onDraw: (round: number) => void;
@@ -328,132 +330,53 @@ export function Home({
   onSkip: (() => Promise<void>) | null;
 }) {
   const [skipping, setSkipping] = useState(false);
-  // 등록증 링크는 이 기기에 등록증이 있을 때만(첫 그리기 뒤에 읽는다)
-  const [hasKey, setHasKey] = useState(false);
-  useEffect(
-    () => setHasKey(services.ns === GAME_NS && !!services.wallet.loadKey()),
-    [services],
-  );
-  const current = mine.find((m) => m.ticket.round === status.round);
-  // 결과 봉투: 추첨이 끝났는데 아직 열어 보지 않은 내 응모권
-  const envelopes = mine
+  // 이 기기의 등록증(첫 그리기 뒤에 읽는다: 서버에서 그린 화면과 어긋나지 않게)
+  const [key, setKey] = useState<KeyInfo | null | undefined>(undefined);
+  useEffect(() => {
+    const found = services.wallet.loadKey();
+    setKey(found);
+    // 등록이 아직 장부에 오르지 않았으면 이어서 올린다(증명이 없는 예전 열쇠는 첫 응모 때)
+    if (found && services.ns === GAME_NS)
+      void ensureRegistered(services, found).catch(() => {});
+  }, [services]);
+  // 결과 봉투: 추첨이 끝났는데 아직 열어 보지 않은 내 응모권(가장 최근 것)
+  const envelope = mine
     .filter(
       (m) =>
         services.ledger.record(m.ticket.round) && !opened.has(m.ticket.round),
     )
-    .sort((a, b) => b.ticket.round - a.ticket.round);
-  // 이번 회차 추첨은 마감 5분 뒤(drand). 앞 회차 추첨을 기다리는 동안은 그쪽을 센다
-  const drawAt =
-    status.phase === "waiting" && status.nextDrawRound < status.round
-      ? status.nextDrawAt
-      : status.times.closesAt + DRAND_DELAY;
+    .sort((a, b) => b.ticket.round - a.ticket.round)[0];
 
   return (
     <>
-      <header className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <BackToGames />
-          <span className="flex items-center gap-4">
-            {hasKey && (
-              <a
-                href="/stardraw/id"
-                data-my-id
-                className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
-              >
-                내 등록증
-              </a>
-            )}
-            <a
-              href="/stardraw/about"
-              className="text-sm text-white/70 underline-offset-4 hover:text-white hover:underline"
-            >
-              설명
-            </a>
-          </span>
+      <header className="flex flex-col gap-4">
+        <BackToGames />
+        <div className="sd-title flex flex-col gap-1 text-center">
+          <h1 className="font-black text-3xl tracking-tight">하늘의 별 따기</h1>
+          <p className="break-keep text-sm text-white/65">{TAGLINE}</p>
         </div>
-        <div className="sd-title flex flex-col gap-1 pt-2 text-center">
-          <h1 className="font-black text-4xl tracking-tight">하늘의 별 따기</h1>
-          <p className="break-keep text-sm text-white/70">{TAGLINE}</p>
-        </div>
+        {key !== undefined && (
+          <Greeting services={services} keyInfo={key} onRegister={onEnter} />
+        )}
       </header>
 
-      <section
-        aria-label="이번 회차"
-        className="sd-glass flex flex-col gap-4 rounded-3xl p-5"
-      >
-        <div className="flex items-baseline justify-between">
-          <span className="font-bold text-xl tabular-nums">
-            {roundTitle(services.ledger.schedule, status.round)}
-          </span>
-          <span className="text-sm text-white/60" data-schedule-line>
-            {scheduleLine(status.times.entry.length)}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 py-1 text-center">
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm text-white/60">
-              {status.phase === "closing" ? "곧 마감" : "마감까지"}
-            </span>
-            <span
-              className="font-mono font-bold text-4xl tabular-nums tracking-tight"
-              data-countdown="close"
-            >
-              {formatLeft(status.times.entryDeadline - status.now)}
-            </span>
-            <span className="text-white/45 text-xs">
-              {formatTime(status.times.closesAt)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm text-white/60">
-              {drawAt === status.nextDrawAt &&
-              status.nextDrawRound < status.round
-                ? "앞 회차 추첨까지"
-                : "추첨까지"}
-            </span>
-            <span
-              className="font-mono font-bold text-4xl text-amber-100 tabular-nums tracking-tight"
-              data-countdown="draw"
-            >
-              {formatLeft(drawAt - status.now)}
-            </span>
-            <span className="text-white/45 text-xs">{formatTime(drawAt)}</span>
-          </div>
-        </div>
-        {current ? (
-          <button
-            type="button"
-            onClick={() => onReceipt(current)}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200/30 bg-amber-200/10 px-4 py-3 text-left"
-          >
-            <span className="flex flex-col">
-              <span className="font-semibold">이번 회차에 응모했습니다</span>
-              <span className="text-sm text-white/65">응모권 보기</span>
-            </span>
-            <span className="flex gap-1">
-              {current.ticket.numbers.map((n) => (
-                <LottoBall key={n} n={n} size="sm" />
-              ))}
-            </span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={status.phase !== "open"}
-            onClick={onEnter}
-            className="sd-cta rounded-2xl py-4 font-black text-slate-950 text-xl disabled:opacity-40"
-          >
-            {status.phase === "open"
-              ? "별 6개 고르러 가기"
-              : status.phase === "closing"
-                ? "응모가 마감되었습니다"
-                : "앞 회차 추첨을 기다립니다"}
-          </button>
-        )}
-        <p className="text-center text-white/50 text-xs tabular-nums">
-          이번 회차 응모 {status.entries}장 · 한 열쇠는 회차마다 한 장
-        </p>
-      </section>
+      <RoundCard
+        services={services}
+        status={status}
+        mine={mine}
+        envelope={envelope}
+        onEnter={onEnter}
+        onReceipt={onReceipt}
+        onDraw={onDraw}
+      />
+
+      <LastRound
+        services={services}
+        mine={mine}
+        hide={envelope?.ticket.round}
+        onRounds={onRounds}
+        onDraw={onDraw}
+      />
 
       <WinNotice
         services={services}
@@ -463,107 +386,333 @@ export function Home({
       />
       <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
 
-      {envelopes.length > 0 && (
-        <section aria-label="결과 봉투" className="flex flex-col gap-2">
-          <h2 className="font-bold">결과 봉투 {envelopes.length}장</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {envelopes.map((m) => (
-              <button
-                key={m.ticket.round}
-                type="button"
-                onClick={() => onDraw(m.ticket.round)}
-                data-envelope={m.ticket.round}
-                className="sd-envelope flex w-32 shrink-0 flex-col items-center gap-1 rounded-xl px-3 pt-12 pb-3 text-slate-900"
-              >
-                <span className="font-bold tabular-nums">
-                  {roundTitle(services.ledger.schedule, m.ticket.round)}
-                </span>
-                <span className="text-xs">눌러서 추첨 보기</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="grid grid-cols-2 gap-3">
+      {mine.length > 0 && (
         <button
           type="button"
           onClick={onMine}
-          className="sd-glass flex flex-col items-start gap-0.5 rounded-2xl px-4 py-3 text-left"
+          className="sd-glass flex items-center justify-between rounded-2xl px-4 py-3 text-left"
         >
           <span className="font-semibold">내 응모</span>
-          <span className="text-white/60 text-xs tabular-nums">
-            응모권 {mine.length}장 · 당첨자 확인
+          <span className="text-sm text-white/60 tabular-nums">
+            {mine.length}장 →
           </span>
         </button>
-        <button
-          type="button"
-          onClick={onRounds}
-          className="sd-glass flex flex-col items-start gap-0.5 rounded-2xl px-4 py-3 text-left"
-        >
-          <span className="font-semibold">지난 회차</span>
-          <span className="text-white/60 text-xs">
-            당첨 번호 · 확인 기록 · 장부 검사
-          </span>
-        </button>
-      </section>
-
-      <Odds />
+      )}
 
       {onSkip && (
-        <section className="flex flex-col gap-2 rounded-2xl border border-white/10 border-dashed p-4 text-sm text-white/65">
-          <p className="break-keep">
-            지금은 서버가 열리기 전이라, 이 기기 안 연습 장부로 돌아갑니다. 연습
-            참가자 24명이 회차마다 함께 응모합니다. 상품은 없습니다.
-          </p>
-          <button
-            type="button"
-            disabled={skipping}
-            onClick={async () => {
-              setSkipping(true);
-              try {
-                await onSkip();
-              } finally {
-                setSkipping(false);
-              }
-            }}
-            className="self-start rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
-          >
-            {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
-          </button>
-        </section>
+        <button
+          type="button"
+          disabled={skipping}
+          onClick={async () => {
+            setSkipping(true);
+            try {
+              await onSkip();
+            } finally {
+              setSkipping(false);
+            }
+          }}
+          className="self-center rounded-lg border border-white/15 border-dashed px-3 py-1.5 text-sm text-white/60 hover:bg-white/10 disabled:opacity-50"
+        >
+          {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
+        </button>
       )}
+
+      <nav
+        aria-label="더 보기"
+        className="flex justify-center gap-5 pt-2 text-sm text-white/60"
+      >
+        {[
+          ["설명", "/stardraw/about"],
+          ["배우기", "/stardraw/learn"],
+          ["검증", "/stardraw/verify"],
+          ["데모", "/stardraw/demo"],
+        ].map(([label, href]) => (
+          <a
+            key={href}
+            href={href}
+            className="underline-offset-4 hover:text-white hover:underline"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
     </>
   );
 }
 
-/** 로또 1등과 눈에 보이는 별 하나 맞히기 확률 비교 */
-function Odds() {
+/**
+ * 맨 위 인사. 이 기기에 등록증이 있으면 "○○에 거주하는 ○○ 님, 안녕하세요"와 작은 등록증(누르면 내 등록증),
+ * 없으면 「우주인 등록」
+ */
+function Greeting({
+  services,
+  keyInfo,
+  onRegister,
+}: {
+  services: Services;
+  keyInfo: KeyInfo | null;
+  onRegister: () => void;
+}) {
+  if (!keyInfo)
+    return (
+      <button
+        type="button"
+        onClick={onRegister}
+        data-greeting="none"
+        className="self-center rounded-full border border-amber-200/40 px-4 py-1.5 font-semibold text-amber-100 text-sm hover:bg-amber-200/10"
+      >
+        우주인 등록
+      </button>
+    );
+  const a = astronautOf(keyInfo.pub);
+  const body = (
+    <>
+      <IdThumb pub={keyInfo.pub} />
+      <span className="break-keep text-left text-sm text-white/85">
+        {residentPhrase(a)} 님, 안녕하세요
+      </span>
+    </>
+  );
+  // 데모·둘러보기의 가짜 우주인은 실제 게임의 내 등록증으로 잇지 않는다
+  return services.ns === GAME_NS ? (
+    <a
+      href="/stardraw/id"
+      data-greeting={a.number}
+      aria-label={`${residentPhrase(a)} 님, 안녕하세요. 내 등록증`}
+      className="flex items-center gap-3 self-center rounded-2xl px-2 py-1 hover:bg-white/5"
+    >
+      {body}
+    </a>
+  ) : (
+    <div
+      data-greeting={a.number}
+      className="flex items-center gap-3 self-center px-2 py-1"
+    >
+      {body}
+    </div>
+  );
+}
+
+/** 작은 등록증(얼굴만) */
+function IdThumb({ pub }: { pub: Uint8Array }) {
+  const a = astronautOf(pub);
+  return (
+    <span
+      aria-hidden="true"
+      className="sd-idthumb relative flex h-10 w-16 shrink-0 items-center overflow-hidden rounded-md pl-1"
+    >
+      <Avatar face={a.face} egg={a.egg} label="" className="h-8 w-auto" />
+      <span className="ml-1.5 flex flex-1 flex-col gap-1 pr-1.5">
+        <span className="h-0.5 rounded bg-white/45" />
+        <span className="h-0.5 w-3/4 rounded bg-white/30" />
+        <span className="h-0.5 w-1/2 rounded bg-white/30" />
+      </span>
+    </span>
+  );
+}
+
+/** 시각만 "오후 3:00" */
+function clockOf(seconds: number): string {
+  return CLOCK.format(new Date(seconds * 1000));
+}
+const CLOCK = new Intl.DateTimeFormat("ko-KR", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/**
+ * 지금 회차 카드: 지금 할 일 하나와 지금 단계의 시계 하나만 크게.
+ * 열지 않은 결과 → 「추첨 보기」, 응모 전 → 마감까지 + 「별 6개 고르기」, 응모함 → 추첨까지 + 고른 별 + 「영수증」,
+ * 마감 뒤 추첨 전 → 추첨까지. 지금 아닌 시계는 작게
+ */
+function RoundCard({
+  services,
+  status: s,
+  mine,
+  envelope,
+  onEnter,
+  onReceipt,
+  onDraw,
+}: {
+  services: Services;
+  status: LedgerStatus;
+  mine: MyTicket[];
+  envelope: MyTicket | undefined;
+  onEnter: () => void;
+  onReceipt: (m: MyTicket) => void;
+  onDraw: (round: number) => void;
+}) {
+  const schedule = services.ledger.schedule;
+  // 앞 회차 추첨을 기다리는 동안은 그 회차가 지금 회차다
+  const drawWaiting = s.phase === "waiting" && s.nextDrawRound < s.round;
+  const round = drawWaiting ? s.nextDrawRound : s.round;
+  const drawAt = drawWaiting ? s.nextDrawAt : s.times.closesAt + DRAND_DELAY;
+  const closed = s.phase !== "open";
+  const ticket = mine.find((m) => m.ticket.round === round);
+
+  if (envelope) {
+    const r = envelope.ticket.round;
+    return (
+      <section
+        aria-label="추첨 결과"
+        data-card="result"
+        className="sd-glass flex flex-col items-center gap-4 rounded-3xl p-6 text-center"
+      >
+        <span className="font-bold text-lg tabular-nums">
+          {roundShort(schedule, r)} 추첨 끝
+        </span>
+        <button
+          type="button"
+          onClick={() => onDraw(r)}
+          data-envelope={r}
+          className="sd-envelope flex h-28 w-44 items-end justify-center rounded-xl pb-3 font-bold text-slate-900"
+        >
+          추첨 보기
+        </button>
+        {!closed && (
+          <span className="text-sm text-white/60 tabular-nums">
+            {roundShort(schedule, s.round)} 마감까지{" "}
+            {formatLeft(s.times.entryDeadline - s.now)}
+          </span>
+        )}
+      </section>
+    );
+  }
+
+  const bigLabel = closed || ticket ? "추첨까지" : "마감까지";
+  const big = closed || ticket ? drawAt - s.now : s.times.entryDeadline - s.now;
   return (
     <section
-      aria-label="확률 비교"
-      className="sd-glass grid grid-cols-2 gap-px overflow-hidden rounded-2xl"
+      aria-label="이번 회차"
+      data-card={closed ? "drawing" : ticket ? "entered" : "open"}
+      className="sd-glass flex flex-col items-center gap-4 rounded-3xl px-5 py-6 text-center"
     >
-      <div className="flex flex-col gap-1 p-4">
-        <span className="text-white/60 text-xs">
-          눈에 보이는 별 하나 맞히기
+      <span className="font-bold text-lg tabular-nums" data-round-state>
+        {roundShort(schedule, round)} {closed ? "마감" : "응모 중"}
+      </span>
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="text-sm text-white/60">{bigLabel}</span>
+        <span
+          className={cn(
+            "font-bold font-mono text-6xl tabular-nums tracking-tight",
+            bigLabel === "추첨까지" && "text-amber-100",
+          )}
+          data-countdown={bigLabel === "추첨까지" ? "draw" : "close"}
+        >
+          {formatLeft(big)}
         </span>
-        <span className="font-mono font-bold text-2xl tabular-nums">
-          1/9,000
-        </span>
-        <span className="text-white/55 text-xs">눈에 보이는 별 약 9천 개</span>
       </div>
-      <div className="flex flex-col gap-1 p-4">
-        <span className="text-white/60 text-xs">로또 1등</span>
-        <span className="font-mono font-bold text-2xl tabular-nums">
-          1/8,145,060
-        </span>
-        <span className="text-white/55 text-xs">45개 중 6개</span>
-      </div>
-      <p className="col-span-2 border-white/10 border-t p-3 text-center text-sm">
-        로또 1등이 약 <b className="text-amber-200">900배</b> 더 어렵습니다
-      </p>
+      {ticket ? (
+        <div className="flex w-full flex-col items-center gap-3">
+          <span className="font-semibold text-amber-100">응모 완료</span>
+          <span className="flex flex-wrap justify-center gap-1">
+            {ticket.ticket.numbers.map((n) => (
+              <LottoBall key={n} n={n} size="sm" />
+            ))}
+          </span>
+          <button
+            type="button"
+            onClick={() => onReceipt(ticket)}
+            className="w-full max-w-xs rounded-2xl border border-white/25 py-3 font-semibold hover:bg-white/10"
+          >
+            영수증
+          </button>
+        </div>
+      ) : (
+        !closed && (
+          <button
+            type="button"
+            onClick={onEnter}
+            className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
+          >
+            별 6개 고르기
+          </button>
+        )
+      )}
+      <span className="text-white/50 text-xs tabular-nums">
+        {closed
+          ? `추첨 ${clockOf(drawAt)}`
+          : ticket
+            ? `마감 ${clockOf(s.times.closesAt)} · 응모 ${s.entries}장`
+            : `추첨 ${clockOf(drawAt)} · 응모 ${s.entries}장`}
+      </span>
     </section>
+  );
+}
+
+/** 지난 회차 결과 한 줄(누르면 지난 회차). 내 응모권이 있으면 등수와 「다시 보기」 */
+function LastRound({
+  services,
+  mine,
+  hide,
+  onRounds,
+  onDraw,
+}: {
+  services: Services;
+  mine: MyTicket[];
+  /** 아직 열지 않은 결과 회차(번호를 먼저 보여 주지 않는다) */
+  hide: number | undefined;
+  onRounds: () => void;
+  onDraw: (round: number) => void;
+}) {
+  const closed = services.ledger.closed();
+  const record = closed.at(-1)?.record;
+  if (!record || record.round === hide) return null;
+  const my = mine.find((m) => m.ticket.round === record.round);
+  const rank = my && !record.void ? myRank(record, my.ticket) : null;
+  return (
+    <div className="sd-glass flex items-center gap-2 rounded-2xl px-4 py-3">
+      <button
+        type="button"
+        onClick={onRounds}
+        aria-label="지난 회차"
+        data-last-round={record.round}
+        className="flex min-w-0 flex-1 flex-col gap-1.5 text-left"
+      >
+        <span className="text-white/60 text-xs tabular-nums">
+          지난 회차 · {roundShort(services.ledger.schedule, record.round)}
+          {my && (
+            <b
+              className={cn(
+                "ml-1.5 font-semibold",
+                rank ? "text-amber-200" : "text-white/70",
+              )}
+            >
+              {record.void
+                ? "무효"
+                : rank
+                  ? `${RANK_LABEL[rank]} 당첨`
+                  : "낙첨"}
+            </b>
+          )}
+        </span>
+        {record.void ? (
+          <span className="text-sm text-white/60">무효 회차</span>
+        ) : (
+          <span className="flex flex-wrap items-center gap-1">
+            {record.numbers.map((n) => (
+              <LottoBall
+                key={n}
+                n={n}
+                size="sm"
+                ring={!!my?.ticket.numbers.includes(n)}
+              />
+            ))}
+            <span className="px-0.5 text-white/40">+</span>
+            <LottoBall n={record.bonus} size="sm" />
+          </span>
+        )}
+      </button>
+      {my && !record.void && (
+        <button
+          type="button"
+          onClick={() => onDraw(record.round)}
+          className="shrink-0 rounded-lg border border-white/20 px-2.5 py-1.5 text-xs hover:bg-white/10"
+        >
+          다시 보기
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -592,7 +741,7 @@ function ReceiptView({
       </button>
       {printing && (
         <p role="status" className="text-center font-semibold text-amber-100">
-          응모했습니다. 추첨까지 하늘을 지켜봐 주세요
+          응모했습니다
         </p>
       )}
       <Receipt
@@ -732,9 +881,7 @@ export function MineView({
               {astronautOf(key.pub).number}
             </span>
           </span>
-          {services.ns === GAME_NS && (
-            <span className="text-sm text-white/70">등록증 보기 →</span>
-          )}
+          {services.ns === GAME_NS && <span className="text-white/60">→</span>}
         </a>
       )}
       <WinNotice services={services} tickets={mine.map((m) => m.ticket)} />
@@ -819,6 +966,7 @@ function RecoverKey({
   const [state, setState] = useState<
     "idle" | "working" | "missing" | "cancelled" | "error"
   >("idle");
+  const [message, setMessage] = useState<string | null>(null);
   const find = async () => {
     setState("working");
     try {
@@ -840,35 +988,34 @@ function RecoverKey({
             });
       onFound(key);
     } catch (err) {
-      setState(passkeyProblem(err) === "cancelled" ? "cancelled" : "error");
+      if (passkeyProblem(err) === "cancelled") setState("cancelled");
+      else {
+        setState("error");
+        setMessage(err instanceof Error ? err.message : null);
+      }
     }
   };
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
-      <p className="break-keep text-white/80">
-        이 기기에는 아직 우주인 등록증이 없어요. 다른 기기에서 응모했다면, 그
-        등록증으로 내 응모권을 찾을 수 있어요.
-      </p>
+    <div className="flex flex-col items-center gap-2 text-sm">
       <button
         type="button"
         disabled={state === "working"}
         onClick={() => void find()}
-        className="self-start rounded-lg border border-white/25 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
+        className="rounded-lg border border-white/25 px-3 py-1.5 hover:bg-white/10 disabled:opacity-50"
       >
-        {state === "working" ? "찾고 있습니다" : "등록증으로 내 응모권 찾기"}
+        {state === "working" ? "찾고 있습니다" : "이미 우주인 등록증이 있어요"}
       </button>
       {state === "missing" && (
         <p className="break-keep text-amber-100/85 text-xs">
-          장부에서 이 등록증을 찾지 못했어요.
-          {services.practice && " 연습 장부는 기기마다 따로예요."}
+          장부에 없는 등록증이에요.
         </p>
       )}
       {state === "cancelled" && (
         <p className="text-amber-100/85 text-xs">확인을 취소했어요.</p>
       )}
       {state === "error" && (
-        <p className="text-rose-200 text-xs">
-          찾지 못했어요. 잠시 뒤 다시 해 주세요.
+        <p className="break-keep text-rose-200 text-xs">
+          {message ?? "찾지 못했어요. 잠시 뒤 다시 해 주세요."}
         </p>
       )}
     </div>
@@ -1102,15 +1249,6 @@ function RoundDetail({
         ))}
       </ul>
 
-      {!record.void && RANKS.some((r) => counts[r] > 0) && (
-        <p
-          className="break-keep text-center text-sm text-white/60"
-          data-check-hint
-        >
-          당첨자를 확인하려면 당첨자에게 확인 링크를 받으세요
-        </p>
-      )}
-
       <div className="flex flex-col gap-2 rounded-2xl border border-white/10 p-4">
         <button
           type="button"
@@ -1124,7 +1262,7 @@ function RoundDetail({
           }}
           className="self-start rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10"
         >
-          {checking ? "장부를 처음부터 다시 계산하고 있습니다" : "장부 검사"}
+          {checking ? "검사하고 있습니다" : "장부 검사"}
         </button>
         {report && (
           <div
@@ -1133,9 +1271,7 @@ function RoundDetail({
             data-verify={report.problems.length === 0 ? "ok" : "fail"}
           >
             {report.problems.length === 0 ? (
-              <p className="text-emerald-200">
-                처음 회차부터 다시 계산했습니다. 문제가 없습니다.
-              </p>
+              <p className="text-emerald-200">문제가 없습니다</p>
             ) : (
               <ul className="list-disc pl-5 text-rose-200">
                 {report.problems.map((p) => (
@@ -1145,9 +1281,11 @@ function RoundDetail({
                 ))}
               </ul>
             )}
-            <p className="mt-1 text-white/50 text-xs">
-              연습 장부라 drand 서명과 봉인 시각 증거는 확인하지 않습니다.
-            </p>
+            {services.practice && (
+              <p className="mt-1 text-white/50 text-xs">
+                연습 장부라 drand 서명과 봉인 시각 증거는 확인하지 않습니다.
+              </p>
+            )}
           </div>
         )}
       </div>

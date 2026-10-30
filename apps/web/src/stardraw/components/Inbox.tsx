@@ -334,10 +334,6 @@ function AnsweredCard({
               </li>
             ))}
           </ol>
-          <p className="text-white/55 text-xs">
-            확인하는 분이 세 별을 하늘에서 차례로 누르면 결과가 여기 나옵니다.
-            전달: 카노푸스 우주국 · 우주국은 전달만 하고 별 세 개는 모릅니다.
-          </p>
         </>
       )}
     </div>

@@ -1,6 +1,8 @@
 import {
+  decodeRegistrationProof,
   decodeTicket,
   type EntrantSigner,
+  encodeRegistrationProof,
   encodeTicket,
   equalBytes,
   FLAG_UP,
@@ -8,6 +10,7 @@ import {
   fromBase64Url,
   passkeySigner,
   rawPublicKeyFromSpki,
+  type SignatureData,
   signerFromKeyPair,
   softCredentialId,
   softPasskeySigner,
@@ -17,6 +20,7 @@ import {
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
+import { astronautOf } from "./astronaut/identity";
 import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
 
 /**
@@ -30,6 +34,42 @@ import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
  */
 
 export const PASSKEY_NAME = "하늘의 별 따기";
+/** 공개 열쇠를 알기 전(만드는 순간) 패스키에 붙는 이름. 만든 뒤 "우주인 ○○"으로 바꾼다 */
+export const NEW_ASTRONAUT_NAME = "하늘의 별 따기 우주인";
+
+/** 기기의 패스키 고르는 창에 보일 이름: "우주인 노을별"(국장 패스키는 "카노푸스 우주국장") */
+export function astronautPasskeyName(pub: Uint8Array): string {
+  return `우주인 ${astronautOf(pub).name}`;
+}
+
+/**
+ * 만든(또는 찾은) 패스키의 이름을 "우주인 ○○"으로 바꾼다. 이름은 공개 열쇠에서 정해지는데 공개 열쇠는 만든 뒤에야 알 수 있어,
+ * WebAuthn `signalCurrentUserDetails`(지원하는 브라우저만)로 알린다. 없거나 실패하면 처음 이름 그대로 둔다
+ */
+export function renamePasskey(userId: Uint8Array, pub: Uint8Array): void {
+  const api = (
+    globalThis as {
+      PublicKeyCredential?: {
+        signalCurrentUserDetails?: (o: {
+          rpId: string;
+          userId: string;
+          name: string;
+          displayName: string;
+        }) => Promise<void>;
+      };
+    }
+  ).PublicKeyCredential?.signalCurrentUserDetails;
+  if (!api) return;
+  const name = astronautPasskeyName(pub);
+  void api
+    .call(globalThis.PublicKeyCredential, {
+      rpId: location.hostname,
+      userId: toBase64Url(userId),
+      name,
+      displayName: name,
+    })
+    .catch(() => {});
+}
 
 export interface KeyInfo {
   /** passkey: 실제 게임. demo: 데모만 쓰는 기기 안 열쇠(흉내 패스키, 장부에도 패스키 모양으로 등록) */
@@ -91,6 +131,9 @@ export interface Wallet {
    * 이 기기의 열쇠가 아니면 null
    */
   issuedAt(pub: Uint8Array): number | null;
+  /** 등록 증명(그 패스키로 한 서명)을 둔다. 등록이 늦어져 작업 증명을 다시 풀어도 다시 서명하지 않게 */
+  saveProof(pub: Uint8Array, proof: SignatureData): void;
+  loadProof(pub: Uint8Array): SignatureData | null;
   loadTickets(): MyTicket[];
   addTicket(mine: MyTicket): void;
   /** 결과 봉투를 연 회차 */
@@ -112,6 +155,7 @@ export function createWallet(
   const KEY = `${ns}-key`;
   const TICKETS = `${ns}-tickets`;
   const OPENED = `${ns}-opened`;
+  const PROOF = `${ns}-key-proof`;
 
   const saveKey = (key: KeyInfo) =>
     writeJson(KEY, {
@@ -154,14 +198,15 @@ export function createWallet(
     loadKey,
 
     async createPasskey() {
+      const userId = crypto.getRandomValues(new Uint8Array(16));
       const credential = (await navigator.credentials.create({
         publicKey: {
           rp: { id: location.hostname, name: PASSKEY_NAME },
           user: {
-            // 이름·이메일은 받지 않는다. 비밀번호 관리 앱에는 "하늘의 별 따기"로 보인다
-            id: crypto.getRandomValues(new Uint8Array(16)),
-            name: PASSKEY_NAME,
-            displayName: PASSKEY_NAME,
+            // 이름·이메일은 받지 않는다. 만든 뒤 "우주인 ○○"으로 바꿔 국장 패스키와 가른다
+            id: userId,
+            name: NEW_ASTRONAUT_NAME,
+            displayName: NEW_ASTRONAUT_NAME,
           },
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           // ES256(P-256)만: 응모자 id와 서명 규칙이 P-256이다
@@ -200,6 +245,7 @@ export function createWallet(
         createdAt: now(),
       };
       saveKey(key);
+      renamePasskey(userId, key.pub);
       return key;
     },
 
@@ -215,6 +261,9 @@ export function createWallet(
       const credentialId = new Uint8Array(credential.rawId);
       const pub = await lookup(credentialId);
       if (!pub) return null;
+      const handle = (credential.response as AuthenticatorAssertionResponse)
+        .userHandle;
+      if (handle) renamePasskey(new Uint8Array(handle), pub);
       const key: KeyInfo = {
         kind: "passkey",
         credentialId,
@@ -246,6 +295,23 @@ export function createWallet(
       const at = now();
       saveKey({ ...mine, createdAt: at });
       return at;
+    },
+
+    saveProof(pub, proof) {
+      writeJson(PROOF, {
+        pub: toBase64Url(pub),
+        proof: toBase64Url(encodeRegistrationProof(proof)),
+      });
+    },
+
+    loadProof(pub) {
+      const saved = readJson<{ pub: string; proof: string }>(PROOF);
+      if (!saved || saved.pub !== toBase64Url(pub)) return null;
+      try {
+        return decodeRegistrationProof(fromBase64Url(saved.proof));
+      } catch {
+        return null;
+      }
     },
 
     loadTickets() {
@@ -290,7 +356,7 @@ export function createWallet(
     },
 
     async clear() {
-      for (const k of [KEY, TICKETS, OPENED]) {
+      for (const k of [KEY, TICKETS, OPENED, PROOF]) {
         try {
           localStorage.removeItem(k);
         } catch {

@@ -12,7 +12,6 @@ import {
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
-import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
@@ -44,7 +43,6 @@ export function Receipt({
   const drawAt = drandTime(drandRoundForClose(times.closesAt));
   const id = toHex(ticketId(ticket));
   const rank: Rank | null = record ? myRank(record, ticket) : null;
-  const [aboutId, setAboutId] = useState(false);
   return (
     <article
       aria-label={`${roundShort(schedule, ticket.round)} 응모권`}
@@ -81,26 +79,10 @@ export function Receipt({
             <dd className="text-right">{formatTime(receivedAt)}</dd>
           </>
         )}
-        <dt className="flex items-center gap-1 text-slate-400">
-          일련번호
-          <button
-            type="button"
-            aria-expanded={aboutId}
-            aria-label="일련번호가 뭔가요?"
-            onClick={() => setAboutId((v) => !v)}
-            className="grid size-4 place-items-center rounded-full border border-slate-500 text-[10px] leading-none hover:text-slate-200"
-          >
-            i
-          </button>
-        </dt>
+        <dt className="text-slate-400">일련번호</dt>
         <dd className="text-right" data-ticket-id>
           {shortId(id)}
         </dd>
-        {aboutId && (
-          <p className="col-span-2 break-keep font-sans text-[11px] text-slate-400 leading-snug">
-            공개 장부에서 내 응모권을 찾는 번호예요.
-          </p>
-        )}
         {ticket.sig.kind === "webauthn" && (
           <>
             <dt className="text-slate-400">서명</dt>

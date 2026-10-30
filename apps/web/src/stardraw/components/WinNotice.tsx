@@ -148,16 +148,14 @@ function NoticeCard({
       <p className="font-semibold text-amber-200 text-xs tracking-wide">
         카노푸스 우주국 당첨 안내
       </p>
-      <p className="break-keep font-bold text-lg">
-        {title}입니다. 당첨을 알리고 싶은 사람에게 확인 링크를 보내세요
-      </p>
+      <p className="break-keep font-bold text-lg">{title}입니다</p>
       {compact ? (
         <button
           type="button"
           onClick={onOpen}
           className="self-start rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-50 text-sm hover:bg-amber-200/15"
         >
-          확인 링크 만들러 가기
+          확인 링크 만들기
         </button>
       ) : (
         <>
@@ -189,9 +187,8 @@ function NoticeCard({
                 </button>
               </div>
               <p className="break-keep text-white/60 text-xs">
-                한 사람이 한 번만 쓸 수 있고{" "}
-                {formatTime(latest.expiresAt / 1000)}에 닫힙니다. 받은 사람이
-                열면 여기로 확인 요청이 옵니다.
+                한 번만 쓸 수 있습니다 · {formatTime(latest.expiresAt / 1000)}
+                까지
               </p>
             </div>
           )}
@@ -207,16 +204,13 @@ function NoticeCard({
             )}
           >
             {busy
-              ? "등록증을 확인하고 있습니다"
+              ? "만들고 있습니다"
               : latest
                 ? "다른 사람에게 보낼 새 링크"
                 : "확인 링크 만들기"}
           </button>
         </>
       )}
-      <p className="text-amber-100/55 text-[11px]">
-        공개 장부로 이 기기가 계산한 안내입니다
-      </p>
       {error && (
         <p role="alert" className="text-rose-200 text-sm">
           {error}

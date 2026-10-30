@@ -6,6 +6,7 @@ import {
   drandRoundForClose,
   drandTime,
   encodeRegistration,
+  encodeRegistrationProof,
   encodeTicket,
   fromBase64Url,
   fromHex,
@@ -18,6 +19,7 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  type SignatureData,
   scheduleFromRecords,
   type Ticket,
   toBase64Url,
@@ -28,7 +30,7 @@ import {
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
-import type { Ledger } from "./ledger";
+import { type Ledger, RegisterLater } from "./ledger";
 import type { LedgerPhase, LedgerStatus } from "./local-ledger";
 
 /**
@@ -220,9 +222,40 @@ export class RemoteLedger implements Ledger {
       { cache: "no-store" },
     );
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`장부에 묻지 못했습니다(${res.status})`);
+    if (!res.ok) {
+      // 국장 패스키면 서버가 그렇다고 알린다(403)
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `장부에 묻지 못했습니다(${res.status})`);
+    }
     const { pub } = (await res.json()) as { pub: string };
     return fromBase64Url(pub);
+  }
+
+  async register(
+    registration: KeyRegistration,
+    proof: SignatureData,
+    challenge: Uint8Array,
+  ): Promise<{ round: number }> {
+    const res = await this.f(`${this.o.base}/api/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        registration: toBase64Url(encodeRegistration(registration)),
+        proof: toBase64Url(encodeRegistrationProof(proof)),
+        head: toHex(challenge),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      round?: number;
+    };
+    if (res.status === 409) throw new RegisterLater(body.error);
+    if (!res.ok || typeof body.round !== "number")
+      throw new Error(body.error ?? `등록하지 못했습니다(${res.status})`);
+    const key = toBase64Url(registration.pub);
+    this.registered.add(key);
+    this.registeredAt.set(key, body.round);
+    return { round: body.round };
   }
 
   async submit(

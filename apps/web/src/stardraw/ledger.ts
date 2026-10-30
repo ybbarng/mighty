@@ -3,6 +3,7 @@ import type {
   PowParams,
   RoundRecord,
   Schedule,
+  SignatureData,
   Ticket,
   VerifyReport,
 } from "@mighty/stardraw-core";
@@ -37,6 +38,15 @@ export interface Ledger {
   passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null>;
   /** 이 공개 열쇠가 장부에 등록된 회차(우주인 등록증의 등록 일자). 아직 응모 전이라 등록이 없으면 null */
   registeredRound(pub: Uint8Array): Promise<number | null>;
+  /**
+   * 응모 없이 등록만 올린다(우주인 등록 직후, docs/36 11-14). `proof`는 그 패스키로 한 등록 증명 서명,
+   * `challenge`는 작업 증명에 쓴 문제 값. 등록 회차를 돌려준다. 지금 받을 수 없으면(마감 뒤, 회차가 바뀜) `RegisterLater`
+   */
+  register(
+    registration: KeyRegistration,
+    proof: SignatureData,
+    challenge: Uint8Array,
+  ): Promise<{ round: number }>;
   submit(
     ticket: Ticket,
     registration?: KeyRegistration,
@@ -46,4 +56,12 @@ export interface Ledger {
   ticketsOf(round: number): readonly Ticket[];
   /** 장부 전체를 처음부터 다시 계산한다 */
   verify(mine?: readonly Uint8Array[]): Promise<VerifyReport>;
+}
+
+/** 등록을 지금 받을 수 없다(마감 뒤이거나 회차가 바뀌었다). 다음 회차가 열리면 다시 계산해 보낸다 */
+export class RegisterLater extends Error {
+  constructor(message = "다음 회차가 열리면 등록됩니다") {
+    super(message);
+    this.name = "RegisterLater";
+  }
 }

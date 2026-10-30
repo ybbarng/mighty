@@ -200,10 +200,6 @@ export function CheckLink({
           <p className="font-bold text-lg">
             {title} 당첨자가 보낸 확인 링크입니다
           </p>
-          <p className="break-keep text-sm text-white/75">
-            공개 장부에서 {title} 당첨 응모권을 확인했습니다. 「확인 시작」을
-            누르면 당첨자에게 확인 요청이 가고, 이 링크는 다시 쓸 수 없습니다.
-          </p>
           <button
             type="button"
             disabled={busy}
@@ -213,8 +209,7 @@ export function CheckLink({
             {busy ? "요청을 보내고 있습니다" : "확인 시작"}
           </button>
           <p className="text-white/50 text-xs">
-            링크 기한 {formatTime(state.expiresAt / 1000)}까지 · 이 기기에서
-            끝까지 확인해 주세요
+            한 번만 쓸 수 있습니다 · {formatTime(state.expiresAt / 1000)}까지
           </p>
         </div>
       )}
@@ -228,8 +223,7 @@ export function CheckLink({
             >
               <p className="font-semibold">당첨자의 승인을 기다리고 있습니다</p>
               <p className="mt-1 text-sm text-white/60">
-                당첨자는 {formatTime(session.answerBy / 1000)}까지 승인할 수
-                있습니다. 이 기기에서 확인을 마쳐 주세요.
+                {formatTime(session.answerBy / 1000)}까지
               </p>
             </div>
           )}

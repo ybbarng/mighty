@@ -855,6 +855,12 @@ button {
   );
   pointer-events: none;
 }
+/* 첫 화면 인사 옆 작은 등록증 */
+.sd-idthumb {
+  background: linear-gradient(135deg, #1b2b55 0%, #101a36 55%, #1d1440 100%);
+  border: 1px solid rgba(205, 220, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
 .sd-idcard {
   container-type: inline-size;
   background:

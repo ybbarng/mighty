@@ -47,6 +47,7 @@ import {
   roundAt,
   roundTimes,
   type Schedule,
+  type SignatureData,
   type Signer,
   sealDesignations,
   selectOperations,
@@ -62,11 +63,12 @@ import {
   toHex,
   type VerifyReport,
   verifyLedger,
+  verifyRegistrationProof,
   verifyTicketSignature,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
-import type { Ledger } from "./ledger";
+import { type Ledger, RegisterLater } from "./ledger";
 
 /**
  * 기기 안 연습 장부(docs/36 11-5 2번). 서버가 생기기 전까지 화면이 이것으로 응모 → 마감 → 추첨 →
@@ -391,6 +393,8 @@ export class LocalLedger implements Ledger {
     const id = toHex(credentialId);
     for (const list of [...this.registrations, this.pending.registrations])
       for (const r of list) if (toHex(r.credentialId) === id) return r.pub;
+    if (everDirector(await this.opsState(), new Uint8Array(0), credentialId))
+      throw new Error("이 패스키는 국장 열쇠라 응모에 쓸 수 없습니다");
     return null;
   }
 
@@ -405,6 +409,55 @@ export class LocalLedger implements Ledger {
     )
       ? this.pending.round
       : null;
+  }
+
+  /** 등록만 받기(서버 `POST /api/register`와 같은 확인). 등록 회차를 돌려준다 */
+  async register(
+    registration: KeyRegistration,
+    proof: SignatureData,
+    challenge: Uint8Array,
+  ): Promise<{ round: number }> {
+    await this.settle();
+    const known = await this.registeredRound(registration.pub);
+    if (known !== null) return { round: known };
+    const now = this.now();
+    const round = roundAt(this.schedule, now);
+    if (round === null) throw new RegisterLater();
+    const times = roundTimes(this.schedule, round);
+    if (this.records.length < round - 1 || now >= times.closesAt)
+      throw new RegisterLater();
+    if (toHex(challenge) !== toHex(this.head()))
+      throw new RegisterLater("회차가 바뀌었습니다. 다시 계산해 주세요");
+    const problem = checkRegistration(registration);
+    if (problem) throw new Error(problem);
+    if (
+      everDirector(
+        await this.opsState(),
+        registration.pub,
+        registration.credentialId,
+      )
+    )
+      throw new Error("이 패스키는 국장 열쇠라 응모에 쓸 수 없습니다");
+    if (await this.passkeyPub(registration.credentialId))
+      throw new Error("이미 다른 열쇠로 등록된 패스키입니다");
+    if (!(await verifyRegistrationProof(registration, proof, this.policy)))
+      throw new Error("등록 서명이 맞지 않습니다");
+    if (
+      !(await checkPow(
+        challenge,
+        registrationContent(registration),
+        registration.nonce,
+        times.entry.registerPowTarget,
+        PRACTICE_POW,
+      ))
+    )
+      throw new Error("열쇠 등록 계산이 맞지 않습니다");
+    if (this.pending.round !== round)
+      this.pending = { round, tickets: [], registrations: [] };
+    this.pending.registrations.push(registration);
+    this.keys.add(toHex(entrantId(registration.pub)));
+    this.write();
+    return { round };
   }
 
   /** 응모권 받기(서버가 할 확인을 그대로 한다). 받은 시각(초)을 돌려준다 */
@@ -441,7 +494,7 @@ export class LocalLedger implements Ledger {
           registration.credentialId,
         )
       )
-        throw new Error("국장 패스키로는 우주인 등록을 할 수 없습니다");
+        throw new Error("이 패스키는 국장 열쇠라 응모에 쓸 수 없습니다");
       if (
         !this.keys.has(who) &&
         !(await checkPow(

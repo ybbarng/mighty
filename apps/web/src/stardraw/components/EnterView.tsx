@@ -18,6 +18,7 @@ import {
   passkeyProblem,
   platformUnlock,
 } from "../passkey-env";
+import { ensureRegistered, registering, signProof } from "../registrar";
 import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
 import { SKY_STARS, starOf } from "../sky";
@@ -99,9 +100,9 @@ export function EnterView({
       kind,
       text:
         kind === "cancelled"
-          ? `${what}. 확인을 취소했어요. 다시 누르면 이어서 할 수 있어요.`
+          ? `${what}. 확인을 취소했어요.`
           : kind === "unsupported"
-            ? "이 기기에서는 등록증을 만들 수 없어요. 다시 누른 뒤 '다른 기기 사용'(휴대폰)을 고르고, 화면의 QR을 휴대폰 카메라로 찍어 주세요."
+            ? "이 기기에서는 등록증을 만들 수 없어요. '다른 기기 사용'을 골라 휴대폰으로 만들어 주세요."
             : err instanceof Error
               ? err.message
               : String(err),
@@ -145,7 +146,12 @@ export function EnterView({
       const signer = await services.wallet.signerFor(key);
       let registration: KeyRegistration | null | undefined;
       if (!(await ledger.isRegistered(key.pub))) {
-        setWork("처음 한 번, 열쇠를 장부에 올릴 계산을 하고 있습니다");
+        setWork("등록하고 있습니다");
+        // 우주인 등록 직후 올리던 등록이 아직 돌고 있으면 그것을 기다린다
+        await registering(services, key)?.catch(() => null);
+      }
+      if (!(await ledger.isRegistered(key.pub))) {
+        // 등록 증명이 없는 예전 열쇠나 올리지 못한 등록은 응모권과 함께 낸다
         registration = await makeRegistration(
           { publicKey: key.pub },
           key.credentialId,
@@ -154,7 +160,7 @@ export function EnterView({
           { params: ledger.powParams },
         );
       }
-      setWork("응모권을 계산하고, 등록증으로 서명합니다");
+      setWork("계산하고 있습니다");
       const ticket = await makeTicket(
         signer,
         status.round,
@@ -165,7 +171,7 @@ export function EnterView({
       );
       if (!ticket || registration === null)
         throw new Error("응모권을 만들지 못했습니다");
-      setWork("장부에 내고 있습니다");
+      setWork("내고 있습니다");
       const { receivedAt } = await ledger.submit(ticket, registration);
       setStep("folding");
       play("starBall");
@@ -188,6 +194,13 @@ export function EnterView({
     setError(null);
     try {
       const made = await services.wallet.createPasskey();
+      // 바로 장부에 등록한다: 그 패스키로 등록 증명에 서명하고(확인 한 번 더), 작업 증명·올리기는 뒤에서
+      try {
+        await signProof(services, made);
+        void ensureRegistered(services, made).catch(() => {});
+      } catch {
+        // 서명을 취소하면 첫 응모 때 응모권과 함께 등록한다
+      }
       setIssued({ kind: "new", key: made });
       setKey(made);
     } catch (err) {
@@ -207,12 +220,10 @@ export function EnterView({
         services.ledger.passkeyPub(id),
       );
       if (found) {
+        void ensureRegistered(services, found).catch(() => {});
         setIssued({ kind: "found", key: found });
         setKey(found);
-      } else
-        setKeyNote(
-          "이 등록증으로 응모한 기록이 없어요. 처음이면 「우주인 등록」을 눌러 주세요.",
-        );
+      } else setKeyNote("장부에 없는 등록증이에요.");
     } catch (err) {
       fail(err, "등록증을 찾지 못했어요");
     } finally {
@@ -256,7 +267,7 @@ export function EnterView({
             onClick={() => setIssued(null)}
             className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950"
           >
-            별 6개 고르러 가기
+            별 6개 고르기
           </button>
         </AstronautPanel>
       </section>
@@ -317,12 +328,6 @@ export function EnterView({
           onPick={step === "pick" ? toggle : undefined}
           label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
         />
-        <span className="pointer-events-none absolute top-2 left-3 text-[11px] text-white/45">
-          북쪽 하늘
-        </span>
-        <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] text-white/45">
-          남쪽 하늘 · 동쪽이 왼쪽
-        </span>
       </div>
 
       <StarInfo n={focus} />
@@ -397,9 +402,7 @@ export function EnterView({
               ? status.phase === "waiting"
                 ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
                 : "이번 회차 응모가 마감되었습니다"
-              : !full
-                ? `별을 ${6 - picked.length}개 더 골라 주세요`
-                : "이 별 6개로 응모하기"}
+              : "이 별 6개로 응모하기"}
         </button>
       </div>
     </section>
@@ -528,9 +531,6 @@ function NumberSlip({
       className="rounded-2xl border border-rose-300/25 bg-[linear-gradient(180deg,rgba(255,228,230,0.07),rgba(255,228,230,0.03))] p-3"
       aria-label="번호 칸"
     >
-      <legend className="px-1 text-rose-200/70 text-xs">
-        번호로 고르기 · 별 이름은 누르면 위에 나옵니다
-      </legend>
       <div className="grid grid-cols-7 gap-1.5">
         {SKY_STARS.map((s) => {
           const on = picked.includes(s.n);
@@ -576,10 +576,6 @@ function InAppNotice({ app }: { app: string }) {
     >
       <p className="break-keep text-amber-50">
         {app} 안에서는 패스키를 쓸 수 없어요. Safari나 Chrome으로 열어 주세요.
-      </p>
-      <p className="break-keep text-amber-100/70 text-xs">
-        오른쪽 위(또는 아래) 메뉴의 「다른 브라우저로 열기」를 누르거나, 주소를
-        복사해 Safari·Chrome에 붙여 넣으세요.
       </p>
       <button
         type="button"

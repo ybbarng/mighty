@@ -37,15 +37,12 @@ export function AstronautView() {
         ) : key ? (
           <AstronautPanel services={services} pub={key.pub} />
         ) : (
-          <div className="sd-glass flex flex-col items-center gap-3 rounded-3xl px-5 py-8 text-center">
-            <p className="break-keep text-white/80">
-              아직 이 기기에 우주인 등록증이 없어요.
-            </p>
+          <div className="flex flex-col items-center py-8">
             <a
               href="/stardraw/enter"
-              className="sd-cta w-full max-w-xs rounded-2xl py-3 font-bold text-slate-950"
+              className="sd-cta w-full max-w-xs rounded-2xl py-3 text-center font-bold text-slate-950"
             >
-              우주인 등록하러 가기
+              우주인 등록
             </a>
           </div>
         )}
