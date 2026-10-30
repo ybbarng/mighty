@@ -20,6 +20,11 @@ export interface Ledger {
   readonly powParams: PowParams;
   /** 기기 안 연습 장부(practice), 서버 시험 운영(trial), 정식(live) */
   readonly mode: "practice" | "trial" | "live";
+  /**
+   * 장부 표시: 연습·서버와 처음 일정표 해시(예: "server:ab12…"). 서버 장부를 다시 시작하면 바뀐다.
+   * 지갑은 이 값으로 다른 장부의 응모권을 가른다. 서버 장부는 첫 `settle()` 전에는 null
+   */
+  id(): string | null;
   /** 지금 시각(초, 장부 기준) */
   now(): number;
   /** 다음 회차 문제 값 */

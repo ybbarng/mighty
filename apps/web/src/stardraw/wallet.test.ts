@@ -1,8 +1,12 @@
-import { verifySignature } from "@mighty/stardraw-core";
+import {
+  encodeTicket,
+  toBase64Url,
+  verifySignature,
+} from "@mighty/stardraw-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { UnlockPurpose } from "./demo-unlock";
-import { createDemoWallet } from "./wallet";
+import { createDemoWallet, createWallet } from "./wallet";
 
 afterEach(() => {
   localStorage.clear();
@@ -69,5 +73,53 @@ describe("데모 지갑: 실제 패스키 대신 흉내 확인과 기기 안 데
     await wallet.createPasskey();
     await wallet.clear();
     expect(wallet.loadKey()).toBeNull();
+  });
+});
+
+describe("응모권은 그 장부의 것으로만 센다", () => {
+  const ticketOf = (round: number) => ({
+    ticket: {
+      v: 1,
+      round,
+      numbers: [1, 2, 3, 4, 5, 6],
+      pub: new Uint8Array(65).fill(4),
+      nonce: 7,
+      sig: { kind: "raw" as const, sig: new Uint8Array(64).fill(1) },
+    },
+    receivedAt: 100,
+  });
+
+  it("A 장부 1회차 응모권은 다시 시작한 B 장부 1회차에서 응모하지 않은 것으로 보인다", () => {
+    let ledger: string | null = "trial:aaaa";
+    const wallet = createWallet("test-game", () => ledger);
+    wallet.addTicket(ticketOf(1));
+    wallet.markOpened(1);
+    expect(wallet.loadTickets().map((m) => m.ticket.round)).toEqual([1]);
+
+    // 서버 장부를 새 genesis로 다시 시작했다
+    ledger = "trial:bbbb";
+    expect(wallet.loadTickets()).toEqual([]);
+    expect(wallet.openedRounds().has(1)).toBe(false);
+
+    // 원래 장부로 돌아가면 다시 보인다
+    ledger = "trial:aaaa";
+    expect(wallet.loadTickets()).toHaveLength(1);
+  });
+
+  it("장부를 아직 받지 못했거나 장부 표시가 없는 옛 응모권은 지금 것으로 세지 않는다", () => {
+    const wallet = createWallet("test-game", () => null);
+    wallet.addTicket(ticketOf(1));
+    expect(wallet.loadTickets()).toEqual([]);
+    // 장부 표시를 두기 전 판이 저장한 모양
+    localStorage.setItem(
+      "test-old-tickets",
+      JSON.stringify([
+        { t: toBase64Url(encodeTicket(ticketOf(1).ticket)), at: 1 },
+      ]),
+    );
+    localStorage.setItem("test-old-opened", JSON.stringify([1]));
+    const old = createWallet("test-old", () => "trial:aaaa");
+    expect(old.loadTickets()).toEqual([]);
+    expect(old.openedRounds().size).toBe(0);
   });
 });

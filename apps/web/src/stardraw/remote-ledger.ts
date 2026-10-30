@@ -9,6 +9,7 @@ import {
   encodeTicket,
   fromBase64Url,
   fromHex,
+  genesisHash,
   type KeyRegistration,
   POW_PARAMS,
   type PowParams,
@@ -18,6 +19,7 @@ import {
   type Schedule,
   type Ticket,
   toBase64Url,
+  toHex,
   type VerifyOptions,
   type VerifyReport,
   verifyLedger,
@@ -91,6 +93,10 @@ export class RemoteLedger implements Ledger {
     return (
       this.state?.mode ?? (this.genesis?.ledger === "trial" ? "trial" : "live")
     );
+  }
+
+  id(): string | null {
+    return this.genesis ? `server:${toHex(genesisHash(this.genesis))}` : null;
   }
 
   now(): number {

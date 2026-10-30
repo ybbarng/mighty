@@ -200,6 +200,10 @@ export class LocalLedger implements Ledger {
       for (const r of list) this.keys.add(toHex(entrantId(r.pub)));
   }
 
+  id(): string {
+    return `practice:${toHex(genesisHash(this.schedule))}`;
+  }
+
   /** 지금 시각(초, 건너뛴 시간 포함) */
   now(): number {
     return Math.floor(this.clock.now() / 1000) + this.skipped;

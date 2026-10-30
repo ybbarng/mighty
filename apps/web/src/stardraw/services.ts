@@ -88,21 +88,27 @@ export function getServices(ns: string = GAME_NS): Services {
           },
         },
       });
+  const ledger: Ledger =
+    practice ??
+    new RemoteLedger({ base: SERVER_API, clock, policy: sitePolicy() });
+  const ledgerId = () => ledger.id();
   const services: Services = {
     ns,
     clock,
     relay,
     // 데모는 실제 패스키를 만들지 않고 흉내만 낸다(wallet.ts `createDemoWallet`)
-    wallet: ns === DEMO_NS ? createDemoWallet(ns) : createWallet(ns),
+    // 응모권에는 장부 표시를 함께 둔다(다시 시작한 장부의 같은 회차 번호와 섞이지 않게)
+    wallet:
+      ns === DEMO_NS
+        ? createDemoWallet(ns, undefined, ledgerId)
+        : createWallet(ns, ledgerId),
     checker: new Checker(
       relay,
       browserCheckStore(`${ns}-checks`),
       clock,
       sitePolicy(),
     ),
-    ledger:
-      practice ??
-      new RemoteLedger({ base: SERVER_API, clock, policy: sitePolicy() }),
+    ledger,
     practice,
   };
   cache.set(ns, services);

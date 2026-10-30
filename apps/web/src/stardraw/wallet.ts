@@ -20,6 +20,8 @@ import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
  * 여기에는 패스키 번호와 공개 열쇠만 둔다. 응모·확인마다 Face ID·지문·화면 잠금 한 번.
  * 터미널 도구(나중)는 열쇠 파일을 쓴다.
  * 저장 이름공간(`ns`)이 다르면 서로 보이지 않는다(데모는 실제 게임과 따로 둔다).
+ * 응모권과 봉투를 연 회차에는 장부 표시(`Ledger.id()`)를 함께 두고, 지금 장부의 것만 보여 준다.
+ * 서버 장부를 새 genesis로 다시 시작하면 회차 번호가 1부터 겹치기 때문이다(2026-10-30 시험 서버).
  */
 
 export const PASSKEY_NAME = "하늘의 별 따기";
@@ -81,7 +83,14 @@ export interface Wallet {
   clear(): Promise<void>;
 }
 
-export function createWallet(ns: string): Wallet {
+/**
+ * `ledgerId`는 지금 장부의 표시다(아직 장부를 받지 못했으면 null).
+ * 다른 장부의 응모권·봉투는 지우지 않고 남겨 두되 지금 것으로 세지 않는다
+ */
+export function createWallet(
+  ns: string,
+  ledgerId: () => string | null = () => null,
+): Wallet {
   const KEY = `${ns}-key`;
   const TICKETS = `${ns}-tickets`;
   const OPENED = `${ns}-opened`;
@@ -94,7 +103,14 @@ export function createWallet(ns: string): Wallet {
     });
 
   const readTickets = () =>
-    readJson<{ t: string; at: number }[]>(TICKETS) ?? [];
+    readJson<{ t: string; at: number; ledger?: string | null }[]>(TICKETS) ??
+    [];
+
+  /** 장부별 봉투를 연 회차. 장부 표시가 없던 옛 판의 목록(숫자 배열)은 어느 장부의 것인지 몰라 버린다 */
+  const readOpened = () => {
+    const saved = readJson<Record<string, number[]> | number[]>(OPENED);
+    return saved && !Array.isArray(saved) ? saved : {};
+  };
 
   const ticketIds = () => new Set(readTickets().map((s) => s.t));
 
@@ -179,8 +195,12 @@ export function createWallet(ns: string): Wallet {
     },
 
     loadTickets() {
+      const ledger = ledgerId();
       const out: MyTicket[] = [];
+      if (!ledger) return out;
       for (const s of readTickets()) {
+        // 다른 장부(다시 시작한 서버 장부, 연습 장부)와 장부 표시가 없는 옛 응모권은 세지 않는다
+        if (s.ledger !== ledger) continue;
         try {
           out.push({
             ticket: decodeTicket(fromBase64Url(s.t)),
@@ -196,17 +216,23 @@ export function createWallet(ns: string): Wallet {
     addTicket(mine) {
       const t = toBase64Url(encodeTicket(mine.ticket));
       if (ticketIds().has(t)) return;
-      writeJson(TICKETS, [...readTickets(), { t, at: mine.receivedAt }]);
+      writeJson(TICKETS, [
+        ...readTickets(),
+        { t, at: mine.receivedAt, ledger: ledgerId() },
+      ]);
     },
 
     openedRounds() {
-      return new Set(readJson<number[]>(OPENED) ?? []);
+      const ledger = ledgerId();
+      return new Set(ledger ? (readOpened()[ledger] ?? []) : []);
     },
 
     markOpened(round) {
-      const set = new Set(readJson<number[]>(OPENED) ?? []);
-      set.add(round);
-      writeJson(OPENED, [...set]);
+      const ledger = ledgerId();
+      if (!ledger) return;
+      const all = readOpened();
+      all[ledger] = [...new Set([...(all[ledger] ?? []), round])];
+      writeJson(OPENED, all);
     },
 
     async clear() {
@@ -231,8 +257,9 @@ export function createWallet(ns: string): Wallet {
 export function createDemoWallet(
   ns: string,
   unlock: (purpose: UnlockPurpose) => Promise<boolean> = requestUnlock,
+  ledgerId: () => string | null = () => null,
 ): Wallet {
-  const base = createWallet(ns);
+  const base = createWallet(ns, ledgerId);
   const DEMO_KEY = `${ns}-demo-key`;
 
   const confirm = async (purpose: UnlockPurpose) => {
