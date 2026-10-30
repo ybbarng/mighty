@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
+import { useScreenHistory } from "@/game/screen-history";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { YutIconArt } from "../icon-art";
@@ -331,7 +331,16 @@ type Screen =
 
 /** 윷놀이(/yut): 첫 화면, 옵션, 규칙, 배우기, 다함께 방, 대국 화면 */
 export function YutApp() {
-  const [screen, setScreen] = useState<Screen>({ kind: "start" });
+  // 판·방을 떠날 때(나가기 단추든 뒤로가기든) 하는 정리
+  function leavePlay() {
+    endYutSession();
+    useYut.getState().leave();
+  }
+  // 화면마다 브라우저 기록에 남겨 뒤로가기가 바로 전 화면으로 간다(game/screen-history)
+  const [screen, setScreen] = useScreenHistory<Screen>(
+    { kind: "start" },
+    { leavePlay, restorable: ["options", "rules", "tutorial"] },
+  );
   const view = useYut((s) => s.view);
   const settings = useYutSettings();
 
@@ -349,18 +358,9 @@ export function YutApp() {
     }
     const hosted = hostedRoom("yut");
     if (hosted) setScreen({ kind: "online", room: null, resume: hosted });
-  }, []);
+  }, [setScreen]);
 
-  const backToStart = () => {
-    endYutSession();
-    useYut.getState().leave();
-    if (window.location.search.includes("room=")) {
-      const url = new URL(window.location.href);
-      url.search = "";
-      window.history.replaceState(null, "", url);
-    }
-    setScreen({ kind: "start" });
-  };
+  const backToStart = () => setScreen({ kind: "start" });
 
   if (screen.kind === "online")
     return (

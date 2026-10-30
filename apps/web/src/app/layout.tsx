@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Analytics } from "@/components/Analytics";
 import { SITE } from "@/components/brand/brand";
+import { LeaveConfirm } from "@/components/LeaveConfirm";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { StoreHydration } from "@/components/StoreHydration";
 
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <StoreHydration />
         <Analytics />
         {children}
+        <LeaveConfirm />
         <ServiceWorker />
       </body>
     </html>

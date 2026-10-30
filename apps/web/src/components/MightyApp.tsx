@@ -2,9 +2,9 @@
 
 import type { RuleSet } from "@mighty/engine";
 import { useEffect, useState } from "react";
-
 import type { SavedMatch } from "@/game/local-match";
 import { clearGame, loadGame } from "@/game/persistence";
+import { useScreenHistory } from "@/game/screen-history";
 import { chosenRules, useSettings } from "@/game/settings";
 import { useGame } from "@/game/store";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
@@ -35,7 +35,23 @@ type Screen =
   | { kind: "about" };
 
 export function MightyApp() {
-  const [screen, setScreen] = useState<Screen>({ kind: "start" });
+  // 판·방을 떠날 때(나가기 단추든 뒤로가기든) 하는 정리
+  function leavePlay() {
+    endOnlineSession();
+    useGame.setState({
+      seatNames: null,
+      audit: null,
+      hostLeft: false,
+      reconnecting: false,
+      offlineSeats: [],
+      endVote: null,
+    });
+  }
+  // 화면마다 브라우저 기록에 남겨 뒤로가기가 바로 전 화면으로 간다(game/screen-history)
+  const [screen, setScreen] = useScreenHistory<Screen>(
+    { kind: "start" },
+    { leavePlay, restorable: ["options", "about", "tutorial"] },
+  );
   const [saved, setSaved] = useState<SavedMatch | null>(null);
   const newGame = useGame((s) => s.newGame);
   const resume = useGame((s) => s.resume);
@@ -64,26 +80,9 @@ export function MightyApp() {
         room: null,
         resume: hosted,
       });
-  }, []);
+  }, [setScreen]);
 
-  const backToStart = () => {
-    endOnlineSession();
-    useGame.setState({
-      seatNames: null,
-      audit: null,
-      hostLeft: false,
-      reconnecting: false,
-      offlineSeats: [],
-      endVote: null,
-    });
-    // 초대 링크로 들어왔다면 주소의 방 코드를 지워 처음 화면으로 돌아간다.
-    if (window.location.search.includes("room=")) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("room");
-      window.history.replaceState(null, "", url);
-    }
-    setScreen({ kind: "start" });
-  };
+  const backToStart = () => setScreen({ kind: "start" });
 
   if (screen.kind === "online") {
     return (

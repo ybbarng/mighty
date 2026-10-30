@@ -12,6 +12,7 @@ import { SuitStylePicker } from "@/components/SuitStylePicker";
 import { SuitText } from "@/components/SuitText";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
+import { useScreenHistory } from "@/game/screen-history";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { useHeartsTutorialProgress } from "@/tutorial/progress";
@@ -43,7 +44,23 @@ const BG =
 
 /** 하트(/hearts) */
 export function HeartsApp() {
-  const [screen, setScreen] = useState<Screen>({ kind: "start" });
+  // 판·방을 떠날 때(나가기 단추든 뒤로가기든) 하는 정리
+  function leavePlay() {
+    endHeartsSession();
+    useHearts.setState({
+      seatNames: null,
+      audit: null,
+      hostLeft: false,
+      reconnecting: false,
+      offlineSeats: [],
+      endVote: null,
+    });
+  }
+  // 화면마다 브라우저 기록에 남겨 뒤로가기가 바로 전 화면으로 간다(game/screen-history)
+  const [screen, setScreen] = useScreenHistory<Screen>(
+    { kind: "start" },
+    { leavePlay, restorable: ["options", "rules", "tutorial"] },
+  );
   const [saved, setSaved] = useState<HeartsSaved | null>(null);
   const ruleCode = useHeartsSettings((s) => s.ruleCode);
   const level = useHeartsSettings((s) => s.level);
@@ -63,25 +80,9 @@ export function HeartsApp() {
     }
     const hosted = hostedRoom("hearts");
     if (hosted) setScreen({ kind: "online", room: null, resume: hosted });
-  }, []);
+  }, [setScreen]);
 
-  const backToStart = () => {
-    endHeartsSession();
-    useHearts.setState({
-      seatNames: null,
-      audit: null,
-      hostLeft: false,
-      reconnecting: false,
-      offlineSeats: [],
-      endVote: null,
-    });
-    if (window.location.search.includes("room=")) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("room");
-      window.history.replaceState(null, "", url);
-    }
-    setScreen({ kind: "start" });
-  };
+  const backToStart = () => setScreen({ kind: "start" });
 
   const rules = heartsRules(ruleCode);
 

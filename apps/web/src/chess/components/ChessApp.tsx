@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import { BoardOnlineScreen } from "@/components/BoardOnlineScreen";
 import { GameHome } from "@/components/GameHome";
 import { StudyHome } from "@/components/study/StudyHome";
@@ -11,6 +10,7 @@ import {
 } from "@/components/TimePresetPicker";
 import { LessonPlayer } from "@/components/tutorial/LessonPlayer";
 import { TutorialHome } from "@/components/tutorial/TutorialHome";
+import { useScreenHistory } from "@/game/screen-history";
 import { cn } from "@/lib/cn";
 import { type HostRestore, hostedRoom } from "@/net/host-store";
 import { chessOnline } from "../online";
@@ -379,7 +379,16 @@ const STUDY_SETS = CHESS_PUZZLE_SETS.map((s) => ({
 /** 체스(/chess): 첫 화면, 옵션, 규칙, 배우기, 다함께 체스 방, 대국 화면 */
 export function ChessApp() {
   useChessHydration();
-  const [screen, setScreen] = useState<Screen>({ kind: "start" });
+  // 판·방을 떠날 때(나가기 단추든 뒤로가기든) 하는 정리
+  function leavePlay() {
+    endChessSession();
+    useChess.getState().leave();
+  }
+  // 화면마다 브라우저 기록에 남겨 뒤로가기가 바로 전 화면으로 간다(game/screen-history)
+  const [screen, setScreen] = useScreenHistory<Screen>(
+    { kind: "start" },
+    { leavePlay, restorable: ["options", "rules", "tutorial", "study"] },
+  );
   const view = useChess((s) => s.view);
   const winsToFinish = useChessSettings((s) => s.winsToFinish);
   const time = useChessSettings((s) => s.time);
@@ -399,18 +408,9 @@ export function ChessApp() {
     }
     const hosted = hostedRoom("chess");
     if (hosted) setScreen({ kind: "online", room: null, resume: hosted });
-  }, []);
+  }, [setScreen]);
 
-  const backToStart = () => {
-    endChessSession();
-    useChess.getState().leave();
-    if (window.location.search.includes("room=")) {
-      const url = new URL(window.location.href);
-      url.search = "";
-      window.history.replaceState(null, "", url);
-    }
-    setScreen({ kind: "start" });
-  };
+  const backToStart = () => setScreen({ kind: "start" });
 
   if (screen.kind === "online")
     return (
