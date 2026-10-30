@@ -14,4 +14,5 @@ export * from "./sas";
 export * from "./schedule";
 export * from "./signature";
 export * from "./ticket";
+export * from "./vectors";
 export * from "./verify";
