@@ -9,7 +9,7 @@
 - 화면은 같은 출처 상대 주소로 부른다. 화면 빌드에 `NEXT_PUBLIC_STARDRAW_API=/stardraw-api`를 넣어야 서버를 쓰고, 비우면 지금처럼 기기 안 연습 장부로 돈다(아직 넣지 않았다).
 - 서비스 워커는 `/stardraw-api/` 아래를 저장하지 않는다(`apps/web/public/sw.js`).
 - 이미지: `ghcr.io/ybbarng/stardraw-server`(`apps/stardraw-server/Dockerfile`, 빌드 문맥은 저장소 맨 위). `.github/workflows/image.yml`의 `server-image` 일이 만든다. 저장소 변수 `STARDRAW_SERVER_IMAGE`를 `true`로 켜기 전에는 돌지 않고, 배포는 하지 않는다(이 폴더의 compose로 손으로 띄운다).
-- 모드: `STARDRAW_MODE=trial|live`. 서버는 데이터 폴더의 장부 종류(처음 일정표의 시험 표시)와 모드가 다르면 뜨지 않는다.
+- 단계: 설정이 아니라 장부가 정한다. 새 장부는 시험 단계로 시작하고, `schedule-live` 명령으로 정식 단계를 예약한다(아래 2절).
 
 ## 서명 열쇠
 
@@ -24,57 +24,54 @@ chmod 600 server-key.pkcs8
 
 열쇠를 잃으면 이전 영수증은 그대로 확인되지만(공개 열쇠가 장부에 있다), 새 열쇠로 바꾼 사실을 공지해야 한다. 백업은 비밀번호 관리 앱에 둔다.
 
-## 1. 시험 운영
+## 1. 시험 단계
 
-시험 장부는 처음 일정표에 시험 표시가 있어 genesis 해시(꼬리표 `stardraw/genesis-trial/v1`)가 정식과 다르다. 그래서 시험 응모권·등록·증명은 정식 장부에 섞일 수 없다. 봉인 시각 인증은 정식과 같게 받고, GitHub 앵커는 `trial` 브랜치에 남긴다(아래 "시각 인증과 앵커"). 화면 위에는 "시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다" 띠가 뜬다(서버가 알려 주는 모드로).
+장부는 하나다(docs/36 11-6). 새 장부는 시험 단계로 시작하고, 정식 시작은 장부 안의 일정 바꾸기 한 줄이라 시험 회차도 같은 사슬에 영원히 남는다. 화면은 시험 단계 회차를 "시험 n회", 정식 단계 첫 회차부터 "정식 1회"로 보이고, 시험 단계 동안 "시험 운영 중" 띠를 띄운다(서버가 알려 주는 지금 회차 단계로). 봉인 시각 인증은 단계와 상관없이 받고, GitHub 앵커는 처음 일정표를 main의 `genesis.txt`에, 시험 회차를 `trial` 브랜치에 남긴다(아래 "시각 인증과 앵커").
 
 ```sh
 # .env
-STARDRAW_MODE=trial
-STARDRAW_DATA=data-trial
-STARDRAW_ROUND_SECONDS=600       # 시험 회차 길이(기본 10분, 10분보다 짧을 수 없다)
+STARDRAW_ROUND_SECONDS=600       # 시험 단계 회차 길이(기본 10분, 10분보다 짧을 수 없다). 새 장부를 만들 때만 쓴다
 # STARDRAW_EPOCH=                 # 비우면 띄운 뒤 첫 맞춘 마감(10분 회차면 다음 x:05·x:15…)이 1회차 마감
 ```
 
 ```sh
 docker compose up -d
-curl -s https://game.byb.kr/stardraw-api/api/state   # "mode":"trial"
+curl -s https://game.byb.kr/stardraw-api/api/state   # "mode":"trial", "liveFrom":null
 ```
 
-시험 중 확인할 것: 응모(패스키 만들기), 마감·봉인, drand 추첨, 결과 봉투, 내 응모, 다른 기기에서 내 응모권 찾기, 당첨자 확인(별 세 개), 장부 검사, 백업.
+- 장부(데이터 폴더 `data/`)는 다시 시작하지 않는다. 처음 띄울 때 앵커 저장소 main에 남긴 `genesis.txt`와 다른 장부로 띄우면 앵커가 거절하고(서버 기록에 `처음 일정표 앵커를 남기지 못해…`), 장부 검사도 "장부를 다시 시작했다"로 실패한다.
 
-## 2. 정식 시작
+시험 중 확인할 것: 응모(패스키 만들기), 마감·봉인·시각 인증, drand 추첨, 결과 봉투, 내 응모, 다른 기기에서 내 응모권 찾기, 당첨자 확인(별 세 개), 장부 검사(검증하기 페이지), 앵커 커밋, 백업.
 
-시험이 잘 되면 시험 장부를 버리고 정식 장부를 새로 만든다. **시험 장부의 패스키 등록(공개 열쇠·패스키 번호)만 옮기고**, 응모권·회차·확인 요청은 버린다. 옮긴 사람은 정식 1회차부터 다시 등록 계산 없이 응모할 수 있다(패스키는 기기에 그대로 있다). 원시 열쇠(터미널) 등록은 옮기지 않는다.
+## 2. 정식 시작(정식 단계 예약)
+
+서버를 멈추지 않고 예약 명령 하나를 돌린다. 정식 첫 회차는 **예약이 실리는 기록의 마감 + 24시간 뒤**에 열리는 회차부터이고(규칙의 하루 예고), 매시 정각 추첨이 되게 x:55에 시작해야 한다.
 
 ```sh
 cd ~/servers/byb.kr/apps/stardraw
-# 1) 시험 장부를 마지막으로 떠 두고 시험 서버를 내린다
-docker compose exec -T stardraw node server.mjs backup /data/backup/trial-final.sqlite
-docker compose down
-
-# 2) 정식 장부를 만든다(빈 data-live 폴더에, 정식 1회차 시작 시각은 지금보다 뒤)
-#    매시 정각 추첨 · 55분 마감: 1회차 시작은 x:55여야 한다(아니면 거절).
-#    예: 08:55 시작 → 1회차 마감 09:55, 추첨 10:00
-mkdir -p data-live && cp data-trial/backup/trial-final.sqlite data-live/
-STARDRAW_DATA=data-live docker compose run --rm -e STARDRAW_MODE=live stardraw \
-  node server.mjs start-live --epoch 2026-11-02T08:55:00+09:00 \
-  --carry-registrations /data/trial-final.sqlite
-#   → "정식 장부를 만들었다: 1회차 …, 패스키 등록 N개를 옮김, genesis …"
-
-# 3) .env를 정식으로 바꿔 띄운다
-#    STARDRAW_MODE=live
-#    STARDRAW_DATA=data-live
-#    (시각 인증·앵커는 compose 기본값 그대로. 앵커 브랜치는 정식이면 main)
-docker compose up -d
-curl -s https://game.byb.kr/stardraw-api/api/state   # "mode":"live"
-curl -s https://game.byb.kr/stardraw-api/ledger/genesis.json   # carried: 옮긴 등록 목록
+# 예: 11월 2일 08:55 시작 → 정식 1회 마감 09:55, 추첨 10:00
+docker compose exec -T stardraw node server.mjs schedule-live --from 2026-11-02T08:55:00+09:00
+#   → "정식 단계를 예약했다: 사슬 N회차(…) 가 정식 1회, 60분 회차. M회차 기록에 실린다"
 ```
 
-- `start-live`는 이미 장부가 있는 폴더, 시험 장부가 아닌 백업, 지난 시각을 거절한다.
-- 정식 회차 길이는 1시간이다(`--round-seconds`로 바꿀 수 있다).
-- 화면은 장부를 처음부터 다시 받는다. 시험 때 기기에 남은 내 응모권 목록은 정식 장부에 없는 회차라 결과가 나오지 않는다(화면에서 정리할지는 따로 정한다).
-- `data-trial/`은 지워도 되지만, 정식이 자리 잡을 때까지 서버 밖에 하나 보관해 둔다.
+- 명령은 규칙을 먼저 확인하고(시험 단계 장부인지, 이미 정식 단계·예약이 있는지, x:55인지, 시험 회차가 열리는 시각인지, 24시간 예고) 맞지 않으면 아무것도 바꾸지 않는다.
+- 서버는 다음 회차 기록을 닫을 때 예약을 싣는다(서버 기록 `M회차 기록에 일정 바꾸기를 실었다`). 그 뒤 `/api/state`의 `liveFrom`이 정식 첫 사슬 회차가 된다. 그사이 서버가 멈춰 기록이 늦게 닫혀 24시간에 못 미치면 싣지 않고 지우므로 다시 예약한다.
+- 정식 단계 회차부터 앵커 브랜치는 `main`이다. 시험 회차와 응모·패스키 등록은 그대로 이어진다(옮길 것이 없다).
+
+## 지금 장부를 한 번 새로 시작하기(2026-10-30, 장부 형식이 바뀐 때 한 번만)
+
+이어지는 장부 형식(일정표 줄의 단계 바이트)과 시각 인증·앵커는 이 판부터 들어갔다. 그 전에 띄운 시험 장부(`data-trial/`, 20분 회차)는 형식이 달라 새 서버가 이어 쓸 수 없으므로, 이번 한 번만 새로 시작한다. 앵커 저장소에는 아직 `genesis.txt`가 없으니 새 장부가 첫 장부가 된다.
+
+```sh
+cd ~/servers/byb.kr/apps/stardraw
+docker compose exec -T stardraw node server.mjs backup /data/backup/old-trial-final.sqlite   # 옛 장부 보관
+docker compose down
+# 이미지를 이 판으로 올리고(.env의 STARDRAW_MODE·STARDRAW_DATA 줄은 지운다), 새 폴더 data/로 띄운다
+docker compose pull && docker compose up -d
+docker compose logs stardraw | head   # 시각 인증·앵커 줄, 1회차 시작 시각 확인
+```
+
+- 옛 `data-trial/`은 서버 밖에 보관한다(공개 장부 파일도 함께). 화면은 새 장부를 처음부터 받는다. 옛 장부 기기에 남은 내 응모권은 결과가 나오지 않는다.
 
 ## 시각 인증과 앵커
 
@@ -93,7 +90,7 @@ ${EDITOR:-vi} /home/ybbarng/secrets/stardraw-anchor.env   # STARDRAW_ANCHOR_TOKE
 
 ## 백업
 
-- 공개 장부 파일(`data-*/ledger/`)은 누구나 내려받고 정식은 앵커에도 해시가 남는다. 그래도 마감 전 응모권, 열쇠 등록, 당첨자 확인 전달은 SQLite에만 있다.
+- 공개 장부 파일(`data/ledger/`)은 누구나 내려받고 정식은 앵커에도 해시가 남는다. 그래도 마감 전 응모권, 열쇠 등록, 당첨자 확인 전달은 SQLite에만 있다.
 - 서버를 멈추지 않고 뜨기(Node 내장 SQLite backup):
 
 ```sh
@@ -106,7 +103,7 @@ docker compose exec -T stardraw node server.mjs backup /data/backup/stardraw-$(d
 ## 사용자가 정할 것
 
 1. 시험 운영을 언제 시작할지, 시험 회차 길이(기본 10분)
-2. 정식 1회차 시작 시각(`start-live --epoch`, x:55). 처음 정하면 장부에 묶여 바꿀 수 없다
+2. 정식 시작 시각(`schedule-live --from`, x:55, 하루 전까지 예약). 기록에 실리면 바꿀 수 없다
 3. 봉인 시각 인증: 공개 기관 DigiCert·Sectigo, 한 곳 이상으로 정함(2026-10-30). 더 엄격히 하려면 `STARDRAW_TSA_MIN=2`
 4. 앵커 저장소: `ybbarng/stardraw-ledger`(공개)로 정함. 토큰은 `/home/ybbarng/secrets/stardraw-anchor.env`
 5. 서명 열쇠 보관(서버의 파일 + 비밀번호 관리 앱 백업)

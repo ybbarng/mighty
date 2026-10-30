@@ -122,7 +122,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 머클 루트(응모권)와 등록 루트는 둘 다 RFC 6962 방식, id 사전 순이다.
 - **봉인 값** = `taggedHash("stardraw/seal/v1", round ‖ count ‖ merkleRoot ‖ registrationCount ‖ registrationRoot)`. 마감 직후 시각 인증을 받는 값이다(토큰에는 SHA-256(봉인 값)이 실린다). 등록도 drand 전에 고정돼, 결과를 본 뒤 당첨 응모권의 등록을 빼서 무효로 만들 수 없다.
 - 기록 해시 = `taggedHash("stardraw/record/v1", 기록)`. 다음 회차의 `prev`이자 문제 값이 된다.
-- 1회차의 prev는 `taggedHash("stardraw/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다. 시험 장부는 꼬리표가 `stardraw/genesis-trial/v1`이고, 옮겨 온 등록이 있으면 `count ‖ root`가 붙는다(11-6).
+- 1회차의 prev는 `taggedHash("stardraw/genesis/v1", 처음 일정표)`라 처음 일정표도 체인에 묶인다. 일정표 줄마다 단계(phase)가 실린다(11-6).
 - 무효 회차는 번호 0 여섯 개, 보너스 0, 당첨 없음, drandSig 빈 값이다.
 
 **별명**(선택): 지난 회차 당첨 응모권의 열쇠로 `"stardraw/nickname/v1" ‖ 0x00 ‖ round ‖ 응모권 id ‖ 별명`에 서명한다. NFC로 맞춘 1~20자, 보이지 않는 글자 없음, 응모권마다 한 번. 그 회차가 닫힌 뒤에 내므로 다음 회차 기록에 들어가고, 기록 안에서는 응모권 id 순이다.
@@ -401,20 +401,31 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 5. 터미널 도구.
 6. 보안 배우기 페이지(다음 차례).
 
-### 11-6. 시험 운영과 정식 시작(2026-10-29 사용자: 먼저 시험 배포 → 잘 되면 장부를 지우고 정식 시작)
+### 11-6. 시험 운영과 정식 시작: 이어지는 장부(2026-10-30 사용자: 장부를 새로 만들지 않고 하나의 사슬을 끝까지 잇는다)
 
-**시험 장부**
-- 서버 설정 `STARDRAW_MODE=trial`(기본). 처음 일정표에 `ledger: "trial"` 표시가 붙고, genesis 해시 꼬리표가 `stardraw/genesis-trial/v1`이다(정식은 `stardraw/genesis/v1`). 1회차 문제 값부터 달라 시험 응모권·등록·확인 증명은 정식 장부에서 쓸 수 없다.
-- 공개 시각 인증은 정식과 똑같이 받는다(검사기 화면이 시험 장부로도 시각 증명을 확인할 수 있게). GitHub 앵커는 `trial` 브랜치에 남긴다(11-7). 시험 회차 길이는 `STARDRAW_ROUND_SECONDS`(기본 10분, 최소 10분 규칙 그대로). `STARDRAW_EPOCH`을 비우면 띄운 뒤 첫 맞춘 마감(1시간이면 다음 x:55, 10분이면 다음 x:05·x:15…)이 1회차 마감이다.
-- `/api/state`의 `mode`로 화면이 "시험 운영 중 · 응모 기록은 정식 시작 때 지워집니다" 띠를 띄운다.
-- 서버는 데이터 폴더의 장부 종류(처음 일정표의 시험 표시)와 설정의 모드가 다르면 뜨지 않는다. 정식 모드는 `start-live`로 만든 장부가 있어야 뜬다.
+처음에는 "시험 장부를 지우고 정식 장부를 새로 만든다(패스키 등록만 옮김, `start-live`)"로 정했다가 2026-10-30 바꿨다. 시험 회차도 영원히 남고, 정식 시작은 장부 안의 일정 바꾸기다. `start-live`와 등록 옮기기(`carried`)는 코드·시험·문서에서 지웠다.
 
-**정식 시작: 시험 장부의 패스키 등록만 옮긴다**
-- `node server.mjs start-live --epoch <ISO> --carry-registrations <시험 장부 백업>`: 빈 데이터 폴더에 정식 장부를 만든다. 시험 장부 백업(처음 일정표에 시험 표시가 있어야 한다)에서 **패스키 등록**(공개 열쇠·패스키 번호·등록 값)만 꺼내고, 응모권·회차·확인 요청은 버린다. 원시 열쇠(터미널) 등록은 옮기지 않는다. 1회차 시작은 지금보다 뒤여야 하고, 추첨이 정각에 오게 맞춰야 한다(1시간 회차면 x:55 시작. 예: `--epoch 2026-11-02T08:55:00+09:00` → 1회차 마감 09:55, 추첨 10:00).
-- 옮긴 등록은 **처음 일정표에 묶는다**: 일정표에 `carried: { count, root }`(등록 id를 id 순으로 정렬한 RFC 6962 머클 루트, hex)를 넣고, genesis 해시 끝에 `count(u32) ‖ root(32)`를 붙인다(옮긴 등록이 없으면 예전과 같은 해시). 그래서 옮긴 목록은 1회차 문제 값에 묶여, 어느 drand 값보다도 먼저 고정된다. 운영자가 나중에 등록을 끼워 넣거나 뺄 수 없다.
-- 목록은 장부의 `genesis.json`에 `carried`(encodeRegistration base64url, id 순)로 공개한다. 서버는 0회차 등록으로 저장해, 옮긴 열쇠는 정식 1회차부터 등록 없이 응모한다.
-- **검사 규칙**(`verifyLedger`의 `carried` 옵션): 목록의 수·머클 루트가 처음 일정표의 `carried`와 같아야 하고, 정렬·형식(`checkRegistration`)·같은 열쇠/패스키 번호 겹침을 본다. **작업 증명은 면제**한다(시험 장부에서 그 회차 문제 값으로 치렀고, 시험 문제 값은 정식 장부에 없다). 받아들인 등록은 1회차 전에 등록된 열쇠로 친다. 처음 일정표에 `carried`가 없는데 목록을 주거나, 있는데 목록이 다르면 문제로 남긴다. 시험 장부에는 `carried`를 둘 수 없다.
-- 절차와 명령은 `deploy/stardraw/README.md`. 서버 이미지는 `image.yml`의 `server-image`(변수 `STARDRAW_SERVER_IMAGE=true`일 때만, 배포는 손으로).
+**단계(phase)**
+- 일정표 한 줄(`ScheduleEntry`)에 `phase: "trial" | "live"`를 둔다. 줄 바이트 끝에 u8(0 없음, 1 시험, 2 정식)로 실려 genesis 해시와 기록 해시에 묶인다.
+- 서버의 새 장부는 시험 단계 한 줄로 시작한다(`STARDRAW_ROUND_SECONDS`, 기본 10분. `STARDRAW_EPOCH`을 비우면 띄운 뒤 첫 맞춘 마감이 1회차 마감).
+- 정식 시작 = 일정 바꾸기 한 줄 추가(`fromRound`, length 3600, closeMargin 5, 작업 증명 목표값, `phase: "live"`). 기존 "그 기록 마감 + 24시간 뒤에 시작하는 회차부터" 규칙을 그대로 따라 하루 전에 장부에 예고된다.
+- 규칙(`checkSchedule`·`checkScheduleChange`): 단계는 모든 줄에 있거나(서버 장부) 모두 없다(기기 안 연습 장부). 정식 단계 뒤로 시험 단계를 둘 수 없다.
+- 서버는 `STARDRAW_MODE` 없이 장부의 지금 단계를 따른다. `/api/state`의 `mode`(지금 회차 단계)로 화면이 시험 띠를 띄우고, `liveFrom`(정식 첫 사슬 회차, 없으면 null)을 함께 준다. 시각 인증은 단계와 상관없이 켠다.
+
+**보이는 회차 번호**
+- core `displayRound(schedule, round)` 하나로 화면·검사기·검증 페이지가 같이 쓴다: 정식 단계 첫 회차가 "정식 1회", 그 앞은 "시험 n회", 단계가 없으면 "n회". 화면은 연습 장부에서 예전처럼 "제 n회"를 보인다(`round-label.ts`).
+- 데이터의 기준은 늘 사슬 회차 번호(`round`)다: 기록, 공유 주소(`/stardraw/ticket#<회차>-…`), 앵커 경로.
+- 화면의 원격 장부(`RemoteLedger.schedule`)는 처음 일정표에 닫힌 기록의 일정 바꾸기를 모두 반영한 일정표다(정식 단계부터 회차 길이가 1시간으로 바뀐다).
+
+**다시 시작 막기**
+- 서버는 장부를 처음 만들 때 앵커 저장소 main 브랜치에 `genesis.txt`(장부 id, genesis 해시, epoch)를 한 번 커밋한다. 이미 다른 내용이 있으면 덮어쓰지 않고 1분마다 다시 시도하며 기록을 남긴다(사람이 봐야 한다).
+- 검사기(`verifyLedger`의 `genesisAnchorVerifier`, anchor.ts `githubGenesisVerifier`)는 장부의 처음 일정표가 그 파일과 같은지 본다. 다르면 "장부를 다시 시작했다"로 실패, 없으면 건너뜀. 규칙 "이 장부는 다시 시작하지 않는다"는 검증 페이지에도 적었다.
+- 회차 앵커 브랜치는 그 회차의 단계로 정한다(시험 `trial`, 정식 `main`, `anchorBranch`). 검사기도 같은 규칙으로 읽는다.
+
+**정식 예약 명령**
+- `node server.mjs schedule-live --from <ISO, x:55> [--round-seconds 3600]`: 돌고 있는 서버의 데이터 폴더에 예약만 넣는다(`pendingChange`). 명령은 먼저 규칙을 확인한다: 시험 단계 장부인지, 이미 정식 단계가 있거나 예약이 있는지, 시작이 정각 추첨에 맞는지(1시간이면 x:55), 시험 회차가 열리는 시각인지, 다음에 닫히는 기록(지금 닫힌 기록 수 + 1)의 마감 + 24시간보다 뒤인지.
+- 서버는 다음 회차 기록을 닫을 때 예약을 기록의 `scheduleChanges`에 싣고 지운다. 그사이 늦어져 24시간 규칙에 맞지 않으면 싣지 않고 지운 뒤 기록을 남긴다(다시 예약해야 한다).
+- 절차는 `deploy/stardraw/README.md`.
 
 ### 11-7. 봉인 시각 증명과 앵커(2026-10-30)
 
@@ -432,7 +443,7 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - 회차가 닫힐 때마다 파일 하나를 Contents API로 커밋한다: `ledgers/{장부 id}/{회차 6자리}.txt`. 장부 id는 genesis 해시 앞 16자리라 시험 장부를 새로 시작해도 섞이지 않는다.
 - 본문: `stardraw-anchor v1` / `ledger <장부 id>` / `round <회차>` / `record <기록 해시 hex>` / `seal <봉인 증거 요약>`(`tsa:digicert@<genTime>,sectigo@<genTime>`, 없으면 `-`).
 - 커밋 메시지: `하늘의 별 따기 {회차}회 기록 {기록 해시 앞 12자리} (장부 {장부 id})`.
-- 브랜치(`STARDRAW_ANCHOR_BRANCH`) 기본: 시험 운영 `trial`, 정식 `main`.
+- 브랜치는 회차의 단계로 정한다: 시험 단계 `trial`, 정식 단계 `main`(`anchorBranch`). 처음 일정표 파일 `genesis.txt`는 늘 `main`(11-6 "다시 시작 막기").
 - 차례대로 남기고, 실패하면 1분 뒤 그 회차부터 다시 보낸다. 회차 진행은 막지 않는다. 같은 경로에 같은 내용이 이미 있으면(응답만 잃은 경우) 성공으로, 다른 내용이면 멈추고 기록을 남긴다(사람이 봐야 한다).
 - 검사기(`githubAnchorVerifier`, `verifyLedger`의 `anchorVerifier`): raw.githubusercontent.com에서 회차 파일을 읽어 기록 해시가 같은지 본다. 파일이 없으면 건너뜀.
 - 토큰은 서버의 `env_file`(`/home/ybbarng/secrets/stardraw-anchor.env`, `required: false`)로만 넣고 로그·장부 어디에도 찍지 않는다. 권한은 이 저장소 Contents 쓰기만.
