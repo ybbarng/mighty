@@ -489,7 +489,9 @@ await stardraw.vectors()`}</Code>
             >
               packages/stardraw-cli
             </a>
-            , Node 24와 pnpm). 앵커는 GitHub에서 직접 읽습니다.
+            , Node 24와 pnpm). 앵커는 GitHub에서 직접 읽습니다. 터미널 도구는
+            검사 전용이라 열쇠를 다루지 않고, 응모와 당첨 확인은 브라우저
+            패스키로만 합니다.
           </p>
           <Code>{`git clone https://github.com/ybbarng/mighty && cd mighty
 pnpm install
@@ -564,8 +566,8 @@ pnpm stardraw-verify site https://game.byb.kr --build apps/web/out`}</Code>
               이 페이지와 화면 코드는 운영자가 내줍니다. 해시 비교로 내가 받은
               파일이 공개 커밋에서 나왔는지는 알 수 있지만, 운영자가 사람마다
               또는 때마다 다른 파일을 내주면 내가 비교한 그때의 파일만
-              확인됩니다. 패스키 서명은 여전히 화면 코드가 시키고, 터미널로
-              응모·증명하는 명령은 아직 없습니다.
+              확인됩니다. 응모와 당첨 확인은 브라우저 패스키로만 하므로 패스키
+              서명은 늘 화면 코드가 시킵니다.
             </li>
             <li>
               해시 목록은 지금 사이트와 GitHub Actions 기록에만

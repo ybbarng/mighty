@@ -2,7 +2,7 @@ import { equalBytes, sha256 } from "./bytes";
 
 /**
  * 열쇠는 ECDSA P-256(docs/36 4절). 브라우저·Node 모두 WebCrypto(`crypto.subtle`)로 다룬다.
- * 브라우저는 내보낼 수 없는 열쇠를 IndexedDB에 두고, 터미널은 열쇠 파일에 둔다(이 패키지 밖).
+ * 원시 열쇠는 연습 장부·데모·시험이 쓴다. 실제 응모는 브라우저 패스키(인증기 안 열쇠)로만 한다.
  * 서명은 r‖s 64바이트(IEEE P1363), 공개 열쇠는 압축하지 않은 65바이트다.
  */
 

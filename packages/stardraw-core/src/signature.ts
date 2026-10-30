@@ -11,7 +11,8 @@ import { SIGNATURE_LENGTH, verifySignature } from "./keys";
 
 /**
  * 응모자 서명(응모권·당첨 증명·별명)은 두 가지 모양이다(docs/36 11-2).
- * 1. 원시 P-256 서명(r‖s 64바이트): 터미널 열쇠 파일, 패스키를 못 쓰는 브라우저의 기기 안 열쇠
+ * 1. 원시 P-256 서명(r‖s 64바이트): 연습 장부·데모의 기기 안 열쇠. 실제 게임 화면은 쓰지 않는다
+ *    (응모는 브라우저 패스키로만, 터미널 도구는 검사 전용)
  * 2. 패스키(WebAuthn ES256) 단언: 인증기가 `authenticatorData ‖ SHA-256(clientDataJSON)`에
  *    DER 서명한다. clientDataJSON의 challenge가 서명할 내용의 해시(SHA-256)라서,
  *    결국 같은 내용에 대한 서명이 된다.
@@ -204,7 +205,7 @@ export function derToP1363(der: Uint8Array): Uint8Array | null {
   return at === der.length ? out : null;
 }
 
-/** r‖s 64바이트 → DER. 시험의 가짜 인증기와 터미널이 쓴다 */
+/** r‖s 64바이트 → DER. 시험의 가짜 인증기와 배우기 흉내 인증기가 쓴다 */
 export function p1363ToDer(raw: Uint8Array): Uint8Array {
   if (raw.length !== 64) throw new Error("서명은 64바이트");
   const int = (b: Uint8Array) => {

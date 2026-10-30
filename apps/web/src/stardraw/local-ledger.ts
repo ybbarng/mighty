@@ -119,7 +119,7 @@ interface Saved {
 export type LedgerPhase =
   /** 응모를 받는다 */
   | "open"
-  /** 화면·터미널 마감(마감 여유) 뒤, 서버 마감 전 */
+  /** 화면 마감(마감 여유) 뒤, 서버 마감 전 */
   | "closing"
   /** 앞 회차 추첨이 끝나야 이번 회차 문제 값이 나온다(마감 5분 뒤) */
   | "waiting";

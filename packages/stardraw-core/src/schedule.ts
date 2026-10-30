@@ -11,7 +11,7 @@ export interface ScheduleEntry {
   fromRound: number;
   /** 회차 길이(초) */
   length: number;
-  /** 마감 여유(초). 화면·터미널은 closesAt - closeMargin부터 응모를 막는다 */
+  /** 마감 여유(초). 화면은 closesAt - closeMargin부터 응모를 막는다 */
   closeMargin: number;
   /** 작업 증명 목표값(argon 결과 앞 4바이트가 이것보다 작아야 한다, pow.ts) */
   powTarget: number;
@@ -42,7 +42,7 @@ export interface RoundTimes {
   round: number;
   opensAt: number;
   closesAt: number;
-  /** 화면·터미널이 응모를 막는 시각 */
+  /** 화면이 응모를 막는 시각 */
   entryDeadline: number;
   entry: ScheduleEntry;
 }
