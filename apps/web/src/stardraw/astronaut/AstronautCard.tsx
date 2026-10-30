@@ -204,7 +204,8 @@ export function AstronautCard({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="w-full max-w-md [perspective:900px]">
+      {/* 카드 너비가 cqw의 기준(카드 자신의 container-type은 자기 모서리에 쓰이지 않고, 없으면 화면 너비가 기준이 된다) */}
+      <div className="w-full max-w-md [container-type:inline-size] [perspective:900px]">
         <div
           className="sd-idcard-flip relative"
           data-flipped={flipped ? "" : undefined}
@@ -219,7 +220,7 @@ export function AstronautCard({
             data-owner={owner}
             inert={flipped}
             className={cn(
-              "sd-idcard sd-idcard-face sd-idcard-sweep relative aspect-[1.586] w-full cursor-pointer select-none overflow-hidden rounded-[4.5cqw] text-white outline-none focus-visible:ring-2 focus-visible:ring-sky-300",
+              "sd-idcard sd-idcard-face sd-idcard-sweep relative aspect-[1.586] w-full cursor-pointer select-none overflow-hidden rounded-[3.7cqw] text-white outline-none focus-visible:ring-2 focus-visible:ring-sky-300",
             )}
             onPointerDown={(e) => {
               press.current = {
@@ -386,7 +387,7 @@ export function AstronautCard({
               inert={!flipped}
               aria-label="우주인 등록증 뒷면"
               role="group"
-              className="sd-idcard sd-idcard-face sd-idcard-back absolute inset-0 select-none overflow-hidden rounded-[4.5cqw] text-white"
+              className="sd-idcard sd-idcard-face sd-idcard-back absolute inset-0 select-none overflow-hidden rounded-[3.7cqw] text-white"
               onPointerDown={(e) => {
                 press.current = {
                   x: e.clientX,
