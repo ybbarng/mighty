@@ -21,11 +21,14 @@ import type { Relay } from "./relay";
  *   GET  /api/keys/:pub                 이 공개 열쇠가 등록돼 있는지와 등록 회차 { registered, round }
  *   GET  /api/passkeys/:credentialId    패스키 번호로 공개 열쇠 찾기(다른 기기에서 내 패스키 찾기)
  *   POST /api/enter                     { ticket, registration? } → { receipt, receivedAt }
- *   POST /api/confirm                   당첨자 확인 요청 만들기 → { id, request, checkerKey, answerBy, token }
+ *   POST /api/confirm/invites           당첨자: { invite }(서명한 확인 링크 초대) → { expiresAt }
+ *   POST /api/confirm/peek              확인하는 사람: { token } → { state: "open", round, ticketId, expiresAt } | { state: "used" }
+ *   POST /api/confirm/start             { token, checkerKey } → { id, request, checkerKey, answerBy, invitedAt, reportKey }
  *   POST /api/confirm/open              { ticketIds } → 열린 요청들
  *   GET  /api/confirm/:id               { answer, outcome }
  *   POST /api/confirm/:id/answer        { claim, winnerKey } | { declined: true }
- *   POST /api/confirm/:id/report        { token, outcome }
+ *   POST /api/confirm/:id/report        { reportKey, outcome }
+ * 확인 링크 토큰은 주소에 넣지 않고 본문으로만 받는다(서버 로그에 남지 않게).
  *   GET  /ledger/...                    공개 장부 파일(nginx가 대신 내도 된다)
  * 바이트는 모두 base64url이다. 화면과 같은 출처라 CORS가 필요 없고, 개발용 출처만 허용 목록에 둔다.
  */
@@ -175,17 +178,34 @@ async function handle(
     });
   }
 
-  if (method === "POST" && path === "/api/confirm") {
+  if (method === "POST" && path === "/api/confirm/invites") {
     const body = await readJson(req);
-    if (typeof body.round !== "number" || !Number.isInteger(body.round))
-      throw new EntryError("회차가 없습니다");
     return send(
       res,
       200,
-      relay.create({
-        round: body.round,
-        ticketId: str(body.ticketId, "응모권 id"),
-        requester: str(body.requester, "확인하는 분 이름"),
+      await relay.createInvite({
+        invite: str(body.invite, "확인 링크"),
+        ip: clientIp(req, o.trustProxy),
+      }),
+    );
+  }
+
+  if (method === "POST" && path === "/api/confirm/peek") {
+    const body = await readJson(req);
+    return send(
+      res,
+      200,
+      relay.peek(str(body.token, "링크"), clientIp(req, o.trustProxy)),
+    );
+  }
+
+  if (method === "POST" && path === "/api/confirm/start") {
+    const body = await readJson(req);
+    return send(
+      res,
+      200,
+      relay.start({
+        token: str(body.token, "링크"),
         checkerKey: str(body.checkerKey, "임시 공개 열쇠"),
         ip: clientIp(req, o.trustProxy),
       }),
@@ -223,7 +243,7 @@ async function handle(
     }
     if (method === "POST" && action === "/report") {
       const body = await readJson(req);
-      relay.report(id, str(body.token, "확인 표"), body.outcome);
+      relay.report(id, str(body.reportKey, "결과 열쇠"), body.outcome);
       return send(res, 200, { ok: true });
     }
   }

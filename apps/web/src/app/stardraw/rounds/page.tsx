@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#070d19" };
 
-/** 지난 회차. 회차 하나는 #12, 추첨 보기는 #draw-12, 당첨자 확인은 #check-12-1 */
+/** 지난 회차. 회차 하나는 #12, 추첨 보기는 #draw-12 */
 export default function StardrawRoundsPage() {
   return <StardrawApp page="rounds" />;
 }

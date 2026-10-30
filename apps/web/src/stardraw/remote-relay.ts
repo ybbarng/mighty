@@ -9,12 +9,14 @@ import type {
   ConfirmAnswer,
   ConfirmOutcome,
   ConfirmRelay,
+  InvitePeek,
   OpenRequest,
 } from "./confirm-relay";
 
 /**
  * 당첨자 확인 전달의 서버 판(apps/stardraw-server `/api/confirm`). `LocalConfirmRelay`와 같은 인터페이스다.
- * 서버는 서명이 맞는 응답만 받고, 결과는 요청을 만든 기기만 올린다(만들 때 받은 표를 이 기기에 둔다).
+ * 서버는 서명이 맞는 초대·응답만 받고, 결과는 요청을 붙인 기기만 올린다(붙일 때 받은 결과 열쇠를 이 기기에 둔다).
+ * 확인 링크 토큰은 주소가 아니라 본문으로만 보낸다(서버 로그에 남지 않게).
  * 기다리는 쪽은 `Clock`으로 짧게 되묻는다(시험은 ManualClock).
  */
 
@@ -26,6 +28,7 @@ interface OpenJson {
   request: string;
   checkerKey: string;
   answerBy: number;
+  invitedAt: number;
 }
 
 export interface TokenStore {
@@ -61,7 +64,18 @@ const toOpen = (o: OpenJson): OpenRequest => ({
   request: decodeConfirmRequest(o.request),
   checkerKey: fromBase64Url(o.checkerKey),
   answerBy: o.answerBy,
+  invitedAt: o.invitedAt,
 });
+
+/** 서버가 낸 오류(상태 번호를 함께 둔다) */
+class RelayError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 export class RemoteConfirmRelay implements ConfirmRelay {
   private readonly f: typeof fetch;
@@ -88,26 +102,41 @@ export class RemoteConfirmRelay implements ConfirmRelay {
     });
     const json = (await res.json().catch(() => ({}))) as T & { error?: string };
     if (!res.ok)
-      throw new Error(json.error ?? `확인 전달에 실패했습니다(${res.status})`);
+      throw new RelayError(
+        json.error ?? `확인 전달에 실패했습니다(${res.status})`,
+        res.status,
+      );
     return json;
   }
 
-  async create(
-    round: number,
-    ticketId: Uint8Array,
-    requester: string,
-    checkerKey: Uint8Array,
-  ): Promise<OpenRequest> {
-    const created = await this.call<OpenJson & { token: string }>(
-      "/api/confirm",
-      {
-        round,
-        ticketId: toBase64Url(ticketId),
-        requester,
-        checkerKey: toBase64Url(checkerKey),
-      },
+  async invite(encoded: string): Promise<{ expiresAt: number }> {
+    return this.call<{ expiresAt: number }>("/api/confirm/invites", {
+      invite: encoded,
+    });
+  }
+
+  async peek(token: string): Promise<InvitePeek> {
+    try {
+      const got = await this.call<
+        | { state: "open"; round: number; ticketId: string; expiresAt: number }
+        | { state: "used" }
+      >("/api/confirm/peek", { token });
+      return got.state === "used"
+        ? got
+        : { ...got, ticketId: fromBase64Url(got.ticketId) };
+    } catch (err) {
+      if (err instanceof RelayError && err.status === 404)
+        return { state: "missing" };
+      throw err;
+    }
+  }
+
+  async start(token: string, checkerKey: Uint8Array): Promise<OpenRequest> {
+    const created = await this.call<OpenJson & { reportKey: string }>(
+      "/api/confirm/start",
+      { token, checkerKey: toBase64Url(checkerKey) },
     );
-    this.tokens.set(created.id, created.token);
+    this.tokens.set(created.id, created.reportKey);
     return toOpen(created);
   }
 
@@ -172,9 +201,9 @@ export class RemoteConfirmRelay implements ConfirmRelay {
   }
 
   async report(id: string, outcome: ConfirmOutcome): Promise<void> {
-    const token = this.tokens.get(id);
-    if (!token) throw new Error("이 확인 요청을 만든 기기가 아닙니다");
-    await this.call(`/api/confirm/${id}/report`, { token, outcome });
+    const reportKey = this.tokens.get(id);
+    if (!reportKey) throw new Error("이 확인 요청을 만든 기기가 아닙니다");
+    await this.call(`/api/confirm/${id}/report`, { reportKey, outcome });
   }
 
   onOutcome(

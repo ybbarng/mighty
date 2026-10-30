@@ -1,30 +1,49 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  CHECK_LINK_REQUESTER,
   type ConfirmRequest,
   decodeConfirmRequest,
+  decodeInvite,
   encodeConfirmRequest,
   equalBytes,
   fromBase64Url,
+  fromHex,
+  inviteTokenHash,
+  isInviteToken,
   newChallengeText,
   toBase64Url,
   toHex,
 } from "@mighty/stardraw-core";
 
 /**
- * 당첨자 확인 전달(docs/36 11-2).
- * 1. 확인하는 분이 지난 회차의 당첨 응모권에서 「당첨자 확인」 → 이름과 임시 ECDH 공개 열쇠를 실어 요청을 만든다
- * 2. 당첨자 기기는 내 응모권에 온 열린 요청을 스스로 찾아 띄우고, [확인]이면 패스키로 서명해
- *    서명과 자기 임시 공개 열쇠를 올린다([거절]도 알린다). 24시간 안에 답해야 한다
- * 3. 확인하는 분의 브라우저가 서명을 장부의 응모권으로 직접 검사하고, 별 세 개를 맞춰 본 뒤 결과를 올린다
- * 서버는 응모권 id로 요청을 찾아 주고 응답·결과를 전달·보관(7일)만 한다. 검사하지 않고, 공개 열쇠만 봐서 별을 모른다.
- * 지금은 서버가 없어 같은 기기 안(localStorage, 탭 사이 storage 이벤트)으로 흉내 낸다.
- * 서버가 생기면 같은 인터페이스(`ConfirmRelay`)로 바꿔 끼운다.
+ * 당첨자 확인 전달(docs/36 11-2, 2026-10-30 "당첨자가 먼저 보내는 확인 링크").
+ * 1. 당첨자가 내 응모의 당첨 응모권에서 「확인 링크 만들기」 → 응모권 열쇠로 서명한 초대를 올린다(`invite`)
+ * 2. 당첨자가 메신저로 링크(…/stardraw/check#토큰)를 보낸다
+ * 3. 확인하는 사람이 링크를 열어(`peek`) 「확인 시작」 → 임시 ECDH 공개 열쇠를 실어 요청을 붙인다(`start`, 초대는 한 번만)
+ * 4. 당첨자 기기는 내 응모권에 온 열린 요청을 스스로 찾아 띄우고, 승인하면 서명과 임시 공개 열쇠를 올린다. 24시간 안에
+ * 5. 확인하는 사람의 브라우저가 서명을 장부의 응모권으로 직접 검사하고, 별 세 개를 맞춰 본 뒤 결과를 올린다
+ * 서버 판은 `RemoteConfirmRelay`, 연습 장부·데모는 같은 기기 안(localStorage, 탭 사이 storage 이벤트)으로 흉내 낸다.
+ * 기기 안 흉내는 초대 서명을 검사하지 않는다(장부를 모른다). 서버는 검사한다.
  */
 
 /** 당첨자가 답할 수 있는 시간(그 뒤 별 누르기에는 기한이 없다) */
 export const CONFIRM_ANSWER_TTL_MS = 24 * 60 * 60 * 1000;
 /** 전달하는 쪽이 요청·응답·결과를 들고 있는 시간 */
 export const CONFIRM_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+/** 확인 링크를 쓸 수 있는 시간 */
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** 응모권 하나에 아직 쓰이지 않은 링크 수 */
+export const OPEN_INVITES_PER_TICKET = 10;
+
+/** 확인 링크를 열어 본 결과 */
+export type InvitePeek =
+  | { state: "open"; round: number; ticketId: Uint8Array; expiresAt: number }
+  | { state: "used" }
+  /** 없거나 기한이 지났다 */
+  | { state: "missing" };
+
+export const USED_LINK =
+  "이미 사용된 링크입니다. 당첨자에게 새 링크를 받으세요";
 
 export type ConfirmOutcome =
   | { ok: true }
@@ -38,6 +57,8 @@ export interface OpenRequest {
   checkerKey: Uint8Array;
   /** 이때까지 답해야 한다 */
   answerBy: number;
+  /** 이 요청이 붙은 확인 링크를 만든 시각 */
+  invitedAt: number;
 }
 
 export type ConfirmAnswer =
@@ -45,13 +66,12 @@ export type ConfirmAnswer =
   | { declined: true };
 
 export interface ConfirmRelay {
-  /** 확인하는 분: 요청을 만든다 */
-  create(
-    round: number,
-    ticketId: Uint8Array,
-    requester: string,
-    checkerKey: Uint8Array,
-  ): Promise<OpenRequest>;
+  /** 당첨자: 서명한 확인 링크 초대(`encodeInvite`)를 올린다 */
+  invite(encoded: string): Promise<{ expiresAt: number }>;
+  /** 확인하는 사람: 링크를 열어 본다(초대를 쓰지 않는다) */
+  peek(token: string): Promise<InvitePeek>;
+  /** 확인하는 사람: 「확인 시작」. 링크에 요청을 붙이고 링크를 닫는다 */
+  start(token: string, checkerKey: Uint8Array): Promise<OpenRequest>;
   /** 당첨자: 내 응모권들에 온, 아직 답하지 않은 요청 */
   openFor(ticketIds: readonly Uint8Array[]): Promise<OpenRequest[]>;
   /** 당첨자: 서명을 올리거나 거절한다. 요청은 한 번만 답할 수 있다 */
@@ -73,6 +93,7 @@ interface Entry {
   request: string;
   checkerKey: string;
   answerBy: number;
+  invitedAt: number;
   keepUntil: number;
   answer?: { claim: string; winnerKey: string } | { declined: true };
   outcome?: ConfirmOutcome;
@@ -110,6 +131,14 @@ export function browserRelayStore(): RelayStore {
       return () => window.removeEventListener("storage", handler);
     },
   };
+}
+
+interface StoredInvite {
+  round: number;
+  ticketHex: string;
+  createdAt: number;
+  expiresAt: number;
+  requestId?: string;
 }
 
 function toAnswer(a: NonNullable<Entry["answer"]>): ConfirmAnswer {
@@ -165,19 +194,94 @@ export class LocalConfirmRelay implements ConfirmRelay {
     return () => this.listeners.delete(listener);
   }
 
-  async create(
-    round: number,
-    ticketId: Uint8Array,
-    requester: string,
-    checkerKey: Uint8Array,
-  ): Promise<OpenRequest> {
+  private inviteKey(token: string): string {
+    return `${this.prefix}i-${toHex(inviteTokenHash(token))}`;
+  }
+
+  private invites(): { key: string; invite: StoredInvite }[] {
+    const out: { key: string; invite: StoredInvite }[] = [];
+    for (const key of this.store.keys()) {
+      if (!key.startsWith(`${this.prefix}i-`)) continue;
+      try {
+        out.push({
+          key,
+          invite: JSON.parse(this.store.get(key) ?? "") as StoredInvite,
+        });
+      } catch {
+        // 깨진 값은 건너뛴다
+      }
+    }
+    return out;
+  }
+
+  async invite(encoded: string): Promise<{ expiresAt: number }> {
+    const invite = decodeInvite(encoded);
+    const now = this.clock.now();
+    const ticketHex = toHex(invite.ticketId);
+    const open = this.invites().filter(
+      ({ invite: i }) =>
+        i.ticketHex === ticketHex && !i.requestId && i.expiresAt > now,
+    );
+    if (open.length >= OPEN_INVITES_PER_TICKET)
+      throw new Error(
+        `아직 쓰이지 않은 확인 링크가 ${OPEN_INVITES_PER_TICKET}개입니다. 그 링크를 먼저 보내 주세요`,
+      );
+    const key = `${this.prefix}i-${toHex(invite.tokenHash)}`;
+    if (this.store.get(key)) throw new Error("이미 만든 확인 링크입니다");
+    const expiresAt = now + INVITE_TTL_MS;
+    const stored: StoredInvite = {
+      round: invite.round,
+      ticketHex,
+      createdAt: now,
+      expiresAt,
+    };
+    this.store.set(key, JSON.stringify(stored));
+    this.emit(key);
+    return { expiresAt };
+  }
+
+  private liveInvite(token: string): StoredInvite | null {
+    if (!isInviteToken(token)) return null;
+    const text = this.store.get(this.inviteKey(token));
+    if (!text) return null;
+    try {
+      const invite = JSON.parse(text) as StoredInvite;
+      return invite.expiresAt > this.clock.now() ? invite : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async peek(token: string): Promise<InvitePeek> {
+    const invite = this.liveInvite(token);
+    if (!invite) return { state: "missing" };
+    if (invite.requestId) return { state: "used" };
+    return {
+      state: "open",
+      round: invite.round,
+      ticketId: fromHex(invite.ticketHex),
+      expiresAt: invite.expiresAt,
+    };
+  }
+
+  async start(token: string, checkerKey: Uint8Array): Promise<OpenRequest> {
+    const invite = this.liveInvite(token);
+    if (!invite)
+      throw new Error(
+        "없는 링크이거나 기한(7일)이 지났습니다. 당첨자에게 새 링크를 받으세요",
+      );
+    if (invite.requestId) throw new Error(USED_LINK);
     const id = toHex(crypto.getRandomValues(new Uint8Array(12)));
+    this.store.set(
+      this.inviteKey(token),
+      JSON.stringify({ ...invite, requestId: id }),
+    );
     const request: ConfirmRequest = {
       // 매번 새 문구라 미리 서명해 두거나 지난 서명을 다시 쓸 수 없다
       challenge: newChallengeText(),
-      requester,
-      round,
-      ticketId,
+      requester: CHECK_LINK_REQUESTER,
+      round: invite.round,
+      ticketId: fromHex(invite.ticketHex),
     };
     const now = this.clock.now();
     const answerBy = now + CONFIRM_ANSWER_TTL_MS;
@@ -185,9 +289,16 @@ export class LocalConfirmRelay implements ConfirmRelay {
       request: encodeConfirmRequest(request),
       checkerKey: toBase64Url(checkerKey),
       answerBy,
+      invitedAt: invite.createdAt,
       keepUntil: now + CONFIRM_KEEP_MS,
     });
-    return { id, request, checkerKey, answerBy };
+    return {
+      id,
+      request,
+      checkerKey,
+      answerBy,
+      invitedAt: invite.createdAt,
+    };
   }
 
   async openFor(ticketIds: readonly Uint8Array[]): Promise<OpenRequest[]> {
@@ -196,6 +307,7 @@ export class LocalConfirmRelay implements ConfirmRelay {
     for (const key of this.store.keys()) {
       if (!key.startsWith(this.prefix)) continue;
       const id = key.slice(this.prefix.length);
+      if (!/^[0-9a-f]{24}$/.test(id)) continue;
       const entry = this.read(id);
       if (!entry || entry.answer || entry.answerBy <= now) continue;
       const request = decodeConfirmRequest(entry.request);
@@ -205,6 +317,7 @@ export class LocalConfirmRelay implements ConfirmRelay {
           request,
           checkerKey: fromBase64Url(entry.checkerKey),
           answerBy: entry.answerBy,
+          invitedAt: entry.invitedAt,
         });
     }
     return out.sort((a, b) => a.answerBy - b.answerBy);

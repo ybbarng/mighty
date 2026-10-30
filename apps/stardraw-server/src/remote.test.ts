@@ -2,10 +2,13 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import {
   displayRound,
+  encodeInvite,
   generateSasKey,
   makeRegistration,
   makeTicket,
+  newInviteToken,
   roundTimes,
+  signInvite,
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
@@ -135,19 +138,26 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     const report = await ledger.verify([ticketId(ticket)]);
     expect(report.problems).toEqual([]);
 
-    // 당첨자 확인: 확인하는 분과 당첨자가 같은 서버 전달을 쓴다
+    // 당첨자 확인: 당첨자가 링크를 만들고, 확인하는 사람이 같은 서버 전달로 연다
     const tokens = new Map<string, string>();
     const relay = new RemoteConfirmRelay(base, rig.clock, {
       get: (id) => tokens.get(id) ?? null,
       set: (id, t) => tokens.set(id, t),
     });
+    const link = newInviteToken();
+    await relay.invite(encodeInvite(await signInvite(me.signer, ticket, link)));
+    expect(await relay.peek(link)).toMatchObject({
+      state: "open",
+      round: 1,
+      ticketId: ticketId(ticket),
+    });
+    expect(await relay.peek(newInviteToken())).toEqual({ state: "missing" });
     const checker = await generateSasKey();
-    const open = await relay.create(
-      1,
-      ticketId(ticket),
-      "Brice",
-      checker.publicKey,
-    );
+    const open = await relay.start(link, checker.publicKey);
+    expect(await relay.peek(link)).toEqual({ state: "used" });
+    await expect(
+      relay.start(link, (await generateSasKey()).publicKey),
+    ).rejects.toThrow("이미 사용된 링크");
     let answer: ConfirmAnswer | null = null;
     const stop = relay.onAnswer(open.id, (a) => {
       answer = a;

@@ -437,6 +437,11 @@ test("화면마다 주소가 있어 뒤로가기는 바로 전 화면, 새로고
   await expect(noPull).toHaveCount(1);
   await page.goBack();
   await expect(noPull).toHaveCount(0);
+  // 확인 링크 주소: 없는 링크면 새 링크를 받으라고 안내한다
+  await page.goto(`/stardraw/check#${"A".repeat(24)}`);
+  await expect(page.locator("[data-check-link='missing']")).toContainText(
+    "없는 링크이거나 기한(7일)이 지났습니다",
+  );
 });
 
 test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
@@ -528,36 +533,72 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   const checker = page.locator("[data-pane='checker']");
   const winner = page.locator("[data-pane='winner']");
 
-  // 1) 가짜 당첨자: 서명이 맞지 않아 빨간불
+  // 0) 당첨자 폰: 카노푸스 우주국 당첨 안내(장부로 기기가 계산) → 확인 링크 만들기(서명 시트 한 번)
+  const notice = winner.locator("[data-win-notice]");
+  await expect(notice).toContainText("카노푸스 우주국 당첨 안내");
+  await expect(notice).toContainText(
+    "1회 1등입니다. 당첨을 알리고 싶은 사람에게 확인 링크를 보내세요",
+  );
+  await notice.getByRole("button", { name: "확인 링크 만들기" }).click();
+  await demoUnlock(page, "sign");
+  await expect(notice.locator("[data-check-url]")).toHaveAttribute(
+    "data-check-url",
+    /\/stardraw\/check#[A-Za-z0-9_-]{24}$/,
+  );
+  await page.screenshot({
+    path: info.outputPath("stardraw-demo-link.png"),
+    fullPage: true,
+  });
+
+  // 1) 확인하는 사람: 링크를 열면 회차·등수가 보이고 「확인 시작」. 링크는 한 번만 쓰인다
   await toChecker();
-  await checker.getByLabel("확인하는 사람 이름").fill("Brice");
+  await expect(
+    checker.getByText("1회 1등 당첨자가 보낸 확인 링크입니다"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("stardraw-demo-link-open.png"),
+    fullPage: true,
+  });
+  await checker.getByRole("button", { name: "확인 시작" }).click();
+  await expect(
+    checker.getByText("당첨자의 승인을 기다리고 있습니다"),
+  ).toBeVisible();
   await checker
-    .getByRole("button", { name: "당첨자 확인 요청 보내기" })
+    .getByRole("button", { name: "다른 사람이 같은 링크를 열면?" })
     .click();
   await expect(
-    checker.getByText("당첨자의 응답을 기다리고 있습니다"),
-  ).toBeVisible();
+    checker.locator("[data-second-checker] [data-link-notice='used']"),
+  ).toContainText("이미 사용된 링크입니다");
+  await page.screenshot({
+    path: info.outputPath("stardraw-demo-link-used.png"),
+    fullPage: true,
+  });
+
+  // 2) 가짜 당첨자: 서명이 맞지 않아 빨간불
   await toWinner();
   await expect(
-    winner.getByText(/Brice님이 1회 1등 당첨 확인을 요청했습니다/),
+    winner.getByText(/보낸 확인 링크로 1회 1등 당첨 확인 요청이 왔습니다/),
   ).toBeVisible();
-  // 이름은 보낸 사람이 적고, 우주국은 전달만 한다
-  await expect(winner).toContainText(
-    "이름은 보낸 분이 직접 적은 것입니다 · 전달: 카노푸스 우주국",
-  );
+  // 우주국은 전달만 한다
+  await expect(winner).toContainText("에 만든 링크 · 전달: 카노푸스 우주국");
   await winner.getByRole("button", { name: "가짜 당첨자로 답하기" }).click();
   await toChecker();
-  await expect(checker.locator("[data-status='failed']")).toContainText(
+  await expect(checker.locator("[data-verdict='fail']").first()).toContainText(
     "본인 확인에 실패했습니다",
   );
   await expect(checker).toContainText("그 응모권을 낸 열쇠의 서명이 아닙니다");
 
-  // 2) 새로 요청하면 진짜 당첨자가 서명하고 별 세 개를 받는다
-  await checker.getByRole("button", { name: "새로 요청하기" }).click();
-  await expect(checker.getByLabel("확인하는 사람 이름")).toHaveValue("Brice");
-  await checker
-    .getByRole("button", { name: "당첨자 확인 요청 보내기" })
+  // 3) 새 링크를 보내면 진짜 당첨자가 승인하고 별 세 개를 받는다
+  await toWinner();
+  await notice
+    .getByRole("button", { name: "다른 사람에게 보낼 새 링크" })
     .click();
+  await demoUnlock(page, "sign");
+  await toChecker();
+  await checker.getByRole("button", { name: "확인 시작" }).click();
+  await expect(
+    checker.getByText("당첨자의 승인을 기다리고 있습니다"),
+  ).toBeVisible();
   await toWinner();
   // 「등록증으로 승인」: 내 등록증이 나타나 확인을 받고 별 세 개가 빛난다
   await winner.getByRole("button", { name: "등록증으로 승인" }).click();
@@ -583,12 +624,12 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
   // 3) 확인하는 사람: 일부러 차례를 바꿔 한 번 틀리고, 맞게 누른다
   await toChecker();
   await expect(
-    checker.getByText("상대가 보낸 별 세 개를 하늘에서 차례로 눌러 주세요"),
+    checker.getByText("당첨자가 보낸 별 세 개를 하늘에서 차례로 눌러 주세요"),
   ).toBeVisible();
   const sky = "[data-pane='checker'] canvas[data-sky='pick']";
   for (const n of [...stars].reverse()) await tapStar(page, sky, n);
-  await expect(checker.locator("[data-verdict='fail']")).toContainText(
-    "별 세 개가 맞지 않습니다. 2번 더 할 수 있습니다",
+  await expect(checker.locator("[data-verdict='wrong']")).toContainText(
+    /별 세 개가 맞지 않습니다.*2번 더 할 수 있습니다/,
   );
   // 틀린 별은 잠시 뒤 지워진다
   await expect(checker.getByText("①").first()).toBeVisible();
@@ -701,8 +742,11 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["lose", (s) => s.getByText("아쉽게도 당첨되지 않았습니다")],
     ["mine", (s) => s.getByText("제 1회").first()],
     ["rounds", (s) => s.getByRole("heading", { name: "지난 회차" })],
-    ["winner", (s) => s.getByText(/Brice/).first()],
-    ["checker", (s) => s.getByText("당첨자의 응답을 기다리고 있습니다")],
+    ["win-notice", (s) => s.locator("[data-check-url]")],
+    ["link-open", (s) => s.getByRole("button", { name: "확인 시작" })],
+    ["link-used", (s) => s.locator("[data-link-notice='used']")],
+    ["winner", (s) => s.getByText(/당첨 확인 요청이 왔습니다/).first()],
+    ["checker", (s) => s.getByText("당첨자의 승인을 기다리고 있습니다")],
     ["check-ok", (s) => s.locator("[data-verdict='ok']")],
     ["check-fail", (s) => s.locator("[data-verdict='fail']")],
     ["register", (s) => s.getByRole("button", REGISTER)],

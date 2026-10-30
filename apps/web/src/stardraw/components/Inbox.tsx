@@ -14,7 +14,7 @@ import type { Services } from "../services";
 import { starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
 import { useRegistered } from "./AstronautPanel";
-import { RANK_LABEL } from "./parts";
+import { formatTime, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
 /** 내가 서명해 보낸 확인(별 세 개는 이 기기에만 남는다. 화면을 닫았다 열어도 보낼 수 있게) */
@@ -22,7 +22,8 @@ interface Answered {
   id: string;
   round: number;
   rank: number;
-  requester: string;
+  /** 요청이 붙은 확인 링크를 만든 시각 */
+  invitedAt: number;
   stars: number[];
   outcome?: ConfirmOutcome;
 }
@@ -46,9 +47,9 @@ function saveAnswered(ns: string, list: Answered[]): void {
 }
 
 /**
- * 당첨자 쪽 확인: 내 응모권에 온 요청을 스스로 찾아(열 때, 열려 있는 동안) 띄운다.
+ * 당첨자 쪽 확인: 내가 보낸 확인 링크로 온 요청을 스스로 찾아(열 때, 열려 있는 동안) 띄운다.
  * 「등록증으로 승인」이면 내 등록증 카드가 나타나 패스키 확인을 받고(등록증 본인 확인과 같은 움직임), 별 세 개가 ①②③ 차례로 빛난다.
- * 요청은 아무나 보낼 수 있고 이름은 보낸 사람이 적는다. 카노푸스 우주국(서버)은 전달만 한다(확인 요청에는 우주국 관인이 없다).
+ * 요청은 내가 만든 링크로만 온다(링크마다 한 번). 카노푸스 우주국(서버)은 전달만 한다(확인 요청에는 우주국 관인이 없다).
  */
 export function Inbox({
   services,
@@ -142,7 +143,7 @@ export function Inbox({
           id: req.id,
           round: req.request.round,
           rank: rankOfRequest(req) ?? 0,
-          requester: req.request.requester,
+          invitedAt: req.invitedAt,
           stars,
         },
       ];
@@ -199,15 +200,16 @@ export function Inbox({
             className="sd-breathe flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
           >
             <p className="font-bold">
-              {req.request.requester}님이{" "}
+              보낸 확인 링크로{" "}
               {roundShort(services.ledger.schedule, req.request.round)}{" "}
-              {rank ? RANK_LABEL[rank] : ""} 당첨 확인을 요청했습니다
+              {rank ? RANK_LABEL[rank] : ""} 당첨 확인 요청이 왔습니다
             </p>
             <p className="text-amber-100/60 text-xs">
-              이름은 보낸 분이 직접 적은 것입니다 · 전달: 카노푸스 우주국
+              {formatTime(req.invitedAt / 1000)}에 만든 링크 · 전달: 카노푸스
+              우주국
             </p>
             <p className="text-sm text-amber-100/80">
-              모르는 분의 요청이면 거절하세요.
+              링크를 보낸 적이 없으면 거절하세요.
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -298,8 +300,8 @@ function AnsweredCard({
       ) : (
         <>
           <p className="break-keep font-semibold">
-            확인을 요청한 {answered.requester}님께, 당첨을 알렸던 그
-            메신저·메일로 이 세 별 이름을 차례대로 보내 주세요
+            링크를 보낸 사람에게, 당첨을 알렸던 그 메신저·메일로 이 세 별 이름을
+            차례대로 보내 주세요
           </p>
           <p className="break-keep text-amber-100/85 text-sm" data-sas-warning>
             별 세 개는 내가 당첨을 알린 그 사람에게만 보내세요.

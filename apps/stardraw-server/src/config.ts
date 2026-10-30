@@ -48,8 +48,8 @@ export interface ServerConfig {
   entriesPerPrefixPerRound: number;
   /** 공인 IP 앞부분 하나당 하루 새 열쇠 등록 상한 */
   registrationsPerPrefixPerDay: number;
-  /** 당첨자 확인 요청: IP 앞부분 하나당 하루 상한 */
-  confirmsPerPrefixPerDay: number;
+  /** 당첨자 확인 링크 만들기: IP 앞부분 하나당 하루 상한 */
+  invitesPerPrefixPerDay: number;
   /** 동시에 도는 Argon2 확인 수, 기다리는 줄 상한 */
   argonConcurrency: number;
   argonQueue: number;
@@ -133,7 +133,7 @@ export function loadConfig(): ServerConfig {
     trustProxy: env("STARDRAW_TRUST_PROXY") === "1",
     entriesPerPrefixPerRound: int("STARDRAW_ENTRIES_PER_PREFIX", 20),
     registrationsPerPrefixPerDay: int("STARDRAW_REGISTRATIONS_PER_PREFIX", 10),
-    confirmsPerPrefixPerDay: int("STARDRAW_CONFIRMS_PER_PREFIX", 30),
+    invitesPerPrefixPerDay: int("STARDRAW_INVITES_PER_PREFIX", 30),
     argonConcurrency: int("STARDRAW_ARGON_CONCURRENCY", 2),
     argonQueue: int("STARDRAW_ARGON_QUEUE", 32),
     sealDeadline: int("STARDRAW_SEAL_DEADLINE", 180),

@@ -6,7 +6,6 @@ import {
   drandTime,
   equalBytes,
   RANKS,
-  type Rank,
   type RoundRecord,
   roundTimes,
   type Ticket,
@@ -22,14 +21,14 @@ import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
 import { track } from "@/stats/track";
 import { astronautOf } from "../astronaut/identity";
-import { type CheckBatch, type CheckTicket, isActive } from "../checks";
+import { type CheckSession, isActive } from "../checks";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
 import { myRank, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
 import { GAME_NS, type Services, useLedger } from "../services";
 import type { KeyInfo, MyTicket } from "../wallet";
-import { CheckPanel } from "./CheckPanel";
+import { CheckLink } from "./CheckLink";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
 import { Inbox } from "./Inbox";
@@ -43,6 +42,7 @@ import {
 } from "./parts";
 import { Receipt } from "./Receipt";
 import { ticketUrl } from "./TicketView";
+import { WinNotice } from "./WinNotice";
 
 type View =
   | { name: "home" }
@@ -52,16 +52,18 @@ type View =
   | { name: "mine" }
   | { name: "rounds" }
   | { name: "round"; round: number }
-  | { name: "check"; round: number; rank: Rank };
+  /** 당첨자가 보낸 확인 링크(/stardraw/check#토큰) */
+  | { name: "link"; token: string };
 
 /** 화면마다 자기 주소(정적 내보내기라 실제 경로 페이지). 경로 안의 작은 화면은 # 조각으로 */
-export type StardrawPage = "home" | "enter" | "mine" | "rounds";
+export type StardrawPage = "home" | "enter" | "mine" | "rounds" | "check";
 
 const PATH: Record<StardrawPage, string> = {
   home: "/stardraw",
   enter: "/stardraw/enter",
   mine: "/stardraw/mine",
   rounds: "/stardraw/rounds",
+  check: "/stardraw/check",
 };
 
 /** 화면 → 주소. 뒤로가기·새로고침이 그 화면으로 돌아오게 브라우저 기록에 남긴다 */
@@ -81,8 +83,8 @@ function urlOf(v: View): string {
       return `${PATH.rounds}#${v.round}`;
     case "draw":
       return `${PATH.rounds}#draw-${v.round}`;
-    case "check":
-      return `${PATH.rounds}#check-${v.round}-${v.rank}`;
+    case "link":
+      return `${PATH.check}#${v.token}`;
   }
 }
 
@@ -90,6 +92,7 @@ function urlOf(v: View): string {
 function viewOf(page: StardrawPage, hash: string): View {
   const h = hash.replace(/^#/, "");
   if (page === "enter") return { name: "enter" };
+  if (page === "check") return { name: "link", token: h };
   if (page === "mine") {
     const t = /^t-([0-9a-f]{64})$/.exec(h);
     return t ? { name: "receipt", id: t[1] as string } : { name: "mine" };
@@ -97,9 +100,6 @@ function viewOf(page: StardrawPage, hash: string): View {
   if (page === "rounds") {
     let m = /^draw-(\d+)$/.exec(h);
     if (m) return { name: "draw", round: Number(m[1]) };
-    m = /^check-(\d+)-([1-5])$/.exec(h);
-    if (m)
-      return { name: "check", round: Number(m[1]), rank: Number(m[2]) as Rank };
     m = /^(\d+)$/.exec(h);
     if (m) return { name: "round", round: Number(m[1]) };
     return { name: "rounds" };
@@ -255,17 +255,10 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
             round={view.round}
             mine={mine}
             onBack={() => back({ name: "rounds" })}
-            onCheck={(rank) => go({ name: "check", round: view.round, rank })}
             onDraw={() => go({ name: "draw", round: view.round })}
           />
-        ) : view.name === "check" ? (
-          <CheckPanel
-            services={services}
-            round={view.round}
-            rank={view.rank}
-            tickets={winnersOf(services, view.round, view.rank)}
-            onClose={() => back({ name: "round", round: view.round })}
-          />
+        ) : view.name === "link" ? (
+          <CheckLink key={view.token} services={services} token={view.token} />
         ) : (
           <Home
             services={services}
@@ -295,15 +288,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       </div>
     </main>
   );
-}
-
-function winnersOf(services: Services, round: number, rank: Rank): Ticket[] {
-  const record = services.ledger.record(round);
-  if (!record) return [];
-  const ids = new Set(record.winners[rank].map(toHex));
-  return services.ledger
-    .ticketsOf(round)
-    .filter((t) => ids.has(toHex(ticketId(t))));
 }
 
 /** 서버 시험 운영 띠 */
@@ -471,6 +455,12 @@ export function Home({
         </p>
       </section>
 
+      <WinNotice
+        services={services}
+        tickets={mine.map((m) => m.ticket)}
+        compact
+        onOpen={onMine}
+      />
       <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
 
       {envelopes.length > 0 && (
@@ -503,7 +493,7 @@ export function Home({
         >
           <span className="font-semibold">내 응모</span>
           <span className="text-white/60 text-xs tabular-nums">
-            응모권 {mine.length}장 · 당첨자 확인 요청
+            응모권 {mine.length}장 · 당첨자 확인
           </span>
         </button>
         <button
@@ -513,7 +503,7 @@ export function Home({
         >
           <span className="font-semibold">지난 회차</span>
           <span className="text-white/60 text-xs">
-            당첨 번호 · 당첨자 확인 · 장부 검사
+            당첨 번호 · 확인 기록 · 장부 검사
           </span>
         </button>
       </section>
@@ -747,6 +737,7 @@ export function MineView({
           )}
         </a>
       )}
+      <WinNotice services={services} tickets={mine.map((m) => m.ticket)} />
       <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
       {sorted.length === 0 ? (
         <p className="py-10 text-center text-white/60">
@@ -895,21 +886,19 @@ export function RoundsView({
   onBack: () => void;
   onOpen: (round: number) => void;
 }) {
-  const [batches, setBatches] = useState<CheckBatch[]>([]);
+  const [sessions, setSessions] = useState<CheckSession[]>([]);
   const [limit, setLimit] = useState(24);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 읽는다
   useEffect(() => {
-    void services.checker.list().then(setBatches);
+    void services.checker.list().then(setSessions);
   }, [services, version]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 읽는다
   const closed = useMemo(
     () => services.ledger.closed().slice().reverse(),
     [services, version],
   );
-  const openChecks = batches.filter(isActive);
-  const waitingStars = openChecks.filter((b) =>
-    b.tickets.some((t) => t.status === "signed"),
-  ).length;
+  const openChecks = sessions.filter(isActive);
+  const waitingStars = openChecks.filter((s) => s.status === "signed").length;
 
   return (
     <section className="flex flex-col gap-4" aria-label="지난 회차">
@@ -926,7 +915,7 @@ export function RoundsView({
       </div>
       {openChecks.length > 0 && (
         <p className="sd-breathe rounded-xl border border-sky-200/25 bg-sky-300/5 px-4 py-3 text-sm">
-          확인 중인 요청 {openChecks.length}건
+          확인 중인 당첨자 {openChecks.length}건
           {waitingStars > 0
             ? ` · 별 세 개를 기다리는 중 ${waitingStars}건`
             : ""}
@@ -1007,21 +996,19 @@ function RoundDetail({
   round,
   mine,
   onBack,
-  onCheck,
   onDraw,
 }: {
   services: Services;
   round: number;
   mine: MyTicket[];
   onBack: () => void;
-  onCheck: (rank: Rank) => void;
   onDraw: () => void;
 }) {
   const record = services.ledger.record(round);
   const [report, setReport] = useState<VerifyReport | null>(null);
   const [checking, setChecking] = useState(false);
   /** 이 기기에서 당첨자 확인을 마친 응모권 */
-  const [checked, setChecked] = useState<Map<string, CheckTicket>>(new Map());
+  const [checked, setChecked] = useState<Map<string, CheckSession>>(new Map());
   useEffect(() => {
     void services.checker.confirmed().then(setChecked);
   }, [services]);
@@ -1111,18 +1098,18 @@ function RoundDetail({
                 </span>
               );
             })}
-            {counts[rank] > 0 && (
-              <button
-                type="button"
-                onClick={() => onCheck(rank)}
-                className="self-start rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-100 text-sm hover:bg-amber-200/10"
-              >
-                당첨자 확인
-              </button>
-            )}
           </li>
         ))}
       </ul>
+
+      {!record.void && RANKS.some((r) => counts[r] > 0) && (
+        <p
+          className="break-keep text-center text-sm text-white/60"
+          data-check-hint
+        >
+          당첨자를 확인하려면 당첨자에게 확인 링크를 받으세요
+        </p>
+      )}
 
       <div className="flex flex-col gap-2 rounded-2xl border border-white/10 p-4">
         <button

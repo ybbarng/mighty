@@ -17,7 +17,7 @@ import {
   TsaRootLog,
 } from "./outside";
 import { Publisher } from "./publish";
-import { Relay } from "./relay";
+import { DEFAULT_RELAY_LIMITS, Relay } from "./relay";
 import { parseScheduleLiveArgs, scheduleLive } from "./schedule-live";
 import { loadServerKey } from "./server-key";
 import { Store } from "./store";
@@ -77,7 +77,8 @@ async function main(): Promise<void> {
     log,
   });
   const relay = new Relay(store, clock, config.policy, {
-    requestsPerPrefixPerDay: config.confirmsPerPrefixPerDay,
+    ...DEFAULT_RELAY_LIMITS,
+    invitesPerPrefixPerDay: config.invitesPerPrefixPerDay,
   });
   const http = createHttpServer(engine, relay, {
     basePath: config.basePath,

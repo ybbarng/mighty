@@ -28,6 +28,17 @@ export interface Seal {
   log: unknown;
 }
 
+/** 당첨자 확인 링크 초대(토큰 해시만 둔다) */
+export interface InviteRow {
+  tokenHash: string;
+  ticketHex: string;
+  round: number;
+  createdAt: number;
+  expiresAt: number;
+  /** 쓰였으면 붙은 확인 요청 id */
+  requestId: string | null;
+}
+
 export interface RelayRow {
   id: string;
   ticketHex: string;
@@ -82,7 +93,26 @@ export class Store {
         keep_until INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS relay_ticket ON relay (ticket);
+      CREATE TABLE IF NOT EXISTS invites (
+        token_hash TEXT PRIMARY KEY,
+        ticket TEXT NOT NULL,
+        round INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        request_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS invites_ticket ON invites (ticket);
     `);
+    // 2026-10-30 확인 링크로 바꾸며 옛 방식(회차·등수 묶음 요청) 요청을 버린다. 한 번만
+    const moved = this.db
+      .prepare("SELECT v FROM meta WHERE k = 'relay-invites'")
+      .get();
+    if (!moved) {
+      this.db.exec("DELETE FROM relay");
+      this.db
+        .prepare("INSERT INTO meta (k, v) VALUES ('relay-invites', '1')")
+        .run();
+    }
   }
 
   close(): void {
@@ -334,6 +364,59 @@ export class Store {
 
   relayPrune(now: number): void {
     this.db.prepare("DELETE FROM relay WHERE keep_until <= ?").run(now);
+    this.db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(now);
+  }
+
+  /** 새 초대. 같은 토큰 해시가 이미 있으면 false */
+  inviteAdd(row: InviteRow): boolean {
+    const r = this.db
+      .prepare(
+        "INSERT OR IGNORE INTO invites (token_hash, ticket, round, created_at, expires_at, request_id) VALUES (?, ?, ?, ?, ?, NULL)",
+      )
+      .run(
+        row.tokenHash,
+        row.ticketHex,
+        row.round,
+        row.createdAt,
+        row.expiresAt,
+      );
+    return Number(r.changes) === 1;
+  }
+
+  inviteGet(tokenHash: string): InviteRow | null {
+    const r = this.db
+      .prepare("SELECT * FROM invites WHERE token_hash = ?")
+      .get(tokenHash);
+    return r
+      ? {
+          tokenHash: String(r.token_hash),
+          ticketHex: String(r.ticket),
+          round: Number(r.round),
+          createdAt: Number(r.created_at),
+          expiresAt: Number(r.expires_at),
+          requestId: r.request_id === null ? null : String(r.request_id),
+        }
+      : null;
+  }
+
+  /** 그 응모권의 아직 쓰이지 않고 기한이 남은 초대 수 */
+  invitesOpen(ticketHex: string, now: number): number {
+    const r = this.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM invites WHERE ticket = ? AND request_id IS NULL AND expires_at > ?",
+      )
+      .get(ticketHex, now);
+    return Number(r?.n ?? 0);
+  }
+
+  /** 초대를 쓴다(한 번만). 이미 쓰였으면 false */
+  inviteUse(tokenHash: string, requestId: string): boolean {
+    const r = this.db
+      .prepare(
+        "UPDATE invites SET request_id = ? WHERE token_hash = ? AND request_id IS NULL",
+      )
+      .run(requestId, tokenHash);
+    return Number(r.changes) === 1;
   }
 }
 

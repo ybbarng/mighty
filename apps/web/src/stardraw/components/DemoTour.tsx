@@ -5,13 +5,14 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { buildTour, TOUR_EGG_PUBS, type TourState } from "../demo-tour";
 import { AstronautPanel } from "./AstronautPanel";
-import { CheckPanel } from "./CheckPanel";
+import { CheckLink } from "./CheckLink";
 import { DemoUnlockPrompt } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
 import { EnterView, KeySetup } from "./EnterView";
 import { Inbox } from "./Inbox";
 import { Receipt } from "./Receipt";
 import { Home, MineView, RoundsView, TrialBanner } from "./StardrawApp";
+import { WinNotice } from "./WinNotice";
 
 /** 데모 "화면 둘러보기" 목록. 주소는 #tour-<id>라 뒤로가기로 목록에 돌아온다 */
 export const TOUR_ITEMS = [
@@ -27,8 +28,11 @@ export const TOUR_ITEMS = [
   { id: "lose", label: "낙첨" },
   { id: "mine", label: "내 응모" },
   { id: "rounds", label: "지난 회차" },
-  { id: "winner", label: "당첨자 폰" },
-  { id: "checker", label: "확인하는 사람" },
+  { id: "win-notice", label: "당첨 안내·확인 링크" },
+  { id: "link-open", label: "확인 링크 연 화면" },
+  { id: "link-used", label: "이미 사용된 링크" },
+  { id: "winner", label: "당첨자 폰: 승인" },
+  { id: "checker", label: "확인하는 사람: 기다림" },
   { id: "check-ok", label: "확인 성공" },
   { id: "check-fail", label: "확인 실패" },
   { id: "register", label: "우주인 등록" },
@@ -211,32 +215,34 @@ function Screen({
           onOpen={noop}
         />
       );
+    case "win-notice":
+      return <WinNotice services={services} tickets={[drawn.ticket]} />;
+    case "link-open":
+      return (
+        <CheckLink services={services} token={s.links.fresh} onClose={onBack} />
+      );
+    case "link-used":
+      return (
+        <CheckLink services={services} token={s.links.used} onClose={onBack} />
+      );
     case "winner":
       return <Inbox services={services} tickets={[drawn.ticket]} />;
     case "checker":
       return (
-        <CheckPanel
+        <CheckLink
           services={services}
-          round={1}
-          rank={1}
-          tickets={[drawn.ticket]}
+          token={s.links.waiting}
           onClose={onBack}
         />
       );
     case "check-ok":
     case "check-fail":
       return (
-        <CheckPanel
+        <CheckLink
           services={services}
-          round={1}
-          rank={1}
-          tickets={[drawn.ticket]}
+          token={s.links.waiting}
           onClose={onBack}
-          preset={
-            id === "check-ok"
-              ? { batch: s.confirmed, verdict: "ok" }
-              : { batch: s.failed, verdict: "fail" }
-          }
+          preset={id === "check-ok" ? s.confirmed : s.failed}
         />
       );
     case "register":

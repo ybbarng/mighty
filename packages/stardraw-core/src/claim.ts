@@ -22,9 +22,9 @@ import { type Ticket, ticketId } from "./ticket";
 /**
  * 당첨 증명(docs/36 11-2). 둘 다 응모권 열쇠(원시 열쇠나 패스키)의 서명이고,
  * 장부의 응모권으로 확인한다.
- * 1. 확인 문구 증명(화면 기본, "초록불"): 확인하는 쪽이 확인 요청(문구·내 이름·회차·응모권)을
- *    링크나 QR로 건네고, 당첨자가 그 문구와 요청자 이름에 서명한다. 문구가 매번 달라
- *    다시 쓸 수 없고, 당첨자는 누가 확인을 요청했는지 보고 서명한다.
+ * 1. 확인 문구 증명(화면 기본, "초록불"): 당첨자가 보낸 확인 링크(invite.ts)에 확인하는 쪽이 요청을 붙이면
+ *    전달 서버가 확인 요청(문구·요청자 칸·회차·응모권)을 만들고, 당첨자가 그 문구와 요청자 칸에 서명한다.
+ *    문구가 매번 달라 다시 쓸 수 없다. 요청자 칸은 이름 칸을 없앤 뒤 늘 `CHECK_LINK_REQUESTER`다.
  * 2. 바로 보내는 증명: claim ‖ 응모권 id ‖ 받는 사람 ‖ 보내는 사람 ‖ 최근 drand 회차.
  *    메신저 한 번으로 보내는 길로 남겨 둔다.
  * 붙여 넣는 문자열은 `stardraw-claim:` + base64url(바이너리)다.
@@ -46,7 +46,7 @@ export type Claim =
       kind: "challenge";
       ticketId: Uint8Array;
       challenge: string;
-      /** 확인을 요청한 사람(당첨자 화면에 "○○님이 확인을 요청했어요"로 보인다) */
+      /** 요청자 칸. 확인 링크로 붙은 요청은 늘 `CHECK_LINK_REQUESTER`(형식은 그대로 둔다) */
       requester: string;
       pub: Uint8Array;
       sig: SignatureData;

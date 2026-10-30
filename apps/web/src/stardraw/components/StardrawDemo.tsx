@@ -10,7 +10,6 @@ import {
   sasChallenge,
   type Ticket,
   ticketId,
-  toHex,
 } from "@mighty/stardraw-core";
 import { useEffect, useState } from "react";
 
@@ -18,11 +17,12 @@ import { MadeWith } from "@/components/brand/MadeWith";
 import { cn } from "@/lib/cn";
 
 import { demoPick } from "../demo-pick";
+import { invitesOf } from "../invites";
 import type { LocalLedger } from "../local-ledger";
 import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
 import type { MyTicket } from "../wallet";
-import { CheckPanel } from "./CheckPanel";
+import { CheckLink } from "./CheckLink";
 import { type TourId, TourList, TourScreen, tourIdOf } from "./DemoTour";
 import { DemoUnlockSheet } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
@@ -30,11 +30,13 @@ import { EnterView } from "./EnterView";
 import { Inbox } from "./Inbox";
 import { formatLeft, LottoBall, RANK_LABEL } from "./parts";
 import { Receipt } from "./Receipt";
+import { WinNotice } from "./WinNotice";
 
 /**
  * 하늘의 별 따기 데모: 응모부터 당첨자 확인까지 한 사람이 혼자 끝까지 해 본다.
  * 장부·열쇠·확인 기록은 실제 게임과 따로 저장한다(이름공간 "stardraw-demo").
  * 데모만의 기능: 지금 마감·지금 추첨, 미리 본 당첨 번호로 n등이 되게 고르기, 가짜 당첨자로 답하기.
+ * 당첨자 확인은 기기 하나로 두 역할을 흉내 낸다: 당첨자 폰에서 확인 링크를 만들면 확인하는 사람 화면이 그 링크를 연다.
  * 데모는 실제 패스키를 만들지 않는다: 서명 순간마다 화면 안 흉내 시트(`DemoUnlockSheet`)가 뜬다.
  */
 /** 화면 둘러보기에 목록을 눌러 들어왔는지 */
@@ -59,6 +61,10 @@ export function StardrawDemo() {
   });
   const [drawing, setDrawing] = useState<number | null>(null);
   const [pane, setPane] = useState<"winner" | "checker">("winner");
+  /** 당첨자 폰에서 만든 확인 링크(확인하는 사람 화면이 연다) */
+  const [link, setLink] = useState<string | null>(null);
+  /** 같은 링크를 다른 사람이 열어 본다(한 번만 쓰이는지) */
+  const [second, setSecond] = useState(false);
   const [busy, setBusy] = useState(false);
   // 화면 둘러보기(#tour-<id>). 목록에서 들어왔으면 「화면 목록」은 뒤로가기다
   const [tourId, setTourId] = useState<TourId | null>(null);
@@ -102,6 +108,17 @@ export function StardrawDemo() {
     const picks = demoPick(services.practice.peekDraw(round), entering.rank);
     setEntering({ key: Date.now(), picks, rank: entering.rank, round });
   }, [services, round, entering.rank, entering.round]);
+
+  // 새로고침해도 최근에 만든 링크를 이어서 연다
+  const latestTicket = mine
+    .filter((m) => services?.ledger.record(m.ticket.round))
+    .sort((a, b) => b.ticket.round - a.ticket.round)[0]?.ticket;
+  useEffect(() => {
+    if (!services || !latestTicket) return;
+    const [newest] = invitesOf(services.ns, latestTicket, services.clock.now());
+    setLink(newest?.token ?? null);
+    setSecond(false);
+  }, [services, latestTicket]);
 
   if (!services || !status)
     return (
@@ -328,8 +345,16 @@ export function StardrawDemo() {
                       hidden={pane !== "winner"}
                       data="winner"
                     >
+                      <WinNotice
+                        services={services}
+                        tickets={[latest.ticket]}
+                        onCreated={(invite) => {
+                          setLink(invite.token);
+                          setSecond(false);
+                        }}
+                      />
                       <p className="text-sm text-white/65">
-                        확인 요청이 오면 여기에 뜹니다.
+                        링크를 받은 사람이 확인을 시작하면 요청이 여기에 뜹니다.
                       </p>
                       <Inbox
                         services={services}
@@ -342,17 +367,46 @@ export function StardrawDemo() {
                       hidden={pane !== "checker"}
                       data="checker"
                     >
-                      <CheckPanel
-                        services={services}
-                        round={latest.ticket.round}
-                        rank={latestRank}
-                        tickets={winnersOf(
-                          services,
-                          latest.ticket.round,
-                          latestRank,
-                        )}
-                        onClose={() => setPane("winner")}
-                      />
+                      {link ? (
+                        <>
+                          <p className="text-sm text-white/65">
+                            당첨자가 보낸 링크를 연 화면입니다.
+                          </p>
+                          <CheckLink
+                            key={link}
+                            services={services}
+                            token={link}
+                            onClose={() => setPane("winner")}
+                          />
+                          {second ? (
+                            <div data-second-checker>
+                              <p className="pb-2 text-sm text-white/65">
+                                다른 사람이 같은 링크를 연 화면
+                              </p>
+                              <CheckLink
+                                key={`${link}-2`}
+                                services={services}
+                                token={link}
+                                fresh
+                                onClose={() => setSecond(false)}
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSecond(true)}
+                              className="self-start rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10"
+                            >
+                              다른 사람이 같은 링크를 열면?
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-white/60">
+                          당첨자 폰에서 「확인 링크 만들기」를 누르면 그 링크를
+                          여기서 엽니다.
+                        </p>
+                      )}
                     </Pane>
                   </div>
                 </div>
@@ -373,15 +427,6 @@ export function StardrawDemo() {
       </div>
     </main>
   );
-}
-
-function winnersOf(services: Services, round: number, rank: Rank): Ticket[] {
-  const record = services.ledger.record(round);
-  if (!record) return [];
-  const ids = new Set(record.winners[rank].map(toHex));
-  return services.ledger
-    .ticketsOf(round)
-    .filter((t) => ids.has(toHex(ticketId(t))));
 }
 
 function Step({
@@ -503,7 +548,7 @@ function FakeWinner({
         onClick={async () => {
           const [open] = await services.relay.openFor([ticketId(ticket)]);
           if (!open) {
-            setMessage("먼저 확인하는 사람 화면에서 요청을 보내 주세요");
+            setMessage("먼저 확인하는 사람 화면에서 확인을 시작해 주세요");
             return;
           }
           // 응모권 열쇠가 없는 사람: 다른 열쇠로 서명한다
