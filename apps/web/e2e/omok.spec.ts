@@ -51,6 +51,10 @@ async function placeOne(page: Page, touch: boolean): Promise<void> {
       await expect(stones(page)).toHaveCount(before + 1, { timeout: 1500 });
       return;
     } catch {}
+    // 그사이 판이 끝났으면(컴퓨터가 이김) 더 둘 곳을 찾지 않는다.
+    // 빈칸 225곳을 1.5초씩 다 눌러 보다 시험 시간을 넘기던 경합이다
+    if (await page.getByRole("button", { name: "다시 하기" }).isVisible())
+      return;
   }
   throw new Error("둘 곳이 없다");
 }
