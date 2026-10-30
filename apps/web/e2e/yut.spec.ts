@@ -173,6 +173,34 @@ test("윷놀이: 게임 목록에서 들어가 입문 컴퓨터와 두다가 판
   await expect(page.getByRole("button", { name: /이어하기/ })).toHaveCount(0);
 });
 
+test("윷놀이 개인 시간: 빠른 3분을 고르면 자리마다 시계가 보이고 내 차례에만 간다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "시계는 화면 크기와 상관없다");
+  // 시계를 시험이 움직인다(실제로 기다리지 않는다).
+  await page.clock.install();
+  await page.goto("/yut");
+  await ready(page);
+  await page.getByRole("button", { name: "옵션" }).click();
+  await page.getByRole("button", { name: "빠른 3분" }).click();
+  await page.getByRole("button", { name: "처음으로" }).click();
+  await expect(
+    page.getByRole("button", { name: /나홀로 윷놀이/ }),
+  ).toContainText("빠른 3분");
+  await page.getByRole("button", { name: /나홀로 윷놀이/ }).click();
+  const mine = page.locator('[data-clock-seat="0"] [data-clock]');
+  await expect(page.locator("[data-clock-seat]")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "윷 던지기" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.clock.runFor(20_000);
+  await expect(mine).toHaveText(/^2:[34]\d$/);
+  await expect(page.locator('[data-clock-seat="1"] [data-clock]')).toHaveText(
+    /^[23]:\d\d$/,
+  );
+  await page.screenshot({ path: info.outputPath("yut-time.png") });
+});
+
 test("윷놀이: 하던 게임은 새로고침해도 이어 한다", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "저장은 화면 크기와 상관없다");
   await page.goto("/yut");
