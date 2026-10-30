@@ -119,6 +119,8 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     expect(receivedAt).toBe(EPOCH + 10);
     expect(ledger.status().entries).toBe(1);
     expect(await ledger.isRegistered(me.signer.publicKey)).toBe(true);
+    // 우주인 등록증의 등록 회차: 닫히기 전에는 서버에 묻고, 닫힌 뒤에는 장부 파일에서
+    expect(await ledger.registeredRound(me.signer.publicKey)).toBe(1);
     // 같은 회차 두 번은 서버의 한국어 문구로 거절
     await expect(ledger.submit(ticket)).rejects.toThrow("이미 응모");
 
@@ -126,6 +128,7 @@ describe("화면의 서버 장부 ↔ 실제 서버", () => {
     await rig.finish(1);
     await ledger.settle(true);
     expect(ledger.closed()).toHaveLength(1);
+    expect(await ledger.registeredRound(me.signer.publicKey)).toBe(1);
     expect(ledger.record(1)?.winners[1].map(toHex)).toEqual([
       toHex(ticketId(ticket)),
     ]);

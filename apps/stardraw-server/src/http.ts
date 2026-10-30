@@ -18,7 +18,7 @@ import type { Relay } from "./relay";
 /**
  * HTTP 주소(모두 `basePath` 아래, 운영은 /stardraw-api).
  *   GET  /api/state                     지금 회차·닫힌 회차 수·문제 값·응모 수·서버 공개 열쇠
- *   GET  /api/keys/:pub                 이 공개 열쇠가 등록돼 있는지
+ *   GET  /api/keys/:pub                 이 공개 열쇠가 등록돼 있는지와 등록 회차 { registered, round }
  *   GET  /api/passkeys/:credentialId    패스키 번호로 공개 열쇠 찾기(다른 기기에서 내 패스키 찾기)
  *   POST /api/enter                     { ticket, registration? } → { receipt, receivedAt }
  *   POST /api/confirm                   당첨자 확인 요청 만들기 → { id, request, checkerKey, answerBy, token }
@@ -135,7 +135,8 @@ async function handle(
     } catch {
       throw new EntryError("공개 열쇠 형식이 맞지 않습니다");
     }
-    return send(res, 200, { registered: engine.isRegistered(pub) });
+    const round = engine.registrationRound(pub);
+    return send(res, 200, { registered: round !== null, round });
   }
 
   const credentialMatch = path.match(/^\/api\/passkeys\/([A-Za-z0-9_-]+)$/);

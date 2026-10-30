@@ -50,7 +50,10 @@ describe("HTTP", () => {
       rig.engine.head(),
     );
     const keyUrl = `${base}/api/keys/${toBase64Url(p.signer.publicKey)}`;
-    expect(await (await fetch(keyUrl)).json()).toEqual({ registered: false });
+    expect(await (await fetch(keyUrl)).json()).toEqual({
+      registered: false,
+      round: null,
+    });
     const res = await fetch(`${base}/api/enter`, {
       method: "POST",
       headers: {
@@ -69,7 +72,10 @@ describe("HTTP", () => {
     const receipt = decodeReceipt(fromBase64Url(body.receipt));
     const serverKey = fromBase64Url(state.serverKey);
     expect(await verifyReceipt(serverKey, receipt)).toBe(true);
-    expect(await (await fetch(keyUrl)).json()).toEqual({ registered: true });
+    expect(await (await fetch(keyUrl)).json()).toEqual({
+      registered: true,
+      round: 1,
+    });
 
     // 같은 응모권을 또 내면 거절(한국어 문구와 409)
     const again = await fetch(`${base}/api/enter`, {

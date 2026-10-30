@@ -35,6 +35,8 @@ export interface Ledger {
   isRegistered(pub: Uint8Array): boolean | Promise<boolean>;
   /** 패스키 번호로 장부에 등록된 공개 열쇠를 찾는다(다른 기기에서 내 패스키 찾기) */
   passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null>;
+  /** 이 공개 열쇠가 장부에 등록된 회차(우주인 등록증의 등록 일자). 아직 응모 전이라 등록이 없으면 null */
+  registeredRound(pub: Uint8Array): Promise<number | null>;
   submit(
     ticket: Ticket,
     registration?: KeyRegistration,

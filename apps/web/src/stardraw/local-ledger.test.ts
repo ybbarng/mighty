@@ -161,6 +161,18 @@ describe("연습 장부: 응모 받기", () => {
     expect(ledger.status().entries).toBe(1);
   });
 
+  it("등록 회차: 첫 응모 회차이고, 닫힌 뒤에도 같다. 응모 전이면 없다", async () => {
+    const { clock, ledger } = setup();
+    const me = await generateSigner();
+    expect(await ledger.registeredRound(me.publicKey)).toBeNull();
+    await enter(ledger, me, [1, 2, 3, 4, 5, 6]);
+    expect(await ledger.registeredRound(me.publicKey)).toBe(1);
+    clock.advance((HOUR + DRAW_AFTER) * 1000);
+    await ledger.settle();
+    await enter(ledger, me, [7, 8, 9, 10, 11, 12], false);
+    expect(await ledger.registeredRound(me.publicKey)).toBe(1);
+  });
+
   it("등록하지 않은 열쇠, 앞 회차 추첨 전, 마감 뒤 응모는 받지 않는다", async () => {
     const { clock, ledger } = setup();
     const me = await generateSigner();

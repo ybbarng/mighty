@@ -78,6 +78,8 @@ export class RemoteLedger implements Ledger {
   private tickets: Ticket[][] = [];
   private registrations: KeyRegistration[][] = [];
   private registered = new Set<string>();
+  /** 공개 열쇠(base64url) → 등록 회차. 닫힌 회차 파일에서 채우고, 없으면 서버에 묻는다 */
+  private registeredAt = new Map<string, number>();
   private busy: Promise<unknown> = Promise.resolve();
   private readonly f: typeof fetch;
 
@@ -161,7 +163,10 @@ export class RemoteLedger implements Ledger {
         decodeRegistration(fromBase64Url(r)),
       );
       this.registrations.push(regs);
-      for (const r of regs) this.registered.add(toBase64Url(r.pub));
+      for (const r of regs) {
+        this.registered.add(toBase64Url(r.pub));
+        this.registeredAt.set(toBase64Url(r.pub), round);
+      }
     }
   }
 
@@ -198,6 +203,18 @@ export class RemoteLedger implements Ledger {
     );
     if (registered) this.registered.add(key);
     return registered;
+  }
+
+  async registeredRound(pub: Uint8Array): Promise<number | null> {
+    const key = toBase64Url(pub);
+    const known = this.registeredAt.get(key);
+    if (known !== undefined) return known;
+    const { round } = await this.get<{ round?: number | null }>(
+      `/api/keys/${key}`,
+    );
+    if (typeof round !== "number") return null;
+    this.registeredAt.set(key, round);
+    return round;
   }
 
   async passkeyPub(credentialId: Uint8Array): Promise<Uint8Array | null> {

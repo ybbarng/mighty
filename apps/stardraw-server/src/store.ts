@@ -172,6 +172,14 @@ export class Store {
       .get(entrantHex);
   }
 
+  /** 이 열쇠가 등록된 회차(없으면 null). 등록 회차는 닫히면 그 회차 공개 장부 파일에도 드러난다 */
+  registrationRound(entrantHex: string): number | null {
+    const row = this.db
+      .prepare("SELECT round FROM registrations WHERE entrant = ?")
+      .get(entrantHex);
+    return row ? Number(row.round) : null;
+  }
+
   credentialTaken(credentialHex: string): boolean {
     return !!this.db
       .prepare("SELECT 1 FROM registrations WHERE credential = ?")

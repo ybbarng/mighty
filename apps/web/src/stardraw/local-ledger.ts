@@ -330,6 +330,19 @@ export class LocalLedger implements Ledger {
     return null;
   }
 
+  async registeredRound(pub: Uint8Array): Promise<number | null> {
+    const who = toHex(entrantId(pub));
+    const found = this.registrations.findIndex((list) =>
+      list.some((r) => toHex(entrantId(r.pub)) === who),
+    );
+    if (found >= 0) return found + 1;
+    return this.pending.registrations.some(
+      (r) => toHex(entrantId(r.pub)) === who,
+    )
+      ? this.pending.round
+      : null;
+  }
+
   /** 응모권 받기(서버가 할 확인을 그대로 한다). 받은 시각(초)을 돌려준다 */
   async submit(
     ticket: Ticket,

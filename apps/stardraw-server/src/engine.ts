@@ -191,6 +191,11 @@ export class StardrawServer {
     return this.o.store.isRegistered(toHex(entrantId(pub)));
   }
 
+  /** 이 열쇠의 등록 회차(우주인 등록증의 등록 일자). 없으면 null */
+  registrationRound(pub: Uint8Array): number | null {
+    return this.o.store.registrationRound(toHex(entrantId(pub)));
+  }
+
   /** 패스키 번호 → 공개 열쇠(장부에 공개될 값이라 숨길 것이 없다) */
   passkeyPub(credentialId: Uint8Array): Uint8Array | null {
     return (
