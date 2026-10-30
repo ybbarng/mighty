@@ -79,7 +79,8 @@ export interface RelayLimits {
 }
 
 export const DEFAULT_RELAY_LIMITS: RelayLimits = {
-  invitesPerPrefixPerDay: 30,
+  // 운영 기본값은 config.ts DEFAULT_PREFIX_LIMITS(공유 IP 기준으로 넉넉히)와 같다
+  invitesPerPrefixPerDay: 100,
   badLinksPerPrefixPerDay: 60,
   openInvitesPerTicket: 10,
 };

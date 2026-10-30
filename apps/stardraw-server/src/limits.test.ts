@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_PREFIX_LIMITS } from "./config";
 import { BusyError, Counters, Gate, ipPrefix } from "./limits";
+import { DEFAULT_RELAY_LIMITS } from "./relay";
 
 describe("IP 앞부분", () => {
   it("IPv4는 /24, IPv6는 /48, IPv4가 섞인 IPv6는 IPv4로 본다", () => {
@@ -46,5 +48,19 @@ describe("동시 실행 제한", () => {
     releases.shift()?.();
     await Promise.all([first, second]);
     expect(most).toBe(1);
+  });
+});
+
+describe("IP 앞부분 상한 기본값(공유 IP 기준)", () => {
+  it("회사·학교 NAT처럼 외부 IP 하나에 100명이 넘어도 막히지 않게 넉넉하다", () => {
+    expect(DEFAULT_PREFIX_LIMITS).toEqual({
+      registrationsPerPrefixPerDay: 200,
+      entriesPerPrefixPerRound: 200,
+      invitesPerPrefixPerDay: 100,
+    });
+    // 전달 서버 기본값도 같은 값을 쓴다
+    expect(DEFAULT_RELAY_LIMITS.invitesPerPrefixPerDay).toBe(
+      DEFAULT_PREFIX_LIMITS.invitesPerPrefixPerDay,
+    );
   });
 });

@@ -36,6 +36,7 @@ import {
   toHex,
 } from "@mighty/stardraw-core";
 
+import { DEFAULT_PREFIX_LIMITS } from "./config";
 import { StardrawServer } from "./engine";
 import {
   type Anchor,
@@ -176,8 +177,12 @@ export async function makeRig(
     rootLog: log,
     anchor: limits.anchor ?? noAnchor,
     limits: {
-      entriesPerPrefixPerRound: limits.entriesPerPrefixPerRound ?? 20,
-      registrationsPerPrefixPerDay: limits.registrationsPerPrefixPerDay ?? 10,
+      entriesPerPrefixPerRound:
+        limits.entriesPerPrefixPerRound ??
+        DEFAULT_PREFIX_LIMITS.entriesPerPrefixPerRound,
+      registrationsPerPrefixPerDay:
+        limits.registrationsPerPrefixPerDay ??
+        DEFAULT_PREFIX_LIMITS.registrationsPerPrefixPerDay,
       argonConcurrency: 2,
       argonQueue: 32,
     },

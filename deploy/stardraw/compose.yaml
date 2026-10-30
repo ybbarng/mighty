@@ -49,7 +49,7 @@ services:
       - traefik.http.routers.stardraw.tls.certresolver=le
       - traefik.http.routers.stardraw.middlewares=stardraw-ratelimit
       # 같은 공인 IP 하나당 1분에 300번, 한꺼번에 60번. 화면은 1초마다 상태를 묻지 않고(10초) 장부 파일은 캐시된다.
-      # 응모 자체의 상한(회차당 IP 앞부분 20장, 하루 새 열쇠 10개)은 서버가 따로 센다
+      # 응모 자체의 상한(IP 앞부분마다 회차당 200장, 하루 새 열쇠 200개, 확인 링크 100개. 공유 IP 기준 기본값)은 서버가 따로 센다
       - traefik.http.middlewares.stardraw-ratelimit.ratelimit.average=300
       - traefik.http.middlewares.stardraw-ratelimit.ratelimit.period=1m
       - traefik.http.middlewares.stardraw-ratelimit.ratelimit.burst=60

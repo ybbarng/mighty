@@ -92,6 +92,15 @@ const str = (v: unknown, name: string): string => {
   return v;
 };
 
+/**
+ * 상한을 셀 클라이언트 주소. `trustProxy`(운영: Traefik 뒤)면 `X-Real-Ip`를 쓴다.
+ * 위조할 수 없는 이유(2026-10-30 Traefik v3.7.16 소스 pkg/middlewares/forwardedheaders/forwarded_header.go로 확인):
+ * 진입점에 `forwardedHeaders.trustedIPs`·`insecure`를 두지 않으면 Traefik은 모든 클라이언트를 믿지 않아
+ * 들어온 X-Real-Ip·X-Forwarded-*(밑줄 변형 X_Real_Ip 포함)를 지우고, X-Real-Ip를 실제 접속 주소로 새로 넣는다.
+ * 그래서 이 값은 Traefik이 본 접속 주소다. 전제: 서버 포트를 바깥에 열지 않고 Traefik만 바깥 80·443을 받는다
+ * (servers 저장소 byb.kr/apps/stardraw/compose.yaml에 ports 없음, traefik.yml에 forwardedHeaders 없음).
+ * Traefik 앞에 다른 프록시(CDN 등)를 두게 되면 그 프록시만 trustedIPs로 믿게 설정을 함께 바꿔야 한다
+ */
 function clientIp(req: IncomingMessage, trustProxy: boolean): string {
   if (trustProxy) {
     const real = req.headers["x-real-ip"];

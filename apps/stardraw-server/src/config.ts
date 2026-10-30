@@ -42,7 +42,7 @@ export interface ServerConfig {
   policy: WebAuthnPolicy;
   /** 개발용으로 다른 출처를 받을 때(CORS 허용 목록) */
   devOrigins: string[];
-  /** Traefik 뒤에서 X-Real-Ip를 믿는다 */
+  /** Traefik 뒤에서 X-Real-Ip를 믿는다(Traefik이 클라이언트 값을 지우고 접속 주소로 덮어쓴다, http.ts clientIp) */
   trustProxy: boolean;
   /** 공인 IP 앞부분 하나당 회차 응모 상한 */
   entriesPerPrefixPerRound: number;
@@ -76,6 +76,21 @@ const int = (name: string, fallback: number): number => {
   if (!Number.isInteger(n)) throw new Error(`${name}는 정수여야 한다: ${v}`);
   return n;
 };
+
+/**
+ * IP 앞부분(IPv4 /24, IPv6 /48)마다 상한의 기본값(2026-10-30 10·20·30 → 200·200·100).
+ * 회사·학교·통신사 NAT/CGNAT에서는 외부 IP 하나를 여럿이 쓴다(사용자: 회사 외부 IP 1개에 직원 100명 넘음).
+ * IP 제한은 서버 자원을 지키는 넉넉한 안전장치일 뿐 남용 방지의 1차 수단이 아니다. 정상 사용자끼리 몫을 깎고,
+ * 공격자는 다른 네트워크로 쉽게 옮긴다. 응모 비용은 응모권마다의 작업 증명이 맡는다(docs/36 5절)
+ */
+export const DEFAULT_PREFIX_LIMITS = {
+  /** 하루 새 열쇠 등록(새 우주인) */
+  registrationsPerPrefixPerDay: 200,
+  /** 회차 응모 */
+  entriesPerPrefixPerRound: 200,
+  /** 하루 당첨자 확인 링크 만들기 */
+  invitesPerPrefixPerDay: 100,
+} as const;
 
 /** 정식 단계 회차 길이: 1시간(매시 정각 추첨 · 55분 마감) */
 export const LIVE_ROUND_SECONDS = 3600;
@@ -131,9 +146,18 @@ export function loadConfig(): ServerConfig {
     },
     devOrigins: (env("STARDRAW_DEV_ORIGINS") ?? "").split(",").filter(Boolean),
     trustProxy: env("STARDRAW_TRUST_PROXY") === "1",
-    entriesPerPrefixPerRound: int("STARDRAW_ENTRIES_PER_PREFIX", 20),
-    registrationsPerPrefixPerDay: int("STARDRAW_REGISTRATIONS_PER_PREFIX", 10),
-    invitesPerPrefixPerDay: int("STARDRAW_INVITES_PER_PREFIX", 30),
+    entriesPerPrefixPerRound: int(
+      "STARDRAW_ENTRIES_PER_PREFIX",
+      DEFAULT_PREFIX_LIMITS.entriesPerPrefixPerRound,
+    ),
+    registrationsPerPrefixPerDay: int(
+      "STARDRAW_REGISTRATIONS_PER_PREFIX",
+      DEFAULT_PREFIX_LIMITS.registrationsPerPrefixPerDay,
+    ),
+    invitesPerPrefixPerDay: int(
+      "STARDRAW_INVITES_PER_PREFIX",
+      DEFAULT_PREFIX_LIMITS.invitesPerPrefixPerDay,
+    ),
     argonConcurrency: int("STARDRAW_ARGON_CONCURRENCY", 2),
     argonQueue: int("STARDRAW_ARGON_QUEUE", 32),
     sealDeadline: int("STARDRAW_SEAL_DEADLINE", 180),
