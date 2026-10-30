@@ -6,7 +6,7 @@ import { emptyWinners } from "./record";
 import { TICKET_VERSION_QUAL, type Ticket, ticketQualMessage } from "./ticket";
 
 /**
- * 상품 대상 판정(docs/36 11-13 ②). 검사기·서버·화면이 같은 함수를 쓴다. 장부만으로 계산한다(서버 판단 없음).
+ * 상품 대상 판정(docs/36 11-13 ②). 문제 문장은 "상품 자격:"으로 시작한다(검사 항목 「소속과 상품 자격」). 검사기·서버·화면이 같은 함수를 쓴다. 장부만으로 계산한다(서버 판단 없음).
  * - 증서가 진짜: 효력이 생긴 기간, 끝나지 않은 소속, 회차 마감이 기간 안, 도장, 자격 서명
  * - 한 회차 한 자격 한 장: 같은 자격 공개 열쇠가 둘 이상이면 그 응모권 모두 상품 대상에서 빠진다(등수는 그대로)
  * - 쓰인 자격 수 ≤ 발급 수: verifyLedger가 회차마다 센다(`countUsed`)
@@ -87,7 +87,7 @@ export function judgeRound(
   for (let k = 0; k < tickets.length; k++) {
     const t = tickets[k] as Ticket;
     if (t.v !== TICKET_VERSION_QUAL || !t.qual) continue;
-    const label = `응모권 ${toHex(ids[k] as Uint8Array).slice(0, 12)}`;
+    const label = `상품 자격: 응모권 ${toHex(ids[k] as Uint8Array).slice(0, 12)}`;
     const problem = checkTicketQualification(state, t, closesAt);
     if (problem) {
       problems.push(`${label}: ${problem}`);
@@ -116,7 +116,7 @@ export function judgeRound(
       for (const entry of list)
         if (!valid.includes(entry))
           problems.push(
-            `응모권 ${toHex(ids[entry.index] as Uint8Array).slice(0, 12)}: 도장이 기간 열쇠로 확인되지 않는다`,
+            `상품 자격: 응모권 ${toHex(ids[entry.index] as Uint8Array).slice(0, 12)}: 도장이 기간 열쇠로 확인되지 않는다`,
           );
     }
     const counts = new Map<string, number>();

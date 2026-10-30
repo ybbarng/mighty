@@ -1180,6 +1180,45 @@ export function operationsView(
   };
 }
 
+/** 화면이 보는 자격 기간(서버 GET /api/qual, 연습 장부). verify는 받는 곳의 확인 방법(설정이 없으면 null) */
+export interface QualPeriodInfo extends QualPeriodView {
+  badge: Badge;
+  method: string;
+  /** 지금 받을 수 있는지(확인 방법이 있고, 소속·기간이 끝나지 않음) */
+  open: boolean;
+  verify: "google" | "demo" | null;
+}
+
+export interface QualInfo {
+  round: number;
+  periods: QualPeriodInfo[];
+}
+
+/** 회차 round가 열린 때(효력을 맞춘 상태)의 자격 기간 목록. verifyOf는 소속 이름 → 확인 방법 */
+export function qualInfoOf(
+  state: OpsState,
+  round: number,
+  now: number,
+  verifyOf: (affiliationName: string) => "google" | "demo" | null,
+): QualInfo {
+  const periods = state.periods.flatMap((p) => {
+    const a = state.affiliations.find((x) => equalBytes(x.id, p.affiliation));
+    if (!a) return [];
+    const verify = verifyOf(a.fields.name);
+    const active = (a.until === null || a.until > round) && now < p.endsAt;
+    return [
+      {
+        ...periodView(state, p),
+        badge: a.fields.badge,
+        method: a.fields.method,
+        open: active && verify !== null,
+        verify,
+      },
+    ];
+  });
+  return { round, periods };
+}
+
 export function periodView(
   state: OpsState,
   p: QualPeriodState,

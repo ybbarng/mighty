@@ -100,6 +100,7 @@ export function ledgerReport(
   for (const p of whole) out.push(`        문제: ${problemText(p)}`);
   out.push("");
   out.push(...directorLines(result));
+  out.push(...qualificationLines(result));
   if (findings.length > 0) {
     out.push("");
     out.push("[내 응모권]");
@@ -173,4 +174,17 @@ export function directorLines(result: CheckResult): string[] {
       );
   }
   return out;
+}
+
+/** 소속과 상품 자격(docs/36 11-13): 자격 기간마다 발급 수와 응모권에 쓰인 서로 다른 자격 수 */
+export function qualificationLines(result: CheckResult): string[] {
+  if (result.qualification.length === 0) return [];
+  const day = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
+  return [
+    "[소속과 상품 자격]",
+    ...result.qualification.map(
+      (p) =>
+        `  ${p.affiliationName} ${p.number}기 · ${day(p.startsAt)}~${day(p.endsAt)} · ${p.from}회차부터 · 도장 열쇠 ${p.fingerprint} · 발급 ${p.issued} · 쓰인 자격 ${p.used}`,
+    ),
+  ];
 }

@@ -40,9 +40,9 @@ import {
   operationsView,
   opId,
   type PowParams,
-  periodView,
   phaseOf,
-  type QualPeriodView,
+  type QualInfo,
+  qualInfoOf,
   RawKeyRejected,
   type Receipt,
   type RoundRecord,
@@ -134,16 +134,6 @@ export interface QualificationOptions {
   verifyGoogle?: GoogleTokenVerifier;
   /** 발급 요청: IP 앞부분 하나당 하루 상한(기본 200, 회사 NAT 기준) */
   issuesPerPrefixPerDay?: number;
-}
-
-/** 화면이 보는 자격 기간(GET /api/qual) */
-export interface QualPeriodInfo extends QualPeriodView {
-  badge: number;
-  method: string;
-  /** 이 서버에서 지금 받을 수 있는지(설정된 확인 방법이 있고 기간이 끝나지 않음) */
-  open: boolean;
-  /** 확인 방법 종류(화면이 단추를 고른다). 설정이 없으면 null */
-  verify: "google" | null;
 }
 
 /** 응모자에게 보일 거절. status는 HTTP 응답 번호 */
@@ -975,27 +965,16 @@ export class StardrawServer {
   }
 
   /** 화면이 보는 자격 기간: 지금 회차에 효력이 생긴 기간과, 이 서버에서 받을 수 있는지 */
-  async qualInfo(): Promise<{ round: number; periods: QualPeriodInfo[] }> {
+  async qualInfo(): Promise<QualInfo> {
     await this.opsReady;
     const now = this.now();
     const round = roundAt(this.schedule(), now) ?? 0;
-    const state = this.opsAt(Math.max(round, 1));
-    const periods = state.periods.map((p) => {
-      const a = state.affiliations.find((x) => equalBytes(x.id, p.affiliation));
-      const config = a
-        ? this.o.qualification?.affiliations.get(a.fields.name)
-        : undefined;
-      const active =
-        !!a && (a.until === null || a.until > round) && now < p.endsAt;
-      return {
-        ...periodView(state, p),
-        badge: a?.fields.badge ?? 0,
-        method: a?.fields.method ?? "",
-        open: active && !!config,
-        verify: config ? config.kind : null,
-      };
-    });
-    return { round, periods };
+    return qualInfoOf(
+      this.opsAt(Math.max(round, 1)),
+      round,
+      now,
+      (name) => this.o.qualification?.affiliations.get(name)?.kind ?? null,
+    );
   }
 
   /**

@@ -11,6 +11,7 @@ import {
   equalBytes,
   fromBase64Url,
   fromHex,
+  taggedHash,
   toBase64Url,
   toHex,
 } from "./bytes";
@@ -21,6 +22,7 @@ import {
   directorHistory,
   type OperationsView,
   operationsView,
+  type QualPeriodView,
 } from "./operations";
 import {
   fetchFailure,
@@ -84,6 +86,44 @@ export interface CheckResult {
   directors: DirectorHistoryLine[];
   /** 운영 기록·소속·국장 열쇠 */
   operations: OperationsView;
+  /** 자격 기간마다 발급 수와 응모권에 쓰인 서로 다른 자격 수(docs/36 11-13) */
+  qualification: QualificationSummary[];
+}
+
+export interface QualificationSummary extends QualPeriodView {
+  /** 응모권에 쓰인 서로 다른 자격 수 */
+  used: number;
+  /** 도장 열쇠 지문(사람이 대조하는 보조 표시) */
+  fingerprint: string;
+}
+
+/** 검사 결과의 자격 기간 요약: 장부의 기간(효력이 생긴 것)과 쓰인 자격 수 */
+export function qualificationSummary(
+  report: VerifyReport,
+  records: number,
+): QualificationSummary[] {
+  const view = operationsView(report.operations, records, report.head);
+  return view.periods.map((p) => ({
+    ...p,
+    used: report.qualification.used[p.id] ?? 0,
+    fingerprint: toHex(
+      taggedHash("stardraw/issuer-fp/v1", fromBase64Url(p.issuerKey)),
+    ).slice(0, 16),
+  }));
+}
+
+/** 「소속과 상품 자격」 항목의 덧말: 기간마다 발급 수와 쓰인 자격 수 */
+export function qualificationDetail(
+  summary: readonly QualificationSummary[],
+): string {
+  return summary.length === 0
+    ? "열린 자격 기간이 없습니다"
+    : summary
+        .map(
+          (p) =>
+            `${p.affiliationName} ${p.number}기 · 발급 ${p.issued} · 쓰인 자격 ${p.used}`,
+        )
+        .join(" / ");
 }
 
 export interface PublicGenesisFile {
@@ -374,6 +414,11 @@ const RULES: { id: string; label: string; test: RegExp }[] = [
   { id: "pow", label: "작업 증명", test: /작업 증명/ },
   { id: "nickname", label: "별명", test: /^별명/ },
   {
+    id: "qualification",
+    label: "소속과 상품 자격(증서·도장·발급 수)",
+    test: /^상품 자격/,
+  },
+  {
     id: "ticket",
     label: "응모권 서명·한 사람 한 장",
     test: /^응모권|응모권 목록/,
@@ -520,12 +565,16 @@ export async function checkPublicLedger(
     registrations: registrations.reduce((n, r) => n + r.length, 0),
     powChecked: report.powChecked,
     head: toHex(report.head),
-    items: withPowDetail(checkItemsFrom(report.problems, extra, skips), report),
+    items: withQualDetail(
+      withPowDetail(checkItemsFrom(report.problems, extra, skips), report),
+      qualificationSummary(report, records.length),
+    ),
     problems: report.problems,
     // 봉인 시각은 아래 「바깥 증명」 항목(timestampItem)이 seals의 토큰으로 따로 본다
     skipped: report.skipped.filter((s) => !s.includes("머클 루트 로그 시각")),
     directors: directorHistory(report.operations),
     operations: operationsView(report.operations, records.length, report.head),
+    qualification: qualificationSummary(report, records.length),
     ledger,
   };
 }
@@ -622,6 +671,18 @@ async function timestampItem(
   return item(
     "pass",
     `${proved}회차 확인(${[...names].join(", ")})${voided > 0 ? `, 무효 ${voided}회차` : ""}`,
+  );
+}
+
+/** 「소속과 상품 자격」 항목이 통과면 기간마다 발급 수와 쓰인 자격 수를 적는다 */
+export function withQualDetail(
+  items: CheckItem[],
+  summary: readonly QualificationSummary[],
+): CheckItem[] {
+  return items.map((item) =>
+    item.id === "qualification" && item.status === "pass"
+      ? { ...item, detail: qualificationDetail(summary) }
+      : item,
   );
 }
 
