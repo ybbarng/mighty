@@ -1,6 +1,6 @@
 import { createRng, nextFloat } from "@mighty/engine";
 
-import { ballColor, SKY_LINES, SKY_STARS, starRadius, tempColor } from "./sky";
+import { SKY_LINES, SKY_STARS, starRadius, tempColor } from "./sky";
 import { type Meteor, type Twinkle, twinkleLevel } from "./sky-effects";
 
 /**
@@ -13,7 +13,7 @@ import { type Meteor, type Twinkle, twinkleLevel } from "./sky-effects";
  * - 추첨(draw): 모든 별의 빛을 끈 하늘에서 룰렛 불빛(cursor)이 돌고, 멈춘 당첨 별만 켜진 채 남는다.
  *   보너스는 하늘빛, 내 별(파란 고리)이 당첨 번호면 고리 안의 별빛이 맥동한다. 반짝임·유성은 돌지 않는다
  *
- * 휴대폰 비용: 상태가 같으면 바탕 층(먼지·선·별)과 위 층(고리·번호 공)을 미리 그려 두고,
+ * 휴대폰 비용: 상태가 같으면 바탕 층(먼지·선·별)과 위 층(고리·번호)을 미리 그려 두고,
  * 프레임마다 두 층을 붙이며 그 사이에 움직이는 빛(반짝임·빛줄기·강조)만 그린다.
  */
 
@@ -60,24 +60,13 @@ export function scaleOf(width: number): number {
   return Math.max(0.55, Math.min(1.6, width / 360));
 }
 
-/** 번호 공(별 아래) 가운데까지의 거리 */
-function labelOffset(r: number, scale: number): number {
-  return r + 11 * scale;
-}
-
-/** 이 자리(px)에 있는 별 번호. 별이나 그 아래 번호 공을 누르면 된다 */
+/** 이 자리(px)에 있는 별 번호. 별(과 오른쪽 위 번호)을 누르면 된다 */
 export function starAt(x: number, y: number, width: number): number | null {
   const scale = scaleOf(width);
   let best: number | null = null;
   let bestD = Infinity;
   for (const s of SKY_STARS) {
-    const px = s.x * width;
-    const py = s.y * width;
-    const r = starRadius(s.mag) * scale;
-    const d = Math.min(
-      Math.hypot(px - x, py - y),
-      Math.hypot(px - x, py + labelOffset(r, scale) - y),
-    );
+    const d = Math.hypot(s.x * width - x, s.y * width - y);
     if (d < bestD) {
       bestD = d;
       best = s.n;
@@ -247,7 +236,7 @@ function sceneOf(W: number, state: SkyState) {
       y: s.y * W,
       c: tempColor(s.k) as Rgb,
       look: starLook(s.mag, scale),
-      /** 고리·번호 공 자리를 정하는 반지름(누르는 자리와 같다) */
+      /** 고리 자리를 정하는 반지름 */
       r: starRadius(s.mag) * scale,
       mine,
       drawn,
@@ -322,7 +311,7 @@ function paintBase(g: Ctx, sc: Scene) {
   g.globalAlpha = 1;
 }
 
-/** 위 층: 별자리 이름, 고리, 번호 공, 차례 표시 */
+/** 위 층: 별자리 이름, 번호, 고리, 차례 표시 */
 function paintTop(g: Ctx, sc: Scene) {
   const { W, state, scale, dark, focusCon } = sc;
   if (focusCon) {
@@ -344,7 +333,22 @@ function paintTop(g: Ctx, sc: Scene) {
   }
 
   for (const st of sc.stars) {
-    const { x, y, r, s } = st;
+    const { x, y, s } = st;
+
+    // 번호: 동그라미 없이 별빛 색 글자로 별 오른쪽 위에(별 지도처럼), 은은하게 빛난다
+    g.globalAlpha =
+      dark && !st.on ? 0.22 : st.dim ? 0.3 : st.mine || st.on ? 1 : 0.88;
+    g.save();
+    g.shadowColor = rgba(st.c, 0.9);
+    g.shadowBlur = 6 * scale;
+    g.fillStyle = rgba(whiter(st.c, 0.2), 1);
+    g.font = `600 ${Math.max(8, Math.round(10.5 * scale))}px ui-monospace, Menlo, monospace`;
+    g.textAlign = "left";
+    g.textBaseline = "alphabetic";
+    g.fillText(String(s.n), x + st.r + 2.5 * scale, y - st.r - 1.5 * scale);
+    g.restore();
+    g.globalAlpha = 1;
+
     // 고리: 내 별은 금빛(추첨 화면에서는 당첨 별 금빛과 헷갈리지 않게 하늘색).
     // 맞았는지는 고리 색이 아니라 고리 안의 별이 켜져 빛나는 것으로 알린다(파란 고리 + 빛)
     if (st.mine) {
@@ -354,7 +358,7 @@ function paintTop(g: Ctx, sc: Scene) {
           : "rgba(244,210,122,0.95)";
       g.lineWidth = 1.5 * Math.min(1.2, scale);
       g.beginPath();
-      g.arc(x, y, r + 6 * scale, 0, TAU);
+      g.arc(x, y, st.r + 6 * scale, 0, TAU);
       g.stroke();
     }
     if (state.mode === "pick" && state.focus === s.n) {
@@ -362,28 +366,10 @@ function paintTop(g: Ctx, sc: Scene) {
       g.setLineDash([3, 3]);
       g.lineWidth = 1;
       g.beginPath();
-      g.arc(x, y, r + 10 * scale, 0, TAU);
+      g.arc(x, y, st.r + 10 * scale, 0, TAU);
       g.stroke();
       g.setLineDash([]);
     }
-
-    // 번호(로또 공 색 작은 공)
-    const ly = y + labelOffset(r, scale);
-    const br = 8 * scale;
-    g.fillStyle = ballColor(s.n);
-    g.globalAlpha =
-      dark && !st.on ? 0.22 : st.dim ? 0.25 : st.mine || st.on ? 1 : 0.8;
-    g.beginPath();
-    g.arc(x, ly, br, 0, TAU);
-    g.fill();
-    g.globalAlpha = st.dim ? 0.4 : 1;
-    g.fillStyle = "#1a1a1a";
-    g.font = `600 ${Math.max(7, Math.round(9 * scale))}px ui-monospace, Menlo, monospace`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(String(s.n), x, ly + 0.5);
-    g.textBaseline = "alphabetic";
-    g.globalAlpha = 1;
   }
 
   // 차례 표시(①②③): 별 위에 금빛 동그라미 숫자

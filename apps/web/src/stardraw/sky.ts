@@ -45,13 +45,17 @@ export function starOf(n: number): SkyStar {
   return s;
 }
 
-/** 로또 공 색 구간: 1~10 노랑, 11~20 파랑, 21~30 빨강, 31~40 회색, 41~45 초록 */
+/**
+ * 번호 공 색: 그 별의 빛깔(표면 온도, `tempWord`와 같은 구간)을 공처럼 진하게 한 다섯 색.
+ * 하늘 그림의 별빛(`tempColor`)은 실제처럼 옅어서 공으로는 서로 구별되지 않는다
+ */
 export function ballColor(n: number): string {
-  if (n <= 10) return "#f6c343";
-  if (n <= 20) return "#5aa8e8";
-  if (n <= 30) return "#ef6a5a";
-  if (n <= 40) return "#a7adb8";
-  return "#6cc58a";
+  const k = starOf(n).k;
+  if (k < 4000) return "#e5533d";
+  if (k < 5500) return "#f08a2c";
+  if (k < 7000) return "#f4c542";
+  if (k < 10000) return "#e9edf5";
+  return "#5b8def";
 }
 
 /** 별빛 색의 채도를 얼마나 낮출지(0이면 흑체 색 그대로, 1이면 흰색). 실제 별은 눈에 아주 옅은 색으로만 보인다 */
