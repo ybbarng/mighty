@@ -255,8 +255,7 @@ function Backup({ holding }: { holding: QualHolding }) {
           </div>
         )}
         <p className="text-white/50 text-xs">
-          받은 다음 회차 응모부터 붙습니다. 이 기기에는 잠기지 않은 채
-          저장됩니다.
+          받은 다음 회차 응모부터 붙습니다.
         </p>
       </div>
     </div>
