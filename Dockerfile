@@ -46,10 +46,13 @@ COPY . .
 # 정적 빌드라 주소들은 빌드할 때 들어간다.
 #   NEXT_PUBLIC_SITE_URL   공유 미리보기 이미지 주소
 #   NEXT_PUBLIC_UMAMI_WEBSITE_ID  사이트 통계(stats.byb.kr umami) ID. 비우면 통계 스크립트를 싣지 않는다(docs/33)
+#   NEXT_PUBLIC_STARDRAW_API  하늘의 별 따기 서버 주소(예: /stardraw-api). 비우면 기기 안 연습 장부로 돈다(docs/36 11-5)
 ARG NEXT_PUBLIC_SITE_URL=https://game.byb.kr
 ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID=
+ARG NEXT_PUBLIC_STARDRAW_API=
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_UMAMI_WEBSITE_ID=$NEXT_PUBLIC_UMAMI_WEBSITE_ID \
+    NEXT_PUBLIC_STARDRAW_API=$NEXT_PUBLIC_STARDRAW_API \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @mighty/web build
 
