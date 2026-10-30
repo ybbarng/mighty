@@ -42,6 +42,7 @@ import {
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
+import { StatsView } from "./StatsView";
 import { ticketUrl } from "./TicketView";
 import { WinNotice } from "./WinNotice";
 
@@ -53,11 +54,19 @@ type View =
   | { name: "mine" }
   | { name: "rounds" }
   | { name: "round"; round: number }
+  /** 관측 기록(공개 장부 통계) */
+  | { name: "stats" }
   /** 당첨자가 보낸 확인 링크(/stardraw/check#토큰) */
   | { name: "link"; token: string };
 
 /** 화면마다 자기 주소(정적 내보내기라 실제 경로 페이지). 경로 안의 작은 화면은 # 조각으로 */
-export type StardrawPage = "home" | "enter" | "mine" | "rounds" | "check";
+export type StardrawPage =
+  | "home"
+  | "enter"
+  | "mine"
+  | "rounds"
+  | "check"
+  | "stats";
 
 const PATH: Record<StardrawPage, string> = {
   home: "/stardraw",
@@ -65,6 +74,7 @@ const PATH: Record<StardrawPage, string> = {
   mine: "/stardraw/mine",
   rounds: "/stardraw/rounds",
   check: "/stardraw/check",
+  stats: "/stardraw/stats",
 };
 
 /** 화면 → 주소. 뒤로가기·새로고침이 그 화면으로 돌아오게 브라우저 기록에 남긴다 */
@@ -86,6 +96,8 @@ function urlOf(v: View): string {
       return `${PATH.rounds}#draw-${v.round}`;
     case "link":
       return `${PATH.check}#${v.token}`;
+    case "stats":
+      return PATH.stats;
   }
 }
 
@@ -94,6 +106,7 @@ function viewOf(page: StardrawPage, hash: string): View {
   const h = hash.replace(/^#/, "");
   if (page === "enter") return { name: "enter" };
   if (page === "check") return { name: "link", token: h };
+  if (page === "stats") return { name: "stats" };
   if (page === "mine") {
     const t = /^t-([0-9a-f]{64})$/.exec(h);
     return t ? { name: "receipt", id: t[1] as string } : { name: "mine" };
@@ -255,6 +268,13 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
             version={version}
             onBack={() => back({ name: "home" })}
             onOpen={(round) => go({ name: "round", round })}
+            onStats={() => go({ name: "stats" })}
+          />
+        ) : view.name === "stats" ? (
+          <StatsView
+            services={services}
+            version={version}
+            onBack={() => back({ name: "rounds" })}
           />
         ) : view.name === "round" ? (
           <RoundDetail
@@ -1005,11 +1025,14 @@ export function RoundsView({
   version,
   onBack,
   onOpen,
+  onStats,
 }: {
   services: Services;
   version: number;
   onBack: () => void;
   onOpen: (round: number) => void;
+  /** 관측 기록(통계)으로. 없으면 링크를 두지 않는다(데모 둘러보기) */
+  onStats?: () => void;
 }) {
   const [sessions, setSessions] = useState<CheckSession[]>([]);
   const [limit, setLimit] = useState(24);
@@ -1036,7 +1059,17 @@ export function RoundsView({
           ← 처음으로
         </button>
         <h2 className="font-bold text-lg">지난 회차</h2>
-        <span className="w-16" />
+        {onStats ? (
+          <button
+            type="button"
+            onClick={onStats}
+            className="w-16 text-right text-sm text-white/70 hover:text-white"
+          >
+            관측 기록
+          </button>
+        ) : (
+          <span className="w-16" />
+        )}
       </div>
       {openChecks.length > 0 && (
         <p className="sd-breathe rounded-xl border border-sky-200/25 bg-sky-300/5 px-4 py-3 text-sm">
