@@ -1,5 +1,6 @@
 import {
   type BeaconVerifier,
+  DEFAULT_TSA_MIN,
   DEFAULT_WEBAUTHN_POLICY,
   decodeRecord,
   decodeRegistration,
@@ -11,9 +12,12 @@ import {
   type Schedule,
   sealDigest,
   type Ticket,
+  type TsaAuthority,
+  type TsaProof,
   toHex,
   type VerifyReport,
   verifyLedger,
+  verifyTsaProof,
 } from "@mighty/stardraw-core";
 
 /**
@@ -62,6 +66,8 @@ interface SealFile {
   round: number;
   digest: string;
   loggedAt: number;
+  /** 봉인 시각 증거(공개 시각 인증 토큰 등) */
+  log?: unknown;
 }
 interface RoundFile {
   record: string;
@@ -76,6 +82,8 @@ export interface CheckOptions {
   base?: string;
   /** 시험만 바꿔 끼운다(기본은 quicknet BLS 확인) */
   beaconVerifier?: BeaconVerifier;
+  /** 시험만 바꿔 끼운다(기본은 core에 열쇠를 고정한 기관 `TSA_AUTHORITIES`) */
+  tsaAuthorities?: readonly TsaAuthority[];
 }
 
 /** 문제 문장을 항목으로 나누는 규칙(verify.ts의 문장 기준, 위에서부터 처음 맞는 것) */
@@ -192,8 +200,10 @@ export async function checkServerLedger(
 
   // 봉인 파일: 마감 직후 공개한 봉인 값이 닫힌 회차 기록과 같은지
   const sealProblems: string[] = [];
+  const seals: SealFile[] = [];
   for (const record of records) {
     const seal = await get<SealFile>(`/ledger/seals/${pad(record.round)}.json`);
+    seals.push(seal);
     if (seal.digest !== toHex(sealDigest(record)))
       sealProblems.push(`${record.round}회차: 봉인 값이 기록과 다르다`);
     if (seal.loggedAt !== record.rootLoggedAt)
@@ -217,15 +227,12 @@ export async function checkServerLedger(
           status: "fail",
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
-    {
-      id: "timestamp",
-      label: "봉인이 drand보다 먼저였다는 바깥 증명(공개 시각 인증)",
-      status: "skip",
-      detail:
-        genesis.schedule.ledger === "trial"
-          ? "시험 운영이라 시각 인증을 받지 않습니다"
-          : "이 페이지는 아직 시각 인증 토큰을 확인하지 않습니다",
-    },
+    await timestampItem(
+      records,
+      seals,
+      genesis.schedule.ledger === "trial",
+      options.tsaAuthorities,
+    ),
   ];
   return result(
     "server",
@@ -235,6 +242,74 @@ export async function checkServerLedger(
     tickets,
     registrations,
     withPowDetail(itemsFrom(report.problems, extra, {}), report),
+  );
+}
+
+const TIMESTAMP_LABEL = "봉인이 drand보다 먼저였다는 바깥 증명(공개 시각 인증)";
+
+/**
+ * 봉인 시각 증명(docs/36 11-1, core tsa.ts): 회차마다 seals/N의 시각 인증 토큰을 확인한다.
+ * 통과 규칙: 실린 토큰이 모두 맞고 서로 다른 기관 DEFAULT_TSA_MIN곳 이상이며, 가장 이른 시각이 기록의 rootLoggedAt과 같다.
+ * 그 시각이 drand 시각보다 앞서는지는 「무효 회차 규칙」 항목이 본다. 무효 회차(rootLoggedAt 0)는 볼 것이 없다.
+ * 시험 운영에서 증거가 없는 회차(서버 시계로 봉인)는 건너뜀, 정식이면 실패다
+ */
+async function timestampItem(
+  records: readonly RoundRecord[],
+  seals: readonly SealFile[],
+  trial: boolean,
+  authorities?: readonly TsaAuthority[],
+): Promise<CheckItem> {
+  const failed: string[] = [];
+  const missing: number[] = [];
+  const names = new Set<string>();
+  let proved = 0;
+  let voided = 0;
+  for (const [i, record] of records.entries()) {
+    if (record.rootLoggedAt === 0) {
+      voided++;
+      continue;
+    }
+    const log = seals[i]?.log as TsaProof | null | undefined;
+    if (log?.kind !== "tsa") {
+      missing.push(record.round);
+      continue;
+    }
+    const check = await verifyTsaProof(log, {
+      digest: sealDigest(record),
+      minValid: DEFAULT_TSA_MIN,
+      ...(authorities ? { authorities } : {}),
+    });
+    if (!check.ok)
+      failed.push(`${record.round}회차: ${check.problems.join(", ")}`);
+    else if (check.loggedAt !== record.rootLoggedAt)
+      failed.push(
+        `${record.round}회차: 봉인 시각이 가장 이른 토큰 시각과 다르다`,
+      );
+    else {
+      proved++;
+      for (const s of check.stamps) names.add(s.tsa);
+    }
+  }
+  const item = (status: CheckStatus, detail: string): CheckItem => ({
+    id: "timestamp",
+    label: TIMESTAMP_LABEL,
+    status,
+    detail,
+  });
+  if (failed.length > 0) return item("fail", failed.join(" / "));
+  const noProof = `시각 인증 없이 서버 시계로 봉인한 회차: ${missing.join(", ")}`;
+  if (missing.length > 0)
+    return trial ? item("skip", noProof) : item("fail", noProof);
+  if (proved === 0)
+    return item(
+      "skip",
+      voided > 0
+        ? "모든 회차가 무효라 볼 토큰이 없습니다"
+        : "닫힌 회차가 없습니다",
+    );
+  return item(
+    "pass",
+    `${proved}회차 확인(${[...names].join(", ")})${voided > 0 ? `, 무효 ${voided}회차` : ""}`,
   );
 }
 
@@ -253,7 +328,7 @@ export async function checkPracticeLedger(ledger: {
       [
         {
           id: "timestamp",
-          label: "봉인이 drand보다 먼저였다는 바깥 증명(공개 시각 인증)",
+          label: TIMESTAMP_LABEL,
           status: "skip",
           detail: "연습 장부는 이 기기 안에서만 돕니다",
         },

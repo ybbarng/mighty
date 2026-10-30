@@ -314,22 +314,48 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
             </p>
           </Rule>
 
-          <Rule title="봉인이 추첨보다 먼저였다는 증거">
+          <Rule title="봉인이 추첨보다 먼저였다는 증거" file="tsa.ts">
             <p className="text-white/80">
               마감 직후 봉인 값으로 공개 시각 인증 기관(RFC 3161 TSA) 여러
-              곳에서 시각 인증 토큰을 받습니다. 토큰마다 다음을 확인합니다.
+              곳에서 시각 인증 토큰을 받아 <code>seals/N.json</code>의{" "}
+              <code>log</code>에 싣습니다. 시험 운영도 같게 받습니다.
             </p>
+            <Code>{`log = { kind: "tsa", tokens: [{ tsa, genTime, token(DER, base64) }, …] }
+토큰에 실린 값(messageImprint, SHA-256) = SHA-256(sealDigest)
+rootLoggedAt = 맞는 토큰 가운데 가장 이른 genTime(초, 소수점 아래 버림)
+통과: 실린 토큰이 모두 맞고, 서로 다른 기관 1곳 이상, rootLoggedAt이 기록과 같다`}</Code>
             <ul className={li}>
               <li>
-                <code>messageImprint</code>가 SHA-256이고 값이 봉인
-                값(sealDigest)과 같다
+                토큰 서명: CMS SignedData의 서명된 속성(
+                <code>messageDigest</code> = TSTInfo의 해시,{" "}
+                <code>contentType</code> = TSTInfo)이 토큰 안 서명 인증서로
+                확인된다. 적어 둔 <code>genTime</code>은 토큰 안 시각과 같다
               </li>
               <li>
-                <code>genTime</code> &lt; drand 회차 시각
+                인증서 사슬: 서명 인증서에서 위로 올라가며 서명을 확인해 아래
+                고정한 공개 열쇠(인증서 SPKI DER의 SHA-256)에 닿는다. 그 아래
+                인증서는 <code>genTime</code>에 유효하고, 서명 인증서는 시각
+                인증용(EKU timeStamping)이다
               </li>
               <li>
-                토큰 서명이 미리 정해 둔 TSA 인증서로 확인된다(인증서를 고정해
-                둠)
+                고정한 열쇠: DigiCert Trusted Root G4{" "}
+                <code className="break-all">59df317b…e364729c</code>, Sectigo
+                Public Time Stamping Root R46{" "}
+                <code className="break-all">a4db8668…03824795</code>, FreeTSA
+                Root CA <code className="break-all">52c54ba3…818e99b5</code>
+                (개인 운영이라 서버 기본에는 없음)
+              </li>
+              <li>
+                <code>genTime</code> &lt; drand 회차 시각은 위 「봉인 값과 무효
+                회차」 규칙(rootLoggedAt ≥ drand 회차 시각이면 무효)으로
+                확인합니다
+              </li>
+              <li>
+                서버는 DigiCert·Sectigo 두 곳에 동시에 묻고 한 곳 이상 받으면
+                봉인합니다. 한 기관이 멈춰도 회차가 무효가 되지 않게 하려는
+                것이고, 두 곳 모두 받은 회차는 두 기관이 함께 거짓말하지 않는 한
+                시각을 바꿀 수 없습니다. 마감 3분 뒤까지 한 곳도 못 받으면 무효
+                회차입니다
               </li>
             </ul>
           </Rule>

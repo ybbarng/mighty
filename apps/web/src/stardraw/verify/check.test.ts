@@ -8,9 +8,12 @@ import {
   roundTimes,
   type Schedule,
   sealDigest,
+  sealImprint,
+  type TsaProof,
   toBase64Url,
   toHex,
 } from "@mighty/stardraw-core";
+import { FakeTsa } from "@mighty/stardraw-core/testing";
 import { describe, expect, it } from "vitest";
 
 import { checkServerLedger } from "./check";
@@ -125,5 +128,60 @@ describe("장부 전체 검사(서버 공개 파일)", () => {
     const status = statusOf(result.items);
     expect(status.seal).toBe("fail");
     expect(status.head).toBe("fail");
+  });
+});
+
+describe("봉인 시각 증명(공개 시각 인증 토큰)", () => {
+  const tsa = new FakeTsa("tsa-a", () => RECORD.rootLoggedAt);
+  const tokenFor = (digest: Uint8Array, genTime: number) =>
+    Buffer.from(tsa.stamp(sealImprint(digest), genTime)).toString("base64");
+  const withLog = (log: unknown, mode: "trial" | "live" = "trial") =>
+    files((f) => {
+      const seal = f["/ledger/seals/000001.json"] as Record<string, unknown>;
+      seal.log = log;
+      if (mode === "live") {
+        const { ledger: _, ...live } = SCHEDULE;
+        f["/ledger/genesis.json"] = { v: 1, schedule: live, carried: [] };
+      }
+    });
+  const proof = (token: string, genTime = RECORD.rootLoggedAt): TsaProof => ({
+    kind: "tsa",
+    tokens: [{ tsa: "tsa-a", genTime, token }],
+  });
+  const check = (fetch: typeof globalThis.fetch) =>
+    checkServerLedger({
+      base: "",
+      fetch,
+      beaconVerifier: () => true,
+      tsaAuthorities: [tsa.authority],
+    });
+  const timestamp = async (fetch: typeof globalThis.fetch) =>
+    (await check(fetch)).items.find((i) => i.id === "timestamp");
+
+  it("토큰이 봉인 값을 담고 가장 이른 시각이 기록과 같으면 통과한다", async () => {
+    const token = tokenFor(sealDigest(RECORD), RECORD.rootLoggedAt);
+    expect(await timestamp(withLog(proof(token)))).toMatchObject({
+      status: "pass",
+      detail: "1회차 확인(tsa-a)",
+    });
+  });
+
+  it("다른 값을 담은 토큰, 기록과 다른 시각의 토큰은 실패한다", async () => {
+    const other = tokenFor(new Uint8Array(32), RECORD.rootLoggedAt);
+    expect((await timestamp(withLog(proof(other))))?.status).toBe("fail");
+    const earlier = tokenFor(sealDigest(RECORD), RECORD.rootLoggedAt - 5);
+    expect(
+      await timestamp(withLog(proof(earlier, RECORD.rootLoggedAt - 5))),
+    ).toMatchObject({
+      status: "fail",
+      detail: "1회차: 봉인 시각이 가장 이른 토큰 시각과 다르다",
+    });
+  });
+
+  it("증거가 없는 회차는 시험 운영이면 건너뜀, 정식이면 실패", async () => {
+    expect((await timestamp(withLog({ kind: "local" })))?.status).toBe("skip");
+    expect((await timestamp(withLog({ kind: "local" }, "live")))?.status).toBe(
+      "fail",
+    );
   });
 });
