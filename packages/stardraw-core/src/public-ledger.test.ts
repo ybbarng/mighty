@@ -1,26 +1,22 @@
-// @vitest-environment node
-import {
-  anchorFile,
-  anchorPath,
-  closeRound,
-  drandRoundForClose,
-  encodeRecord,
-  genesisAnchorFile,
-  genesisHash,
-  ledgerId,
-  recordHash,
-  roundTimes,
-  type Schedule,
-  sealDigest,
-  sealImprint,
-  type TsaProof,
-  toBase64Url,
-  toHex,
-} from "@mighty/stardraw-core";
-import { FakeTsa } from "@mighty/stardraw-core/testing";
 import { describe, expect, it } from "vitest";
 
-import { checkServerLedger } from "./check";
+import { anchorFile, anchorPath, genesisAnchorFile, ledgerId } from "./anchor";
+import { toBase64Url, toHex } from "./bytes";
+import { drandRoundForClose } from "./drand";
+import {
+  checkPublicLedger,
+  findTicket,
+  type PublicLedger,
+  parseTicketQuery,
+} from "./public-ledger";
+import { encodeRecord, genesisHash, recordHash } from "./record";
+import { closeRound, sealDigest, sortTickets } from "./round";
+import { roundTimes, type Schedule } from "./schedule";
+import { FakeTsa, registerRaw, signers, ticketFor } from "./testing";
+import { ticketId } from "./ticket";
+import { sealImprint, type TsaProof } from "./tsa";
+
+const checkServerLedger = checkPublicLedger;
 
 // 시험 장부 하나: 1회차는 응모 없이 정상으로 닫혔다(가짜 drand 서명, 확인은 바꿔 끼운다)
 const SCHEDULE: Schedule = {
@@ -137,7 +133,7 @@ describe("장부 전체 검사(서버 공개 파일)", () => {
 describe("봉인 시각 증명(공개 시각 인증 토큰)", () => {
   const tsa = new FakeTsa("tsa-a", () => RECORD.rootLoggedAt);
   const tokenFor = (digest: Uint8Array, genTime: number) =>
-    Buffer.from(tsa.stamp(sealImprint(digest), genTime)).toString("base64");
+    btoa(String.fromCharCode(...tsa.stamp(sealImprint(digest), genTime)));
   const withLog = (log: unknown, mode: "trial" | "live" = "trial") =>
     files((f) => {
       const seal = f["/ledger/seals/000001.json"] as Record<string, unknown>;
@@ -221,6 +217,84 @@ describe("앵커 저장소(GitHub raw)", () => {
     expect(result.items.find((i) => i.id === "anchor")).toMatchObject({
       status: "fail",
       detail: "처음 일정표: 앵커 저장소의 장부와 다르다(장부를 다시 시작했다)",
+    });
+  });
+});
+
+describe("내 응모권 찾기", () => {
+  it("공유 주소·영수증 앞자리·회차-일련번호를 읽는다", () => {
+    const id = "ab".repeat(32);
+    expect(
+      parseTicketQuery(`https://game.byb.kr/stardraw/ticket#12-${id}`),
+    ).toEqual({ round: 12, id });
+    expect(parseTicketQuery("3 ABCD ef01 2345")).toEqual({
+      round: 3,
+      id: "abcdef012345",
+    });
+    expect(parseTicketQuery("3-abc")).toBeNull();
+    expect(parseTicketQuery("0-abcdef012345")).toBeNull();
+    expect(parseTicketQuery("abcdef012345")).toBeNull();
+  });
+
+  // 응모권 둘이 든 1회차(가짜 drand 서명)
+  async function ledgerWithTickets(): Promise<{
+    ledger: PublicLedger;
+    ids: string[];
+  }> {
+    const keys = await signers(2);
+    const prev = genesisHash(SCHEDULE);
+    const registrations = await registerRaw(keys, prev);
+    const tickets = await Promise.all(
+      keys.map((k, i) => ticketFor(k, 1, [1, 2, 3, 4, 5, 6 + i], prev)),
+    );
+    const record = closeRound({
+      schedule: SCHEDULE,
+      round: 1,
+      prev,
+      tickets,
+      registrations,
+      rootLoggedAt: closesAt + 10,
+      beacon: {
+        round: drandRoundForClose(closesAt),
+        signature: new Uint8Array(48).fill(7),
+      },
+    });
+    return {
+      ledger: {
+        genesis: SCHEDULE,
+        head: { rounds: 1, head: toHex(recordHash(record)), sealed: 1 },
+        records: [record],
+        tickets: [sortTickets(tickets)],
+        registrations: [registrations],
+        seals: [],
+      },
+      ids: tickets.map((t) => toHex(ticketId(t))),
+    };
+  }
+
+  it("일련번호 앞자리로 찾아 머클 증명과 등수를 확인한다", async () => {
+    const { ledger, ids } = await ledgerWithTickets();
+    const id = ids[0] as string;
+    const found = findTicket(ledger, { round: 1, id: id.slice(0, 12) });
+    expect(found).toMatchObject({ found: true, id, included: true });
+    if (found.found) {
+      const record = ledger.records[0];
+      const expected =
+        ([1, 2, 3, 4, 5] as const).find((r) =>
+          record?.winners[r].some((w) => toHex(w) === id),
+        ) ?? null;
+      expect(found.rank).toBe(expected);
+    }
+  });
+
+  it("없는 일련번호, 닫히지 않은 회차는 이유와 함께 못 찾는다", async () => {
+    const { ledger } = await ledgerWithTickets();
+    expect(findTicket(ledger, { round: 1, id: "00000000" })).toMatchObject({
+      found: false,
+      reason: "1회차 응모권 2장 가운데 이 일련번호가 없습니다",
+    });
+    expect(findTicket(ledger, { round: 2, id: "00000000" })).toMatchObject({
+      found: false,
     });
   });
 });

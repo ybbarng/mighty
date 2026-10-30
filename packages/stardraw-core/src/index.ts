@@ -7,6 +7,7 @@ export * from "./keys";
 export * from "./merkle";
 export * from "./nickname";
 export * from "./pow";
+export * from "./public-ledger";
 export * from "./receipt";
 export * from "./record";
 export * from "./registration";
