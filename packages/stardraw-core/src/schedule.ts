@@ -17,23 +17,20 @@ export interface ScheduleEntry {
   powTarget: number;
   /** 새 열쇠 등록의 작업 증명 목표값(응모권보다 훨씬 무겁게, docs/36 5절) */
   registerPowTarget: number;
+  /**
+   * 운영 단계(docs/36 11-6). 서버 장부는 시험 단계로 시작해 일정 바꾸기 한 줄로 정식 단계에 들어가고,
+   * 사슬은 끝까지 하나다. 단계가 없는 일정표(기기 안 연습 장부)는 모든 줄에 없다
+   */
+  phase?: Phase;
 }
+
+export type Phase = "trial" | "live";
 
 export interface Schedule {
   /** 1회차가 열리는 시각 */
   epoch: number;
   /** fromRound 오름차순, 첫 줄은 fromRound 1 */
   entries: ScheduleEntry[];
-  /**
-   * 시험 운영 장부. genesis 꼬리표가 달라(record.ts) 정식 장부와 응모권·등록·증명이 섞일 수 없다.
-   * 정식 장부는 이 칸이 없다
-   */
-  ledger?: "trial";
-  /**
-   * 시험 장부에서 옮겨 온 패스키 등록(docs/36 11-6). 목록은 장부의 genesis 파일에 공개하고,
-   * 여기에는 수와 등록 id 머클 루트(hex)만 둔다. genesis 해시에 들어가 1회차 전에 고정된다
-   */
-  carried?: { count: number; root: string };
 }
 
 /** 회차 k가 정해지려면 앞 회차 기록(drand 뒤)이 있어야 해서 회차는 10분보다 짧을 수 없다 */
@@ -75,30 +72,40 @@ export function checkScheduleEntry(entry: ScheduleEntry): string | null {
   ) {
     return "등록 작업 증명 목표값은 1~2^32-1 정수";
   }
+  if (
+    entry.phase !== undefined &&
+    entry.phase !== "trial" &&
+    entry.phase !== "live"
+  )
+    return "단계는 trial이거나 live";
+  return null;
+}
+
+/** 줄을 하나 더 붙여도 단계 규칙에 맞는지: 단계는 모든 줄에 있거나 모두 없고, 정식 뒤로 시험은 없다 */
+function checkPhaseAfter(
+  prev: ScheduleEntry | undefined,
+  next: ScheduleEntry,
+): string | null {
+  if (!prev) return null;
+  if ((prev.phase === undefined) !== (next.phase === undefined))
+    return "단계는 모든 줄에 있거나 모두 없어야 한다";
+  if (prev.phase === "live" && next.phase === "trial")
+    return "정식 단계 뒤로 시험 단계를 둘 수 없다(장부는 다시 시작하지 않는다)";
   return null;
 }
 
 export function checkSchedule(schedule: Schedule): string | null {
   if (!Number.isInteger(schedule.epoch) || schedule.epoch < 0)
     return "epoch는 0 이상 정수";
-  if (schedule.ledger !== undefined && schedule.ledger !== "trial")
-    return "장부 종류는 시험(trial)이거나 없어야 한다";
-  if (schedule.carried !== undefined) {
-    const { count, root } = schedule.carried;
-    if (!Number.isInteger(count) || count < 1 || count > 0xffffffff)
-      return "옮긴 등록 수는 1 이상 정수";
-    if (!/^[0-9a-f]{64}$/.test(root)) return "옮긴 등록 루트는 32바이트 hex";
-    if (schedule.ledger === "trial")
-      return "시험 장부에는 등록을 옮겨 오지 않는다";
-  }
   const first = schedule.entries[0];
   if (first?.fromRound !== 1) return "첫 줄은 1회차부터";
-  let prev = 0;
+  let prev: ScheduleEntry | undefined;
   for (const entry of schedule.entries) {
-    const problem = checkScheduleEntry(entry);
+    const problem = checkScheduleEntry(entry) ?? checkPhaseAfter(prev, entry);
     if (problem) return problem;
-    if (entry.fromRound <= prev) return "fromRound는 늘어나야 한다";
-    prev = entry.fromRound;
+    if (prev && entry.fromRound <= prev.fromRound)
+      return "fromRound는 늘어나야 한다";
+    prev = entry;
   }
   return null;
 }
@@ -179,9 +186,9 @@ export function checkScheduleChange(
   change: ScheduleEntry,
   decidedInRound: number,
 ): string | null {
-  const problem = checkScheduleEntry(change);
-  if (problem) return problem;
   const last = schedule.entries.at(-1);
+  const problem = checkScheduleEntry(change) ?? checkPhaseAfter(last, change);
+  if (problem) return problem;
   if (last && change.fromRound <= last.fromRound)
     return "새 줄은 마지막 줄보다 뒤 회차부터";
   const decidedAt = roundTimes(schedule, decidedInRound).closesAt;
@@ -198,4 +205,41 @@ export function withChange(
   change: ScheduleEntry,
 ): Schedule {
   return { epoch: schedule.epoch, entries: [...schedule.entries, change] };
+}
+
+/** 회차의 운영 단계. 단계가 없는 일정표면 null */
+export function phaseOf(schedule: Schedule, round: number): Phase | null {
+  return roundTimes(schedule, round).entry.phase ?? null;
+}
+
+/** 정식 단계 첫 회차(사슬 회차 번호). 아직 정식 단계가 없으면 null */
+export function liveStart(schedule: Schedule): number | null {
+  return schedule.entries.find((e) => e.phase === "live")?.fromRound ?? null;
+}
+
+export interface DisplayRound {
+  phase: Phase | null;
+  /** 단계 안에서 센 번호(정식 단계 첫 회차가 1) */
+  number: number;
+  /** "정식 3회", "시험 12회", 단계가 없으면 "12회" */
+  label: string;
+}
+
+/**
+ * 사람에게 보이는 회차 번호(docs/36 11-6). 데이터의 기준은 늘 사슬 회차 번호(round)이고,
+ * 화면·검사기·검증 페이지는 이 함수 하나로 "정식 n회"·"시험 n회"를 보인다
+ */
+export function displayRound(schedule: Schedule, round: number): DisplayRound {
+  const phase = phaseOf(schedule, round);
+  if (phase === null) return { phase, number: round, label: `${round}회` };
+  const start =
+    phase === "live"
+      ? (liveStart(schedule) as number)
+      : (schedule.entries.find((e) => e.phase === "trial")?.fromRound ?? 1);
+  const number = round - start + 1;
+  return {
+    phase,
+    number,
+    label: `${phase === "live" ? "정식" : "시험"} ${number}회`,
+  };
 }

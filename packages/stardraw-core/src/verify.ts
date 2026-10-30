@@ -73,14 +73,17 @@ export interface VerifyOptions {
    * 회차 기록 해시가 바깥 앵커와 같은지(선택). anchor.ts `githubAnchorVerifier`.
    * true 같음, false 다름(문제), null 앵커가 없음(skipped)
    */
-  anchorVerifier?: (record: RoundRecord) => Promise<boolean | null>;
+  anchorVerifier?: (
+    record: RoundRecord,
+    schedule: Schedule,
+  ) => Promise<boolean | null>;
+  /**
+   * 처음 일정표가 바깥 앵커(main 브랜치의 genesis 파일)와 같은지(선택). anchor.ts `githubGenesisVerifier`.
+   * 장부는 다시 시작하지 않는다는 규칙의 확인이다. true 같음, false 다름(문제), null 없음(skipped)
+   */
+  genesisAnchorVerifier?: (genesis: Schedule) => Promise<boolean | null>;
   /** 패스키 서명을 받을 사이트·주소. 기본은 game.byb.kr */
   webauthnPolicy?: WebAuthnPolicy;
-  /**
-   * 시험 장부에서 옮겨 온 등록(genesis 파일에 공개된 목록, docs/36 11-6).
-   * 처음 일정표의 `carried`(수·루트)와 맞아야 하고, 작업 증명은 보지 않는다(시험 장부에서 치렀다)
-   */
-  carried?: readonly KeyRegistration[];
 }
 
 export interface Problem {
@@ -137,44 +140,16 @@ export async function verifyLedger(
   const winnerKeys = new Map<string, { round: number; pub: Uint8Array }>();
   const accepted: Nickname[] = [];
 
-  // 옮겨 온 등록: genesis의 수·루트와 맞는지, 정렬·형식·겹침. 작업 증명은 면제
-  const carried = options.carried ?? [];
-  if (genesis.carried || carried.length > 0) {
-    const failCarried = (message: string) =>
-      problems.push({ round: 0, message: `옮긴 등록: ${message}` });
-    const ids = carried.map(registrationId);
-    if (!genesis.carried) failCarried("처음 일정표에 옮긴 등록이 없다");
-    else {
-      if (genesis.carried.count !== carried.length)
-        failCarried(
-          `수가 ${carried.length}인데 처음 일정표는 ${genesis.carried.count}`,
-        );
-      if (toHex(merkleRoot(ids)) !== genesis.carried.root)
-        failCarried("목록으로 만든 머클 루트가 처음 일정표와 다르다");
-    }
-    for (let k = 0; k < carried.length; k++) {
-      const reg = carried[k] as KeyRegistration;
-      const id = ids[k] as Uint8Array;
-      if (k > 0 && compareBytes(ids[k - 1] as Uint8Array, id) >= 0)
-        failCarried("목록이 id 순서가 아니거나 같은 등록이 두 번 있다");
-      const problem = checkRegistration(reg);
-      if (problem) {
-        failCarried(`${short(id)}: ${problem}`);
-        continue;
-      }
-      const who = toHex(entrantId(reg.pub));
-      const credential = toHex(reg.credentialId);
-      if (
-        keyByEntrant.has(who) ||
-        (reg.kind === "passkey" && keyByCredential.has(credential))
-      ) {
-        failCarried(`${short(id)}: 같은 열쇠·패스키 번호가 두 번 있다`);
-        continue;
-      }
-      keyByEntrant.add(who);
-      if (reg.kind === "passkey") keyByCredential.add(credential);
-      keys.push(reg);
-    }
+  // 바깥 앵커의 처음 일정표(선택): 장부를 다시 시작하지 않았는지
+  if (options.genesisAnchorVerifier) {
+    const same = await options.genesisAnchorVerifier(genesis);
+    if (same === false)
+      problems.push({
+        round: 0,
+        message:
+          "처음 일정표: 앵커 저장소의 장부와 다르다(장부를 다시 시작했다)",
+      });
+    else if (same === null) skipped.push("앵커의 처음 일정표(기록 없음)");
   }
 
   for (let i = 0; i < records.length; i++) {
@@ -382,6 +357,7 @@ export async function verifyLedger(
       }
     }
 
+    const roundSchedule = schedule;
     // 6. 일정 변경
     for (const change of record.scheduleChanges) {
       const problem = checkScheduleChange(schedule, change, round);
@@ -393,7 +369,7 @@ export async function verifyLedger(
 
     // 7. 바깥 앵커(선택)
     if (options.anchorVerifier) {
-      const anchored = await options.anchorVerifier(record);
+      const anchored = await options.anchorVerifier(record, roundSchedule);
       if (anchored === false) fail("기록 해시가 앵커 저장소의 기록과 다르다");
       else if (anchored === null) skipped.push(`${round}회차: 앵커(기록 없음)`);
     }

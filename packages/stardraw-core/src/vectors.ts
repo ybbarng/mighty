@@ -16,7 +16,14 @@ import {
 } from "./registration";
 import { sealDigest } from "./round";
 import { sasKeyFromPair, sasSecret, sasStars } from "./sas";
-import { alignedEpoch, roundTimes, type Schedule } from "./schedule";
+import {
+  alignedEpoch,
+  displayRound,
+  roundTimes,
+  type Schedule,
+  type ScheduleEntry,
+  withChange,
+} from "./schedule";
 import { webauthnChallenge } from "./signature";
 import {
   encodeTicket,
@@ -105,6 +112,12 @@ const HOURLY: Schedule = {
       registerPowTarget: 7158278,
     },
   ],
+};
+
+/** 같은 일정표, 서버 장부처럼 시험 단계로 시작 */
+const PHASED: Schedule = {
+  epoch: HOURLY_EPOCH,
+  entries: [{ ...(HOURLY.entries[0] as ScheduleEntry), phase: "trial" }],
 };
 
 /** drand quicknet 1000000회차(api.drand.sh에서 받은 실제 값) */
@@ -331,18 +344,32 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
           String(drandTime(drandRoundForClose(roundTimes(HOURLY, 1).closesAt))),
       },
       {
-        title: "정식 장부 genesis 해시",
-        input: "위 일정표(마감 여유 5, 작업 증명 143165576, 등록 7158278)",
+        title: "단계 없는 genesis 해시(연습 장부)",
+        input:
+          "위 일정표(마감 여유 5, 작업 증명 143165576, 등록 7158278, 단계 없음 0)",
         expected:
-          "b0f2eda998a14ec3bdeb150ea7d1d909b03780c6d38f46768bc71804d0b1ace5",
+          "891b5b5f568b1e553bbe88f189a9262f50d52ff9f75675c630f5ed1101ba22d1",
         compute: () => toHex(genesisHash(HOURLY)),
       },
       {
-        title: "시험 장부 genesis 해시",
-        input: '같은 일정표 + ledger "trial"',
+        title: "단계가 있는 genesis 해시",
+        input: '같은 일정표, 첫 줄 phase "trial"(단계 바이트 1)',
         expected:
-          "20dabba97f509d9865e2885642854ca57fdf9a4fc9283a5173183b0da67d01e8",
-        compute: () => toHex(genesisHash({ ...HOURLY, ledger: "trial" })),
+          "34da4f32bdc737c526a2efeb8fe6439014b49547c755403d45c010b296c08c1d",
+        compute: () => toHex(genesisHash(PHASED)),
+      },
+      {
+        title: "보이는 회차 번호",
+        input: '위 일정표 + 25회차부터 phase "live" 한 줄 → 24회차, 25회차',
+        expected: "시험 24회 / 정식 1회",
+        compute: () => {
+          const s = withChange(PHASED, {
+            ...(PHASED.entries[0] as ScheduleEntry),
+            fromRound: 25,
+            phase: "live",
+          });
+          return `${displayRound(s, 24).label} / ${displayRound(s, 25).label}`;
+        },
       },
     ],
   },

@@ -501,6 +501,70 @@ describe("일정 변경", () => {
   });
 });
 
+describe("시험 → 정식 이어지는 장부", () => {
+  // 응모 없는 회차를 이어 붙인다: 1회차 기록에 26회차부터 정식 단계 한 줄
+  const trial: Schedule = {
+    epoch: HOURLY.epoch,
+    entries: [{ ...(HOURLY.entries[0] as ScheduleEntry), phase: "trial" }],
+  };
+  const liveFrom26: ScheduleEntry = {
+    ...(HOURLY.entries[0] as ScheduleEntry),
+    fromRound: 26,
+    phase: "live",
+  };
+  function chain(rounds: number, change: ScheduleEntry): RoundRecord[] {
+    let schedule = trial;
+    let prev = genesisHash(trial);
+    const records: RoundRecord[] = [];
+    for (let round = 1; round <= rounds; round++) {
+      const { closesAt } = roundTimes(schedule, round);
+      const record = closeRound({
+        schedule,
+        round,
+        prev,
+        tickets: [],
+        rootLoggedAt: closesAt + 10,
+        beacon: beaconFor(schedule, round),
+        ...(round === 1 ? { scheduleChanges: [change] } : {}),
+      });
+      if (round === 1) schedule = withChange(schedule, change);
+      records.push(record);
+      prev = recordHash(record);
+    }
+    return records;
+  }
+
+  it("한 사슬로 정식 단계에 들어가고 검사를 통과한다", async () => {
+    const records = chain(27, liveFrom26);
+    const report = await verifyLedger(
+      trial,
+      records,
+      records.map(() => []),
+      records.map(() => []),
+      OPTIONS,
+    );
+    expect(messages(report)).toEqual([]);
+    expect(report.schedule.entries.map((e) => e.phase)).toEqual([
+      "trial",
+      "live",
+    ]);
+    // 기록 바이트에도 단계가 실린다
+    const first = records[0] as RoundRecord;
+    expect(decodeRecord(encodeRecord(first))).toEqual(first);
+    expect(decodeRecord(encodeRecord(first)).scheduleChanges[0]?.phase).toBe(
+      "live",
+    );
+  });
+
+  it("24시간보다 이른 정식 예약은 드러난다", async () => {
+    const records = chain(1, { ...liveFrom26, fromRound: 20 });
+    const report = await verifyLedger(trial, records, [[]], [[]], OPTIONS);
+    expect(messages(report)).toEqual([
+      "1: 일정 변경: 일정 변경은 24시간 뒤에 시작하는 회차부터",
+    ]);
+  });
+});
+
 describe("내 응모권 포함 증명", () => {
   it("내 응모권이 그 회차 루트에 들어 있음을 증명하고, 남의 루트로는 통과하지 못한다", async () => {
     const ledger = await buildLedger(2);

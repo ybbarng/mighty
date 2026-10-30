@@ -1,4 +1,4 @@
-import { ByteWriter, compareBytes, taggedHash, toHex } from "./bytes";
+import { ByteWriter, compareBytes, taggedHash } from "./bytes";
 import {
   type DrandBeacon,
   drandRandomness,
@@ -43,25 +43,7 @@ export function registrationRoot(
 }
 
 /**
- * 시험 장부에서 정식 장부로 등록을 옮길 때(docs/36 11-6): id 순으로 정렬한 목록과,
- * 처음 일정표의 `carried`에 넣을 수·루트
- */
-export function carryRegistrations(registrations: readonly KeyRegistration[]): {
-  registrations: KeyRegistration[];
-  carried: { count: number; root: string };
-} {
-  const sorted = sortRegistrations(registrations);
-  return {
-    registrations: sorted,
-    carried: {
-      count: sorted.length,
-      root: toHex(merkleRoot(sorted.map(registrationId))),
-    },
-  };
-}
-
-/**
- * 마감 직후 투명성 로그(Rekor)에 올리는 봉인 값. 응모권 목록과 열쇠 등록 목록을 함께 묶는다.
+ * 마감 직후 시각 인증을 받는 봉인 값. 응모권 목록과 열쇠 등록 목록을 함께 묶는다.
  * 등록도 drand 전에 고정돼야, 결과를 본 뒤 당첨 응모권의 등록을 빼서 무효로 만들 수 없다.
  * taggedHash("stardraw/seal/v1", round(u32) ‖ count(u32) ‖ merkleRoot ‖ registrationCount(u32) ‖ registrationRoot)
  */

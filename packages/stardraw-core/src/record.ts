@@ -1,4 +1,4 @@
-import { ByteReader, ByteWriter, fromHex, taggedHash } from "./bytes";
+import { ByteReader, ByteWriter, taggedHash } from "./bytes";
 import { RANKS, type Rank } from "./draw";
 import { type Nickname, readNickname, writeNickname } from "./nickname";
 import type { Schedule, ScheduleEntry } from "./schedule";
@@ -52,30 +52,38 @@ export function emptyWinners(): Record<Rank, Uint8Array[]> {
   return { 1: [], 2: [], 3: [], 4: [], 5: [] };
 }
 
-/**
- * 처음 일정표 해시(1회차의 prev이자 문제 값).
- * - 시험 장부는 꼬리표가 "stardraw/genesis-trial/v1"이라 정식 장부와 해시 사슬이 처음부터 갈린다
- * - 옮긴 등록이 있으면 뒤에 count(u32) ‖ root(32)를 붙인다(없으면 예전과 같은 해시)
- */
+/** 처음 일정표 해시(1회차의 prev이자 문제 값) */
 export function genesisHash(schedule: Schedule): Uint8Array {
   const w = new ByteWriter().u64(schedule.epoch).u16(schedule.entries.length);
   for (const e of schedule.entries) writeEntry(w, e);
-  if (schedule.carried)
-    w.u32(schedule.carried.count).fixed(fromHex(schedule.carried.root), 32);
-  return taggedHash(
-    schedule.ledger === "trial"
-      ? "stardraw/genesis-trial/v1"
-      : "stardraw/genesis/v1",
-    w.done(),
-  );
+  return taggedHash("stardraw/genesis/v1", w.done());
 }
+
+/** 단계: 0 없음, 1 시험, 2 정식 */
+const PHASE_CODE = { trial: 1, live: 2 } as const;
 
 function writeEntry(w: ByteWriter, e: ScheduleEntry): void {
   w.u32(e.fromRound)
     .u32(e.length)
     .u32(e.closeMargin)
     .u32(e.powTarget)
-    .u32(e.registerPowTarget);
+    .u32(e.registerPowTarget)
+    .u8(e.phase ? PHASE_CODE[e.phase] : 0);
+}
+
+function readEntry(r: ByteReader): ScheduleEntry {
+  const entry: ScheduleEntry = {
+    fromRound: r.u32(),
+    length: r.u32(),
+    closeMargin: r.u32(),
+    powTarget: r.u32(),
+    registerPowTarget: r.u32(),
+  };
+  const phase = r.u8();
+  if (phase === 1) entry.phase = "trial";
+  else if (phase === 2) entry.phase = "live";
+  else if (phase !== 0) throw new Error(`모르는 단계: ${phase}`);
+  return entry;
 }
 
 function writeIds(w: ByteWriter, ids: readonly Uint8Array[]): void {
@@ -133,15 +141,7 @@ export function decodeRecord(bytes: Uint8Array): RoundRecord {
   for (const rank of RANKS) winners[rank] = readIds(r);
   const changes: ScheduleEntry[] = [];
   const changeCount = r.u16();
-  for (let i = 0; i < changeCount; i++) {
-    changes.push({
-      fromRound: r.u32(),
-      length: r.u32(),
-      closeMargin: r.u32(),
-      powTarget: r.u32(),
-      registerPowTarget: r.u32(),
-    });
-  }
+  for (let i = 0; i < changeCount; i++) changes.push(readEntry(r));
   const nicknames: Nickname[] = [];
   const nicknameCount = r.u16();
   for (let i = 0; i < nicknameCount; i++) nicknames.push(readNickname(r));
