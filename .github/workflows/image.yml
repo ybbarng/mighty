@@ -183,9 +183,15 @@ jobs:
           set -euo pipefail
           tag="site-${SHA:0:12}"
           digest=$(jq -r .digest build-hashes.json)
-          gh release create "$tag" build-hashes.json --repo "$GITHUB_REPOSITORY" --target "$SHA" \
-            --title "사이트 화면 코드 $tag" --latest=false \
-            --notes "game.byb.kr 에 배포한 커밋 $SHA 의 화면 코드 해시 목록. digest $digest. 확인 방법은 docs/36 11-8."
+          notes="game.byb.kr 에 배포한 커밋 $SHA 의 화면 코드 해시 목록. digest $digest. 확인 방법은 docs/36 11-8."
+          # 같은 이름의 릴리스가 이미 있으면(다시 돌리기, GitHub 오류로 임시 릴리스만 남은 경우) 파일을 덮어쓰고 정식으로 바꾼다
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" build-hashes.json --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false --notes "$notes"
+          else
+            gh release create "$tag" build-hashes.json --repo "$GITHUB_REPOSITORY" --target "$SHA" \
+              --title "사이트 화면 코드 $tag" --latest=false --notes "$notes"
+          fi
 
   # 서버에 배포한다. 서버의 배포 키는 forced-command 로 servers 저장소의 apps/mighty/deploy.sh 만 실행한다.
   # 이미지를 받을 토큰은 이 실행의 GITHUB_TOKEN 을 표준입력으로 넘긴다(서버에 남지 않고, 실행이 끝나면 만료된다).
