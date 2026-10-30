@@ -53,14 +53,16 @@ const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * 이 화면을 보일 때의 주소: # 조각을 바꾸고, 방 화면이 아니면 ?room= 을 지운다.
+ * 이 화면을 보일 때의 주소: # 조각을 바꾸고, 판·방 밖으로 나가면 ?room= 을 지운다.
+ * 방에서 들어간 대국은 방 코드를 남겨야 참가자가 새로고침해도 그 방으로 돌아온다.
  * 처음 그릴 때는 앱이 초대 링크의 방 코드를 읽어야 하니 지우지 않는다(`keepRoom`).
  */
 function urlFor(screen: ScreenLike, keepRoom = false): string {
   const url = new URL(window.location.href);
   const hash = HASH_OF[screen.kind];
   url.hash = hash ?? "";
-  if (!keepRoom && screen.kind !== "online") url.searchParams.delete("room");
+  if (!keepRoom && !PLAY_KINDS.has(screen.kind))
+    url.searchParams.delete("room");
   return url.toString().replace(/#$/, "");
 }
 
