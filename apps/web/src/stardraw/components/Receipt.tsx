@@ -146,8 +146,7 @@ export function Receipt({
         </p>
       )}
       <p className="mt-3 break-keep text-center text-[11px] text-slate-400">
-        당첨 확인은 응모한 열쇠(패스키)로만 할 수 있습니다. 이 그림을 남에게
-        보여 줘도 당첨을 가져갈 수는 없습니다.
+        당첨 확인은 응모한 열쇠(패스키)로만 할 수 있습니다.
       </p>
     </article>
   );
