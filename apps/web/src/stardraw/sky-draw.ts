@@ -7,7 +7,8 @@ import { type Meteor, type Twinkle, twinkleLevel } from "./sky-effects";
  * 네모 하늘 그리기(응모·영수증·추첨이 같이 쓴다, docs/36 11-3).
  * - 응모(pick): 고른 별은 금빛 고리, 누른 별의 별자리는 환하게 이름까지, 고른 별의 별자리는 조금 밝게
  * - 영수증(receipt): 내 별 6개만 밝게, 나머지 별과 별자리 선은 더 흐리게
- * - 추첨(draw): 나온 당첨 번호 별이 켜지고(보너스는 점선 고리), 내 별과 겹치면 더 강조
+ * - 추첨(draw): 모든 별의 빛을 끈 하늘에서 룰렛 불빛(cursor)이 돌고, 멈춘 당첨 별만 켜진 채 남는다.
+ *   보너스는 다른 빛깔(하늘빛), 내 별과 겹치면 초록 고리로 더 강조. 반짝임·유성은 돌지 않는다
  */
 
 export type SkyMode = "pick" | "receipt" | "draw";
@@ -20,6 +21,8 @@ export interface SkyState {
   lit: readonly number[];
   /** 추첨에서 나온 보너스(아직이면 null) */
   bonus: number | null;
+  /** 추첨 룰렛: 지금 불빛이 지나는 별 */
+  cursor?: number | null;
   /** 차례가 있는 별(당첨자 확인의 별 세 개): ①②③을 단다 */
   marks?: readonly number[];
 }
@@ -83,15 +86,18 @@ export interface FrameInput {
 }
 
 export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
-  const { width: W, state, now, twinkles } = f;
+  const { width: W, state, now } = f;
   const scale = scaleOf(W);
   const receipt = state.mode === "receipt";
+  // 추첨은 하늘의 빛을 모두 끈다(켜진 당첨 별·룰렛 불빛만 밝다)
+  const dark = state.mode === "draw";
+  const twinkles = dark ? [] : f.twinkles;
   const picked = new Set([...state.picked, ...(state.marks ?? [])]);
   const lit = new Set(state.lit);
   g.clearRect(0, 0, W, W);
 
   for (const d of DUST) {
-    g.fillStyle = `rgba(200,210,240,${receipt ? d.a * 0.6 : d.a})`;
+    g.fillStyle = `rgba(200,210,240,${receipt ? d.a * 0.6 : dark ? d.a * 0.35 : d.a})`;
     g.beginPath();
     g.arc(d.x * W, d.y * W, d.r * scale, 0, Math.PI * 2);
     g.fill();
@@ -107,13 +113,15 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
   );
   const levelOf = (con: string) =>
     con === focusCon ? 2 : pickedCons.has(con) ? 1 : 0;
-  const lineColors = receipt
-    ? ["rgba(150,172,240,0.08)", "rgba(160,182,245,0.28)", ""]
-    : [
-        "rgba(150,172,240,0.16)",
-        "rgba(160,182,245,0.34)",
-        "rgba(185,205,255,0.75)",
-      ];
+  const lineColors = dark
+    ? ["rgba(150,172,240,0.06)", "rgba(150,172,240,0.06)", ""]
+    : receipt
+      ? ["rgba(150,172,240,0.08)", "rgba(160,182,245,0.28)", ""]
+      : [
+          "rgba(150,172,240,0.16)",
+          "rgba(160,182,245,0.34)",
+          "rgba(185,205,255,0.75)",
+        ];
   g.lineJoin = "round";
   for (const line of SKY_LINES) {
     const level = levelOf(line.con);
@@ -129,7 +137,11 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
   FAINT_STARS.forEach((p, i) => {
     const level = levelOf(p.con);
     const a = receipt ? 0 : twinkleLevel(twinkles, "faint", i, now);
-    const base = receipt ? [0.18, 0.4, 0.4][level] : [0.32, 0.5, 0.85][level];
+    const base = dark
+      ? 0.1
+      : receipt
+        ? [0.18, 0.4, 0.4][level]
+        : [0.32, 0.5, 0.85][level];
     const x = p.x * W;
     const y = p.y * W;
     g.fillStyle = `rgba(225,232,255,${Math.min(1, (base as number) + 0.6 * a)})`;
@@ -178,30 +190,44 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
     const drawn = lit.has(s.n);
     const isBonus = state.bonus === s.n;
     const hit = mine && (drawn || isBonus);
-    const dim = receipt && !mine;
-    const a = receipt ? 0 : twinkleLevel(twinkles, "star", s.n, now);
+    const passing = dark && state.cursor === s.n;
+    const on = drawn || isBonus || passing;
+    // 영수증은 내 별 말고 흐리게, 추첨은 켜진 별 말고 모두 끈다
+    const dim = (receipt && !mine) || (dark && !on);
+    const a = receipt || dark ? 0 : twinkleLevel(twinkles, "star", s.n, now);
     const r =
       starRadius(s.mag) *
       scale *
       (1 + 0.35 * a) *
       (mine ? 1.15 : 1) *
-      (drawn || isBonus ? 1.25 : 1);
-    g.globalAlpha = dim ? 0.3 : 1;
+      (drawn || isBonus ? 1.25 : passing ? 1.2 : 1);
+    g.globalAlpha = dark && !on ? 0.16 : dim ? 0.3 : 1;
 
-    // 추첨: 켜진 당첨 별은 금빛 빛무리와 고리(내 별과 겹치면 더 크게 맥동)
+    // 룰렛 불빛: 하얗게 번지는 빛(고리 없이)
+    if (passing && !drawn && !isBonus) {
+      const reach = 30 * scale;
+      const halo = g.createRadialGradient(x, y, 0, x, y, reach);
+      halo.addColorStop(0, "rgba(255,250,235,0.95)");
+      halo.addColorStop(0.35, "rgba(255,240,200,0.35)");
+      halo.addColorStop(1, "rgba(255,240,200,0)");
+      g.fillStyle = halo;
+      g.beginPath();
+      g.arc(x, y, reach, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // 추첨: 켜진 당첨 별은 금빛, 보너스는 하늘빛 빛무리와 고리(내 별과 겹치면 더 크게 맥동)
     if (drawn || isBonus) {
       const pulse = 0.65 + 0.35 * Math.sin(now / 260 + s.n);
-      const reach = (hit ? 34 : 26) * scale;
+      const reach = (hit ? 36 : 28) * scale;
+      const tone = isBonus ? "125,211,252" : "255,222,130";
       const halo = g.createRadialGradient(x, y, 0, x, y, reach);
       halo.addColorStop(
         0,
-        hit ? `rgba(255,236,150,${0.85 * pulse})` : "rgba(255,222,130,0.62)",
+        hit ? `rgba(${tone},${0.9 * pulse})` : `rgba(${tone},0.7)`,
       );
-      halo.addColorStop(
-        0.45,
-        hit ? "rgba(255,226,120,0.22)" : "rgba(244,210,122,0.14)",
-      );
-      halo.addColorStop(1, "rgba(244,210,122,0)");
+      halo.addColorStop(0.45, `rgba(${tone},${hit ? 0.24 : 0.16})`);
+      halo.addColorStop(1, `rgba(${tone},0)`);
       g.fillStyle = halo;
       g.beginPath();
       g.arc(x, y, reach, 0, Math.PI * 2);
@@ -275,7 +301,7 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
       g.stroke();
     }
     if (isBonus) {
-      g.strokeStyle = "rgba(244,210,122,0.9)";
+      g.strokeStyle = "rgba(125,211,252,0.95)";
       g.setLineDash([3, 3]);
       g.lineWidth = 1.2;
       g.beginPath();
@@ -297,7 +323,7 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
     const ly = y + labelOffset(r, scale);
     const br = 8 * scale;
     g.fillStyle = ballColor(s.n);
-    g.globalAlpha = dim ? 0.25 : mine || drawn || isBonus ? 1 : 0.8;
+    g.globalAlpha = dark && !on ? 0.22 : dim ? 0.25 : mine || on ? 1 : 0.8;
     g.beginPath();
     g.arc(x, ly, br, 0, Math.PI * 2);
     g.fill();
@@ -333,7 +359,7 @@ export function drawSky(g: CanvasRenderingContext2D, f: FrameInput): void {
   });
 
   const m = f.meteor;
-  if (m && !receipt) {
+  if (m && !receipt && !dark) {
     const t = Math.min(1, Math.max(0, (now - m.start) / m.duration));
     const went = m.distance * W * (1 - (1 - t) ** 1.6);
     const tail = Math.min(went, m.tail * W);

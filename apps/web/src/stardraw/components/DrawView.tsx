@@ -2,24 +2,26 @@
 
 import { type Clock, realClock } from "@mighty/fair-play";
 import type { RoundRecord, Ticket } from "@mighty/stardraw-core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 
 import { drawOrder, myRank } from "../results";
-import { ballColor, starOf } from "../sky";
+import { planRoulette, type RouletteFrame, rouletteAt } from "../roulette";
+import { starOf } from "../sky";
 import { LottoBall, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
-/** 추첨 진행(ms): 섞기, 공 사이 간격, 공이 관을 내려오는 시간 */
-export const DRAW_MIX_MS = 2200;
-export const DRAW_GAP_MS = 1700;
-export const DRAW_TUBE_MS = 650;
+/** 틱 소리 사이 가장 짧은 간격(빨리 돌 때 소리가 뭉개지지 않게) */
+const TICK_GAP_MS = 45;
 
 /**
- * 추첨 연출: 유리 천구의 안 공 45개가 바람에 섞이고, 관으로 하나씩 나와 6개 + 보너스가 놓인다.
- * 공이 나올 때마다 하늘의 그 별이 켜진다. 결과는 기록의 drand 값으로 이미 정해져 있고 연출은 보여 줄 뿐이다.
+ * 추첨 연출(룰렛): 하늘의 빛을 모두 끄고, 불빛이 별 하나씩 켰다 끄며 돌다가 점점 느려져
+ * 정확히 당첨 별에서 멈춘다(그 별은 켜진 채). 이미 뽑힌 별은 건너뛰고 6번 멈춘 뒤 7번째는 보너스(하늘빛).
+ * 멈추는 차례는 실제 로또처럼 나온 차례다. 결과는 기록의 drand 값으로 이미 정해져 있고 연출은 보여 줄 뿐이다.
+ * 칸 위치는 지난 시간으로 계산해(`rouletteAt`) 화면이 늦게 그려져도 늘 목표 별에서 멈춘다.
+ * 「결과 바로 보기」와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
  */
 export function DrawView({
   record,
@@ -33,37 +35,67 @@ export function DrawView({
   clock?: Clock | undefined;
 }) {
   const order = drawOrder(record);
-  const [shown, setShown] = useState(0);
-  const [exiting, setExiting] = useState<number | null>(null);
-  /** 추첨 진행 타이머(「결과 바로 보기」로 끈다) */
-  const timers = useRef<(() => void)[]>([]);
-  const done = shown >= order.length;
+  // 회차가 바뀔 때만 다시 계산한다(order는 record에서 정해진다)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: record.round로 충분하다
+  const plan = useMemo(() => planRoulette(order), [record.round]);
+  const finished: RouletteFrame = {
+    fixed: order,
+    cursor: null,
+    stop: order.length - 1,
+    step: 0,
+    done: true,
+  };
+  const [frame, setFrame] = useState<RouletteFrame>(() =>
+    order.length === 0 ? finished : rouletteAt(plan, 0),
+  );
+  /** 진행을 멈추는 함수(「결과 바로 보기」로 부른다) */
+  const stopRef = useRef<() => void>(() => {});
+  const done = frame.done;
   const rank = ticket ? myRank(record, ticket) : null;
 
-  // 회차가 바뀔 때만 다시 시작한다(order는 record에서 정해진다)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: record.round로 충분하다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 회차가 바뀔 때만 다시 돈다
   useEffect(() => {
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce || order.length === 0) {
-      setShown(order.length);
+      setFrame(finished);
       return;
     }
-    play("starMix");
-    const stops: (() => void)[] = [];
-    timers.current = stops;
-    order.forEach((n, i) => {
-      const at = DRAW_MIX_MS + i * DRAW_GAP_MS;
-      stops.push(clock.after(at, () => setExiting(n)));
-      stops.push(
-        clock.after(at + DRAW_TUBE_MS, () => {
-          setExiting(null);
-          setShown(i + 1);
-          play("starBall");
-        }),
-      );
-    });
+    const started = clock.now();
+    let raf = 0;
+    let alive = true;
+    let last = rouletteAt(plan, 0);
+    let lastTick = -Infinity;
+    const tick = () => {
+      if (!alive) return;
+      const now = clock.now();
+      const next = rouletteAt(plan, now - started);
+      // 칸이 바뀌면 "틱", 멈춰 별이 켜지면 "딩"
+      if (next.fixed.length > last.fixed.length) play("starBall");
+      else if (
+        next.cursor !== null &&
+        next.cursor !== last.cursor &&
+        now - lastTick >= TICK_GAP_MS
+      ) {
+        play("starTick");
+        lastTick = now;
+      }
+      if (
+        next.cursor !== last.cursor ||
+        next.fixed.length !== last.fixed.length
+      )
+        setFrame(next);
+      last = next;
+      if (!next.done) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    stopRef.current = () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+      setFrame(finished);
+    };
     return () => {
-      for (const s of stops) s();
+      alive = false;
+      cancelAnimationFrame(raf);
     };
   }, [record.round, clock]);
 
@@ -71,8 +103,8 @@ export function DrawView({
     if (done && rank && order.length > 0) play("starWin");
   }, [done, rank, order.length]);
 
-  const main = order.slice(0, Math.min(shown, 6));
-  const bonus = shown >= 7 ? (order[6] ?? null) : null;
+  const main = frame.fixed.slice(0, 6);
+  const bonus = frame.fixed.length >= 7 ? (frame.fixed[6] ?? null) : null;
   const mine = ticket?.numbers ?? [];
 
   return (
@@ -94,11 +126,7 @@ export function DrawView({
         <button
           type="button"
           disabled={done}
-          onClick={() => {
-            for (const s of timers.current) s();
-            setExiting(null);
-            setShown(order.length);
-          }}
+          onClick={() => stopRef.current()}
           className="text-sm text-white/60 hover:text-white disabled:invisible"
         >
           결과 바로 보기
@@ -112,21 +140,28 @@ export function DrawView({
         </p>
       ) : (
         <>
-          <Globe
-            order={order}
-            taken={order.slice(0, shown)}
-            exiting={exiting}
-            mixing={!done}
+          <SkyBoard
+            state={{
+              mode: "draw",
+              picked: mine,
+              focus: null,
+              lit: main,
+              bonus,
+              cursor: frame.cursor,
+            }}
+            clock={clock}
+            label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
           />
 
           <div
             className="flex items-center justify-center gap-1.5 sm:gap-2"
             role="status"
             aria-label={`당첨 번호 ${main.join(", ")}${bonus ? `, 보너스 ${bonus}` : ""}`}
+            data-roulette-stop={frame.fixed.length}
           >
             {[0, 1, 2, 3, 4, 5].map((i) => {
-              const n = order[i];
-              return n !== undefined && i < shown ? (
+              const n = main[i];
+              return n !== undefined ? (
                 <LottoBall
                   key={n}
                   n={n}
@@ -149,23 +184,13 @@ export function DrawView({
             )}
           </div>
 
-          <SkyBoard
-            state={{
-              mode: "draw",
-              picked: mine,
-              focus: null,
-              lit: main,
-              bonus,
-            }}
-            label={`추첨 하늘: 켜진 별 ${main.map((n) => starOf(n).ko).join(", ")}`}
-          />
           <p className="-mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-white/65 text-xs">
             <span className="flex items-center gap-1.5">
               <span className="size-3 rounded-full border-2 border-amber-200" />
               당첨 번호
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="size-3 rounded-full border-2 border-amber-200 border-dashed" />
+              <span className="size-3 rounded-full border-2 border-sky-300 border-dashed" />
               보너스
             </span>
             {mine.length > 0 && (
@@ -236,228 +261,6 @@ function Slot({ dashed = false }: { dashed?: boolean }) {
         "size-9 rounded-full border border-white/20",
         dashed && "border-dashed",
       )}
-    />
-  );
-}
-
-interface Ball {
-  n: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
-
-/** 유리 천구의: 공이 바람에 날리고 부딪힌다. 나온 공은 관을 따라 내려간다 */
-function Globe({
-  order,
-  taken,
-  exiting,
-  mixing,
-}: {
-  order: readonly number[];
-  taken: readonly number[];
-  exiting: number | null;
-  mixing: boolean;
-}) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const takenRef = useRef(taken);
-  takenRef.current = taken;
-  const exitRef = useRef<{ n: number; start: number } | null>(null);
-  const mixingRef = useRef(mixing);
-  mixingRef.current = mixing;
-
-  useEffect(() => {
-    exitRef.current =
-      exiting === null ? null : { n: exiting, start: performance.now() };
-  }, [exiting]);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    const g = canvas?.getContext("2d");
-    if (!canvas || !g) return;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // 단위 좌표: 구 가운데(0.5, 0.45), 반지름 0.36
-    const C = { x: 0.5, y: 0.45, r: 0.36 };
-    const R = 0.032;
-    const balls: Ball[] = Array.from({ length: 45 }, (_, i) => {
-      const a = (i / 45) * Math.PI * 2;
-      const d = 0.08 + ((i * 37) % 23) / 100;
-      return {
-        n: i + 1,
-        x: C.x + Math.cos(a) * d,
-        y: C.y + 0.12 + Math.sin(a) * d * 0.5,
-        vx: 0,
-        vy: 0,
-      };
-    });
-    let raf = 0;
-    let last = performance.now();
-    const step = (dt: number) => {
-      const gone = new Set(takenRef.current);
-      const exit = exitRef.current?.n;
-      const live = balls.filter((b) => !gone.has(b.n) && b.n !== exit);
-      for (const b of live) {
-        b.vy += 0.9 * dt; // 중력
-        if (mixingRef.current && b.y > C.y + 0.05) {
-          // 아래에서 부는 바람: 위로 세게, 옆으로 흔들리게(가끔 세찬 돌풍)
-          const gust = Math.random() < 0.04 ? 6 : 1;
-          b.vy -= (2.4 + Math.random() * 3.4) * gust * dt;
-          b.vx += (Math.random() - 0.5) * 6 * gust * dt;
-        } else if (mixingRef.current) {
-          // 위쪽에서도 소용돌이처럼 흩어진다
-          b.vx += (Math.random() - 0.5) * 2.4 * dt;
-        }
-        b.vx *= 0.995;
-        b.vy *= 0.995;
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        const dx = b.x - C.x;
-        const dy = b.y - C.y;
-        const d = Math.hypot(dx, dy);
-        const max = C.r - R;
-        if (d > max) {
-          const nx = dx / d;
-          const ny = dy / d;
-          b.x = C.x + nx * max;
-          b.y = C.y + ny * max;
-          const dot = b.vx * nx + b.vy * ny;
-          b.vx -= 1.8 * dot * nx;
-          b.vy -= 1.8 * dot * ny;
-        }
-      }
-      // 공끼리 겹치지 않게 살짝 밀어낸다
-      for (let i = 0; i < live.length; i++)
-        for (let j = i + 1; j < live.length; j++) {
-          const a = live[i] as Ball;
-          const b = live[j] as Ball;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const d = Math.hypot(dx, dy) || 1e-6;
-          if (d < 2 * R) {
-            const push = (2 * R - d) / 2;
-            a.x -= (dx / d) * push;
-            a.y -= (dy / d) * push;
-            b.x += (dx / d) * push;
-            b.y += (dy / d) * push;
-            const rv = (b.vx - a.vx) * (dx / d) + (b.vy - a.vy) * (dy / d);
-            if (rv < 0) {
-              a.vx += (rv * dx) / d;
-              a.vy += (rv * dy) / d;
-              b.vx -= (rv * dx) / d;
-              b.vy -= (rv * dy) / d;
-            }
-          }
-        }
-      return live;
-    };
-    const ballAt = (b: { n: number; x: number; y: number }, W: number) => {
-      const x = b.x * W;
-      const y = b.y * W;
-      const r = R * W;
-      const grad = g.createRadialGradient(
-        x - r * 0.35,
-        y - r * 0.4,
-        r * 0.1,
-        x,
-        y,
-        r,
-      );
-      grad.addColorStop(0, "#ffffff");
-      grad.addColorStop(0.35, ballColor(b.n));
-      grad.addColorStop(1, "#00000088");
-      g.fillStyle = grad;
-      g.beginPath();
-      g.arc(x, y, r, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#111";
-      g.font = `700 ${Math.round(r * 0.95)}px ui-monospace, Menlo, monospace`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(String(b.n), x, y + 0.5);
-    };
-    const draw = (now: number) => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const W = canvas.clientWidth;
-      if (canvas.width !== Math.round(W * dpr)) {
-        canvas.width = Math.round(W * dpr);
-        canvas.height = Math.round(W * 0.82 * dpr);
-      }
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const dt = Math.min(0.033, (now - last) / 1000);
-      last = now;
-      const live = reduce ? balls : step(dt);
-      g.clearRect(0, 0, W, W);
-      // 받침과 관
-      g.fillStyle = "rgba(148,163,184,0.25)";
-      g.fillRect((C.x - 0.03) * W, (C.y + C.r - 0.01) * W, 0.06 * W, 0.18 * W);
-      g.fillStyle = "rgba(30,41,59,0.9)";
-      g.beginPath();
-      g.ellipse(
-        C.x * W,
-        (C.y + C.r + 0.02) * W,
-        0.16 * W,
-        0.03 * W,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      g.fill();
-      // 유리 구: 안쪽 빛과 테두리, 별자리판처럼 흐린 적도선
-      const glass = g.createRadialGradient(
-        (C.x - 0.12) * W,
-        (C.y - 0.14) * W,
-        0.02 * W,
-        C.x * W,
-        C.y * W,
-        C.r * W,
-      );
-      glass.addColorStop(0, "rgba(186,214,255,0.22)");
-      glass.addColorStop(0.7, "rgba(96,125,190,0.08)");
-      glass.addColorStop(1, "rgba(160,190,255,0.25)");
-      g.fillStyle = glass;
-      g.beginPath();
-      g.arc(C.x * W, C.y * W, C.r * W, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = "rgba(190,210,255,0.35)";
-      g.lineWidth = 0.8;
-      g.beginPath();
-      g.ellipse(C.x * W, C.y * W, C.r * W, C.r * W * 0.28, 0, 0, Math.PI * 2);
-      g.stroke();
-      g.beginPath();
-      g.ellipse(C.x * W, C.y * W, C.r * W * 0.28, C.r * W, 0, 0, Math.PI * 2);
-      g.stroke();
-      for (const b of live) ballAt(b, W);
-      // 나오는 공: 구 아래 구멍에서 관을 따라 내려간다
-      const exit = exitRef.current;
-      if (exit) {
-        const t = Math.min(1, (now - exit.start) / DRAW_TUBE_MS);
-        ballAt({ n: exit.n, x: C.x, y: C.y + C.r - R + t * 0.2 }, W);
-      }
-      // 유리 반사
-      g.strokeStyle = "rgba(255,255,255,0.35)";
-      g.lineWidth = 2;
-      g.beginPath();
-      g.arc(C.x * W, C.y * W, C.r * W * 0.9, Math.PI * 1.1, Math.PI * 1.4);
-      g.stroke();
-      g.strokeStyle = "rgba(200,220,255,0.6)";
-      g.lineWidth = 1.2;
-      g.beginPath();
-      g.arc(C.x * W, C.y * W, C.r * W, 0, Math.PI * 2);
-      g.stroke();
-      raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  return (
-    <canvas
-      ref={ref}
-      role="img"
-      aria-label={`추첨기: 남은 공 ${order.length - taken.length}개`}
-      data-globe={order.length - taken.length}
-      className="mx-auto block aspect-[1/0.82] w-full max-w-sm"
     />
   );
 }

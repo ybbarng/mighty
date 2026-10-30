@@ -11,7 +11,8 @@ import { type SkyEffects, startSkyEffects } from "../sky-effects";
 
 /**
  * 네모 하늘 하나(응모·영수증·추첨이 같이 쓴다). 크기·누르기·강조만 다르다.
- * 반짝임·유성은 움직임 줄이기 설정이 아니고 영수증이 아닐 때만 돈다. 탭이 안 보이면 멈춘다.
+ * 반짝임·유성은 움직임 줄이기 설정이 아니고 응모 하늘일 때만 돈다(영수증은 고요하게, 추첨은 하늘의 빛을 끈다).
+ * 탭이 안 보이면 멈춘다.
  */
 export function SkyBoard({
   state,
@@ -53,7 +54,7 @@ export function SkyBoard({
     const reduce =
       typeof matchMedia === "function" &&
       matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animate = !reduce && stateRef.current.mode !== "receipt";
+    const animate = !reduce && stateRef.current.mode === "pick";
 
     const resize = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);

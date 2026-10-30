@@ -83,9 +83,9 @@ export type Cue =
   | "ball"
   /** 숫자야구: 다 맞힌 답(방망이 "딱"과 관중 함성) */
   | "homerun"
-  /** 하늘의 별 따기: 유리 천구의 안에서 공이 바람에 섞이는 "쏴아"와 부딪히는 소리 */
-  | "starMix"
-  /** 하늘의 별 따기: 공 하나가 관으로 나와 별이 켜지는 "똑-딩" */
+  /** 하늘의 별 따기: 추첨 룰렛 불빛이 별 하나를 지날 때마다 작은 "틱" */
+  | "starTick"
+  /** 하늘의 별 따기: 룰렛이 당첨 별에서 멈춰 그 별이 켜지는 "딩"(응모 접수에도 쓴다) */
   | "starBall"
   /** 하늘의 별 따기: 당첨(맑은 종이 올라가며 반짝임) */
   | "starWin"
@@ -143,8 +143,8 @@ export const CUE_LABELS: Record<Cue, string> = {
   strike: "숫자야구: 스트라이크",
   ball: "숫자야구: 볼",
   homerun: "숫자야구: 홈런",
-  starMix: "하늘의 별 따기: 공 섞기",
-  starBall: "하늘의 별 따기: 공 나옴",
+  starTick: "하늘의 별 따기: 룰렛 틱",
+  starBall: "하늘의 별 따기: 별 켜짐",
   starWin: "하늘의 별 따기: 당첨",
   yutThrow: "윷놀이: 던지기",
   yutLand: "윷놀이: 떨어지기",
@@ -198,6 +198,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   yutLand: 5,
   yutBonus: 2,
   yutPiece: 12,
+  // 아주 짧은 소리라 같은 세기로는 작게 들린다(룰렛이 도는 동안 칸마다 난다)
+  starTick: 16,
   yutCapture: 3,
   yutHome: 0,
 };
@@ -1055,29 +1057,12 @@ function render(cue: Cue, v: Voice): void {
         attack: 0.35,
       });
       break;
-    case "starMix": {
-      // 바람이 부풀었다 잦아드는 "쏴아" 위로, 플라스틱 공이 서로 부딪히는 짧은 "딱딱"을 흩뿌린다
-      noise(v, 0, 1.6, {
-        filter: "bandpass",
-        freq: 700,
-        sweepTo: 1500,
-        q: 0.5,
-        gain: 0.14,
-        attack: 0.4,
-      });
-      for (let t = 0.1; t < 1.5; t += 0.06 + random() * 0.09) {
-        noise(v, t, 0.02, {
-          filter: "bandpass",
-          freq: 2600 + random() * 1600,
-          q: 2,
-          gain: 0.12 + random() * 0.12,
-          attack: 0.001,
-        });
-      }
+    case "starTick":
+      // 룰렛 불빛이 별 하나를 지나는 짧고 높은 나무 "똑"(빨리 돌 때 수십 번 이어져도 거슬리지 않게)
+      woodClack(v, 0, 0.7, 1.7);
       break;
-    }
     case "starBall":
-      // 공이 관을 굴러 받침에 닿는 "똑"과, 별이 켜지는 맑은 "딩"
+      // 룰렛이 멈추는 "똑"과, 별이 켜지는 맑은 "딩"
       noise(v, 0, 0.03, {
         filter: "bandpass",
         freq: 2200,
