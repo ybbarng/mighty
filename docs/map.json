@@ -856,7 +856,7 @@
       "parent": "next-games",
       "status": "building",
       "size": 2,
-      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + Rekor·GitHub 앵커. 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core와 화면(/stardraw, 설명 /stardraw/about, 데모 /stardraw/demo)을 기기 안 연습 장부로 만듦(2026-10-29). 당첨자 확인은 회차·등수 묶음 + 별 세 개(임시 ECDH) + 초록불. 서버 apps/stardraw-server도 만듦(로컬에서 돌고 시험됨, 같은 출처 /stardraw-api, 배포 초안 deploy/stardraw). 화면은 NEXT_PUBLIC_STARDRAW_API가 있을 때만 서버를 쓴다(지금은 연습 장부). 남은 것: 배포(사용자 확인), 터미널 도구, 보안 배우기",
+      "summary": "docs/36: game.byb.kr/stardraw, 별자리 테마의 정시 로또(용어는 실제 로또와 같다). 응모권(서명·작업 증명, 패스키) → 마감 때 봉인 값 공개 → drand로 번호 → 해시 체인 장부 + 공개 시각 인증 기관(RFC 3161 TSA, DigiCert·Sectigo)·GitHub 앵커(ybbarng/stardraw-ledger, 시험 trial·정식 main). 장부는 다시 시작하지 않고 시험에서 정식으로 이어진다(일정표 단계, schedule-live, 24시간 예고). 누구나 참여, 1시간 회차(바꿀 수 있음), 실제 같은 용지·유리 천구의 추첨, 보안 배우기·이력·당첨 증명. 규칙 패키지 packages/stardraw-core와 화면(/stardraw, 설명 /stardraw/about, 데모 /stardraw/demo)을 기기 안 연습 장부로 만듦(2026-10-29). 당첨자 확인은 회차·등수 묶음 + 별 세 개(임시 ECDH) + 초록불. 서버 apps/stardraw-server도 만듦(로컬에서 돌고 시험됨, 같은 출처 /stardraw-api, 배포 초안 deploy/stardraw). 시험 운영 중(20분 회차, 2026-10-30). 남은 것: 서버에 TSA·앵커 연결, /stardraw/learn, 화면 코드 해시·재현 빌드·터미널 검사기, 정식 시작(사용자 확인)",
       "found": "2026-10-29",
       "links": [
         {
@@ -917,7 +917,8 @@
             "하나씩 정하기"
           ],
           "recommend": "추천대로",
-          "status": "open"
+          "status": "decided",
+          "decided": "시험 배포(2026-10-30), Rekor 대신 공개 TSA 여럿, 앵커 ybbarng/stardraw-ledger(토큰은 서버 파일), 장부는 이어서 정식으로(start-live 대신 schedule-live). 정식 시작 시각은 시험 운영을 본 뒤 정한다"
         }
       ]
     }

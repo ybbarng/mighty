@@ -67,7 +67,7 @@ export function HeartsRound({
       ) : (
         <p className="text-sm text-white/60">아직 끝나지 않은 판</p>
       )}
-      {round && round.passes.some((p) => p && p.length > 0) && (
+      {round?.passes.some((p) => p && p.length > 0) && (
         <div className="flex flex-col gap-1 text-sm">
           <span className="text-white/60 text-xs">넘긴 카드</span>
           {seats.map((s) => (
