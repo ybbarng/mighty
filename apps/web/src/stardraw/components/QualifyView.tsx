@@ -35,7 +35,9 @@ export function QualifyView() {
           <a href="/stardraw/privacy" className="hover:text-white/70">
             개인정보처리방침
           </a>
-          <MadeWith />
+          <p>
+            <MadeWith />
+          </p>
         </footer>
       </div>
     </main>

@@ -805,8 +805,15 @@ button {
 }
 /* 맞힌 번호: 고리 대신 빛이 더 멀리 번진다 */
 .sd-ball-hit::after {
-  inset: -62%;
-  --edge: 44%;
+  /* 고리 없이 빛만으로 알아보게: 더 밝게(흰빛 쪽), 더 멀리 번진다(2026-10-31 UX 시험: 맞힌 공이 안 보였다) */
+  inset: -80%;
+  --edge: 38%;
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--ball) 45%, #fff) var(--edge),
+    color-mix(in srgb, var(--ball) 75%, transparent) calc(var(--edge) + 20%),
+    transparent 100%
+  );
 }
 /* 촘촘한 얼룩을 화면 크기 그대로 크게 한 장씩(늘이지도 되풀이하지도 않아 이음매가 없다), 두 장이 서로 다른 방향으로 천천히 오간다 */
 @keyframes sd-ball-boil {
