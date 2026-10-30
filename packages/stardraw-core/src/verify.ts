@@ -370,7 +370,7 @@ export async function verifyLedger(
     }
 
     const roundSchedule = schedule;
-    // 6. 일정 변경(옛 칸)과 운영 기록(국장·관인 서명, 24시간 예고, 취소)
+    // 6. 일정 변경(옛 칸)과 운영 기록(국장·관인 서명, 3회차 예고, 취소)
     const opProblems = await applyRecordOps(ops, record, {
       ...(options.webauthnPolicy ? { policy: options.webauthnPolicy } : {}),
       isEntrant: (pub, credentialId) =>

@@ -37,7 +37,7 @@ import { verifyLedger } from "./verify";
 
 /**
  * 운영 기록(docs/36 11-12). 시험 장부는 1시간 회차의 빈 무효 회차로 빠르게 잇는다(drand·작업 증명 없음).
- * 1시간 회차라 회차 k 기록의 가장 이른 효력 회차는 k + 25다(마감 + 24시간 뒤에 열리는 회차)
+ * 회차 k 기록의 가장 이른 효력 회차는 k + 4다(3회차 예고). 시험들은 그보다 늦은 효력 회차도 쓴다(늦어도 규칙에 맞다)
  */
 
 const TEST_FIELDS: AffiliationFields = {
@@ -189,7 +189,7 @@ describe("운영 기록 바이트", () => {
 });
 
 describe("국장이 일하는 길", () => {
-  it("관인 지정 → 24시간 뒤 국장 → 소속 추가 → 24시간 뒤 적용, 장부 검사를 통과하고 내력에 남는다", async () => {
+  it("관인 지정 → 예고 뒤 국장 → 소속 추가 → 예고 뒤 적용, 장부 검사를 통과하고 내력에 남는다", async () => {
     const c = await withDirector();
     const op = await addAffiliation(c, director);
     await c.close([op]);
@@ -356,9 +356,12 @@ describe("공격: 모두 거절된다", () => {
 
   it("예고 없이 바로 적용(효력 회차를 다음 회차로)", async () => {
     const c = await withDirector();
-    await c.close([await addAffiliation(c, director, c.next + 1)]);
+    const round = c.next;
+    await c.close([await addAffiliation(c, director, round + 3)]);
     expect(await c.problems()).toEqual([
-      expect.stringMatching(/24시간 예고가 모자란다\(효력은 51회차부터/),
+      expect.stringContaining(
+        `예고가 모자란다(3회차 예고, 효력은 ${round + 4}회차부터 가능)`,
+      ),
     ]);
   });
 
@@ -463,7 +466,7 @@ describe("서버·연습 장부가 쓰는 고르기", () => {
       ctx,
     );
     expect(first.bodies).toMatchObject([
-      { kind: "director-add", effectiveRound: 26 },
+      { kind: "director-add", effectiveRound: 5 },
     ]);
     await c.close([await signAsSeal(first.bodies[0] as OpBody, seal)]);
     let state = (await c.report()).operations;

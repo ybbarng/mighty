@@ -495,7 +495,7 @@ describe("일정 변경", () => {
     registerPowTarget: EASY_TARGET,
   });
 
-  it("24시간 뒤 회차부터의 변경은 반영되고, 그보다 이른 변경은 드러난다", async () => {
+  it("3회차 예고 뒤 회차부터의 변경은 반영되고, 그보다 이른 변경은 드러난다", async () => {
     const ledger = await buildLedger(1);
     const record = ledger.records[0] as RoundRecord;
     const ok = await verifyLedger(
@@ -509,13 +509,13 @@ describe("일정 변경", () => {
     expect(ok.schedule).toEqual(withChange(HOURLY, twoHours(26)));
     const early = await verifyLedger(
       ledger.schedule,
-      [{ ...record, scheduleChanges: [twoHours(10)] }],
+      [{ ...record, scheduleChanges: [twoHours(4)] }],
       ledger.tickets,
       ledger.registrations,
       OPTIONS,
     );
     expect(messages(early)).toContain(
-      "1: 일정 변경: 일정 변경은 24시간 뒤에 시작하는 회차부터",
+      "1: 일정 변경: 일정 변경은 3회차 예고 뒤(5회차)부터",
     );
   });
 });
@@ -575,11 +575,11 @@ describe("시험 → 정식 이어지는 장부", () => {
     );
   });
 
-  it("24시간보다 이른 정식 예약은 드러난다", async () => {
-    const records = chain(1, { ...liveFrom26, fromRound: 20 });
+  it("3회차 예고보다 이른 정식 예약은 드러난다", async () => {
+    const records = chain(1, { ...liveFrom26, fromRound: 4 });
     const report = await verifyLedger(trial, records, [[]], [[]], OPTIONS);
     expect(messages(report)).toEqual([
-      "1: 일정 변경: 일정 변경은 24시간 뒤에 시작하는 회차부터",
+      "1: 일정 변경: 일정 변경은 3회차 예고 뒤(5회차)부터",
     ]);
   });
 });

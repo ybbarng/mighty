@@ -36,8 +36,17 @@ export interface Schedule {
 
 /** 회차 k가 정해지려면 앞 회차 기록(drand 뒤)이 있어야 해서 회차는 10분보다 짧을 수 없다 */
 export const MIN_ROUND_LENGTH = 600;
-/** 일정 변경은 이만큼 뒤에 시작하는 회차부터 */
-export const SCHEDULE_NOTICE = 24 * 60 * 60;
+/**
+ * 예고 회차 수(일정 변경·운영 기록). 회차 k 기록에 실린 것은 k+1(이미 응모받는 중)·k+2·k+3 동안 장부에
+ * 보인 뒤 k+4부터 효력이 생긴다. 2026-10-31 전에는 "마감 + 24시간"이었고, 그때 실린 기록은 모두
+ * 이 규칙보다 늦게 효력이 생기므로 이 규칙으로 검사해도 통과한다(docs/36 11-1)
+ */
+export const NOTICE_ROUNDS = 3;
+
+/** 회차 decidedInRound 기록에 실리는 일정 변경·운영 기록의 가장 이른 효력 회차 */
+export function earliestNoticeRound(decidedInRound: number): number {
+  return decidedInRound + NOTICE_ROUNDS + 1;
+}
 
 export interface RoundTimes {
   round: number;
@@ -179,7 +188,7 @@ export function roundAt(schedule: Schedule, t: number): number | null {
 
 /**
  * 회차 `decidedInRound`의 기록에 넣는 일정 변경이 규칙에 맞는지.
- * 새 줄은 맨 뒤에 붙고, 효력은 그 회차 마감 + 24시간 뒤에 시작하는 회차부터다.
+ * 새 줄은 맨 뒤에 붙고, 효력은 3회차 예고 뒤(decidedInRound + 4회차)부터다.
  * 이미 응모받는 회차의 시각은 바뀌지 않는다.
  */
 export function checkScheduleChange(
@@ -192,12 +201,9 @@ export function checkScheduleChange(
   if (problem) return problem;
   if (last && change.fromRound <= last.fromRound)
     return "새 줄은 마지막 줄보다 뒤 회차부터";
-  const decidedAt = roundTimes(schedule, decidedInRound).closesAt;
-  // 새 줄이 붙어도 fromRound가 열리는 시각은 앞 줄들로 정해져 그대로다
-  const startsAt = roundTimes(schedule, change.fromRound).opensAt;
-  if (startsAt < decidedAt + SCHEDULE_NOTICE) {
-    return "일정 변경은 24시간 뒤에 시작하는 회차부터";
-  }
+  const earliest = earliestNoticeRound(decidedInRound);
+  if (change.fromRound < earliest)
+    return `일정 변경은 ${NOTICE_ROUNDS}회차 예고 뒤(${earliest}회차)부터`;
   return null;
 }
 

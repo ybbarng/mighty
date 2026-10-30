@@ -385,7 +385,7 @@ const RULES: { id: string; label: string; test: RegExp }[] = [
   { id: "schedule", label: "일정 변경", test: /^일정 변경/ },
   {
     id: "operations",
-    label: "운영 기록(국장·관인 서명, 24시간 예고)",
+    label: "운영 기록(국장·관인 서명, 3회차 예고)",
     test: /^운영 기록/,
   },
 ];

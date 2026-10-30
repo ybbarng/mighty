@@ -7,10 +7,10 @@ import {
   displayRound,
   isAlignedEpoch,
   liveStart,
+  NOTICE_ROUNDS,
   phaseOf,
   roundAt,
   roundTimes,
-  SCHEDULE_NOTICE,
   type Schedule,
   type ScheduleEntry,
   withChange,
@@ -96,7 +96,7 @@ describe("회차 시각", () => {
   });
 });
 
-describe("일정 변경은 24시간 뒤부터", () => {
+describe("일정 변경은 3회차 예고 뒤부터", () => {
   const change = (fromRound: number) => ({
     fromRound,
     length: 2 * HOUR,
@@ -105,13 +105,19 @@ describe("일정 변경은 24시간 뒤부터", () => {
     registerPowTarget: 2 ** 20,
   });
 
-  it("1회차 마감에 정하면 25회차(마감 + 24시간에 열림)부터 바꿀 수 있다", () => {
-    // 1회차 마감 = EPOCH + 1h, 25회차가 열리는 시각 = EPOCH + 24h → 23시간 뒤라 이르다
-    expect(checkScheduleChange(hourly, change(25), 1)).not.toBeNull();
-    // 26회차는 EPOCH + 25h에 열린다 = 마감 + 24h
+  it("1회차 기록에 실으면 2·3·4회차 동안 보이고 5회차부터 바꿀 수 있다", () => {
+    expect(NOTICE_ROUNDS).toBe(3);
+    expect(checkScheduleChange(hourly, change(4), 1)).toBe(
+      "일정 변경은 3회차 예고 뒤(5회차)부터",
+    );
+    expect(checkScheduleChange(hourly, change(5), 1)).toBeNull();
+  });
+
+  it("옛 규칙(마감 + 24시간)을 지킨 변경은 새 규칙으로도 통과한다(이어지는 장부의 옛 기록)", () => {
+    // 1시간 회차에서 1회차 마감 + 24시간에 열리는 회차는 26회차
     expect(
       roundTimes(hourly, 26).opensAt - roundTimes(hourly, 1).closesAt,
-    ).toBe(SCHEDULE_NOTICE);
+    ).toBe(24 * HOUR);
     expect(checkScheduleChange(hourly, change(26), 1)).toBeNull();
   });
 
@@ -158,10 +164,10 @@ describe("운영 단계(시험 → 정식, 이어지는 장부)", () => {
     phase: "live",
   });
 
-  it("정식 단계는 일정 바꾸기 한 줄이고 24시간 규칙을 그대로 따른다", () => {
-    expect(checkScheduleChange(trial, live(26), 1)).toBeNull();
-    expect(checkScheduleChange(trial, live(25), 1)).toBe(
-      "일정 변경은 24시간 뒤에 시작하는 회차부터",
+  it("정식 단계는 일정 바꾸기 한 줄이고 3회차 예고 규칙을 그대로 따른다", () => {
+    expect(checkScheduleChange(trial, live(5), 1)).toBeNull();
+    expect(checkScheduleChange(trial, live(4), 1)).toBe(
+      "일정 변경은 3회차 예고 뒤(5회차)부터",
     );
   });
 

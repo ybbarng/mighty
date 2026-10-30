@@ -19,10 +19,10 @@ import {
 import type { RoundRecord } from "./record";
 import {
   checkScheduleChange,
+  earliestNoticeRound,
+  NOTICE_ROUNDS,
   readScheduleEntry,
-  roundAt,
   roundTimes,
-  SCHEDULE_NOTICE,
   type Schedule,
   type ScheduleEntry,
   withChange,
@@ -40,7 +40,7 @@ import {
 
 /**
  * 운영 기록(docs/36 11-12): 우주국장(운영자)과 관인(서버 서명 열쇠)이 서명한 일 한 건.
- * 회차 기록 v2의 끝 칸에 실리고, 실린 회차 마감 + 24시간 뒤에 열리는 회차부터 효력이 생긴다.
+ * 회차 기록 v2의 끝 칸에 실리고, 실린 회차부터 3회차 예고 뒤(실린 회차 + 4)에 효력이 생긴다.
  * "국장도 장부에 남는 기록으로만 일한다": 서버 DB에 직접 넣는 운영 일은 없다.
  *
  * 본문 = v(u8 = 1) ‖ kind(u8) ‖ after(32) ‖ effectiveRound(u32) ‖ 내용
@@ -480,25 +480,15 @@ export function matureOps(state: OpsState, round: number): void {
   state.matured = round;
 }
 
-/** 예고 중인 일정 바꾸기가 있으면 그 줄을 뺀 일정표도 함께(그 줄이 취소돼도 24시간이 지켜지게) */
-function scheduleVariants(state: OpsState): Schedule[] {
-  if (!state.pendingSchedule) return [state.schedule];
-  return [
-    state.schedule,
-    { ...state.schedule, entries: state.schedule.entries.slice(0, -1) },
-  ];
-}
-
-/** 회차 round 기록에 실리는 운영 기록의 가장 이른 효력 회차(그 회차 마감 + 24시간 뒤에 열리는 첫 회차) */
-export function earliestEffectiveRound(state: OpsState, round: number): number {
-  let best = round + 1;
-  for (const s of scheduleVariants(state)) {
-    const t = roundTimes(s, round).closesAt + SCHEDULE_NOTICE;
-    let r = roundAt(s, t) ?? round + 1;
-    if (roundTimes(s, r).opensAt < t) r++;
-    best = Math.max(best, r);
-  }
-  return best;
+/**
+ * 회차 round 기록에 실리는 운영 기록의 가장 이른 효력 회차(3회차 예고 뒤, round + 4).
+ * 회차 수로 세므로 예고 중인 일정 바꾸기가 취소되든 말든 같다
+ */
+export function earliestEffectiveRound(
+  _state: OpsState,
+  round: number,
+): number {
+  return earliestNoticeRound(round);
 }
 
 export function checkAffiliationFields(f: AffiliationFields): string | null {
@@ -577,14 +567,14 @@ export async function checkOperation(
   if (!(await verifyOperationSignature(op, ctx.policy)))
     return "서명이 맞지 않는다";
 
-  // 효력 회차: 24시간 예고와 회차 경계. 취소는 0
+  // 효력 회차: 3회차 예고와 회차 경계. 취소는 0
   if (op.kind === "cancel") {
     if (op.effectiveRound !== 0)
       return "예고 취소의 효력 회차는 0(실리는 즉시)";
   } else {
     const earliest = earliestEffectiveRound(state, round);
     if (op.effectiveRound < earliest)
-      return `24시간 예고가 모자란다(효력은 ${earliest}회차부터 가능)`;
+      return `예고가 모자란다(${NOTICE_ROUNDS}회차 예고, 효력은 ${earliest}회차부터 가능)`;
   }
 
   switch (op.kind) {

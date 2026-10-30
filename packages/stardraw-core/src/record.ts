@@ -59,7 +59,7 @@ export interface RoundRecord {
   bonus: number;
   /** 등수별 당첨 응모권 id(사전 순) */
   winners: Record<Rank, Uint8Array[]>;
-  /** 이 회차에 정한 일정 변경(24시간 뒤 효력) */
+  /** 이 회차에 정한 일정 변경(3회차 예고 뒤 효력) */
   scheduleChanges: ScheduleEntry[];
   /** 이 회차까지 사이에 당첨자가 남긴 별명(지난 회차 당첨 응모권, nickname.ts) */
   nicknames: Nickname[];
