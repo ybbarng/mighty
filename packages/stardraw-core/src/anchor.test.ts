@@ -7,6 +7,7 @@ import {
   githubAnchorVerifier,
   ledgerId,
   parseAnchorFile,
+  sealLogId,
 } from "./anchor";
 import { toHex } from "./bytes";
 import { genesisHash, recordHash } from "./record";
@@ -54,13 +55,28 @@ describe("앵커 파일 형식", () => {
       ledger: ledgerId(TRIAL),
       round: 3,
       record: "ab".repeat(32),
-      rekor: "71d4…",
+      seal: "tsa:digicert@1793324472",
     };
     expect(parseAnchorFile(anchorFile(entry))).toEqual(entry);
     expect(anchorCommitMessage(entry)).toBe(
       `하늘의 별 따기 3회 기록 abababababab (장부 ${entry.ledger})`,
     );
     expect(parseAnchorFile("다른 파일")).toBeNull();
+  });
+
+  it("seal 줄은 봉인 증거를 한 줄로 줄인 것", () => {
+    expect(
+      sealLogId({
+        kind: "tsa",
+        tokens: [
+          { tsa: "digicert", genTime: 1793324472, token: "…" },
+          { tsa: "sectigo", genTime: 1793324474, token: "…" },
+        ],
+      }),
+    ).toBe("tsa:digicert@1793324472,sectigo@1793324474");
+    expect(sealLogId({ kind: "rekor", uuid: "71d4" })).toBe("rekor:71d4");
+    expect(sealLogId({ kind: "local", digest: "00" })).toBe("-");
+    expect(sealLogId(null)).toBe("-");
   });
 });
 
@@ -71,7 +87,7 @@ describe("앵커 확인(githubAnchorVerifier)", () => {
     ledger: id,
     round: 1,
     record: toHex(recordHash(record)),
-    rekor: "-",
+    seal: "-",
   });
   const verifierWith = (files: Record<string, string>) =>
     githubAnchorVerifier({

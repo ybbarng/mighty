@@ -20,6 +20,7 @@ const digest = utf8("stardraw rekor fixture");
 const token = (name: keyof typeof FIXTURE_TOKENS) =>
   Uint8Array.from(atob(FIXTURE_TOKENS[name]), (c) => c.charCodeAt(0));
 const at = (s: number) => Date.UTC(2026, 9, 30, 1, 51, s) / 1000;
+const GEN_TIMES = { digicert: at(12), sectigo: at(14), freetsa: at(15) };
 
 /** SignerInfo 서명 값이 토큰 안 어디에 있는지 */
 function signatureOffset(t: Uint8Array): number {
@@ -108,7 +109,11 @@ describe("시각 인증 토큰(실제 기관 토큰)", () => {
 describe("봉인 증거(TsaProof)", () => {
   const proof = (...names: (keyof typeof FIXTURE_TOKENS)[]): TsaProof => ({
     kind: "tsa",
-    tokens: names.map((tsa) => ({ tsa, token: FIXTURE_TOKENS[tsa] })),
+    tokens: names.map((tsa) => ({
+      tsa,
+      genTime: GEN_TIMES[tsa],
+      token: FIXTURE_TOKENS[tsa],
+    })),
   });
 
   it("두 기관이 맞으면 통과하고, 가장 이른 시각을 봉인 시각으로 본다", async () => {
@@ -118,6 +123,15 @@ describe("봉인 증거(TsaProof)", () => {
     });
     expect(check.problems).toEqual([]);
     expect(check.loggedAt).toBe(at(12));
+  });
+
+  it("적어 둔 시각을 토큰과 다르게 고치면 거절한다", async () => {
+    const p = proof("digicert");
+    p.tokens[0] = { ...(p.tokens[0] as TsaProof["tokens"][0]), genTime: at(1) };
+    expect((await verifyTsaProof(p, { digest })).problems).toEqual([
+      "digicert: 적어 둔 시각이 토큰 시각과 다르다",
+      "시각 인증 기관이 1곳보다 적다(0곳)",
+    ]);
   });
 
   it("기관 수가 모자라거나 같은 기관을 두 번 실으면 모자란 것으로 본다", async () => {
@@ -139,8 +153,8 @@ describe("봉인 증거(TsaProof)", () => {
     const swapped: TsaProof = {
       kind: "tsa",
       tokens: [
-        { tsa: "digicert", token: FIXTURE_TOKENS.digicert },
-        { tsa: "sectigo", token: FIXTURE_TOKENS.freetsa },
+        { tsa: "digicert", genTime: at(12), token: FIXTURE_TOKENS.digicert },
+        { tsa: "sectigo", genTime: at(15), token: FIXTURE_TOKENS.freetsa },
       ],
     };
     expect((await verifyTsaProof(swapped, { digest })).ok).toBe(false);

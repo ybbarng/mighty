@@ -13,13 +13,19 @@ import {
   rekorLogFor,
   rekorProofFromResponse,
   type Signer,
+  sealImprint,
+  type TsaAuthority,
+  type TsaProof,
+  timestampRequest,
   toHex,
+  tokenFromResponse,
   verifyQuicknetBeacon,
   verifyRekorEntry,
+  verifyTimestampToken,
 } from "@mighty/stardraw-core";
 
 /**
- * 서버 밖과 닿는 세 가지: drand 공개 난수, 투명성 로그(봉인 값의 시각 증명), GitHub 앵커.
+ * 서버 밖과 닿는 세 가지: drand 공개 난수, 봉인 값의 시각 증명(공개 시각 인증 기관, 꺼 둔 선택지로 Rekor), GitHub 앵커.
  * 모두 인터페이스로 나눠 시험은 가짜를, 운영은 실제 구현을 넣는다. 설정이 없으면 실제 구현은 꺼진다.
  */
 
@@ -67,7 +73,7 @@ export class HttpDrand implements DrandSource {
   }
 }
 
-// ── 투명성 로그 ──
+// ── 봉인 시각 증명 ──
 
 export interface LogResult {
   /** 로그가 찍은 시각(초) */
@@ -149,6 +155,89 @@ export class RekorRootLog implements RootLog {
       return { loggedAt: proof.integratedTime, proof };
     } catch (err) {
       this.warn(`Rekor 등록 오류: ${String(err)}`);
+      return null;
+    }
+  }
+}
+
+/**
+ * 공개 시각 인증 기관(RFC 3161) 여러 곳: SHA-256(봉인 값)을 동시에 보내 토큰을 받는다(docs/36 8-1 O1, 11-1).
+ * 받은 토큰은 검사기와 같은 규칙(`verifyTimestampToken`)으로 먼저 확인해 맞는 것만 싣는다.
+ * 서로 다른 기관 minValid곳 이상이 맞으면 성공이고, 봉인 시각은 그중 가장 이른 시각이다.
+ * 모자라면 null을 돌려 다음 번에 모두에게 다시 묻는다(마감 3분 뒤까지 못 받으면 엔진이 무효로 닫는다).
+ */
+export class TsaRootLog implements RootLog {
+  constructor(
+    private readonly authorities: readonly TsaAuthority[],
+    private readonly minValid: number,
+    private readonly fetchFn: typeof fetch = fetch,
+    private readonly warn: (message: string) => void = () => undefined,
+  ) {
+    if (minValid < 1 || minValid > authorities.length)
+      throw new Error(
+        `시각 인증 최소 기관 수(${minValid})는 1 이상 ${authorities.length} 이하여야 한다`,
+      );
+  }
+
+  async log(digest: Uint8Array): Promise<LogResult | null> {
+    const imprint = sealImprint(digest);
+    const request = timestampRequest(imprint);
+    const got = (
+      await Promise.all(
+        this.authorities.map((a) => this.ask(a, request, imprint)),
+      )
+    ).filter((t) => t !== null);
+    if (got.length < this.minValid) {
+      this.warn(
+        `시각 인증을 ${this.minValid}곳 이상 받지 못했다(${got.length}곳). 다시 시도한다`,
+      );
+      return null;
+    }
+    const proof: TsaProof = {
+      kind: "tsa",
+      tokens: got.map((t) => ({
+        tsa: t.tsa,
+        genTime: t.genTime,
+        token: Buffer.from(t.token).toString("base64"),
+      })),
+    };
+    return { loggedAt: Math.min(...got.map((t) => t.genTime)), proof };
+  }
+
+  private async ask(
+    authority: TsaAuthority,
+    request: Uint8Array,
+    imprint: Uint8Array,
+  ): Promise<{ tsa: string; genTime: number; token: Uint8Array } | null> {
+    try {
+      const res = await this.fetchFn(authority.url, {
+        method: "POST",
+        headers: { "content-type": "application/timestamp-query" },
+        signal: AbortSignal.timeout(10000),
+        body: request.slice().buffer,
+      });
+      if (!res.ok) {
+        this.warn(`${authority.name} 시각 인증 실패: HTTP ${res.status}`);
+        return null;
+      }
+      const token = tokenFromResponse(new Uint8Array(await res.arrayBuffer()));
+      if (!token) {
+        this.warn(`${authority.name} 시각 인증 거절 또는 응답 모양이 틀리다`);
+        return null;
+      }
+      const check = await verifyTimestampToken(token, {
+        imprint,
+        authorities: [authority],
+      });
+      if (!check.ok) {
+        this.warn(
+          `${authority.name} 시각 인증 토큰 확인 실패: ${check.problems.join(", ")}`,
+        );
+        return null;
+      }
+      return { tsa: authority.name, genTime: check.genTime, token };
+    } catch (err) {
+      this.warn(`${authority.name} 시각 인증 오류: ${String(err)}`);
       return null;
     }
   }

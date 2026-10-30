@@ -3,15 +3,24 @@ import {
   ledgerId,
   parseAnchorFile,
   type RekorEntryProof,
+  type RoundRecord,
   recordHash,
   rekorRootLogVerifier,
+  type TsaProof,
   toHex,
+  tsaRootLogVerifier,
   verifyLedger,
 } from "@mighty/stardraw-core";
+import { FakeTsa } from "@mighty/stardraw-core/testing";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { outsideConfig } from "./config";
-import { GitHubAnchor, RekorRootLog } from "./outside";
+import {
+  GitHubAnchor,
+  type LogResult,
+  RekorRootLog,
+  TsaRootLog,
+} from "./outside";
 import {
   FakeGitHub,
   FakeRekor,
@@ -28,35 +37,87 @@ afterEach(() => {
   rig = undefined;
 });
 
+/** 주소로 가짜 기관을 고른다 */
+const fetchBy =
+  (...fakes: FakeTsa[]): typeof fetch =>
+  (input, init) => {
+    const fake = fakes.find((f) => String(input) === f.authority.url);
+    return fake
+      ? fake.fetch(input, init)
+      : Promise.reject(new Error("모르는 주소"));
+  };
+
 const env = (values: Record<string, string>) => (name: string) => values[name];
 
 describe("바깥 기록 설정(outsideConfig)", () => {
-  it("Rekor: 시험 운영은 시험용 로그만, 정식은 실제 로그만", () => {
+  it("Rekor(꺼 둔 선택지): 시각 인증을 끈 때만, 시험 운영은 시험용 로그만, 정식은 실제 로그만", () => {
     expect(
       outsideConfig(
         "trial",
-        env({ STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" }),
+        env({
+          STARDRAW_TSA: "off",
+          STARDRAW_REKOR_URL: "https://rekor.sigstage.dev",
+        }),
       ).rekor,
     ).toEqual({ url: "https://rekor.sigstage.dev" });
     expect(() =>
       outsideConfig(
         "trial",
-        env({ STARDRAW_REKOR_URL: "https://rekor.sigstore.dev" }),
+        env({
+          STARDRAW_TSA: "off",
+          STARDRAW_REKOR_URL: "https://rekor.sigstore.dev",
+        }),
       ),
     ).toThrow();
     expect(() =>
       outsideConfig(
         "live",
-        env({ STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" }),
+        env({
+          STARDRAW_TSA: "off",
+          STARDRAW_REKOR_URL: "https://rekor.sigstage.dev",
+        }),
       ),
     ).toThrow();
     expect(() =>
       outsideConfig(
         "live",
-        env({ STARDRAW_REKOR_URL: "https://rekor.example" }),
+        env({
+          STARDRAW_TSA: "off",
+          STARDRAW_REKOR_URL: "https://rekor.example",
+        }),
       ),
     ).toThrow();
     expect(outsideConfig("live", env({})).rekor).toBeNull();
+    expect(() =>
+      outsideConfig(
+        "trial",
+        env({ STARDRAW_REKOR_URL: "https://rekor.sigstage.dev" }),
+      ),
+    ).toThrow(/STARDRAW_TSA=off/);
+  });
+
+  it("시각 인증: 기본은 DigiCert·Sectigo 중 1곳 이상, 시험 운영도 켠다", () => {
+    for (const mode of ["trial", "live"] as const) {
+      const tsa = outsideConfig(mode, env({})).tsa;
+      expect(tsa?.authorities.map((a) => a.name)).toEqual([
+        "digicert",
+        "sectigo",
+      ]);
+      expect(tsa?.minValid).toBe(1);
+    }
+    const three = outsideConfig(
+      "live",
+      env({ STARDRAW_TSA: "digicert,sectigo,freetsa", STARDRAW_TSA_MIN: "2" }),
+    ).tsa;
+    expect(three?.authorities.length).toBe(3);
+    expect(three?.minValid).toBe(2);
+    expect(outsideConfig("trial", env({ STARDRAW_TSA: "off" })).tsa).toBeNull();
+    expect(() =>
+      outsideConfig("live", env({ STARDRAW_TSA: "digicert,example" })),
+    ).toThrow(/example/);
+    expect(() => outsideConfig("live", env({ STARDRAW_TSA_MIN: "3" }))).toThrow(
+      /STARDRAW_TSA_MIN/,
+    );
   });
 
   it("앵커: 저장소와 토큰이 둘 다 있을 때만, 브랜치 기본은 시험 trial·정식 main", () => {
@@ -79,7 +140,103 @@ describe("바깥 기록 설정(outsideConfig)", () => {
   });
 });
 
-describe("Rekor 투명성 로그(가짜 Rekor)", () => {
+describe("공개 시각 인증(가짜 기관)", () => {
+  const authorities = (a: FakeTsa, b: FakeTsa) => [a.authority, b.authority];
+
+  it("두 기관에 동시에 묻고, 장부의 증거를 검사기가 확인한다(가장 이른 시각이 봉인 시각)", async () => {
+    let fakes: [FakeTsa, FakeTsa] | undefined;
+    rig = await makeRig({
+      rootLog: (_key, clock) => {
+        const now = () => Math.floor(clock.now() / 1000);
+        const a = new FakeTsa("tsa-a", now);
+        const b = new FakeTsa("tsa-b", now);
+        b.shift = 2;
+        fakes = [a, b];
+        return new TsaRootLog(authorities(a, b), 2, fetchBy(a, b));
+      },
+    });
+    await rig.finish(1);
+    const [a, b] = fakes as [FakeTsa, FakeTsa];
+    const ledger = readLedger(rig.dir);
+    const proof = readSealLog(rig.dir, 1) as TsaProof;
+    expect(proof.tokens.map((t) => t.tsa)).toEqual(["tsa-a", "tsa-b"]);
+    const record = ledger.records[0] as RoundRecord;
+    expect(record.rootLoggedAt).toBe(proof.tokens[0]?.genTime);
+    expect(record.void).toBe(false);
+
+    const check = (p: TsaProof, minValid = 2) =>
+      verifyLedger(
+        ledger.genesis,
+        ledger.records,
+        ledger.tickets,
+        ledger.registrations,
+        {
+          beaconVerifier: () => true,
+          powParams: TEST_POW,
+          rootLogVerifier: tsaRootLogVerifier(() => p, {
+            minValid,
+            authorities: authorities(a, b),
+          }),
+        },
+      );
+    expect((await check(proof)).problems).toEqual([]);
+    // 늦은 쪽 토큰만 남기면 봉인 시각이 기록과 달라진다
+    const later = { ...proof, tokens: proof.tokens.slice(1) };
+    expect((await check(later, 1)).problems.map((p) => p.message)).toContain(
+      "머클 루트의 투명성 로그 기록을 확인할 수 없다",
+    );
+  });
+
+  it("한 곳이 실패하거나 틀린 토큰을 주면 최소 수에 따라 다시 시도한다", async () => {
+    const t = 1793324472; // 2026-10-30
+    const a = new FakeTsa("tsa-a", () => t);
+    const b = new FakeTsa("tsa-b", () => t + 1);
+    const digest = new Uint8Array(32).fill(7);
+    const logs: string[] = [];
+    const two = new TsaRootLog(authorities(a, b), 2, fetchBy(a, b), (m) =>
+      logs.push(m),
+    );
+    b.status = 503;
+    expect(await two.log(digest)).toBeNull();
+    b.status = 200;
+    b.wrongImprint = true;
+    expect(await two.log(digest)).toBeNull();
+    expect(logs.join("\n")).toMatch(/tsa-b 시각 인증 실패: HTTP 503/);
+    expect(logs.join("\n")).toMatch(/tsa-b 시각 인증 토큰 확인 실패/);
+    // 한 곳이면 되는 설정은 a만으로 성공
+    const one = new TsaRootLog(authorities(a, b), 1, fetchBy(a, b));
+    const got = (await one.log(digest)) as LogResult;
+    expect(got.loggedAt).toBe(t);
+    expect((got.proof as TsaProof).tokens.map((k) => k.tsa)).toEqual(["tsa-a"]);
+    b.wrongImprint = false;
+    expect((await two.log(digest))?.loggedAt).toBe(t);
+    expect(() => new TsaRootLog(authorities(a, b), 3)).toThrow();
+  });
+
+  it("기한(마감 3분 뒤)까지 못 받으면 무효로 닫고, drand보다 늦은 시각이면 무효다", async () => {
+    let fake: FakeTsa | undefined;
+    rig = await makeRig({
+      rootLog: (_key, clock) => {
+        fake = new FakeTsa("tsa-a", () => Math.floor(clock.now() / 1000));
+        fake.status = 503;
+        return new TsaRootLog([fake.authority], 1, fake.fetch);
+      },
+    });
+    await rig.finish(1);
+    expect(readLedger(rig.dir).records[0]?.void).toBe(true);
+    expect(rig.logs.join("\n")).toMatch(/무효로 닫는다/);
+    // 토큰은 오지만 시각이 drand 뒤
+    const f = fake as FakeTsa;
+    f.status = 200;
+    f.shift = 3600;
+    await rig.finish(2);
+    const r2 = readLedger(rig.dir).records[1] as RoundRecord;
+    expect(r2.rootLoggedAt).toBeGreaterThan(0);
+    expect(r2.void).toBe(true);
+  });
+});
+
+describe("Rekor 투명성 로그(꺼 둔 선택지, 가짜 Rekor)", () => {
   it("봉인 값을 올리고, 장부의 증거로 검사기가 확인한다(시각을 바꾸면 드러난다)", async () => {
     let rekor: FakeRekor | undefined;
     rig = await makeRig({
@@ -152,7 +309,7 @@ describe("GitHub 앵커(가짜 GitHub)", () => {
     ledger: "0123456789abcdef",
     round: 3,
     record: "ab".repeat(32),
-    rekor: "-",
+    seal: "-",
   };
 
   it("회차 파일을 커밋하고, 이미 같은 내용이 있으면 성공으로 본다", async () => {

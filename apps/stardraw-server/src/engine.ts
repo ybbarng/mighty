@@ -25,6 +25,7 @@ import {
   roundTimes,
   type Schedule,
   sealDigest,
+  sealLogId,
   sealRoot,
   signReceipt,
   type Ticket,
@@ -445,16 +446,12 @@ export class StardrawServer {
     ) {
       const record = store.record(round);
       if (!record) return;
-      const log = store.seal(round)?.log as
-        | { uuid?: unknown }
-        | null
-        | undefined;
       try {
         await this.o.anchor.anchor({
           ledger,
           round,
           record: toHex(recordHash(record)),
-          rekor: typeof log?.uuid === "string" ? log.uuid : "-",
+          seal: sealLogId(store.seal(round)?.log),
         });
         store.setAnchored(round);
       } catch (err) {

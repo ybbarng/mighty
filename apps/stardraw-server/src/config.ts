@@ -1,5 +1,7 @@
 import {
   alignedEpoch,
+  DEFAULT_TSA_MIN,
+  DEFAULT_TSA_NAMES,
   POW_PARAMS,
   type PowParams,
   powTargetForTries,
@@ -7,6 +9,8 @@ import {
   REKOR_STAGING,
   rekorLogFor,
   type Schedule,
+  type TsaAuthority,
+  tsaByName,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
 
@@ -18,7 +22,7 @@ import {
 
 /**
  * 운영 모드(docs/36 11-6).
- * - trial: 시험 운영. 장부 genesis에 시험 표시(꼬리표가 달라 정식 장부와 섞이지 않는다), Rekor는 시험용 로그만,
+ * - trial: 시험 운영. 장부 genesis에 시험 표시(꼬리표가 달라 정식 장부와 섞이지 않는다), 시각 인증은 정식과 같게 받고,
  *   GitHub 앵커는 `trial` 브랜치, 화면 위에 "시험 운영 중" 띠. 회차 길이 기본 10분
  * - live: 정식 운영. `start-live` 명령으로 만든 장부로만 띄운다
  */
@@ -52,9 +56,12 @@ export interface ServerConfig {
   /** 동시에 도는 Argon2 확인 수, 기다리는 줄 상한 */
   argonConcurrency: number;
   argonQueue: number;
-  /** 마감 뒤 봉인 값을 투명성 로그에 올려야 하는 기한(초) */
+  /** 마감 뒤 봉인 값의 시각 증명을 받아야 하는 기한(초) */
   sealDeadline: number;
   drandUrls: string[];
+  /** 공개 시각 인증 기관과, 몇 곳 이상 받아야 봉인 성공인지. null이면 끈다(개발용, 서버 시계를 적는다) */
+  tsa: { authorities: TsaAuthority[]; minValid: number } | null;
+  /** 꺼 둔 선택지: Rekor(시각 인증을 끈 때만) */
   rekor: { url: string } | null;
   github: { repo: string; branch: string; token: string } | null;
 }
@@ -143,8 +150,10 @@ export function loadConfig(): ServerConfig {
 }
 
 /**
- * 바깥 기록 설정(docs/36 11-6).
- * - Rekor(`STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만. 시험 운영은 시험용(rekor.sigstage.dev)만,
+ * 바깥 기록 설정(docs/36 11-1, 11-6).
+ * - 시각 인증(`STARDRAW_TSA`): 기관 이름을 쉼표로(기본 digicert,sectigo, core tsa.ts에 열쇠를 고정한 기관만).
+ *   `off`면 끈다(개발용). `STARDRAW_TSA_MIN`(기본 1)곳 이상 맞는 토큰을 받아야 봉인 성공. 시험 운영도 같게 받는다
+ * - Rekor(꺼 둔 선택지, `STARDRAW_TSA=off`일 때만)(`STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만. 시험 운영은 시험용(rekor.sigstage.dev)만,
  *   정식은 실제(rekor.sigstore.dev)만 받는다. 시험 기록을 영구 공개 로그에 남기지 않고, 정식 장부의 시각 증명을
  *   시험용 로그로 대신하지 못하게 하려는 것이다. 맞지 않는 주소면 서버를 띄우지 않는다.
  * - GitHub 앵커(`STARDRAW_ANCHOR_REPO`, `STARDRAW_ANCHOR_TOKEN`): 저장소와 토큰이 둘 다 있을 때만.
@@ -153,8 +162,30 @@ export function loadConfig(): ServerConfig {
 export function outsideConfig(
   mode: ServerMode,
   get: (name: string) => string | undefined,
-): Pick<ServerConfig, "rekor" | "github"> {
+): Pick<ServerConfig, "tsa" | "rekor" | "github"> {
+  const tsaNames = get("STARDRAW_TSA") ?? DEFAULT_TSA_NAMES.join(",");
+  let tsa: ServerConfig["tsa"] = null;
+  if (tsaNames !== "off") {
+    const authorities = tsaNames.split(",").map((name) => {
+      const a = tsaByName(name.trim());
+      if (!a)
+        throw new Error(`열쇠를 고정해 두지 않은 시각 인증 기관: ${name}`);
+      return a;
+    });
+    const minValid = Number(get("STARDRAW_TSA_MIN") ?? DEFAULT_TSA_MIN);
+    if (
+      !Number.isInteger(minValid) ||
+      minValid < 1 ||
+      minValid > authorities.length
+    )
+      throw new Error(
+        `STARDRAW_TSA_MIN은 1 이상 ${authorities.length} 이하: ${minValid}`,
+      );
+    tsa = { authorities, minValid };
+  }
   const rekorUrl = get("STARDRAW_REKOR_URL");
+  if (rekorUrl && tsa)
+    throw new Error("Rekor를 쓰려면 시각 인증을 끈다(STARDRAW_TSA=off)");
   let rekor: ServerConfig["rekor"] = null;
   if (rekorUrl) {
     const log = rekorLogFor(rekorUrl);
@@ -177,5 +208,5 @@ export function outsideConfig(
           token,
         }
       : null;
-  return { rekor, github };
+  return { tsa, rekor, github };
 }

@@ -24,8 +24,25 @@ export interface AnchorEntry {
   round: number;
   /** 그 회차 기록 해시(hex) */
   record: string;
-  /** 봉인의 Rekor 항목 uuid. 로그가 없으면 "-" */
-  rekor: string;
+  /** 봉인 시각 증거 요약(`sealLogId`). 없으면 "-" */
+  seal: string;
+}
+
+/**
+ * 장부 seals/N의 log를 한 줄로 줄인다(앵커 파일의 seal 줄).
+ * 시각 인증 "tsa:digicert@1793324472,sectigo@1793324474", Rekor "rekor:<uuid>", 그 밖에는 "-"
+ */
+export function sealLogId(log: unknown): string {
+  const l = log as {
+    kind?: unknown;
+    uuid?: unknown;
+    tokens?: { tsa?: unknown; genTime?: unknown }[];
+  } | null;
+  if (l?.kind === "rekor" && typeof l.uuid === "string")
+    return `rekor:${l.uuid}`;
+  if (l?.kind === "tsa" && Array.isArray(l.tokens) && l.tokens.length > 0)
+    return `tsa:${l.tokens.map((t) => `${String(t.tsa)}@${String(t.genTime)}`).join(",")}`;
+  return "-";
 }
 
 /** 장부 id: 처음 일정표 해시 앞 16자리 */
@@ -39,7 +56,7 @@ export function anchorPath(ledger: string, round: number): string {
 
 /** 앵커 파일 본문(사람도 읽는 줄 형식) */
 export function anchorFile(e: AnchorEntry): string {
-  return `${ANCHOR_VERSION}\nledger ${e.ledger}\nround ${e.round}\nrecord ${e.record}\nrekor ${e.rekor}\n`;
+  return `${ANCHOR_VERSION}\nledger ${e.ledger}\nround ${e.round}\nrecord ${e.record}\nseal ${e.seal}\n`;
 }
 
 /** 커밋 메시지: "하늘의 별 따기 {회차}회 기록 {기록 해시 앞 12자리} (장부 {id})" */
@@ -57,9 +74,9 @@ export function parseAnchorFile(text: string): AnchorEntry | null {
   const ledger = field("ledger");
   const round = Number(field("round"));
   const record = field("record");
-  const rekor = field("rekor");
-  if (!ledger || !Number.isInteger(round) || !record || !rekor) return null;
-  return { ledger, round, record, rekor };
+  const seal = field("seal");
+  if (!ledger || !Number.isInteger(round) || !record || !seal) return null;
+  return { ledger, round, record, seal };
 }
 
 /**

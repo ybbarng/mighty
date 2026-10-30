@@ -15,6 +15,7 @@ import {
   noAnchor,
   RekorRootLog,
   type RootLog,
+  TsaRootLog,
 } from "./outside";
 import { Publisher } from "./publish";
 import { Relay } from "./relay";
@@ -43,10 +44,12 @@ async function main(): Promise<void> {
   );
   const log = (message: string) => console.log(`[stardraw] ${message}`);
 
-  // 투명성 로그: 설정이 없으면 이 서버의 시계를 적는다(시각 증명 없음. 개발용)
-  const rootLog: RootLog = config.rekor
-    ? new RekorRootLog(config.rekor.url, serverKey, fetch, log)
-    : new LocalRootLog(() => Math.floor(clock.now() / 1000));
+  // 봉인 시각 증명: 공개 시각 인증 기관(기본). 끄면(개발용) 이 서버의 시계를 적는다(시각 증명 없음)
+  const rootLog: RootLog = config.tsa
+    ? new TsaRootLog(config.tsa.authorities, config.tsa.minValid, fetch, log)
+    : config.rekor
+      ? new RekorRootLog(config.rekor.url, serverKey, fetch, log)
+      : new LocalRootLog(() => Math.floor(clock.now() / 1000));
   const anchor: Anchor = config.github
     ? new GitHubAnchor(
         config.github.repo,
@@ -56,9 +59,11 @@ async function main(): Promise<void> {
     : noAnchor;
   if (config.mode === "trial") log("시험 운영: 장부는 정식 시작 때 버린다");
   log(
-    config.rekor
-      ? `투명성 로그: ${config.rekor.url}`
-      : "투명성 로그 설정이 없어 서버 시계로 봉인 시각을 적는다(시각 증명 없음)",
+    config.tsa
+      ? `시각 인증: ${config.tsa.authorities.map((a) => a.name).join(", ")} 중 ${config.tsa.minValid}곳 이상`
+      : config.rekor
+        ? `투명성 로그: ${config.rekor.url}`
+        : "시각 인증을 꺼서 서버 시계로 봉인 시각을 적는다(시각 증명 없음)",
   );
   log(
     config.github

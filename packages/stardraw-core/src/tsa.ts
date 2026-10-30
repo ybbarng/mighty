@@ -200,10 +200,10 @@ export async function verifyTimestampToken(
 
 // ── 장부의 증거 ──
 
-/** seals/N의 log(시각 인증 증거). token은 표준 base64 DER */
+/** seals/N의 log(시각 인증 증거). token은 표준 base64 DER, genTime은 토큰 안 시각(초, 사람이 읽기 쉽게 함께 적는다) */
 export interface TsaProof {
   kind: "tsa";
-  tokens: { tsa: string; token: string }[];
+  tokens: { tsa: string; genTime: number; token: string }[];
 }
 
 export interface TsaProofCheck {
@@ -244,6 +244,10 @@ export async function verifyTsaProof(
           tsa: null,
           problems: ["믿는 기관 목록에 없다"],
         };
+    if (check.ok && check.genTime !== item.genTime) {
+      check.ok = false;
+      check.problems.push("적어 둔 시각이 토큰 시각과 다르다");
+    }
     stamps.push({ ...check, tsa: item.tsa });
     if (!check.ok) problems.push(`${item.tsa}: ${check.problems.join(", ")}`);
   }
