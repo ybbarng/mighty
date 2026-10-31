@@ -901,6 +901,34 @@ button {
     opacity: 0;
   }
 }
+/*
+ * 실루엣 등록증으로 기다리다 확인되면: 같은 자리에 놓인 실제 등록증의 칸이 차례로 채워진다
+ * (성명 → 사진 → 등록번호 → 주소 → 발급일, 배경과 머리는 그대로)
+ */
+.sd-id-fill dd,
+.sd-id-fill [data-avatar],
+.sd-id-fill [data-ghost],
+.sd-id-fill [data-issue-date] {
+  animation: sd-id-fill 420ms ease-out both;
+}
+.sd-id-fill [data-avatar] {
+  animation-delay: 80ms;
+}
+.sd-id-fill dd:nth-of-type(2) {
+  animation-delay: 160ms;
+}
+.sd-id-fill dd:nth-of-type(3) {
+  animation-delay: 240ms;
+}
+.sd-id-fill [data-issue-date],
+.sd-id-fill [data-ghost] {
+  animation-delay: 320ms;
+}
+@keyframes sd-id-fill {
+  from {
+    opacity: 0;
+  }
+}
 /* 돌려받은 응모 용지 위 「접수 반송」 도장: 용지가 다 나온 뒤 위에서 찍힌다(--stamp-delay) */
 .sd-stamp {
   transform: translate(-50%, -50%) rotate(-12deg);
@@ -1775,6 +1803,10 @@ button {
   .sd-print,
   .sd-printer-slot,
   .sd-stamp,
+  .sd-id-fill dd,
+  .sd-id-fill [data-avatar],
+  .sd-id-fill [data-ghost],
+  .sd-id-fill [data-issue-date],
   .sd-id-drop,
   .sd-id-pocket,
   .sd-stage,

@@ -345,7 +345,8 @@ function WelcomeFx({ s, onDone }: { s: TourState; onDone: () => void }) {
     void id
       .run(async () => ((await open()) ? true : null), {
         verb: "제시",
-        pub,
+        // 실제 입장처럼 패스키 전에는 누구인지 모른다: 실루엣으로 기다리다 확인되면 채워진다
+        pub: () => pub,
         blank: true,
         tap: true,
         readFirst: true,

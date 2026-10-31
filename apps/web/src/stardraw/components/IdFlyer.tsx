@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { AstronautCard } from "../astronaut/AstronautCard";
+import { AstronautCard, BlankAstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf } from "../astronaut/identity";
 import { EASE, EASE_OUT, FX } from "../fx-timing";
 import type { Services } from "../services";
@@ -144,6 +144,9 @@ function FlyingCard({
     null,
   );
   const pressable = !!onPress && spot === "peek";
+  /** 실루엣으로 기다렸으면 확인된 등록증은 칸마다 채워지며 나타난다 */
+  const sawBlank = useRef(!pub);
+  if (!pub) sawBlank.current = true;
   const transform =
     drag !== null
       ? `translateY(calc(var(--peek) + ${drag}px)) scale(0.98)`
@@ -228,7 +231,13 @@ function FlyingCard({
       }}
     >
       <div className="pointer-events-none">
-        {pub ? <RealCard services={services} pub={pub} /> : <BlankCard />}
+        {pub ? (
+          <div className={cn(sawBlank.current && "sd-id-fill")}>
+            <RealCard services={services} pub={pub} />
+          </div>
+        ) : (
+          <BlankAstronautCard />
+        )}
       </div>
     </div>
   );
@@ -238,33 +247,6 @@ function RealCard({ services, pub }: { services: Services; pub: Uint8Array }) {
   const a = useMemo(() => astronautOf(pub), [pub]);
   const issued = useIssued(services, pub);
   return <AstronautCard astronaut={a} issued={issued} clock={services.clock} />;
-}
-
-/** 실루엣 카드: 아직 누구인지 모르는 등록증 자리(이름·사진 칸이 비어 있다) */
-function BlankCard() {
-  return (
-    <div
-      data-blank-card
-      className="relative flex aspect-[1.586] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/15 bg-[linear-gradient(135deg,#1e2a4a,#141c33_55%,#1b1736)] p-4"
-    >
-      <span className="font-bold text-white/80">우주인 등록증</span>
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex flex-1 flex-col gap-2">
-          <span className="h-2.5 w-2/3 rounded-full bg-white/20" />
-          <span className="h-2.5 w-1/2 rounded-full bg-white/20" />
-          <span className="h-2.5 w-3/4 rounded-full bg-white/20" />
-        </div>
-        <svg
-          viewBox="0 0 40 48"
-          aria-hidden="true"
-          className="h-20 w-16 shrink-0 rounded-lg border border-white/15 bg-white/5 p-2 text-white/30"
-        >
-          <circle cx="20" cy="17" r="8" fill="currentColor" />
-          <path d="M5 46c1-9 7-15 15-15s14 6 15 15z" fill="currentColor" />
-        </svg>
-      </div>
-    </div>
-  );
 }
 
 /** 확인 표시: 원이 그려지고 체크가 그어진다(Apple Pay의 완료 표시처럼) */

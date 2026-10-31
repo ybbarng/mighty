@@ -758,6 +758,89 @@ export function AstronautCard({
 }
 
 /**
+ * 실루엣 등록증: 아직 누구인지 모를 때 올라와 기다리는 등록증(2026-10-31 사용자). 실제 앞면과 같은 크기·같은 칸 자리에
+ * 제목, 성명·등록번호·주소 칸(글자 대신 흐린 막대), 오른쪽 사진 테두리(안은 사람 실루엣), 발급일 자리, 발급 기관·직인을
+ * 흐리게 그리고 배경 무늬도 흐리게 둔다. 확인되면 같은 자리에 실제 등록증이 놓이고 칸마다 채워진다(`.sd-id-fill`)
+ */
+export function BlankAstronautCard() {
+  const bar = "block rounded-full bg-white/15";
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="w-full max-w-md [container-type:inline-size]">
+        <div
+          data-blank-card
+          aria-hidden="true"
+          className="sd-idcard relative aspect-[1.586] w-full select-none overflow-hidden rounded-[3.7cqw] text-white"
+        >
+          <div className="absolute inset-0 opacity-35">
+            <CardSecurity />
+            <Guilloche />
+          </div>
+          <div className="absolute inset-0 bg-[#0b1020]/35" />
+
+          {/* 머리 */}
+          <div className="absolute inset-x-[5cqw] top-[4.4cqw] flex items-center justify-between">
+            <span className="font-black text-[6cqw] text-white/75 leading-none tracking-[0.06em]">
+              우주인 등록증
+            </span>
+            <span className="flex items-center gap-[1cqw] rounded-full border border-sky-200/20 px-[2cqw] py-[0.8cqw] text-[2.4cqw] text-sky-100/40">
+              <PasskeyMark className="size-[3.6cqw]" />
+              패스키
+            </span>
+          </div>
+
+          {/* 사진 테두리(안은 사람 실루엣) */}
+          <div className="absolute top-[14.5cqw] right-[5cqw] w-[23cqw]">
+            <svg
+              viewBox="0 0 100 120"
+              aria-hidden="true"
+              className="block h-auto w-full rounded-[1.6cqw] border border-white/25 bg-white/5 text-white/20"
+            >
+              <circle cx="50" cy="44" r="18" fill="currentColor" />
+              <path
+                d="M16 120c2-26 16-42 34-42s32 16 34 42z"
+                fill="currentColor"
+              />
+            </svg>
+          </div>
+
+          {/* 칸: 글자 대신 흐린 막대 */}
+          <dl className="absolute top-[15cqw] right-[31cqw] left-[5cqw] grid grid-cols-[auto_1fr] items-center gap-x-[3cqw] gap-y-[2cqw]">
+            <dt className="text-[2.6cqw] text-sky-100/40">성명</dt>
+            <dd className="flex h-[5.6cqw] items-center">
+              <span className={cn(bar, "h-[4cqw] w-[24cqw]")} />
+            </dd>
+            <dt className="text-[2.6cqw] text-sky-100/40">등록번호</dt>
+            <dd className="flex h-[5cqw] items-center">
+              <span className={cn(bar, "h-[2.6cqw] w-[32cqw]")} />
+            </dd>
+            <dt className="text-[2.6cqw] text-sky-100/40">주소</dt>
+            <dd className="flex flex-col gap-[1.2cqw]">
+              <span className={cn(bar, "h-[2.4cqw] w-full")} />
+              <span className={cn(bar, "h-[2.4cqw] w-2/3")} />
+            </dd>
+          </dl>
+
+          {/* 발급일 자리와 발급 기관·직인(흐리게) */}
+          <span
+            className={cn(
+              bar,
+              "absolute bottom-[4.8cqw] left-[5cqw] h-[2.6cqw] w-[18cqw]",
+            )}
+          />
+          <div className="absolute right-[5cqw] bottom-[3.6cqw] left-[5cqw] flex items-end justify-end gap-[2cqw] opacity-40">
+            <span className="mr-[14cqw] text-right text-[2.6cqw] text-sky-50/85 leading-tight">
+              {AGENCY}
+            </span>
+            <Seal className="-right-[1cqw] absolute bottom-[-1.5cqw] size-[13cqw]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 주소 안내(주소를 누르면 카드 아래에 펼친다): 전체 주소 한 줄, 그 천체의 설명, 그리고 바깥쪽 단계마다 접어 둔 설명.
  * 가까운 단계부터 멀어지는 차례로(그 천체 › … › 우리 우주) 읽게 한다. 설명은 place-facts.ts(글이 길어 펼칠 때 불러온다)
  */
