@@ -237,7 +237,11 @@ function CheckMark({ shown }: { shown: boolean }) {
       viewBox="0 0 52 52"
       aria-hidden="true"
       data-id-check={shown || undefined}
-      className={cn("sd-check size-12", shown && "sd-check-on")}
+      className={cn(
+        // 보이지 않을 때도 자리를 차지해 아래로 내려가 기다리는 등록증과 겹친다: 누름을 받지 않는다
+        "sd-check pointer-events-none size-12",
+        shown && "sd-check-on",
+      )}
       style={{ ["--check-ms" as string]: `${FX.idCheck}ms` }}
     >
       <circle
