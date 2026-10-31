@@ -34,27 +34,29 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # 이 저장소 main 에 push 해서 성공한 CI만(포크에서 이름이 main 인 브랜치로 연 PR의 CI가 배포로 이어지지 않게, D5)
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ghcr.io/ybbarng/mighty
           tags: |
             type=raw,value=${{ env.SHA }}
             type=raw,value=latest
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           target: runner
@@ -70,7 +72,7 @@ jobs:
           cache-to: type=gha,scope=mighty,mode=max
       # 화면 코드 해시 목록(docs/36 11-8). 같은 빌드(캐시)에서 build-hashes.json 만 꺼내
       # 실행 요약과 기록 파일(90일)로 남긴다. 사이트도 같은 파일을 /build-hashes.json 으로 낸다
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           target: hashes
@@ -91,7 +93,7 @@ jobs:
             echo "- digest \`$(jq -r .digest hashes/build-hashes.json)\` (파일 $(jq '.files | length' hashes/build-hashes.json)개)"
             echo "- 확인: \`pnpm stardraw-verify site https://game.byb.kr\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: build-hashes
           path: hashes/build-hashes.json
@@ -101,27 +103,28 @@ jobs:
   # 이미지만 만들어 올리고 배포는 하지 않는다(servers 저장소 apps/stardraw/ 에서 손으로 띄운다, deploy/stardraw/README.md).
   # 저장소 변수 STARDRAW_SERVER_IMAGE 를 true 로 켜기 전에는 돌지 않는다.
   server-image:
-    if: vars.STARDRAW_SERVER_IMAGE == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: vars.STARDRAW_SERVER_IMAGE == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ghcr.io/ybbarng/stardraw-server
           tags: |
             type=raw,value=${{ env.SHA }}
             type=raw,value=latest
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: apps/stardraw-server/Dockerfile
@@ -139,11 +142,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -152,7 +156,7 @@ jobs:
         env:
           SOURCE_COMMIT: ${{ env.SHA }}
           NEXT_TELEMETRY_DISABLED: 1
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-hashes
           path: image-hashes
@@ -173,7 +177,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-hashes
       - name: 릴리스 만들기
@@ -214,6 +218,8 @@ jobs:
           USER: ${{ secrets.SERVER_USER }}
           PORT: ${{ secrets.SERVER_PORT || '22' }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 서버 호스트 키(known_hosts 한 줄). 넣어 두면 그 키만 믿고, 없으면 처음 보는 대로 믿는다(D6)
+          HOST_KEY: ${{ secrets.SERVER_HOST_KEY }}
           MODE: deploy
         run: |
           set -euo pipefail
@@ -225,7 +231,11 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if [ -n "$HOST_KEY" ]; then
+            printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
           printf '%s\n' "$TOKEN" | ssh -i ~/.ssh/deploy_key -p "$PORT" \
             -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes \
             "$USER@$HOST" "$MODE $SHA"

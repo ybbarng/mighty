@@ -4,3 +4,6 @@ packages:
 
 allowBuilds:
   lefthook: true
+
+# 새로 나온 지 7일이 안 된 패키지 버전은 받지 않는다(공급망 공격이 퍼지기 전 걸러지게, D6). 단위는 분
+minimumReleaseAge: 10080
