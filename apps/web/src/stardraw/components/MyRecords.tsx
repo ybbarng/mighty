@@ -23,11 +23,14 @@ import { ticketUrl } from "./TicketView";
  */
 export function MyRecordsView({
   records,
+  specimen = false,
   schedule,
   recipient,
   onBack,
   onOpenTicket,
 }: {
+  /** 견본(데모 둘러보기, 로컬 빌드만): 공개 장부에 없는 응모권이라 당첨증 QR 대신 "견본" */
+  specimen?: boolean;
   records: MyRecords;
   schedule: Schedule;
   /** 받는 사람 이름(등록증 이름). 없으면 비운다 */
@@ -209,6 +212,7 @@ export function MyRecordsView({
                 win={open.win}
                 schedule={schedule}
                 recipient={recipient}
+                specimen={specimen}
               />
             ) : null}
             <button
@@ -589,10 +593,12 @@ function Certificate({
   win,
   schedule,
   recipient,
+  specimen = false,
 }: {
   win: WinEntry;
   schedule: Schedule;
   recipient: string | null;
+  specimen?: boolean;
 }) {
   const origin =
     typeof window === "undefined" ? "https://game.byb.kr" : location.origin;
@@ -635,11 +641,22 @@ function Certificate({
         </div>
         <span className="font-mono text-xs">일련번호 {shortId(win.id)}</span>
         <div className="flex items-end gap-4">
-          <InviteQr
-            url={ticketUrl(origin, win.ticket)}
-            size={96}
-            label="공개 장부에서 이 응모권 확인하기"
-          />
+          {specimen ? (
+            <span
+              data-certificate-specimen
+              className="grid size-24 place-items-center rounded-xl border-2 border-[#b3282d] border-dashed font-black text-[#b3282d] text-xl tracking-[0.3em]"
+            >
+              견본
+            </span>
+          ) : (
+            <span data-certificate-url={ticketUrl(origin, win.ticket)}>
+              <InviteQr
+                url={ticketUrl(origin, win.ticket)}
+                size={96}
+                label="공개 장부에서 이 응모권 확인하기"
+              />
+            </span>
+          )}
           <span className="flex flex-col items-start gap-1 text-left text-xs">
             <span>{dateOf(win.at)}</span>
             <span className="flex items-center gap-2 font-bold text-sm">

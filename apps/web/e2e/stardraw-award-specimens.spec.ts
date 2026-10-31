@@ -32,3 +32,25 @@ test("운영 빌드에는 기념 서류 견본 화면이 없다", async ({ page 
   );
   expect(leaked).toEqual([]);
 });
+
+/**
+ * 공개 데모의 화면 둘러보기에도 내 기록 견본(1~5등을 모두 받은 훈장·당첨증·기념 서류)이 없다(2026-10-31 사용자:
+ * 데모에 보이면 스포일러). 실제로 받은 사람의 「내 기록」 화면 코드는 실려도 된다(코드를 읽어야 아는 수준)
+ */
+test("운영 빌드의 공개 데모 둘러보기에는 내 기록 견본이 없다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "한 번만");
+  await page.goto("/stardraw/demo");
+  const tour = page.getByRole("navigation", { name: "화면 둘러보기" });
+  await expect(
+    tour.getByRole("link", { name: "등록증", exact: true }),
+  ).toBeVisible();
+  await expect(
+    tour.getByRole("link", { name: "내 기록", exact: true }),
+  ).toHaveCount(0);
+  await page.goto("/stardraw/demo#tour-records");
+  await expect(tour).toBeVisible();
+  await expect(page.locator("[data-my-records]")).toHaveCount(0);
+  await expect(page.locator("[data-tour-screen='records']")).toHaveCount(0);
+});

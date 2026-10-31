@@ -3,6 +3,7 @@
 import { fromBase64Url, type Rank } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
 import { astronautOf } from "../astronaut/identity";
+import { AWARD_SPECIMENS } from "../awards";
 import {
   buildTour,
   TOUR_EARTH_PUB,
@@ -22,6 +23,9 @@ import { Receipt } from "./Receipt";
 import { Home, MineView, RoundsView } from "./StardrawApp";
 import { WinNotice } from "./WinNotice";
 
+/** 로컬 빌드에서만 보이는 둘러보기 항목(견본) */
+const SPECIMEN_ITEMS = [{ id: "records", label: "내 기록" }] as const;
+
 /** 데모 "화면 둘러보기" 목록. 주소는 #tour-<id>라 뒤로가기로 목록에 돌아온다 */
 export const TOUR_ITEMS = [
   { id: "enter", label: "응모" },
@@ -35,7 +39,6 @@ export const TOUR_ITEMS = [
   { id: "rank-5", label: "5등" },
   { id: "lose", label: "낙첨" },
   { id: "mine", label: "내 응모" },
-  { id: "records", label: "내 기록" },
   { id: "rounds", label: "지난 회차" },
   { id: "win-notice", label: "당첨 안내·확인 링크" },
   { id: "link-open", label: "확인 링크 연 화면" },
@@ -56,6 +59,8 @@ export const TOUR_ITEMS = [
   { id: "in-app", label: "앱 안 브라우저" },
   { id: "no-passkey", label: "패스키 미지원" },
   ...FX_ITEMS,
+  // 내 기록(훈장·당첨증·기념 서류 견본)은 받기 전에는 무엇이 있는지 모르게 로컬 빌드에서만(AWARD_SPECIMENS, 사용자)
+  ...(AWARD_SPECIMENS ? SPECIMEN_ITEMS : []),
 ] as const;
 
 export type TourId = (typeof TOUR_ITEMS)[number]["id"];
@@ -217,6 +222,7 @@ function Screen({
         />
       );
     case "records": {
+      if (!AWARD_SPECIMENS) return null;
       // 둘러보기만: 1회 1~5등 응모권을 모두 내 것으로 쳐 훈장·당첨증·별 도장·기념 서류가 몇 개씩 보이게
       const pubs = [...s.byRank.entries()]
         .filter(([rank]) => rank !== null)
@@ -224,6 +230,7 @@ function Screen({
       const key = services.wallet.loadKey();
       return (
         <MyRecordsView
+          specimen
           records={myRecords({
             schedule: services.ledger.schedule,
             closed: services.ledger.closed(),
