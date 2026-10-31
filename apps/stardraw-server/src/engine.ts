@@ -1018,6 +1018,12 @@ export class StardrawServer {
     if (op.signer.role !== "director")
       throw new EntryError("국장 패스키로 서명한 요청만 받습니다", 403);
     await this.opsReady;
+    // 지금 국장 열쇠인지부터 본다(싸다). 아니면 장부를 훑는 확인(지난 기록 해시 계산)까지 가지 않는다(D9)
+    if (!this.isActiveDirector(op.signer.pub))
+      throw new EntryError(
+        "국장 열쇠가 아닙니다. 우주국이 지정한 국장 패스키로 서명해 주세요",
+        403,
+      );
     const submitted = store.directorOps();
     if (submitted.length >= 20)
       throw new EntryError(
