@@ -39,8 +39,20 @@ describe("HTTP", () => {
   it("상태를 묻고, 응모하면 서명된 영수증을 받고, 장부 파일을 내려받는다", async () => {
     const base = await serve();
     await rig.at(EPOCH + 10);
-    const state = await (await fetch(`${base}/api/state`)).json();
-    expect(state).toMatchObject({ round: 1, records: 0, entries: 0 });
+    const stateRes = await fetch(`${base}/api/state`);
+    expect(stateRes.headers.get("x-content-type-options")).toBe("nosniff");
+    const state = await stateRes.json();
+    expect(state).toMatchObject({
+      round: 1,
+      records: 0,
+      entries: 0,
+      // 감시용 칸(D10): 앵커를 쓰지 않는 시험 장치라 밀림은 null
+      voidRecent: [],
+      anchorLag: null,
+      earlySealLag: null,
+      sealOverdueSeconds: 0,
+      qualIssued: [],
+    });
 
     const p = await player();
     const { ticket, registration } = await entryFor(

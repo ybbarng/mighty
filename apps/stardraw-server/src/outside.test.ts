@@ -252,6 +252,8 @@ describe("공개 시각 인증(가짜 기관)", () => {
     });
     await rig.finish(1);
     expect(readLedger(rig.dir).records[0]?.void).toBe(true);
+    // 감시가 볼 수 있게 상태에 무효 회차가 남는다(D10)
+    expect(rig.engine.state().voidRecent).toEqual([1]);
     expect(rig.logs.join("\n")).toMatch(/무효로 닫는다/);
     // 토큰은 오지만 시각이 drand 뒤
     const f = fake as FakeTsa;

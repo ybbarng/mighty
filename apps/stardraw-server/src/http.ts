@@ -124,6 +124,8 @@ async function handle(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
+  // 응답을 받은 형식대로만 읽게(브라우저가 내용을 짐작해 스크립트로 돌리지 않게, D12)
+  res.setHeader("x-content-type-options", "nosniff");
   const origin = req.headers.origin;
   if (origin && o.devOrigins.includes(origin)) {
     res.setHeader("access-control-allow-origin", origin);

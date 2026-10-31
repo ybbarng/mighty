@@ -447,6 +447,16 @@ export class Store {
       .run(periodHex, account, blindedHex);
   }
 
+  /** 자격 기간마다 발급 수(감시용, D10) */
+  qualIssuedCounts(): { period: string; issued: number }[] {
+    return this.db
+      .prepare(
+        "SELECT period, COUNT(*) AS n FROM qual_issued GROUP BY period ORDER BY period",
+      )
+      .all()
+      .map((r) => ({ period: String(r.period), issued: Number(r.n) }));
+  }
+
   qualIssuedCount(periodHex: string): number {
     const r = this.db
       .prepare("SELECT COUNT(*) AS n FROM qual_issued WHERE period = ?")

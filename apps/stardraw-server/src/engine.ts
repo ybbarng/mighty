@@ -83,7 +83,13 @@ import {
 
 import { GoogleTokenError, type GoogleTokenVerifier } from "./google";
 import { BusyError, Counters, Gate, ipPrefix, PowFailures } from "./limits";
-import type { Anchor, DrandSource, RepoFile, RootLog } from "./outside";
+import {
+  type Anchor,
+  type DrandSource,
+  noAnchor,
+  type RepoFile,
+  type RootLog,
+} from "./outside";
 import { inlinePowChecker, type PowChecker, type PowJob } from "./pow-pool";
 import { type MirrorFile, Publisher } from "./publish";
 import type { ServerKey } from "./server-key";
@@ -214,7 +220,20 @@ export interface ServerState {
    * 서버 감시가 국장에게 알린다(회차와 일련번호 앞부분만, 누구인지는 모른다). 창이 지나면 저절로 빠진다
    */
   qualWins: { round: number; rank: 1 | 2; ticket: string }[];
+  /** 마감이 VOID_WINDOW(24시간) 안인 무효 회차. 비어 있지 않으면 서버 감시가 알린다(D10) */
+  voidRecent: number[];
+  /** 닫은 기록 수 − 앵커에 남긴 수. 앵커를 쓰지 않으면 null. 1보다 크면 앵커가 밀린 것(D10) */
+  anchorLag: number | null;
+  /** 봉인 수 − 추첨 전 봉인 사본을 올린 수. 앵커를 쓰지 않으면 null(D10) */
+  earlySealLag: number | null;
+  /** 마감이 지났는데 아직 봉인하지 못한 시간(초). 정상이면 0, 기한(3분)에 가까워지면 시각 인증이 막힌 것(D10) */
+  sealOverdueSeconds: number;
+  /** 자격 기간마다 발급한 소속 도장 수. 회사 인원보다 많으면 몰래 찍은 것일 수 있다(D10, P10) */
+  qualIssued: { period: string; issued: number }[];
 }
+
+/** 무효 회차를 상태에 남겨 두는 시간(초) */
+export const VOID_WINDOW = 24 * 3600;
 
 /** 소속 1·2등 알림을 상태에 남겨 두는 시간(초). 감시는 비어 있다가 생기면 한 번 알리고, 빠지면 풀렸다고 알린다 */
 export const QUAL_WIN_WINDOW = 72 * 3600;
@@ -362,6 +381,38 @@ export class StardrawServer {
       mode: this.mode,
       liveFrom: liveStart(this.schedule()),
       qualWins: this.qualWins(now),
+      ...this.health(now, round),
+    };
+  }
+
+  /** 감시용 칸(D10): 무효 회차, 앵커·추첨 전 사본 밀림, 봉인 늦음, 기간별 발급 수 */
+  private health(
+    now: number,
+    round: number,
+  ): Pick<
+    ServerState,
+    | "voidRecent"
+    | "anchorLag"
+    | "earlySealLag"
+    | "sealOverdueSeconds"
+    | "qualIssued"
+  > {
+    const { store } = this.o;
+    const schedule = this.schedule();
+    const voidRecent: number[] = [];
+    for (let r = store.recordCount(); r >= 1; r--) {
+      if (now - roundTimes(schedule, r).closesAt > VOID_WINDOW) break;
+      if (store.record(r)?.void) voidRecent.push(r);
+    }
+    const anchoring = this.o.anchor !== noAnchor;
+    const next = store.lastSealed() + 1;
+    const due = round > 0 ? roundTimes(schedule, next).closesAt : now;
+    return {
+      voidRecent,
+      anchorLag: anchoring ? store.recordCount() - store.anchored() : null,
+      earlySealLag: anchoring ? store.lastSealed() - store.earlySealed() : null,
+      sealOverdueSeconds: round > next ? Math.max(0, now - due) : 0,
+      qualIssued: store.qualIssuedCounts(),
     };
   }
 
@@ -1018,8 +1069,16 @@ export class StardrawServer {
     if (op.signer.role !== "director")
       throw new EntryError("국장 패스키로 서명한 요청만 받습니다", 403);
     await this.opsReady;
-    // 지금 국장 열쇠인지부터 본다(싸다). 아니면 장부를 훑는 확인(지난 기록 해시 계산)까지 가지 않는다(D9)
-    if (!this.isActiveDirector(op.signer.pub))
+    // 이 기록이 실릴 회차(닫힌 기록 수 + 1)에 효력이 있는 국장 열쇠인지부터 본다(싸다, 예고가 익은 상태로).
+    // 아니면 장부를 훑는 확인(지난 기록 해시 계산)까지 가지 않는다(D9). 자세한 판정은 아래 selectOperations가 한다
+    const signerPub = op.signer.pub;
+    if (
+      activeDirector(
+        this.opsAt(store.recordCount() + 1),
+        signerPub,
+        store.recordCount() + 1,
+      ) === undefined
+    )
       throw new EntryError(
         "국장 열쇠가 아닙니다. 우주국이 지정한 국장 패스키로 서명해 주세요",
         403,
