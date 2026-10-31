@@ -13,8 +13,7 @@ import {
   toHex,
   type VerifyReport,
 } from "@mighty/stardraw-core";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BackToGames } from "@/components/BackToGames";
 import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
@@ -105,6 +104,20 @@ function urlOf(v: View): string {
   }
 }
 
+/** 지금 주소의 경로가 어느 화면 페이지인지(끝 / 하나는 무시한다) */
+function pageOf(pathname: string): StardrawPage {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  const found = (Object.keys(PATH) as StardrawPage[]).find(
+    (k) => PATH[k] === p,
+  );
+  return found ?? "home";
+}
+
+/** 지금 주소(경로와 # 조각) → 화면 */
+function viewOfLocation(): View {
+  return viewOf(pageOf(window.location.pathname), window.location.hash);
+}
+
 /** 주소 → 화면 */
 function viewOf(page: StardrawPage, hash: string): View {
   const h = hash.replace(/^#/, "");
@@ -129,60 +142,16 @@ function viewOf(page: StardrawPage, hash: string): View {
 let printingId: string | null = null;
 /** 이번 방문에서 별 따기 화면 사이를 옮겨 다녔는지(아니면 "돌아가기"가 사이트 밖으로 나가지 않게 정한 화면으로) */
 let navigated = false;
-/**
- * 라우터로 다른 페이지로 갈 때 갈 화면. 새 페이지가 처음 그려지는 순간에는 주소의 # 조각이 아직 바뀌지 않았을 수 있어
- * (안드로이드 폰에서 첫 화면의 결과 봉투를 누르면 /stardraw/rounds#draw-28 대신 지난 회차 목록이 떠 갇혔다, 2026-10-31)
- * 주소를 기다리지 않고 이 값으로 시작한다. 새 페이지가 한 번 더 만들어져도(라우터가 화면 데이터를 받은 뒤 다시 그리는 등)
- * 같은 화면으로 시작하게, 읽자마자 지우지 않고 주소가 그 화면으로 바뀐 뒤(늦어도 PENDING_MS 뒤) 지운다.
- * 페이지를 새로 불러오면 이 값은 사라지지만 그때는 새 주소에 # 조각이 이미 있다
- */
-let pendingView: { path: string; view: View; at: number } | null = null;
-const PENDING_MS = 5000;
 
-/** 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다 */
+/**
+ * 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다.
+ * `page`는 처음 열린 페이지일 뿐이고, 그 뒤 화면은 늘 지금 주소(경로 + # 조각)에서 읽는다(go 참고)
+ */
 export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const { services, status, version, refresh } = useLedger();
-  const router = useRouter();
-  /** 라우터로 옮겨 오며 넘겨받은 화면으로 시작했는지(그러면 첫 맞추기에서 아직 안 바뀐 주소를 따르지 않는다) */
-  const startedFromPending = useRef(false);
-  const [view, setView] = useState<View>(() => {
-    if (typeof window === "undefined") return viewOf(page, "");
-    const pending = pendingView;
-    if (
-      pending &&
-      pending.path === PATH[page] &&
-      Date.now() - pending.at < PENDING_MS
-    ) {
-      startedFromPending.current = true;
-      return pending.view;
-    }
-    return viewOf(page, window.location.hash);
-  });
-  // 넘겨받은 화면으로 시작했으면 주소가 그 화면으로 바뀐 뒤(늦어도 PENDING_MS 뒤) 넘겨받은 값을 지운다
-  useEffect(() => {
-    if (!startedFromPending.current) return;
-    const done = () => {
-      if (pendingView?.path === PATH[page]) pendingView = null;
-    };
-    const timer = window.setInterval(() => {
-      const want = pendingView ? urlOf(pendingView.view) : null;
-      if (
-        !want ||
-        `${window.location.pathname}${window.location.hash}` === want
-      ) {
-        done();
-        window.clearInterval(timer);
-      }
-    }, 100);
-    const stop = window.setTimeout(() => {
-      done();
-      window.clearInterval(timer);
-    }, PENDING_MS);
-    return () => {
-      window.clearInterval(timer);
-      window.clearTimeout(stop);
-    };
-  }, [page]);
+  const [view, setView] = useState<View>(() =>
+    typeof window === "undefined" ? viewOf(page, "") : viewOfLocation(),
+  );
   // 별을 고르거나 추첨을 보다 화면이 당겨져 새로고침되지 않게(그 밖의 화면은 당겨서 새로고침이 된다)
   useNoPullRefresh(view.name === "enter" || view.name === "draw");
   const [mine, setMine] = useState<MyTicket[]>([]);
@@ -209,15 +178,15 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
 
   // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
   useEffect(() => {
-    const sync = () => setView(viewOf(page, window.location.hash));
-    if (!startedFromPending.current) sync();
+    const sync = () => setView(viewOfLocation());
+    sync();
     window.addEventListener("popstate", sync);
     window.addEventListener("hashchange", sync);
     return () => {
       window.removeEventListener("popstate", sync);
       window.removeEventListener("hashchange", sync);
     };
-  }, [page]);
+  }, []);
 
   // 추첨(결과)을 열면 그 회차는 "열어 봄": 첫 화면 결과 봉투에서 빠진다. 뒤로가기로 나가도 그대로다
   // (예전에는 「돌아가기」로 닫을 때만 기록해, 열지 못하거나 뒤로가기로 나가면 첫 화면이 그 봉투에 갇혔다)
@@ -231,32 +200,24 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   }, [drawRound, loaded, services, version]);
 
   /**
-   * 다른 화면으로: 주소를 바꿔 기록에 남긴다(replace면 지금 기록을 바꾼다).
-   * 같은 페이지 안(# 조각만 바뀜)은 라우터를 거치지 않는다. 라우터가 이를 페이지 이동으로 처리하면 화면을 처음부터
-   * 다시 그리며 # 조각을 놓쳐 목록으로 돌아갔다(2026-10-31 안드로이드 폰, 지난 회차에서 회차를 누르면
-   * "하늘을 펴고 있습니다" 뒤 목록). 다른 페이지로 갈 때만 라우터를 쓴다
+   * 다른 화면으로: 주소를 바꿔 기록에 남기고(replace면 지금 기록을 바꾼다) 이 화면 그대로 그 화면을 그린다.
+   * 다른 경로(/stardraw → /stardraw/mine#t-…)로 갈 때도 Next 라우터를 쓰지 않는다. 라우터로 페이지를 바꾸면
+   * 새 페이지가 그려지는 순간 주소의 # 조각이 아직 없어 목록으로 떨어지는 일이 폰에서 되풀이됐다
+   * (2026-10-31 안드로이드: 봉투 → 지난 회차 목록, 첫 화면 「영수증」 → 내 응모 목록). 별 따기 화면은 모두 이
+   * 한 부품이 그리니 페이지를 바꿀 까닭이 없다. 주소는 실제 경로라 새로고침·공유하면 그 페이지가 바로 열린다.
+   * Next는 history.pushState를 자기 기록과 맞추고, 뒤로가기도 이 부품을 그대로 둔 채 popstate로 알려 준다
    */
   const go = (v: View, replace = false) => {
     const url = urlOf(v);
     navigated = true;
-    if (url.split("#")[0] === PATH[page]) {
-      if (replace) window.history.replaceState(window.history.state, "", url);
-      else window.history.pushState(window.history.state, "", url);
-      setView(v);
-    } else {
-      pendingView = {
-        path: url.split("#")[0] as string,
-        view: v,
-        at: Date.now(),
-      };
-      if (replace) router.replace(url);
-      else router.push(url);
-    }
+    if (replace) window.history.replaceState(window.history.state, "", url);
+    else window.history.pushState(window.history.state, "", url);
+    setView(v);
     window.scrollTo({ top: 0 });
   };
   /** 화면의 "돌아가기": 옮겨 왔으면 바로 전 화면, 주소로 바로 열었으면 정한 화면으로 */
   const back = (fallback: View) => {
-    if (navigated) router.back();
+    if (navigated) window.history.back();
     else go(fallback, true);
   };
   /** 추첨을 아직 열어 보지 않은 내 회차(결과를 가린다, spoiler.ts) */
