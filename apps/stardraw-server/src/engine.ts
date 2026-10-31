@@ -561,7 +561,7 @@ export class StardrawServer {
       await this.opsReady;
       const state = this.opsAt(round);
       const problem = checkTicketQualification(state, ticket, times.closesAt);
-      if (problem) throw new EntryError(`상품 자격 증서: ${problem}`);
+      if (problem) throw new EntryError(`소속 증서: ${problem}`);
       const period = state.periods.find((p) =>
         equalBytes(p.id, ticket.qual?.cert.periodId ?? new Uint8Array()),
       );
@@ -570,7 +570,7 @@ export class StardrawServer {
         !period ||
         !verifyStamp(period.issuerKey, cert.periodId, cert.qualPub, cert.stamp)
       )
-        throw new EntryError("상품 자격 증서: 도장이 맞지 않습니다");
+        throw new EntryError("소속 증서: 도장이 맞지 않습니다");
     }
 
     // 5. 열쇠당 회차 1장
@@ -1002,8 +1002,7 @@ export class StardrawServer {
     ip: string;
   }): Promise<{ blindStamp: Uint8Array }> {
     const q = this.o.qualification;
-    if (!q)
-      throw new EntryError("이 서버는 상품 자격을 발급하지 않습니다", 404);
+    if (!q) throw new EntryError("이 서버는 소속을 발급하지 않습니다", 404);
     const prefix = ipPrefix(input.ip);
     const day = String(Math.floor(this.now() / 86400));
     if (

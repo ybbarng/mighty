@@ -411,7 +411,7 @@ export async function verifyLedger(
       if (n > period.issued && !overIssued.has(key)) {
         overIssued.add(key);
         fail(
-          `상품 자격: 기간 ${key.slice(0, 12)}: 응모권에 쓰인 자격 ${n}개가 발급 수 ${period.issued}개보다 많다`,
+          `소속 증서: 기간 ${key.slice(0, 12)}: 응모권에 쓰인 증서 ${n}개가 발급 수 ${period.issued}개보다 많다`,
         );
       }
     }

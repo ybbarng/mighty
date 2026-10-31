@@ -419,8 +419,8 @@ const RULES: { id: string; label: string; test: RegExp }[] = [
   { id: "nickname", label: "별명", test: /^별명/ },
   {
     id: "qualification",
-    label: "소속과 상품 자격(증서·도장·발급 수)",
-    test: /^상품 자격/,
+    label: "소속(증서·도장·발급 수)",
+    test: /^소속 증서/,
   },
   {
     id: "ticket",

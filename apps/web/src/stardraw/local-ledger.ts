@@ -553,7 +553,7 @@ export class LocalLedger implements Ledger {
       const state = cloneOpsState(await this.opsState());
       matureOps(state, round);
       const problem = checkTicketQualification(state, ticket, times.closesAt);
-      if (problem) throw new Error(`상품 자격 증서: ${problem}`);
+      if (problem) throw new Error(`소속 증서: ${problem}`);
       const cert = ticket.qual.cert;
       const period = state.periods.find(
         (p) => toHex(p.id) === toHex(cert.periodId),
@@ -562,7 +562,7 @@ export class LocalLedger implements Ledger {
         !period ||
         !verifyStamp(period.issuerKey, cert.periodId, cert.qualPub, cert.stamp)
       )
-        throw new Error("상품 자격 증서: 도장이 맞지 않습니다");
+        throw new Error("소속 증서: 도장이 맞지 않습니다");
     }
     this.pending.tickets.push(ticket);
     if (registration && !this.keys.has(who)) {
@@ -763,7 +763,7 @@ export class LocalLedger implements Ledger {
     blinded: Uint8Array,
   ): Promise<Uint8Array> {
     const info = (await this.qualInfo()).periods.find((p) => p.id === periodId);
-    if (!info?.open) throw new Error("지금 받을 수 없는 자격입니다");
+    if (!info?.open) throw new Error("지금 받을 수 없는 소속입니다");
     const secret = this.qualKeys[toHex(fromBase64Url(info.issuerKey))];
     if (!secret) throw new Error("이 기간의 도장 열쇠가 이 기기에 없습니다");
     const stamp = signBlinded(dec(secret), blinded);

@@ -459,11 +459,11 @@ export function StardrawDemo() {
               )}
             </Step>
 
-            <Step n={6} title="상품 자격" id="qualify">
+            <Step n={6} title="소속" id="qualify">
               <p className="break-keep text-sm text-white/70">
-                데모 기관 계정으로 벌집 성단 상품 자격을 받아 봅니다. 「데모
-                소속 차리기」는 데모 국장으로 소속 추가와 자격 기간 열기를 하고
-                예고를 건너뜁니다. 받은 다음 회차 응모부터 증서가 붙습니다.
+                데모 기관 계정으로 벌집 성단 소속을 받아 봅니다. 「데모 소속
+                차리기」는 데모 국장으로 소속 추가와 자격 기간 열기를 하고
+                예고를 건너뜁니다. 받은 다음 회차 응모부터 소속이 표시됩니다.
               </p>
               <QualifyPanel
                 services={services}

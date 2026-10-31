@@ -186,10 +186,10 @@ export function qualificationLines(result: CheckResult): string[] {
   if (result.qualification.length === 0) return [];
   const day = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
   return [
-    "[소속과 상품 자격]",
+    "[소속]",
     ...result.qualification.map(
       (p) =>
-        `  ${p.affiliationName} ${p.number}기 · ${day(p.startsAt)}~${day(p.endsAt)} · ${p.from}회차부터 · 도장 열쇠 ${p.fingerprint} · 발급 ${p.issued} · 쓰인 자격 ${p.used}`,
+        `  ${p.affiliationName} ${p.number}기 · ${day(p.startsAt)}~${day(p.endsAt)} · ${p.from}회차부터 · 도장 열쇠 ${p.fingerprint} · 발급 ${p.issued} · 쓰인 증서 ${p.used}`,
     ),
   ];
 }

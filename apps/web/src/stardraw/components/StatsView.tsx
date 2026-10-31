@@ -132,7 +132,7 @@ function Overview({
   ];
   if (stats.qualified > 0)
     rows.push([
-      "상품 대상 응모",
+      "소속 표시 응모",
       `${stats.qualified.toLocaleString("ko-KR")}장`,
     ]);
   if (first !== null) rows.push(["첫 관측", formatTime(first)]);

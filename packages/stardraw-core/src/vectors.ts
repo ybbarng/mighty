@@ -681,7 +681,7 @@ export const TEST_VECTORS: readonly VectorGroup[] = [
   },
   {
     id: "qualification",
-    title: "상품 자격 증서(docs/36 11-13)",
+    title: "소속 증서(docs/36 11-13)",
     vectors: [
       {
         title:

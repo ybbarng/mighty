@@ -27,7 +27,7 @@ export default function StardrawPrivacyPage() {
         </p>
 
         <h2 className="font-bold text-base text-white">
-          상품 자격 받기(구글 로그인)
+          소속 받기(구글 로그인)
         </h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
@@ -44,7 +44,7 @@ export default function StardrawPrivacyPage() {
             기간 동안 보관합니다.
           </li>
           <li>
-            도장은 가린 채로 찍기(블라인드 서명) 때문에, 우주국도 어느 자격
+            도장은 가린 채로 찍기(블라인드 서명) 때문에, 우주국도 어느 소속
             번호가 누구의 것인지 모릅니다. 응모 기록은 계정과 이어지지 않습니다.
           </li>
         </ul>
@@ -52,7 +52,7 @@ export default function StardrawPrivacyPage() {
         <h2 className="font-bold text-base text-white">응모와 공개 장부</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            응모권(고른 별, 우주인 공개 열쇠, 붙인 자격 번호)과 우주인 등록은
+            응모권(고른 별, 우주인 공개 열쇠, 붙인 소속 번호)과 우주인 등록은
             공개 장부에 남아 누구나 볼 수 있습니다. 이름·이메일은 없습니다.
           </li>
           <li>
@@ -60,8 +60,8 @@ export default function StardrawPrivacyPage() {
             저장하지 않습니다.
           </li>
           <li>
-            패스키의 비밀 열쇠는 기기(인증기) 밖으로 나오지 않습니다. 상품
-            자격의 복구 코드는 이 기기 저장소에만 둡니다.
+            패스키의 비밀 열쇠는 기기(인증기) 밖으로 나오지 않습니다. 소속의
+            복구 코드는 이 기기 저장소에만 둡니다.
           </li>
         </ul>
 

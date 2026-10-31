@@ -399,7 +399,7 @@ export function EnterView({
             className="size-4 accent-amber-300"
           />
           <span className="font-semibold text-amber-50">
-            {qual.period.affiliationName} 상품 대상
+            {qual.period.affiliationName} 소속으로 응모
           </span>
         </label>
       )}

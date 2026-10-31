@@ -87,7 +87,7 @@ export function judgeRound(
   for (let k = 0; k < tickets.length; k++) {
     const t = tickets[k] as Ticket;
     if (t.v !== TICKET_VERSION_QUAL || !t.qual) continue;
-    const label = `상품 자격: 응모권 ${toHex(ids[k] as Uint8Array).slice(0, 12)}`;
+    const label = `소속 증서: 응모권 ${toHex(ids[k] as Uint8Array).slice(0, 12)}`;
     const problem = checkTicketQualification(state, t, closesAt);
     if (problem) {
       problems.push(`${label}: ${problem}`);
@@ -116,7 +116,7 @@ export function judgeRound(
       for (const entry of list)
         if (!valid.includes(entry))
           problems.push(
-            `상품 자격: 응모권 ${toHex(ids[entry.index] as Uint8Array).slice(0, 12)}: 도장이 기간 열쇠로 확인되지 않는다`,
+            `소속 증서: 응모권 ${toHex(ids[entry.index] as Uint8Array).slice(0, 12)}: 도장이 기간 열쇠로 확인되지 않는다`,
           );
     }
     const counts = new Map<string, number>();

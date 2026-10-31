@@ -605,8 +605,9 @@ function AffiliationForm({
     <Section title="시험 소속 추가">
       <p className="break-keep text-sm text-white/70">
         소속은 별·성단 이름과 배지, 신원 확인 방법 이름만 장부에 남깁니다. 실제
-        확인 값(기관 주소 등)은 장부에 넣지 않습니다. 상품 자격은 소속이 효력을
-        얻은 뒤 아래 「소속」에서 자격 기간을 열어 줍니다.
+        확인 값(기관 주소 등)은 장부에 넣지 않습니다. 우주인이 소속을 받을 수
+        있게 하려면 소속이 효력을 얻은 뒤 아래 「소속」에서 자격 기간을 열어
+        줍니다.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">

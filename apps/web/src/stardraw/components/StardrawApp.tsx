@@ -543,7 +543,7 @@ export function Home({
           ["설명", "/stardraw/about"],
           ["배우기", "/stardraw/learn"],
           ["검증", "/stardraw/verify"],
-          ["상품 자격", "/stardraw/qualify"],
+          ["소속", "/stardraw/qualify"],
           ["데모", "/stardraw/demo"],
         ].map(([label, href]) => (
           <a
@@ -1417,9 +1417,9 @@ function RoundDetail({
           className="break-keep text-center text-amber-100/90 text-sm"
           data-prize-summary
         >
-          상품 대상 당첨자 {prizeWinners}명
+          소속이 표시된 당첨 {prizeWinners}장
           {prize.excluded > 0 &&
-            ` · 같은 자격으로 낸 ${prize.excluded}장은 상품 대상에서 빠졌습니다`}
+            ` · 같은 소속 증서로 낸 장은 소속 표시에서 빠졌습니다`}
         </p>
       )}
       {myExcluded && (
@@ -1428,7 +1428,7 @@ function RoundDetail({
           className="break-keep rounded-lg bg-rose-500/15 px-3 py-2 text-rose-100 text-sm"
           data-prize-mine-excluded
         >
-          이 회차에 내 자격 증서가 다른 곳에서도 쓰였습니다. 복구 코드가 새
+          이 회차에 내 소속 증서가 다른 곳에서도 쓰였습니다. 복구 코드가 새
           나갔을 수 있습니다. 다음 자격 기간에 새로 받아 주세요.
         </p>
       )}
@@ -1471,7 +1471,7 @@ function RoundDetail({
                           className="ml-1.5 rounded bg-amber-200/15 px-1.5 py-0.5 text-amber-100 text-xs"
                           data-prize-eligible
                         >
-                          상품 대상
+                          소속
                         </span>
                       )}
                     </span>

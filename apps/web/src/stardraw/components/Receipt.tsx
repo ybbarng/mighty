@@ -92,9 +92,8 @@ export function Receipt({
         </dd>
         {ticket.qual && (
           <>
-            <dt className="text-slate-400">상품</dt>
+            <dt className="text-slate-400">소속</dt>
             <dd className="text-right text-amber-100" data-receipt-qual>
-              상품 대상 ·{" "}
               {qualDisplayId(
                 ticket.qual.cert.periodId,
                 ticket.qual.cert.qualPub,

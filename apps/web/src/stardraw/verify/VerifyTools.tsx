@@ -261,16 +261,14 @@ export function LedgerCheck() {
           </div>
           {result.qualification.length > 0 && (
             <div className="flex flex-col gap-1" data-qualification-summary>
-              <p className="font-semibold text-sm text-white/80">
-                소속과 상품 자격
-              </p>
+              <p className="font-semibold text-sm text-white/80">소속</p>
               <ul className="flex flex-col gap-0.5 text-white/65 text-xs">
                 {result.qualification.map((p) => (
                   <li key={p.id}>
                     {p.affiliationName} {p.number}기 · {p.from}회차부터 · 도장
                     열쇠{" "}
                     <code className="text-amber-100/90">{p.fingerprint}</code> ·
-                    발급 {p.issued} · 쓰인 자격 {p.used}
+                    발급 {p.issued} · 쓰인 증서 {p.used}
                   </li>
                 ))}
               </ul>

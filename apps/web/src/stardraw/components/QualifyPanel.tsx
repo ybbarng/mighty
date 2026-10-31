@@ -76,7 +76,7 @@ export function QualifyPanel({
   if (!info)
     return (
       <p className="py-6 text-center text-sm text-white/60">
-        {error ?? "자격 기간을 읽고 있습니다"}
+        {error ?? "소속을 읽고 있습니다"}
       </p>
     );
 
@@ -84,9 +84,7 @@ export function QualifyPanel({
     <div className="flex flex-col gap-4" data-qualify data-version={version}>
       {info.periods.length === 0 ? (
         <div className="sd-glass flex flex-col gap-3 rounded-2xl p-4 text-sm">
-          <p className="text-white/70">
-            지금 받을 수 있는 상품 자격이 없습니다.
-          </p>
+          <p className="text-white/70">지금 받을 수 있는 소속이 없습니다.</p>
           {demo && services.practice && (
             <button
               type="button"
@@ -112,14 +110,12 @@ export function QualifyPanel({
               data-qual-period={p.id}
             >
               <div className="flex flex-col gap-1">
-                <h2 className="font-bold text-lg">
-                  {p.affiliationName} 상품 자격
-                </h2>
+                <h2 className="font-bold text-lg">{p.affiliationName}</h2>
                 <p className="text-sm text-white/60 tabular-nums">
                   {`${p.method} · ${p.number}기 · ${day(p.startsAt)}~${day(p.endsAt)} · 발급 ${p.issued}개`}
                 </p>
                 <p className="break-keep text-sm text-white/70">
-                  우주국도 누구의 자격인지 모릅니다.
+                  우주국도 누가 받았는지 모릅니다.
                 </p>
               </div>
               {holding ? (
@@ -207,11 +203,11 @@ function Backup({ holding }: { holding: QualHolding }) {
   return (
     <div className="flex flex-col gap-3" data-qual-holding={id}>
       <p className="font-semibold text-emerald-200">
-        받았습니다 · 자격 번호 {id}
+        받았습니다 · 소속 번호 {id}
       </p>
       <div className="flex flex-col gap-2 rounded-xl border border-amber-200/30 bg-amber-200/5 p-3">
         <p className="break-keep text-sm text-amber-50">
-          복구 코드를 가진 사람은 이 기간 상품 자격을 쓸 수 있습니다.
+          복구 코드를 가진 사람은 이 기간 이 소속으로 응모할 수 있습니다.
           비밀번호처럼 보관하세요. 패스키를 잃어도 이 코드로 새 등록증에 불러올
           수 있습니다.
         </p>

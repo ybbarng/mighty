@@ -5,7 +5,7 @@ import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import { useLedger } from "../services";
 import { QualifyPanel } from "./QualifyPanel";
 
-/** /stardraw/qualify: 상품 자격 받기(실제 장부) */
+/** /stardraw/qualify: 소속 받기(실제 장부) */
 export function QualifyView() {
   const { services } = useLedger();
   return (
@@ -21,9 +21,14 @@ export function QualifyView() {
           >
             ← 하늘의 별 따기
           </a>
-          <h1 className="font-bold text-lg">상품 자격</h1>
+          <h1 className="font-bold text-lg">소속</h1>
           <span className="w-16" />
         </div>
+        <p className="break-keep text-sm text-white/75" data-qual-about>
+          소속은 카노푸스 우주국장이 우주인에게 부여하는 집단입니다. 성단과
+          성운이 있고, 소속마다 정한 방법으로 확인한 우주인만 받을 수 있습니다.
+          받은 소속은 응모권과 등록증에 표시됩니다.
+        </p>
         {services ? (
           <QualifyPanel services={services} />
         ) : (

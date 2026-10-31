@@ -288,7 +288,7 @@ describe("상품 자격 받기(기관 계정 → 블라인드 도장)", () => {
     await expect(
       enter(r, await player(), [1, 2, 3, 4, 5, 6], "203.0.113.7", forged),
     ).rejects.toMatchObject({
-      message: "상품 자격 증서: 도장이 맞지 않습니다",
+      message: "소속 증서: 도장이 맞지 않습니다",
     });
   }, 30_000);
 

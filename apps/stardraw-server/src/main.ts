@@ -54,8 +54,8 @@ async function main(): Promise<void> {
   );
   log(
     config.qualAffiliations.size > 0
-      ? `상품 자격 발급: ${[...config.qualAffiliations.keys()].join(", ")}(${GOOGLE_CLIENT_ID ? "구글 로그인" : "구글 클라이언트 ID가 없어 준비 중"})`
-      : "상품 자격 소속 설정이 없어 도장을 찍지 않는다",
+      ? `소속 발급: ${[...config.qualAffiliations.keys()].join(", ")}(${GOOGLE_CLIENT_ID ? "구글 로그인" : "구글 클라이언트 ID가 없어 준비 중"})`
+      : "소속 설정이 없어 도장을 찍지 않는다",
   );
   log(
     config.github

@@ -435,7 +435,7 @@ export class RemoteLedger implements Ledger {
       blindStamp?: string;
     };
     if (!res.ok || !body.blindStamp)
-      throw new Error(body.error ?? `자격을 받지 못했습니다(${res.status})`);
+      throw new Error(body.error ?? `소속을 받지 못했습니다(${res.status})`);
     return fromBase64Url(body.blindStamp);
   }
 

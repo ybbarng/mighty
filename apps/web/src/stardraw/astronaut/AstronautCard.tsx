@@ -717,8 +717,8 @@ export function AstronautCard({
 
       {!flipped && aboutBadge && affiliation && (
         <p className="break-keep text-center text-amber-100/85 text-xs">
-          {affiliation.method}으로 받은 상품 자격이 이 기기에 있습니다. 우주국도
-          누구의 자격인지 모릅니다 ·{" "}
+          {affiliation.method}으로 받은 소속이 이 기기에 있습니다. 우주국도 누가
+          받았는지 모릅니다 ·{" "}
           <a href="/stardraw/qualify" className="underline underline-offset-2">
             자세히
           </a>
