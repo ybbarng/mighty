@@ -15,9 +15,9 @@ import {
 } from "@mighty/stardraw-core";
 import { useEffect, useMemo, useState } from "react";
 import { BackToGames } from "@/components/BackToGames";
-import { MadeWith } from "@/components/brand/MadeWith";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { cn } from "@/lib/cn";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import { track } from "@/stats/track";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
@@ -399,7 +399,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
           />
         )}
         <footer className="pt-4 text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </div>
     </main>

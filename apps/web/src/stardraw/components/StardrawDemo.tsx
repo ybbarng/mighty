@@ -13,9 +13,8 @@ import {
   ticketId,
 } from "@mighty/stardraw-core";
 import { useEffect, useMemo, useState } from "react";
-
-import { MadeWith } from "@/components/brand/MadeWith";
 import { cn } from "@/lib/cn";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { demoPick } from "../demo-pick";
 import { DirectorConsole } from "../director/DirectorConsole";
@@ -475,7 +474,7 @@ export function StardrawDemo() {
         )}
 
         <footer className="pt-4 text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </div>
     </main>

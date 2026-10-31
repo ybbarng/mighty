@@ -1,6 +1,6 @@
 "use client";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { useLedger } from "../services";
 import { QualifyPanel } from "./QualifyPanel";
@@ -36,7 +36,7 @@ export function QualifyView() {
             개인정보처리방침
           </a>
           <p>
-            <MadeWith />
+            <AgencyFooter />
           </p>
         </footer>
       </div>

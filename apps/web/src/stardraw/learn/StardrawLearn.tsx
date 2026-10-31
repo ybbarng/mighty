@@ -1,10 +1,9 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-
-import { MadeWith } from "@/components/brand/MadeWith";
 import { Quiz, type QuizItem } from "@/components/learn/Quiz";
 import { cn } from "@/lib/cn";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { AttackToy } from "./AttackToy";
 import { RendezvousToys } from "./RendezvousToy";
@@ -638,7 +637,7 @@ export function StardrawLearn() {
             에 있습니다.
           </span>
           <span className="text-[11px] text-white/40">
-            <MadeWith />
+            <AgencyFooter />
           </span>
         </footer>
       </article>

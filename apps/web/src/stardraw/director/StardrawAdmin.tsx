@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { DirectorConsole } from "./DirectorConsole";
 import { passkeyKeyring, remoteDirectorBackend } from "./director";
@@ -38,7 +38,7 @@ export function StardrawAdmin() {
         </header>
         <DirectorConsole backend={backend} keyring={keyring} />
         <footer className="pt-4 text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </div>
     </main>

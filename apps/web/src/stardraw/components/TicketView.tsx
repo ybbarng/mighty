@@ -10,7 +10,7 @@ import {
 } from "@mighty/stardraw-core";
 import { useEffect, useState } from "react";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { useLedger } from "../services";
 import { sealedFor } from "../spoiler";
@@ -137,7 +137,7 @@ export function TicketView() {
           나도 응모하기
         </a>
         <footer className="pt-4 text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </div>
     </main>

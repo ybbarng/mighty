@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import {
   KeyHoldingExplained,
   PasskeyFaq,
@@ -311,7 +311,7 @@ export default function StardrawAbout() {
         </div>
 
         <footer className="text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </article>
     </main>

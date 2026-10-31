@@ -1,6 +1,6 @@
 "use client";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { useLedger } from "../services";
 import { AstronautPanel } from "./AstronautPanel";
@@ -47,7 +47,7 @@ export function AstronautView() {
           </div>
         )}
         <footer className="pt-4 text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </div>
     </main>

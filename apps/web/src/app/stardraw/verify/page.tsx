@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
-import { MadeWith } from "@/components/brand/MadeWith";
+import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import { LedgerCheck, VectorTable } from "@/stardraw/verify/VerifyTools";
 
 export const metadata: Metadata = {
@@ -630,7 +630,7 @@ pnpm stardraw-verify site https://game.byb.kr --build apps/web/out`}</Code>
         </Section>
 
         <footer className="text-center text-[11px] text-white/40">
-          <MadeWith />
+          <AgencyFooter />
         </footer>
       </article>
     </main>
