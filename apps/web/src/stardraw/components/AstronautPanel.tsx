@@ -59,7 +59,10 @@ export function AstronautPanel({
   pub,
   greeting,
   children,
+  bare = false,
 }: {
+  /** 등록증만(공유 단추·설명 없이). 발급 연출이 단추를 따로 아래 고정 자리에 둔다 */
+  bare?: boolean;
   services: Services;
   pub: Uint8Array;
   /** 카드 위 인사(등록 직후 등) */
@@ -116,16 +119,20 @@ export function AstronautPanel({
         affiliation={affiliation}
       />
       {children}
-      <button
-        type="button"
-        onClick={() => void share()}
-        className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
-      >
-        {copied ? "링크를 복사했어요" : "등록증 공유"}
-      </button>
-      <p className="-mt-2 break-keep text-center text-white/55 text-xs">
-        등록증을 보여 주면 공개 기록 속 응모가 내 것임을 보일 수 있습니다.
-      </p>
+      {!bare && (
+        <>
+          <button
+            type="button"
+            onClick={() => void share()}
+            className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
+          >
+            {copied ? "링크를 복사했어요" : "등록증 공유"}
+          </button>
+          <p className="-mt-2 break-keep text-center text-white/55 text-xs">
+            등록증을 보여 주면 공개 기록 속 응모가 내 것임을 보일 수 있습니다.
+          </p>
+        </>
+      )}
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import { type Rank, type Ticket, ticketId, toHex } from "@mighty/stardraw-core";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { FX } from "../fx-timing";
 import {
   checkLinkUrl,
   createInvite,
@@ -13,6 +14,7 @@ import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { NOTHING_SEALED, type Sealed } from "../spoiler";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 import { formatTime, RANK_LABEL } from "./parts";
 
 /** 당첨 안내를 띄울 최근 당첨 응모권 수 */
@@ -96,6 +98,8 @@ function NoticeCard({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
+  /** 확인 링크는 이 응모권을 낸 등록증의 서명으로 만든다: 신분증 제시 틀 */
+  const id = useIdPresent(services);
   useEffect(() => {
     setLinks(invitesOf(services.ns, ticket, services.clock.now()));
     setCanShare(typeof navigator !== "undefined" && "share" in navigator);
@@ -110,8 +114,17 @@ function NoticeCard({
     setError(null);
     setCopied(false);
     try {
-      onCreated?.(await createInvite(services, ticket));
-      setLinks(invitesOf(services.ns, ticket, services.clock.now()));
+      const made = await id.run(() => createInvite(services, ticket), {
+        verb: "제시",
+        pub: ticket.pub,
+        done: "확인 링크를 만들었습니다.",
+        hold: FX.idHoldSubmit,
+        onConfirmed: (inv) => {
+          onCreated?.(inv);
+          setLinks(invitesOf(services.ns, ticket, services.clock.now()));
+        },
+      });
+      if (!made) return;
     } catch (err) {
       setError(
         err instanceof DOMException && err.name === "NotAllowedError"
@@ -151,6 +164,7 @@ function NoticeCard({
       data-win-notice={ticket.round}
       className="flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
     >
+      <IdPresentView services={services} id={id} verb="제시" />
       <p className="font-semibold text-amber-200 text-xs tracking-wide">
         카노푸스 우주국 당첨 안내
       </p>
