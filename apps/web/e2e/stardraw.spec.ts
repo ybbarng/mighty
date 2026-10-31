@@ -208,8 +208,8 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
       .press("Enter", { timeout: 30_000 });
   // 발급한 등록증이 뜬다(연출이 있으면 입구 위 화면 전체 오버레이로)
   await expect(page.locator("[data-issued='new']")).toBeVisible();
-  // 만들자마자 그 패스키로 등록 증명에 서명해 장부에 바로 등록한다
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
+  // 패스키 만들기 창 하나만(장부 등록은 첫 응모 때 응모권과 함께)
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
   // 등록 직후 등록증을 발급해 보여 준다. 아직 응모 전이라 등록일은 비어 있다
   await expect(page.locator("[data-issued='new']")).toContainText(
     /^.+에 거주하는 .+ 님,우주인으로 등록되었습니다\. 환영합니다!$/,
@@ -218,7 +218,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(card).toBeVisible();
   const number = (await card.getAttribute("data-idcard")) as string;
   expect(number).toMatch(/^SD-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
-  // 발급일은 실제 신분증처럼 날짜 하나(장부 등록 회차의 날짜)
+  // 발급일은 실제 신분증처럼 날짜 하나(장부 등록 전이면 이 기기에서 만든 날, 같은 날이다)
   await expect(card.locator("[data-issue-date]")).toHaveText(
     /^\d{4}\. \d{1,2}\. \d{1,2}\.$/,
   );
@@ -247,7 +247,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("stardraw-id-issued.png"),
     fullPage: true,
   });
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 0 });
   await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   // 하늘에서 별을 누르면 그 별 설명, 아래 고른 별 6칸이 채워진다(번호 용지는 응모할 때만 나온다)
   await expect(page.getByRole("group", { name: "응모 용지" })).toHaveCount(0);
@@ -306,7 +306,7 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   }
   const receipt = page.locator("[data-receipt]");
   await expect(receipt).toBeVisible({ timeout: 30_000 });
-  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 2 });
+  expect(await passkeyCalls(page)).toEqual({ create: 1, get: 1 });
   await expect(receipt).toContainText("베텔게우스");
   await expect(receipt).toContainText("시리우스");
   await expect(receipt.locator("[data-passkey-mark]")).toBeVisible();
@@ -604,10 +604,9 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     setup.getByRole("alert").filter({ hasText: "등록하지 않았어요" }),
   ).toBeVisible();
   await setup.getByRole("button", REGISTER).click();
+  // 패스키 만들기 창 하나만(장부 등록은 첫 응모 때 응모권과 함께)
   await demoUnlock(page, "create");
-  // 이어서 등록 증명 서명(장부에 바로 등록)
-  await demoUnlock(page, "sign");
-  await expect(setup).toHaveCount(0);
+  await expect(page.locator("[data-issued='new']")).toBeVisible();
   // 등록증을 누르면 흉내 시트로 주인 확인
   const demoCard = page.locator("[data-idcard]");
   await expect(demoCard).toBeVisible();
@@ -787,7 +786,6 @@ test("데모: 이미 해 본 기기에서 「1등 되게」를 누른 뒤 회차
   // 이미 해 본 기기: 한 회차 응모·추첨을 거쳐 열쇠와 장부가 저장된 상태(「데모 처음부터」를 누르지 않는다)
   await page.getByRole("button", REGISTER).click();
   await demoUnlock(page, "create");
-  await demoUnlock(page, "sign");
   await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", ENTER).click();

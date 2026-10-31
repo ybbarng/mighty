@@ -11,7 +11,7 @@ import {
   passkeyFailText,
   passkeyProblem,
 } from "../passkey-env";
-import { ensureRegistered, signProof } from "../registrar";
+import { ensureRegistered } from "../registrar";
 import type { Services } from "../services";
 import type { KeyInfo } from "../wallet";
 import { AstronautPanel } from "./AstronautPanel";
@@ -67,16 +67,12 @@ export function useAstronautSetup(
     new Promise<void>((r) => services.clock.after(ms, r));
 
   /** 패스키 만들기와 등록 증명 서명(만들자마자 장부에 등록, 작업 증명·올리기는 뒤에서) */
-  const makeKey = async () => {
-    const made = await services.wallet.createPasskey();
-    try {
-      await signProof(services, made);
-      void ensureRegistered(services, made).catch(() => {});
-    } catch {
-      // 서명을 취소하면 첫 응모 때 응모권과 함께 등록한다
-    }
-    return made;
-  };
+  /**
+   * 패스키 만들기 창 하나만 연다(2026-10-31 사용자). 예전에는 곧바로 등록 증명 서명 창이 한 번 더 떴는데, 새 누름
+   * 없이 열리는 두 번째 창은 누름 직후에만 패스키 창을 여는 브라우저에서 막히고 사람도 헷갈렸다. 장부 등록은
+   * 첫 응모 때 응모권과 함께 낸다(그 응모의 신분증 제출 누름 안에서)
+   */
+  const makeKey = () => services.wallet.createPasskey();
 
   /** 우주인 등록: 연출이 있으면 신청서부터(패스키는 신청서를 낼 때), 움직임 줄이기면 바로 패스키 만들기 */
   const create = async () => {

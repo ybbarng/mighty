@@ -64,7 +64,6 @@ test("데모 소속: 데모 기관 계정으로 받아 복구 코드를 보고, 
   const setup = page.locator("[data-key-setup]");
   await setup.getByRole("button", { name: "우주인 등록", exact: true }).click();
   await demoUnlock(page, "create");
-  await demoUnlock(page, "sign");
   await page.getByRole("button", { name: "별을 고르러 가 볼까요?" }).click();
   await expect(page.locator("[data-qual-toggle]")).toHaveCount(0);
 
