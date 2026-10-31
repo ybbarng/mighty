@@ -122,6 +122,17 @@ describe("응모권은 그 장부의 것으로만 센다", () => {
     expect(wallet.loadTickets()).toHaveLength(1);
   });
 
+  it("알림 띠를 닫은 회차는 장부별로 남는다", () => {
+    let ledger: string | null = "trial:aaaa";
+    const wallet = createWallet("test-game", () => ledger);
+    wallet.closeNotice([1, 2]);
+    wallet.closeNotice([2, 3]);
+    expect([...wallet.noticeClosedRounds()].sort()).toEqual([1, 2, 3]);
+    expect(wallet.openedRounds().size).toBe(0);
+    ledger = "trial:bbbb";
+    expect(wallet.noticeClosedRounds().size).toBe(0);
+  });
+
   it("장부를 아직 받지 못했거나 장부 표시가 없는 옛 응모권은 지금 것으로 세지 않는다", () => {
     const wallet = createWallet("test-game", () => null);
     wallet.addTicket(ticketOf(1));

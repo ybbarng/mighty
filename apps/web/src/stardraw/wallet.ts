@@ -139,6 +139,9 @@ export interface Wallet {
   /** 결과 봉투를 연 회차 */
   openedRounds(): Set<number>;
   markOpened(round: number): void;
+  /** 추첨이 끝났다는 알림 띠를 닫은 회차(다시 띄우지 않는다) */
+  noticeClosedRounds(): Set<number>;
+  closeNotice(rounds: readonly number[]): void;
   /** 이 이름공간의 지갑을 모두 지운다(데모 처음부터) */
   clear(): Promise<void>;
 }
@@ -155,6 +158,7 @@ export function createWallet(
   const KEY = `${ns}-key`;
   const TICKETS = `${ns}-tickets`;
   const OPENED = `${ns}-opened`;
+  const NOTICE_CLOSED = `${ns}-notice-closed`;
   const PROOF = `${ns}-key-proof`;
 
   const saveKey = (key: KeyInfo) =>
@@ -170,9 +174,20 @@ export function createWallet(
     [];
 
   /** 장부별 봉투를 연 회차. 장부 표시가 없던 옛 판의 목록(숫자 배열)은 어느 장부의 것인지 몰라 버린다 */
-  const readOpened = () => {
-    const saved = readJson<Record<string, number[]> | number[]>(OPENED);
+  const readRounds = (key: string) => {
+    const saved = readJson<Record<string, number[]> | number[]>(key);
     return saved && !Array.isArray(saved) ? saved : {};
+  };
+  const roundsOf = (key: string) => {
+    const ledger = ledgerId();
+    return new Set(ledger ? (readRounds(key)[ledger] ?? []) : []);
+  };
+  const addRounds = (key: string, rounds: readonly number[]) => {
+    const ledger = ledgerId();
+    if (!ledger) return;
+    const all = readRounds(key);
+    all[ledger] = [...new Set([...(all[ledger] ?? []), ...rounds])];
+    writeJson(key, all);
   };
 
   const ticketIds = () => new Set(readTickets().map((s) => s.t));
@@ -343,20 +358,23 @@ export function createWallet(
     },
 
     openedRounds() {
-      const ledger = ledgerId();
-      return new Set(ledger ? (readOpened()[ledger] ?? []) : []);
+      return roundsOf(OPENED);
     },
 
     markOpened(round) {
-      const ledger = ledgerId();
-      if (!ledger) return;
-      const all = readOpened();
-      all[ledger] = [...new Set([...(all[ledger] ?? []), round])];
-      writeJson(OPENED, all);
+      addRounds(OPENED, [round]);
+    },
+
+    noticeClosedRounds() {
+      return roundsOf(NOTICE_CLOSED);
+    },
+
+    closeNotice(rounds) {
+      addRounds(NOTICE_CLOSED, rounds);
     },
 
     async clear() {
-      for (const k of [KEY, TICKETS, OPENED, PROOF]) {
+      for (const k of [KEY, TICKETS, OPENED, NOTICE_CLOSED, PROOF]) {
         try {
           localStorage.removeItem(k);
         } catch {

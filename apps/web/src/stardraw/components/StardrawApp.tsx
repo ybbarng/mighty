@@ -31,6 +31,7 @@ import { GAME_NS, type Services, useLedger } from "../services";
 import { NOTHING_SEALED, type Sealed, sealedFor } from "../spoiler";
 import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckLink } from "./CheckLink";
+import { DrawnNotice } from "./DrawnNotice";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
 import { GameIntro } from "./GameIntro";
@@ -188,6 +189,8 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   /** 지갑을 한 번 읽었는지(그 전에는 영수증을 "찾을 수 없어요"로 보이지 않는다) */
   const [loaded, setLoaded] = useState(false);
   const [opened, setOpened] = useState<Set<number>>(new Set());
+  /** 추첨이 끝났다는 알림 띠를 닫은 회차 */
+  const [noticeClosed, setNoticeClosed] = useState<Set<number>>(new Set());
   // 응모 화면에서 영수증 주소로 옮겨 오며 넘긴 "인쇄 중" 표시는 이 페이지가 열릴 때 한 번만 받는다
   const [printing] = useState(() => {
     const id = printingId;
@@ -201,6 +204,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     setMine(services.wallet.loadTickets());
     setLoaded(true);
     setOpened(services.wallet.openedRounds());
+    setNoticeClosed(services.wallet.noticeClosedRounds());
   }, [version, services]);
 
   // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
@@ -259,6 +263,13 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const sealed: Sealed = services
     ? sealedFor(mine, opened, services.ledger)
     : NOTHING_SEALED;
+  /** 알림 띠에 띄울 회차: 가렸고 띠를 닫지 않은 내 회차(추첨 화면에서는 띄우지 않는다) */
+  const noticeRounds =
+    view.name === "draw"
+      ? []
+      : [...new Set(mine.map((m) => m.ticket.round))]
+          .filter((r) => sealed(r) && !noticeClosed.has(r))
+          .sort((a, b) => a - b);
   const receiptOf = (id: string) =>
     mine.find((m) => toHex(ticketId(m.ticket)) === id);
 
@@ -282,6 +293,17 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
         {services?.ledger.mode === "trial" && <TrialBanner />}
         {/* 서버 없이 이 기기 안에서만 도는 연습판(데모는 따로 자기 띠가 있다) */}
         {services?.practice && services.ns === GAME_NS && <PracticeBanner />}
+        {services && (
+          <DrawnNotice
+            rounds={noticeRounds}
+            schedule={services.ledger.schedule}
+            onDraw={(round) => go({ name: "draw", round })}
+            onClose={() => {
+              services.wallet.closeNotice(noticeRounds);
+              setNoticeClosed(services.wallet.noticeClosedRounds());
+            }}
+          />
+        )}
         {!services || !status ? (
           <p className="py-20 text-center text-white/60">
             하늘을 펴고 있습니다
