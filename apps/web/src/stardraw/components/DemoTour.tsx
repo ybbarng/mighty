@@ -11,6 +11,7 @@ import {
 } from "../demo-tour";
 import { AstronautPanel } from "./AstronautPanel";
 import { CheckLink } from "./CheckLink";
+import { FX_ITEMS, FxScreen } from "./DemoTourFx";
 import { DemoUnlockPrompt } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
 import { EnterView, KeySetup } from "./EnterView";
@@ -51,6 +52,7 @@ export const TOUR_ITEMS = [
   { id: "sheet-check", label: "본인 확인 시트" },
   { id: "in-app", label: "앱 안 브라우저" },
   { id: "no-passkey", label: "패스키 미지원" },
+  ...FX_ITEMS,
 ] as const;
 
 export type TourId = (typeof TOUR_ITEMS)[number]["id"];
@@ -299,6 +301,16 @@ function Screen({
           }}
         />
       );
+    case "fx-gate":
+    case "fx-issue":
+    case "fx-welcome":
+    case "fx-submit":
+    case "fx-print":
+    case "fx-card-open":
+    case "fx-card-entered":
+    case "fx-card-drawing":
+    case "fx-card-closed-none":
+      return <FxScreen id={id} s={s} />;
     case "in-app":
     case "no-passkey":
       return (
