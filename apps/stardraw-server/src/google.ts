@@ -79,7 +79,11 @@ export function googleTokenVerifier(
     const payload = part(p);
     if (header.alg !== "RS256" || typeof header.kid !== "string")
       throw new GoogleTokenError("구글 로그인 결과 형식이 아닙니다");
-    if (now() - fetchedAt > 3600 || !keys.some((k) => k.kid === header.kid))
+    // 모르는 kid면 다시 받되 5분에 한 번만(엉터리 kid로 구글에 요청을 몰아치게 하는 길을 막는다, D1)
+    if (
+      now() - fetchedAt > 3600 ||
+      (!keys.some((k) => k.kid === header.kid) && now() - fetchedAt > 300)
+    )
       await load();
     const jwk = keys.find((k) => k.kid === header.kid);
     if (!jwk) throw new GoogleTokenError("구글 서명 열쇠를 찾지 못했습니다");

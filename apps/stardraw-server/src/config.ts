@@ -71,6 +71,10 @@ export interface ServerConfig {
   directorKeys: { credentialId: Uint8Array; pub: Uint8Array }[];
   /** 국장 요청: IP 앞부분 하나당 하루 상한 */
   directorRequestsPerPrefixPerDay: number;
+  /** 소속 도장 받기: IP 앞부분 하나당 하루 상한(진짜 상한은 계정마다 기간에 한 번, D1) */
+  qualIssuesPerPrefixPerDay: number;
+  /** 없는 확인 링크 조회: IP 앞부분 하나당 하루 상한(토큰은 144비트라 맞힐 수 없다, D1) */
+  badLinksPerPrefixPerDay: number;
   /**
    * 상품 자격 소속마다 신원 확인 방법(docs/36 11-13, `STARDRAW_QUAL_AFFILIATIONS`). 기관 도메인은 여기(비공개 설정)에만 둔다.
    * 모양: `소속 이름=google:도메인`을 쉼표로 여럿. 비면 도장을 찍지 않는다
@@ -204,6 +208,8 @@ export function loadConfig(): ServerConfig {
       "STARDRAW_DIRECTOR_REQUESTS_PER_PREFIX",
       60,
     ),
+    qualIssuesPerPrefixPerDay: int("STARDRAW_QUAL_ISSUES_PER_PREFIX", 200),
+    badLinksPerPrefixPerDay: int("STARDRAW_BAD_LINKS_PER_PREFIX", 60),
     qualAffiliations: parseQualAffiliations(
       env("STARDRAW_QUAL_AFFILIATIONS") ?? "",
     ),

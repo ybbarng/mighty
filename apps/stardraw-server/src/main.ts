@@ -85,6 +85,7 @@ async function main(): Promise<void> {
     directorRequestsPerPrefixPerDay: config.directorRequestsPerPrefixPerDay,
     qualification: {
       affiliations: config.qualAffiliations,
+      issuesPerPrefixPerDay: config.qualIssuesPerPrefixPerDay,
       verifyGoogle: googleTokenVerifier(GOOGLE_CLIENT_ID),
     },
     log,
@@ -96,6 +97,7 @@ async function main(): Promise<void> {
     {
       ...DEFAULT_RELAY_LIMITS,
       invitesPerPrefixPerDay: config.invitesPerPrefixPerDay,
+      badLinksPerPrefixPerDay: config.badLinksPerPrefixPerDay,
     },
     (pub) => engine.isActiveDirector(pub),
   );

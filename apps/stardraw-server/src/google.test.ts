@@ -102,15 +102,20 @@ describe("구글 ID 토큰 확인", () => {
     });
   });
 
-  it("공개 열쇠는 받아 두고 다시 쓰며, 모르는 kid면 새로 받는다", async () => {
-    const v = verifier();
+  it("공개 열쇠는 받아 두고 다시 쓰며, 모르는 kid면 5분에 한 번만 새로 받는다", async () => {
+    let now = NOW;
+    const v = googleTokenVerifier(CLIENT, { fetch: fakeFetch, now: () => now });
     const before = fetched;
     await v(await token(GOOD));
     await v(await token(GOOD));
     expect(fetched - before).toBe(1);
-    await expect(
-      v(await token(GOOD, { alg: "RS256", kid: "k9", typ: "JWT" })),
-    ).rejects.toThrow("서명 열쇠를 찾지 못했습니다");
+    const unknown = await token(GOOD, { alg: "RS256", kid: "k9", typ: "JWT" });
+    // 엉터리 kid를 몰아 보내도 5분 안에는 구글에 다시 묻지 않는다(D1)
+    for (let i = 0; i < 3; i++)
+      await expect(v(unknown)).rejects.toThrow("서명 열쇠를 찾지 못했습니다");
+    expect(fetched - before).toBe(1);
+    now += 301;
+    await expect(v(unknown)).rejects.toThrow("서명 열쇠를 찾지 못했습니다");
     expect(fetched - before).toBe(2);
   });
 
