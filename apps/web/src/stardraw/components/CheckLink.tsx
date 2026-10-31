@@ -10,7 +10,8 @@ import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
-import { formatTime, RANK_LABEL } from "./parts";
+import type { Sealed } from "../spoiler";
+import { DrawFirst, formatTime, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
 type Flash = { kind: "wrong"; left: number } | null;
@@ -34,9 +35,14 @@ export function CheckLink({
   onClose,
   preset,
   fresh,
+  sealed,
+  onDraw,
 }: {
   services: Services;
   token: string;
+  /** 추첨을 아직 열어 보지 않은 내 회차의 링크면 등수 대신 「추첨 보기」 */
+  sealed?: Sealed | undefined;
+  onDraw?: ((round: number) => void) | undefined;
   onClose?: (() => void) | undefined;
   /** 끝난 확인을 그대로 보여 준다(데모 화면 둘러보기의 성공·실패) */
   preset?: CheckSession | undefined;
@@ -135,9 +141,12 @@ export function CheckLink({
 
   const titleOf = (round: number, rank: Rank) =>
     `${roundShort(ledger.schedule, round)} ${RANK_LABEL[rank]}`;
+  const hidden = state.kind === "ready" && !!sealed?.(state.round);
   const title =
     state.kind === "ready"
-      ? titleOf(state.round, state.rank)
+      ? hidden
+        ? `${roundShort(ledger.schedule, state.round)} 당첨자`
+        : titleOf(state.round, state.rank)
       : session
         ? titleOf(session.round, session.rank)
         : "당첨자";
@@ -195,7 +204,15 @@ export function CheckLink({
         </Notice>
       )}
 
-      {state.kind === "ready" && (
+      {state.kind === "ready" && hidden && (
+        <div className="flex justify-center rounded-2xl border border-white/10 p-4">
+          <DrawFirst
+            round={state.round}
+            onDraw={onDraw && (() => onDraw(state.round))}
+          />
+        </div>
+      )}
+      {state.kind === "ready" && !hidden && (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-200/30 bg-amber-200/5 p-4">
           <p className="font-bold text-lg">
             {title} 당첨자가 보낸 확인 링크입니다

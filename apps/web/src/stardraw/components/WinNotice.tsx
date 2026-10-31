@@ -12,6 +12,7 @@ import {
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
+import { NOTHING_SEALED, type Sealed } from "../spoiler";
 import { formatTime, RANK_LABEL } from "./parts";
 
 /** 당첨 안내를 띄울 최근 당첨 응모권 수 */
@@ -21,8 +22,10 @@ const MAX_NOTICES = 3;
 export function winningTickets(
   services: Services,
   tickets: readonly Ticket[],
+  sealed: Sealed = NOTHING_SEALED,
 ): { ticket: Ticket; rank: Rank }[] {
   return tickets
+    .filter((ticket) => !sealed(ticket.round))
     .map((ticket) => {
       const record = services.ledger.record(ticket.round);
       return { ticket, rank: record ? myRank(record, ticket) : null };
@@ -40,18 +43,21 @@ export function winningTickets(
 export function WinNotice({
   services,
   tickets,
+  sealed,
   compact,
   onOpen,
   onCreated,
 }: {
   services: Services;
   tickets: readonly Ticket[];
+  /** 추첨을 아직 열어 보지 않은 내 회차의 당첨은 알리지 않는다 */
+  sealed?: Sealed;
   compact?: boolean;
   onOpen?: () => void;
   /** 링크를 만들었을 때(데모가 확인하는 사람 화면에 넘긴다) */
   onCreated?: (invite: MyInvite) => void;
 }) {
-  const wins = winningTickets(services, tickets);
+  const wins = winningTickets(services, tickets, sealed);
   if (wins.length === 0) return null;
   return (
     <section aria-label="당첨 안내" className="flex flex-col gap-3">

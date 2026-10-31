@@ -148,3 +148,37 @@ export function StardrawTitle() {
     </div>
   );
 }
+
+/**
+ * 추첨을 아직 열어 보지 않은 내 회차의 결과 자리(spoiler.ts). 숫자 대신 이 단추 하나만 둔다.
+ * `onDraw`가 없으면 단추 모양만 그린다(바깥이 이미 누를 수 있는 단추일 때)
+ */
+export function DrawFirst({
+  round,
+  onDraw,
+  className,
+}: {
+  round: number;
+  onDraw?: (() => void) | undefined;
+  className?: string;
+}) {
+  const look = cn(
+    "inline-flex items-center justify-center rounded-lg border border-amber-200/50 bg-amber-200/10 px-3 py-1.5 font-semibold text-amber-100 text-sm",
+    onDraw && "hover:bg-amber-200/20",
+    className,
+  );
+  return onDraw ? (
+    <button
+      type="button"
+      onClick={onDraw}
+      data-draw-first={round}
+      className={look}
+    >
+      추첨 보기
+    </button>
+  ) : (
+    <span data-draw-first={round} className={look}>
+      추첨 보기
+    </span>
+  );
+}

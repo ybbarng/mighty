@@ -12,6 +12,7 @@ import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { starOf } from "../sky";
+import type { Sealed } from "../spoiler";
 import type { KeyInfo } from "../wallet";
 import { useIssued } from "./AstronautPanel";
 import { formatTime, RANK_LABEL } from "./parts";
@@ -54,9 +55,12 @@ function saveAnswered(ns: string, list: Answered[]): void {
 export function Inbox({
   services,
   tickets,
+  sealed,
 }: {
   services: Services;
   tickets: readonly Ticket[];
+  /** 추첨을 아직 열어 보지 않은 내 회차는 등수를 적지 않는다 */
+  sealed?: Sealed;
 }) {
   const [open, setOpen] = useState<OpenRequest[]>([]);
   const [answered, setAnswered] = useState<Answered[]>([]);
@@ -192,7 +196,7 @@ export function Inbox({
         />
       )}
       {open.map((req) => {
-        const rank = rankOfRequest(req);
+        const rank = sealed?.(req.request.round) ? null : rankOfRequest(req);
         return (
           <div
             key={req.id}

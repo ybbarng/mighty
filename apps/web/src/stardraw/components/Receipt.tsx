@@ -18,7 +18,7 @@ import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import { starOf } from "../sky";
 import { KeyIcon } from "./PasskeyHelp";
-import { formatTime, LottoBall, RANK_LABEL, shortId } from "./parts";
+import { DrawFirst, formatTime, LottoBall, RANK_LABEL, shortId } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
 /**
@@ -29,7 +29,9 @@ export function Receipt({
   ticket,
   receivedAt,
   schedule,
-  record,
+  record: shownRecord,
+  sealed = false,
+  onDraw,
   printing = false,
 }: {
   ticket: Ticket;
@@ -37,12 +39,16 @@ export function Receipt({
   receivedAt?: number | undefined;
   schedule: Schedule;
   record?: RoundRecord | undefined;
+  /** 추첨을 아직 열어 보지 않은 내 회차: 결과 대신 「추첨 보기」(spoiler.ts) */
+  sealed?: boolean | undefined;
+  onDraw?: (() => void) | undefined;
   /** 막 응모해 영수증이 인쇄되어 나오는 중 */
   printing?: boolean | undefined;
 }) {
   const times = roundTimes(schedule, ticket.round);
   const drawAt = drandTime(drandRoundForClose(times.closesAt));
   const id = toHex(ticketId(ticket));
+  const record = sealed ? undefined : shownRecord;
   const rank: Rank | null = record ? myRank(record, ticket) : null;
   return (
     <article
@@ -185,7 +191,11 @@ export function Receipt({
           />
         </div>
       )}
-      {record ? (
+      {sealed ? (
+        <div className="flex justify-center">
+          <DrawFirst round={ticket.round} onDraw={onDraw} />
+        </div>
+      ) : record ? (
         <p className="text-center font-bold" data-result>
           {record.void
             ? "이 회차는 무효가 되어 추첨하지 않았습니다"

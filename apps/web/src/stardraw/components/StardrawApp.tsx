@@ -28,6 +28,7 @@ import { ensureRegistered } from "../registrar";
 import { myRank, prizeEligible, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
 import { GAME_NS, type Services, useLedger } from "../services";
+import { NOTHING_SEALED, type Sealed, sealedFor } from "../spoiler";
 import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckLink } from "./CheckLink";
 import { DrawView } from "./DrawView";
@@ -35,6 +36,7 @@ import { EnterView } from "./EnterView";
 import { GameIntro } from "./GameIntro";
 import { Inbox } from "./Inbox";
 import {
+  DrawFirst,
   formatLeft,
   formatTime,
   LottoBall,
@@ -253,6 +255,10 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     if (navigated) router.back();
     else go(fallback, true);
   };
+  /** 추첨을 아직 열어 보지 않은 내 회차(결과를 가린다, spoiler.ts) */
+  const sealed: Sealed = services
+    ? sealedFor(mine, opened, services.ledger)
+    : NOTHING_SEALED;
   const receiptOf = (id: string) =>
     mine.find((m) => toHex(ticketId(m.ticket)) === id);
 
@@ -311,6 +317,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
               <ReceiptView
                 services={services}
                 mine={m}
+                sealed={sealed(m.ticket.round)}
                 printing={printing === view.id}
                 onBack={() => back({ name: "home" })}
                 onDraw={(round) => go({ name: "draw", round })}
@@ -344,24 +351,29 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
           <MineView
             services={services}
             mine={mine}
+            sealed={sealed}
             onBack={() => back({ name: "home" })}
             onOpen={(m) =>
               go({ name: "receipt", id: toHex(ticketId(m.ticket)) })
             }
+            onDraw={(round) => go({ name: "draw", round })}
             onRecovered={() => setMine(services.wallet.loadTickets())}
           />
         ) : view.name === "rounds" ? (
           <RoundsView
             services={services}
             version={version}
+            sealed={sealed}
             onBack={() => back({ name: "home" })}
             onOpen={(round) => go({ name: "round", round })}
+            onDraw={(round) => go({ name: "draw", round })}
             onStats={() => go({ name: "stats" })}
           />
         ) : view.name === "stats" ? (
           <StatsView
             services={services}
             version={version}
+            sealed={sealed}
             onBack={() => back({ name: "rounds" })}
           />
         ) : view.name === "round" ? (
@@ -369,11 +381,18 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
             services={services}
             round={view.round}
             mine={mine}
+            sealed={sealed}
             onBack={() => back({ name: "rounds" })}
-            onDraw={() => go({ name: "draw", round: view.round })}
+            onDraw={(round) => go({ name: "draw", round })}
           />
         ) : view.name === "link" ? (
-          <CheckLink key={view.token} services={services} token={view.token} />
+          <CheckLink
+            key={view.token}
+            services={services}
+            token={view.token}
+            sealed={sealed}
+            onDraw={(round) => go({ name: "draw", round })}
+          />
         ) : (
           <Home
             services={services}
@@ -466,11 +485,9 @@ export function Home({
       void ensureRegistered(services, found).catch(() => {});
   }, [services]);
   // 결과 봉투: 추첨이 끝났는데 아직 열어 보지 않은 내 응모권(가장 최근 것)
+  const sealed = sealedFor(mine, opened, services.ledger);
   const envelope = mine
-    .filter(
-      (m) =>
-        services.ledger.record(m.ticket.round) && !opened.has(m.ticket.round),
-    )
+    .filter((m) => sealed(m.ticket.round))
     .sort((a, b) => b.ticket.round - a.ticket.round)[0];
 
   return (
@@ -499,6 +516,7 @@ export function Home({
         <LastRound
           services={services}
           mine={mine}
+          sealed={sealed}
           onRounds={onRounds}
           onDraw={onDraw}
         />
@@ -507,10 +525,15 @@ export function Home({
       <WinNotice
         services={services}
         tickets={mine.map((m) => m.ticket)}
+        sealed={sealed}
         compact
         onOpen={onMine}
       />
-      <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
+      <Inbox
+        services={services}
+        tickets={mine.map((m) => m.ticket)}
+        sealed={sealed}
+      />
 
       {mine.length > 0 && (
         <button
@@ -744,11 +767,13 @@ function RoundCard({
 function LastRound({
   services,
   mine,
+  sealed,
   onRounds,
   onDraw,
 }: {
   services: Services;
   mine: MyTicket[];
+  sealed: Sealed;
   onRounds: () => void;
   onDraw: (round: number) => void;
 }) {
@@ -757,6 +782,21 @@ function LastRound({
   if (!record) return null;
   const my = mine.find((m) => m.ticket.round === record.round);
   const rank = my && !record.void ? myRank(record, my.ticket) : null;
+  if (sealed(record.round))
+    return (
+      <div className="sd-glass flex items-center gap-2 rounded-2xl px-4 py-3">
+        <button
+          type="button"
+          onClick={onRounds}
+          aria-label="지난 회차"
+          data-last-round={record.round}
+          className="min-w-0 flex-1 text-left text-white/60 text-xs tabular-nums"
+        >
+          지난 회차 · {roundShort(services.ledger.schedule, record.round)}
+        </button>
+        <DrawFirst round={record.round} onDraw={() => onDraw(record.round)} />
+      </div>
+    );
   return (
     <div className="sd-glass flex items-center gap-2 rounded-2xl px-4 py-3">
       <button
@@ -816,6 +856,7 @@ function LastRound({
 function ReceiptView({
   services,
   mine,
+  sealed,
   printing,
   onBack,
   onDraw,
@@ -823,6 +864,7 @@ function ReceiptView({
 }: {
   services: Services;
   mine: MyTicket;
+  sealed: boolean;
   printing?: boolean | undefined;
   onBack: () => void;
   onDraw: (round: number) => void;
@@ -848,6 +890,8 @@ function ReceiptView({
         receivedAt={mine.receivedAt}
         schedule={services.ledger.schedule}
         record={record}
+        sealed={sealed}
+        onDraw={() => onDraw(mine.ticket.round)}
         printing={printing}
       />
       <ShareTicket services={services} ticket={mine.ticket} />
@@ -858,7 +902,7 @@ function ReceiptView({
       >
         내 응모
       </button>
-      {record && (
+      {record && !sealed && (
         <button
           type="button"
           onClick={() => onDraw(mine.ticket.round)}
@@ -964,14 +1008,18 @@ function DrawFor({
 export function MineView({
   services,
   mine,
+  sealed = NOTHING_SEALED,
   onBack,
   onOpen,
+  onDraw,
   onRecovered,
 }: {
   services: Services;
   mine: MyTicket[];
+  sealed?: Sealed;
   onBack: () => void;
   onOpen: (m: MyTicket) => void;
+  onDraw?: (round: number) => void;
   onRecovered: () => void;
 }) {
   const sorted = [...mine].sort((a, b) => b.ticket.round - a.ticket.round);
@@ -1006,8 +1054,16 @@ export function MineView({
           {services.ns === GAME_NS && <span className="text-white/60">→</span>}
         </a>
       )}
-      <WinNotice services={services} tickets={mine.map((m) => m.ticket)} />
-      <Inbox services={services} tickets={mine.map((m) => m.ticket)} />
+      <WinNotice
+        services={services}
+        tickets={mine.map((m) => m.ticket)}
+        sealed={sealed}
+      />
+      <Inbox
+        services={services}
+        tickets={mine.map((m) => m.ticket)}
+        sealed={sealed}
+      />
       {sorted.length === 0 ? (
         <p className="py-10 text-center text-white/60">
           아직 응모하지 않았습니다
@@ -1015,14 +1071,20 @@ export function MineView({
       ) : (
         <ul className="flex flex-col gap-2">
           {sorted.map((m) => {
-            const record = services.ledger.record(m.ticket.round);
+            const hidden = sealed(m.ticket.round);
+            const record = hidden
+              ? undefined
+              : services.ledger.record(m.ticket.round);
             const rank = record ? myRank(record, m.ticket) : null;
             return (
-              <li key={toHex(ticketId(m.ticket))}>
+              <li
+                key={toHex(ticketId(m.ticket))}
+                className="sd-glass flex items-center gap-2 rounded-2xl pr-3"
+              >
                 <button
                   type="button"
                   onClick={() => onOpen(m)}
-                  className="sd-glass flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pl-4 text-left"
                 >
                   <span className="flex flex-col">
                     <span className="font-semibold tabular-nums">
@@ -1034,13 +1096,15 @@ export function MineView({
                         rank ? "text-amber-200" : "text-white/60",
                       )}
                     >
-                      {!record
-                        ? "추첨 전"
-                        : record.void
-                          ? "무효 회차"
-                          : rank
-                            ? `${RANK_LABEL[rank]} 당첨`
-                            : "낙첨"}
+                      {hidden
+                        ? null
+                        : !record
+                          ? "추첨 전"
+                          : record.void
+                            ? "무효 회차"
+                            : rank
+                              ? `${RANK_LABEL[rank]} 당첨`
+                              : "낙첨"}
                     </span>
                   </span>
                   <span className="flex flex-wrap justify-end gap-1">
@@ -1054,6 +1118,13 @@ export function MineView({
                     ))}
                   </span>
                 </button>
+                {hidden && (
+                  <DrawFirst
+                    round={m.ticket.round}
+                    onDraw={onDraw && (() => onDraw(m.ticket.round))}
+                    className="shrink-0"
+                  />
+                )}
               </li>
             );
           })}
@@ -1147,14 +1218,19 @@ function RecoverKey({
 export function RoundsView({
   services,
   version,
+  sealed = NOTHING_SEALED,
   onBack,
   onOpen,
+  onDraw,
   onStats,
 }: {
   services: Services;
   version: number;
+  sealed?: Sealed;
   onBack: () => void;
   onOpen: (round: number) => void;
+  /** 가린 회차는 회차 결과 대신 추첨으로 */
+  onDraw?: (round: number) => void;
   /** 관측 기록(통계)으로. 없으면 링크를 두지 않는다(데모 둘러보기) */
   onStats?: () => void;
 }) {
@@ -1213,8 +1289,13 @@ export function RoundsView({
             <li key={record.round}>
               <RoundRow
                 record={record}
+                sealed={sealed(record.round)}
                 label={roundTitle(services.ledger.schedule, record.round)}
-                onOpen={() => onOpen(record.round)}
+                onOpen={() =>
+                  sealed(record.round) && onDraw
+                    ? onDraw(record.round)
+                    : onOpen(record.round)
+                }
               />
             </li>
           ))}
@@ -1235,10 +1316,13 @@ export function RoundsView({
 
 function RoundRow({
   record,
+  sealed,
   label,
   onOpen,
 }: {
   record: RoundRecord;
+  /** 추첨을 아직 열어 보지 않은 내 회차: 결과와 당첨 수 대신 「추첨 보기」 */
+  sealed: boolean;
   /** 보이는 회차 이름(roundTitle) */
   label: string;
   onOpen: () => void;
@@ -1255,10 +1339,12 @@ function RoundRow({
       <span className="flex items-baseline justify-between">
         <span className="font-semibold tabular-nums">{label}</span>
         <span className="text-white/55 text-xs tabular-nums">
-          응모 {record.count}장 · 당첨 {winners}장
+          응모 {record.count}장{sealed ? "" : ` · 당첨 ${winners}장`}
         </span>
       </span>
-      {record.void ? (
+      {sealed ? (
+        <DrawFirst round={record.round} className="self-start" />
+      ) : record.void ? (
         <span className="text-amber-300/90 text-sm">무효 회차</span>
       ) : (
         <span className="flex flex-wrap items-center gap-1">
@@ -1277,14 +1363,16 @@ function RoundDetail({
   services,
   round,
   mine,
+  sealed,
   onBack,
   onDraw,
 }: {
   services: Services;
   round: number;
   mine: MyTicket[];
+  sealed: Sealed;
   onBack: () => void;
-  onDraw: () => void;
+  onDraw: (round: number) => void;
 }) {
   const record = services.ledger.record(round);
   const [report, setReport] = useState<VerifyReport | null>(null);
@@ -1307,6 +1395,7 @@ function RoundDetail({
   const prizeWinners = RANKS.flatMap((r) =>
     record.winners[r].filter((id) => prize.eligible.has(toHex(id))),
   ).length;
+  const hidden = sealed(round);
 
   return (
     <section
@@ -1324,15 +1413,24 @@ function RoundDetail({
         <h2 className="font-bold text-lg tabular-nums">
           {roundTitle(services.ledger.schedule, round)}
         </h2>
-        <button
-          type="button"
-          onClick={onDraw}
-          className="text-sm text-white/70 hover:text-white"
-        >
-          추첨 보기
-        </button>
+        {hidden ? (
+          <span className="w-16" />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onDraw(round)}
+            className="text-sm text-white/70 hover:text-white"
+          >
+            추첨 보기
+          </button>
+        )}
       </div>
-      {!record.void && (
+      {hidden && (
+        <div className="sd-glass flex justify-center rounded-2xl p-4">
+          <DrawFirst round={round} onDraw={() => onDraw(round)} />
+        </div>
+      )}
+      {!hidden && !record.void && (
         <div className="sd-glass flex flex-wrap items-center justify-center gap-1.5 rounded-2xl p-4">
           {record.numbers.map((n) => (
             <LottoBall key={n} n={n} />
@@ -1345,7 +1443,7 @@ function RoundDetail({
         응모 {record.count}장 · 마감 {formatTime(closesOf(services, round))}
       </p>
 
-      {prize.any && (
+      {!hidden && prize.any && (
         <p
           className="break-keep text-center text-amber-100/90 text-sm"
           data-prize-summary
@@ -1366,62 +1464,66 @@ function RoundDetail({
         </p>
       )}
 
-      <ul className="flex flex-col gap-2" aria-label="등수별 당첨">
-        {RANKS.map((rank) => (
-          <li
-            key={rank}
-            data-rank={rank}
-            className="sd-glass flex flex-col gap-2 rounded-2xl px-4 py-3"
-          >
-            <span className="flex items-center justify-between gap-2">
-              <span>
-                <b>{RANK_LABEL[rank]}</b>{" "}
-                <span className="text-white/55 text-xs">{RANK_RULE[rank]}</span>
-              </span>
-              <span className="text-sm tabular-nums">{counts[rank]}장</span>
-            </span>
-            {record.winners[rank].map((id) => {
-              const hex = toHex(id);
-              const done = checked.get(hex);
-              const nickname = record.nicknames.find(
-                (n) => toHex(n.ticketId) === hex,
-              )?.nickname;
-              return (
-                <span
-                  key={hex}
-                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                >
-                  <span className="font-mono text-white/70 tabular-nums">
-                    {shortId(hex)}
+      {!hidden && (
+        <ul className="flex flex-col gap-2" aria-label="등수별 당첨">
+          {RANKS.map((rank) => (
+            <li
+              key={rank}
+              data-rank={rank}
+              className="sd-glass flex flex-col gap-2 rounded-2xl px-4 py-3"
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span>
+                  <b>{RANK_LABEL[rank]}</b>{" "}
+                  <span className="text-white/55 text-xs">
+                    {RANK_RULE[rank]}
                   </span>
-                  <span className="text-white/80">
-                    {myIds.has(hex) ? "내 응모권" : (nickname ?? "익명")}
-                    {prize.eligible.has(hex) && (
+                </span>
+                <span className="text-sm tabular-nums">{counts[rank]}장</span>
+              </span>
+              {record.winners[rank].map((id) => {
+                const hex = toHex(id);
+                const done = checked.get(hex);
+                const nickname = record.nicknames.find(
+                  (n) => toHex(n.ticketId) === hex,
+                )?.nickname;
+                return (
+                  <span
+                    key={hex}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="font-mono text-white/70 tabular-nums">
+                      {shortId(hex)}
+                    </span>
+                    <span className="text-white/80">
+                      {myIds.has(hex) ? "내 응모권" : (nickname ?? "익명")}
+                      {prize.eligible.has(hex) && (
+                        <span
+                          className="ml-1.5 rounded bg-amber-200/15 px-1.5 py-0.5 text-amber-100 text-xs"
+                          data-prize-eligible
+                        >
+                          상품 대상
+                        </span>
+                      )}
+                    </span>
+                    {done && (
                       <span
-                        className="ml-1.5 rounded bg-amber-200/15 px-1.5 py-0.5 text-amber-100 text-xs"
-                        data-prize-eligible
+                        data-checked={hex}
+                        className="w-full text-emerald-200/90 text-xs"
                       >
-                        상품 대상
+                        확인함
+                        {done.confirmedAt
+                          ? ` · ${monthDay(done.confirmedAt)}`
+                          : ""}
                       </span>
                     )}
                   </span>
-                  {done && (
-                    <span
-                      data-checked={hex}
-                      className="w-full text-emerald-200/90 text-xs"
-                    >
-                      확인함
-                      {done.confirmedAt
-                        ? ` · ${monthDay(done.confirmedAt)}`
-                        : ""}
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </li>
-        ))}
-      </ul>
+                );
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="flex flex-col gap-2 rounded-2xl border border-white/10 p-4">
         <button
@@ -1448,9 +1550,20 @@ function RoundDetail({
               <p className="text-emerald-200">문제가 없습니다</p>
             ) : (
               <ul className="list-disc pl-5 text-rose-200">
+                {/* 가린 회차의 문제는 회차만(문구에 당첨 번호가 들어갈 수 있다) */}
                 {report.problems.map((p) => (
                   <li key={`${p.round}-${p.message}`}>
-                    {p.round}회: {p.message}
+                    {sealed(p.round) ? (
+                      <span className="inline-flex items-center gap-2">
+                        {p.round}회
+                        <DrawFirst
+                          round={p.round}
+                          onDraw={() => onDraw(p.round)}
+                        />
+                      </span>
+                    ) : (
+                      `${p.round}회: ${p.message}`
+                    )}
                   </li>
                 ))}
               </ul>

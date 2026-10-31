@@ -6,6 +6,7 @@ import { type ReactNode, useMemo } from "react";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
 import { ballColor, SKY_STARS, tempWord } from "../sky";
+import { NOTHING_SEALED, type Sealed } from "../spoiler";
 import {
   computeStats,
   type GroupStat,
@@ -24,22 +25,28 @@ const SERIES = 48;
 export function StatsView({
   services,
   version,
+  sealed = NOTHING_SEALED,
   onBack,
 }: {
   services: Services;
   version: number;
+  /** 추첨을 아직 열어 보지 않은 내 회차는 조용히 빼고 센다 */
+  sealed?: Sealed;
   onBack: () => void;
 }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 계산한다
   const stats = useMemo(
     () =>
       computeStats(
-        services.ledger.closed().map(({ record, tickets }) => ({
-          record,
-          qualified: tickets.filter((t) => t.qual).length,
-        })),
+        services.ledger
+          .closed()
+          .filter(({ record }) => !sealed(record.round))
+          .map(({ record, tickets }) => ({
+            record,
+            qualified: tickets.filter((t) => t.qual).length,
+          })),
       ),
-    [services, version],
+    [services, version, sealed],
   );
   const schedule = services.ledger.schedule;
 

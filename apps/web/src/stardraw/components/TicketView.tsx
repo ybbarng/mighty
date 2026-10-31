@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { MadeWith } from "@/components/brand/MadeWith";
 
 import { useLedger } from "../services";
+import { sealedFor } from "../spoiler";
 import { Receipt } from "./Receipt";
 
 /** 공유한 응모권 주소: /stardraw/ticket#<회차>-<일련번호 64자> */
@@ -54,7 +55,16 @@ export function TicketView() {
     const fromLedger = want
       ? services.ledger.ticketsOf(want.round).find(same)
       : undefined;
-    const mine = services.wallet.loadTickets().find((m) => same(m.ticket));
+    const myTickets = services.wallet.loadTickets();
+    const mine = myTickets.find((m) => same(m.ticket));
+    // 내가 응모한 회차인데 이 기기에서 아직 추첨을 보지 않았으면 결과를 가린다(spoiler.ts)
+    const sealed =
+      !!want &&
+      sealedFor(
+        myTickets,
+        services.wallet.openedRounds(),
+        services.ledger,
+      )(want.round);
     const ticket = fromLedger ?? mine?.ticket;
     const drawAt = want
       ? drandTime(
@@ -80,6 +90,10 @@ export function TicketView() {
             receivedAt={mine?.receivedAt}
             schedule={services.ledger.schedule}
             record={record}
+            sealed={sealed}
+            onDraw={() =>
+              window.location.assign(`/stardraw/rounds#draw-${ticket.round}`)
+            }
           />
         </>
       );
