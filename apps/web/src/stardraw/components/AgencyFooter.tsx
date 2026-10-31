@@ -10,7 +10,9 @@ export function AgencyFooter() {
       >
         카노푸스 우주국
       </span>
-      <MadeWith />
+      <span>
+        <MadeWith />
+      </span>
     </span>
   );
 }
