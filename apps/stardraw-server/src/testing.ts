@@ -51,6 +51,7 @@ import {
   noAnchor,
   type RootLog,
 } from "./outside";
+import type { PowChecker } from "./pow-pool";
 import {
   type GenesisFile,
   type HeadFile,
@@ -161,6 +162,8 @@ export async function makeRig(
     directorKeys?: { credentialId: Uint8Array; pub: Uint8Array }[];
     /** 상품 자격 발급 설정 */
     qualification?: QualificationOptions;
+    /** 작업 증명 확인(기본: 같은 스레드에서 실제 계산) */
+    powChecker?: PowChecker;
   } = {},
 ): Promise<Rig> {
   const dir = limits.dir ?? mkdtempSync(join(tmpdir(), "stardraw-"));
@@ -203,6 +206,7 @@ export async function makeRig(
     sealDeadline: 180,
     ...(limits.directorKeys ? { directorKeys: limits.directorKeys } : {}),
     ...(limits.qualification ? { qualification: limits.qualification } : {}),
+    ...(limits.powChecker ? { powChecker: limits.powChecker } : {}),
     log: (m) => logs.push(m),
   });
   await engine.ready();

@@ -18,6 +18,7 @@ import {
   type RootLog,
   TsaRootLog,
 } from "./outside";
+import { isPowWorker, runPowWorker, WorkerPowChecker } from "./pow-pool";
 import { Publisher } from "./publish";
 import { DEFAULT_RELAY_LIMITS, Relay } from "./relay";
 import { parseScheduleLiveArgs, scheduleLive } from "./schedule-live";
@@ -80,6 +81,11 @@ async function main(): Promise<void> {
       argonConcurrency: config.argonConcurrency,
       argonQueue: config.argonQueue,
     },
+    // 작업 증명은 작업 스레드에서(이벤트 루프가 봉인·싼 확인을 계속 돌게, D2). 이 번들 파일 자신을 작업 스레드로 띄운다
+    powChecker: new WorkerPowChecker(
+      new URL(import.meta.url),
+      config.argonConcurrency,
+    ),
     sealDeadline: config.sealDeadline,
     directorKeys: config.directorKeys,
     directorRequestsPerPrefixPerDay: config.directorRequestsPerPrefixPerDay,
@@ -169,11 +175,13 @@ function scheduleLiveCommand(args: readonly string[]): void {
 
 const [command, ...rest] = process.argv.slice(2);
 void (
-  command === "backup" && rest[0]
-    ? backupTo(rest[0])
-    : command === "schedule-live"
-      ? Promise.resolve().then(() => scheduleLiveCommand(rest))
-      : main()
+  isPowWorker()
+    ? Promise.resolve().then(runPowWorker)
+    : command === "backup" && rest[0]
+      ? backupTo(rest[0])
+      : command === "schedule-live"
+        ? Promise.resolve().then(() => scheduleLiveCommand(rest))
+        : main()
 ).catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);

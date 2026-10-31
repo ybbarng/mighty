@@ -46,30 +46,106 @@ export class Counters {
   }
 }
 
-/** 동시 실행 수와 기다리는 줄 상한. 줄이 꽉 차면 곧바로 거절한다(서버가 계산하다 쓰러지지 않게) */
+interface Waiter {
+  start: () => void;
+  cancelTimer: () => void;
+}
+
+/**
+ * 동시 실행 수와 기다리는 줄 상한. 줄이 꽉 차거나 줄에서 `maxWaitMs`를 넘게 기다리면 거절한다
+ * (서버가 계산하다 쓰러지지 않게, 화면은 503을 받으면 잠시 뒤 다시 낸다, D2).
+ * 줄은 둘이다: 소속 증서가 붙은 응모처럼 앞에 세울 일(`priority`)과 나머지. 앞줄을 먼저 꺼내고 줄마다 상한을 따로 둔다.
+ * 그래서 익명 응모가 몰려도 상품 대상 응모는 밀리지 않는다
+ */
 export class Gate {
   private running = 0;
-  private waiting: (() => void)[] = [];
+  private readonly waiting: { high: Waiter[]; normal: Waiter[] } = {
+    high: [],
+    normal: [],
+  };
 
   constructor(
     private readonly concurrency: number,
     private readonly queue: number,
+    private readonly timer?: {
+      after: (ms: number, fn: () => void) => () => void;
+      maxWaitMs: number;
+    },
   ) {}
 
-  async run<T>(fn: () => Promise<T>): Promise<T> {
+  async run<T>(
+    fn: () => Promise<T>,
+    options: { priority?: boolean } = {},
+  ): Promise<T> {
     if (this.running >= this.concurrency) {
-      if (this.waiting.length >= this.queue) throw new BusyError();
-      await new Promise<void>((resolve) => this.waiting.push(resolve));
+      const line = options.priority ? this.waiting.high : this.waiting.normal;
+      if (line.length >= this.queue) throw new BusyError();
+      await new Promise<void>((resolve, reject) => {
+        const waiter: Waiter = { start: resolve, cancelTimer: () => {} };
+        if (this.timer)
+          waiter.cancelTimer = this.timer.after(this.timer.maxWaitMs, () => {
+            const at = line.indexOf(waiter);
+            if (at >= 0) line.splice(at, 1);
+            reject(new BusyError());
+          });
+        line.push(waiter);
+      });
     } else {
       this.running++;
     }
     try {
       return await fn();
     } finally {
-      const next = this.waiting.shift();
-      if (next) next();
-      else this.running--;
+      const next = this.waiting.high.shift() ?? this.waiting.normal.shift();
+      if (next) {
+        next.cancelTimer();
+        next.start();
+      } else this.running--;
     }
+  }
+}
+
+/**
+ * 작업 증명에서 떨어진 응모·등록을 회차 동안 기억한다(D2). Argon2는 서버에서 가장 비싼 계산인데, 실패를 기억하지 않으면
+ * 공격자가 같은 본문을 공짜로 되풀이해 그때마다 계산을 시킬 수 있었다. 같은 본문은 계산 없이 거절하고,
+ * 같은 열쇠는 `maxPerKey`번 떨어지면 그 회차 동안 더 계산하지 않는다. 정상 사용자는 한 번에 맞으므로 비용이 없다.
+ * 메모리는 회차가 바뀌면 비우고, 한 회차에 `cap`개까지만 둔다(넘치면 가장 오래된 것부터 잊는다)
+ */
+export class PowFailures {
+  private window = "";
+  private readonly bodies = new Set<string>();
+  private readonly keys = new Map<string, number>();
+
+  constructor(
+    private readonly maxPerKey = 3,
+    private readonly cap = 50_000,
+  ) {}
+
+  private roll(window: string): void {
+    if (this.window === window) return;
+    this.window = window;
+    this.bodies.clear();
+    this.keys.clear();
+  }
+
+  /** 계산하지 않고 거절할 까닭(없으면 null) */
+  blocked(window: string, body: string, key: string): string | null {
+    this.roll(window);
+    if (this.bodies.has(body)) return "이미 계산이 맞지 않은 응모입니다";
+    if ((this.keys.get(key) ?? 0) >= this.maxPerKey)
+      return "이 열쇠의 계산이 여러 번 맞지 않아 이번 회차에는 더 받지 않습니다";
+    return null;
+  }
+
+  failed(window: string, body: string, key: string): void {
+    this.roll(window);
+    if (this.bodies.size >= this.cap) {
+      const oldest = this.bodies.values().next().value;
+      if (oldest !== undefined) this.bodies.delete(oldest);
+    }
+    this.bodies.add(body);
+    if (this.keys.size < this.cap || this.keys.has(key))
+      this.keys.set(key, (this.keys.get(key) ?? 0) + 1);
   }
 }
 

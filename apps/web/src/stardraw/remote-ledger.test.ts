@@ -3,6 +3,7 @@ import {
   closeRound,
   drandRoundForClose,
   encodeRecord,
+  generateSigner,
   genesisAnchorFile,
   genesisHash,
   githubLedgerBase,
@@ -11,8 +12,11 @@ import {
   recordHash,
   roundTimes,
   type Schedule,
+  signTicket,
+  softPasskeySigner,
   toBase64Url,
   toHex,
+  unsignedTicket,
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
@@ -232,5 +236,70 @@ describe("서버 장부: 앵커 저장소 대비책", () => {
     );
     await expect(notFound.settle()).rejects.toThrow("(404)");
     expect(githubAsked(w2)).toEqual([]);
+  });
+});
+
+describe("응모 요청: 작업 증명 줄이 가득 찼을 때(D2)", () => {
+  /** 응모 요청에 정해 둔 응답을 차례로 내는 가짜 서버(나머지 요청은 world 그대로) */
+  async function setup(statuses: number[]) {
+    const clock = new ManualClock();
+    const w = world(clock);
+    let posts = 0;
+    const ledger = ledgerIn(
+      {
+        ...w,
+        fetch: (async (input: string | URL | Request) => {
+          if (String(input) !== `${SERVER}/api/enter`) return w.fetch(input);
+          const status = statuses[posts++] ?? 200;
+          return status === 200
+            ? Response.json({ receivedAt: 1 })
+            : Response.json({ error: `거절 ${status}` }, { status });
+        }) as typeof fetch,
+      },
+      clock,
+    );
+    await ledger.settle();
+    const signer = softPasskeySigner(await generateSigner());
+    const ticket = await signTicket(
+      signer,
+      unsignedTicket(signer, 4, [1, 2, 3, 4, 5, 6]),
+      0,
+    );
+    return { clock, ledger, ticket, posts: () => posts };
+  }
+
+  /** 시계를 1초씩 옮기며 일이 끝날 때까지 기다린다(조건으로, 상한은 멈춘 시험을 잡는 안전장치) */
+  async function drive<T>(clock: ManualClock, run: Promise<T>) {
+    let done = false;
+    const watched = run.finally(() => {
+      done = true;
+    });
+    watched.catch(() => {});
+    for (let i = 0; i < 30 && !done; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      clock.advance(1000);
+    }
+    return watched;
+  }
+
+  it("503이면 잠시 뒤 다시 내 받는다", async () => {
+    const s = await setup([503, 503]);
+    await expect(drive(s.clock, s.ledger.submit(s.ticket))).resolves.toEqual({
+      receivedAt: 1,
+    });
+    expect(s.posts()).toBe(3);
+  });
+
+  it("상한(429)은 다시 내지 않고, 503도 네 번 넘게는 다시 내지 않는다", async () => {
+    const limited = await setup([429]);
+    await expect(limited.ledger.submit(limited.ticket)).rejects.toThrow(
+      "거절 429",
+    );
+    expect(limited.posts()).toBe(1);
+    const busy = await setup([503, 503, 503, 503, 503, 503]);
+    await expect(
+      drive(busy.clock, busy.ledger.submit(busy.ticket)),
+    ).rejects.toThrow("거절 503");
+    expect(busy.posts()).toBe(5);
   });
 });

@@ -1,11 +1,10 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { Clock } from "@mighty/fair-play";
 import {
   activeDirector,
   anchorBranch,
   applyRecordOps,
   checkNumbers,
-  checkPow,
   checkRegistration,
   checkScheduleChange,
   checkTicketQualification,
@@ -83,8 +82,9 @@ import {
 } from "@mighty/stardraw-core";
 
 import { GoogleTokenError, type GoogleTokenVerifier } from "./google";
-import { BusyError, Counters, Gate, ipPrefix } from "./limits";
+import { BusyError, Counters, Gate, ipPrefix, PowFailures } from "./limits";
 import type { Anchor, DrandSource, RepoFile, RootLog } from "./outside";
+import { inlinePowChecker, type PowChecker, type PowJob } from "./pow-pool";
 import { type MirrorFile, Publisher } from "./publish";
 import type { ServerKey } from "./server-key";
 import type { Store } from "./store";
@@ -115,7 +115,11 @@ export interface EngineOptions {
     registrationsPerPrefixPerDay: number;
     argonConcurrency: number;
     argonQueue: number;
+    /** Argon2 줄에서 이보다 오래(ms) 기다리면 503으로 돌려보낸다(기본 5초, 화면이 다시 낸다, D2) */
+    argonMaxWaitMs?: number;
   };
+  /** 작업 증명을 어디서 계산할지(기본: 같은 스레드. 운영은 작업 스레드, pow-pool.ts) */
+  powChecker?: PowChecker;
   /** 마감 뒤 봉인 값을 로그에 올리는 기한(초) */
   sealDeadline: number;
   /** drand 값을 이만큼(초) 못 받으면 알린다 */
@@ -142,6 +146,13 @@ export interface QualificationOptions {
   verifyGoogle?: GoogleTokenVerifier;
   /** 발급 요청: IP 앞부분 하나당 하루 상한(기본 200, 회사 NAT 기준) */
   issuesPerPrefixPerDay?: number;
+}
+
+/** 요청 본문의 지문(작업 증명 실패 기억에 쓴다, D2) */
+function bodyHash(...parts: Uint8Array[]): string {
+  const h = createHash("sha256");
+  for (const p of parts) h.update(p).update("\0");
+  return h.digest("hex");
 }
 
 /** 응모자에게 보일 거절. status는 HTTP 응답 번호 */
@@ -213,6 +224,8 @@ export class StardrawServer {
   private readonly o: EngineOptions;
   private readonly counters = new Counters();
   private readonly gate: Gate;
+  /** 작업 증명에서 떨어진 본문·열쇠(회차 동안, D2) */
+  private readonly powFailures = new PowFailures();
   private ticking: Promise<void> = Promise.resolve();
   /**
    * 봉인 값을 계산하기 시작한 가장 늦은 회차. 응모 목록을 읽은 뒤 바깥 로그(시각 인증) 응답을 기다리는 동안
@@ -220,6 +233,11 @@ export class StardrawServer {
    * 서버를 다시 띄우면 0부터지만 그때는 봉인이 목록을 처음부터 다시 읽는다
    */
   private sealingFrom = 0;
+
+  /** 작업 증명 하나 확인(운영은 작업 스레드에서, pow-pool.ts) */
+  private checkPowJob(job: PowJob): Promise<boolean> {
+    return (this.o.powChecker ?? inlinePowChecker).check(job);
+  }
 
   /** 이 회차는 더 받지 않는다(봉인했거나 봉인 값을 계산하는 중) */
   private closedFor(round: number): boolean {
@@ -242,6 +260,10 @@ export class StardrawServer {
     this.gate = new Gate(
       options.limits.argonConcurrency,
       options.limits.argonQueue,
+      {
+        after: (ms, fn) => options.clock.after(ms, fn),
+        maxWaitMs: options.limits.argonMaxWaitMs ?? 5000,
+      },
     );
     options.publisher.genesis(this.genesis);
     this.publishBundles();
@@ -503,23 +525,30 @@ export class StardrawServer {
     if (!(await verifyRegistrationProof(registration, proof, this.o.policy)))
       throw new EntryError("등록 서명이 맞지 않습니다");
 
-    // 6. 작업 증명
+    // 6. 작업 증명(떨어진 본문·열쇠는 회차 동안 다시 계산하지 않는다, D2)
     const challenge = this.head();
+    const window = `register|${round}`;
+    const body = bodyHash(input.registration, input.proof);
+    const blocked = this.powFailures.blocked(window, body, who);
+    if (blocked) throw new EntryError(blocked, 429);
     const ok = await this.gate
       .run(() =>
-        checkPow(
+        this.checkPowJob({
           challenge,
-          registrationContent(registration),
-          registration.nonce,
-          times.entry.registerPowTarget,
-          this.o.pow,
-        ),
+          content: registrationContent(registration),
+          nonce: registration.nonce,
+          target: times.entry.registerPowTarget,
+          params: this.o.pow,
+        }),
       )
       .catch((err) => {
         if (err instanceof BusyError) throw new EntryError(err.message, 503);
         throw err;
       });
-    if (!ok) throw new EntryError("열쇠 등록 계산이 맞지 않습니다");
+    if (!ok) {
+      this.powFailures.failed(window, body, who);
+      throw new EntryError("열쇠 등록 계산이 맞지 않습니다");
+    }
 
     let at = round;
     store.transaction(() => {
@@ -639,34 +668,45 @@ export class StardrawServer {
     if (store.hasEntry(round, who))
       throw new EntryError("이번 회차에는 이미 응모했습니다", 409);
 
-    // 6. 작업 증명(가장 비싸다, 동시 실행 제한)
+    // 6. 작업 증명(가장 비싸다, 동시 실행 제한). 떨어진 본문·열쇠는 회차 동안 다시 계산하지 않고,
+    // 소속 증서까지 확인된 응모는 앞줄에 세운다(익명 홍수에 상품 대상 응모가 밀리지 않게, D2)
     const challenge = this.head();
+    const window = `entry|${round}`;
+    const body = bodyHash(input.ticket, input.registration ?? new Uint8Array());
+    const blocked = this.powFailures.blocked(window, body, who);
+    if (blocked) throw new EntryError(blocked, 429);
     const powOk = await this.gate
-      .run(async () => {
-        if (!known && registration) {
-          const regOk = await checkPow(
+      .run(
+        async () => {
+          if (!known && registration) {
+            const regOk = await this.checkPowJob({
+              challenge,
+              content: registrationContent(registration),
+              nonce: registration.nonce,
+              target: times.entry.registerPowTarget,
+              params: this.o.pow,
+            });
+            if (!regOk) return "열쇠 등록 계산이 맞지 않습니다";
+          }
+          const ok = await this.checkPowJob({
             challenge,
-            registrationContent(registration),
-            registration.nonce,
-            times.entry.registerPowTarget,
-            this.o.pow,
-          );
-          if (!regOk) return "열쇠 등록 계산이 맞지 않습니다";
-        }
-        const ok = await checkPow(
-          challenge,
-          ticketContent(ticket),
-          ticket.nonce,
-          times.entry.powTarget,
-          this.o.pow,
-        );
-        return ok ? null : "응모 계산이 맞지 않습니다";
-      })
+            content: ticketContent(ticket),
+            nonce: ticket.nonce,
+            target: times.entry.powTarget,
+            params: this.o.pow,
+          });
+          return ok ? null : "응모 계산이 맞지 않습니다";
+        },
+        { priority: !!ticket.qual },
+      )
       .catch((err) => {
         if (err instanceof BusyError) throw new EntryError(err.message, 503);
         throw err;
       });
-    if (powOk) throw new EntryError(powOk);
+    if (powOk) {
+      this.powFailures.failed(window, body, who);
+      throw new EntryError(powOk);
+    }
 
     // 기다리는 사이 봉인(또는 봉인 값 계산)이 시작됐거나 같은 열쇠가 먼저 들어왔을 수 있다. 확인과 넣기를 한 번에(동기) 한다
     store.transaction(() => {

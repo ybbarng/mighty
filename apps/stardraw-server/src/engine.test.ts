@@ -438,3 +438,57 @@ describe("마감 직전 응모와 봉인", () => {
     expect(messages(await check(readLedger(rig.dir)))).toEqual([]);
   });
 });
+
+describe("작업 증명 홍수 막기(D2)", () => {
+  it("계산이 떨어진 응모는 같은 본문이면 다시 계산하지 않고, 같은 열쇠는 3번 떨어지면 그 회차 동안 계산하지 않는다", async () => {
+    let calls = 0;
+    rig = await makeRig({
+      powChecker: {
+        check: async () => {
+          calls++;
+          return false;
+        },
+      },
+    });
+    await rig.at(EPOCH + 10);
+    const p = await player();
+    const bodyOf = async (numbers: number[]) => {
+      const { ticket, registration } = await entryFor(
+        p,
+        1,
+        numbers,
+        rig.engine.head(),
+      );
+      return {
+        ticket: encodeTicket(ticket),
+        ...(registration
+          ? { registration: encodeRegistration(registration) }
+          : {}),
+        ip: "203.0.113.7",
+      };
+    };
+    const first = await bodyOf([1, 2, 3, 4, 5, 6]);
+    await expect(rig.engine.submit(first)).rejects.toThrow(
+      "계산이 맞지 않습니다",
+    );
+    expect(calls).toBe(1);
+    // 같은 본문을 되풀이해도 계산하지 않는다
+    for (let i = 0; i < 5; i++)
+      await expect(rig.engine.submit(first)).rejects.toMatchObject({
+        status: 429,
+      });
+    expect(calls).toBe(1);
+    // 같은 열쇠의 다른 본문은 세 번째까지 계산하고, 그 뒤로는 계산하지 않는다
+    await expect(
+      rig.engine.submit(await bodyOf([7, 8, 9, 10, 11, 12])),
+    ).rejects.toThrow("계산이 맞지 않습니다");
+    await expect(
+      rig.engine.submit(await bodyOf([13, 14, 15, 16, 17, 18])),
+    ).rejects.toThrow("계산이 맞지 않습니다");
+    expect(calls).toBe(3);
+    await expect(
+      rig.engine.submit(await bodyOf([19, 20, 21, 22, 23, 24])),
+    ).rejects.toThrow("여러 번 맞지 않아");
+    expect(calls).toBe(3);
+  });
+});
