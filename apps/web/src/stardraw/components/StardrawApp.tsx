@@ -251,8 +251,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       className="sd-night min-h-dvh px-4 pt-6 pb-12 text-white"
     >
       <div className="mx-auto flex max-w-xl flex-col gap-5">
-        {/* 서버 없이 이 기기 안에서만 도는 연습판(데모는 따로 자기 띠가 있다) */}
-        {services?.practice && services.ns === GAME_NS && <PracticeBanner />}
         {services && (
           <DrawnNotice
             rounds={noticeRounds}
@@ -403,18 +401,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
         </footer>
       </div>
     </main>
-  );
-}
-
-/** 서버 없는 연습판 띠 */
-function PracticeBanner() {
-  return (
-    <p
-      data-practice-banner
-      className="rounded-xl border border-sky-200/30 bg-sky-200/10 px-3 py-1.5 text-center text-sky-50 text-sm"
-    >
-      연습 모드 · 이 기기 안에서만
-    </p>
   );
 }
 
