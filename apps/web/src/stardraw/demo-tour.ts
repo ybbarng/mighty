@@ -41,6 +41,10 @@ export const TOUR_EGG_PUBS = {
 export const TOUR_EARTH_PUB =
   "BPuokmtzXiMOlhq_CUkfYmQ2WQBYc4bVpwz6_AVORQdqPKoZDuRMJoiisWHqKjhOk9x7KSJ1Tcjhf3l4FHP4vO4";
 
+/** 화면 둘러보기의 안드로메다은하 등록증(출신 인사 견본, 주소가 안드로메다은하로 나오도록 찾아 둔 공개 열쇠 모양 값) */
+export const TOUR_ANDROMEDA_PUB =
+  "BD8Ra0ORwDrjd4tpq_hX4ysaHwyytJuWDb5cVvfAdODD39F1ba5X7AC3ZeZXvdj6NTOu1ZQ-jPkmwezTzDBh5HU";
+
 export interface TourState {
   services: Services;
   /** 내 1회 응모권(1등, 추첨 끝)과 2회 응모권(추첨 전) */

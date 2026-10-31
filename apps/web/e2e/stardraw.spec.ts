@@ -863,6 +863,15 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     // 연출 항목: 시험은 움직임 줄이기라 결과 모습만 보인다
     ["fx-gate", (s) => s.locator("[data-gate]")],
     ["fx-issue", (s) => s.locator("[data-issued='new']")],
+    [
+      "fx-issue-earth",
+      (s) => s.locator("[data-issued-origin]").filter({ hasText: "지구" }),
+    ],
+    [
+      "fx-issue-andromeda",
+      (s) =>
+        s.locator("[data-issued-origin]").filter({ hasText: "안드로메다" }),
+    ],
     ["fx-welcome", (s) => s.locator("[data-idcard]")],
     ["fx-submit", (s) => s.locator("[data-receipt]")],
     ["fx-print", (s) => s.locator("[data-receipt]")],

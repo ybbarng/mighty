@@ -1,10 +1,11 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
+import { originGreeting } from "../origin-greeting";
 import {
   type PasskeyProblem,
   passkeyFailText,
@@ -97,8 +98,13 @@ export function useAstronautSetup(
         {
           verb: "제시",
           pub: (k) => k.pub,
-          done: (k) =>
-            `${residentPhrase(astronautOf(k.pub))} 님, ${greetNow(services.clock.now(), "enter")}`,
+          done: (k) => {
+            const special =
+              Math.random() < 1 / 3
+                ? originGreeting(astronautOf(k.pub), Math.random)
+                : null;
+            return `${residentPhrase(astronautOf(k.pub))} 님, ${special ?? greetNow(services.clock.now(), "enter")}`;
+          },
           onConfirmed: (k) => {
             setWorking(null);
             void ensureRegistered(services, k).catch(() => {});
@@ -143,7 +149,8 @@ export function useAstronautSetup(
 /**
  * 발급한 등록증. `overlay`면 화면 전체 오버레이에서 등록증만 위(우주국)에서 내려와 가운데 자리 잡고, 등록 문구와
  * 단추는 아래 고정 자리(엄지 닿는 곳)에 둔다. 계속하면 등록증만 아래(내 주머니)로 내려가 사라지고 문구·단추는
- * 그 자리에서 흐려진다(같이 미끄러지지 않는다, 2026-10-31 사용자). 아니면(움직임 줄이기) 그 화면 자리에 그린다
+ * 그 자리에서 흐려진다(같이 미끄러지지 않는다, 2026-10-31 사용자). 아니면(움직임 줄이기) 그 화면 자리에 그린다.
+ * 특별한 출신(지구·안드로메다·다른 은하 등)이면 등록 문구 다음 줄에 창구 직원이 놀라는 말을 덧붙인다(origin-greeting.ts)
  */
 export function IssuedView({
   services,
@@ -157,20 +164,36 @@ export function IssuedView({
   overlay?: boolean;
 }) {
   const key = setup.issued;
+  // 출신 인사는 발급할 때 한 번 고른다(다시 그려도 바뀌지 않게)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 발급한 등록증이 바뀔 때만
+  const origin = useMemo(
+    () => (key ? originGreeting(astronautOf(key.pub), Math.random) : null),
+    [key],
+  );
   if (!key) return null;
   const greeting = (
-    <p
-      role="status"
-      data-issued="new"
-      className="flex flex-col items-center gap-1 break-keep text-center text-amber-100"
-    >
-      <span className="text-sm text-amber-100/75">
-        {residentPhrase(astronautOf(key.pub))} 님,
-      </span>
-      <span className="font-bold text-xl">
-        우주인으로 등록되었습니다. 환영합니다!
-      </span>
-    </p>
+    <div className="flex flex-col items-center gap-2">
+      <p
+        role="status"
+        data-issued="new"
+        className="flex flex-col items-center gap-1 break-keep text-center text-amber-100"
+      >
+        <span className="text-sm text-amber-100/75">
+          {residentPhrase(astronautOf(key.pub))} 님,
+        </span>
+        <span className="font-bold text-xl">
+          우주인으로 등록되었습니다. 환영합니다!
+        </span>
+      </p>
+      {origin && (
+        <p
+          data-issued-origin
+          className="break-keep text-center text-amber-50/90 text-base"
+        >
+          {origin}
+        </p>
+      )}
+    </div>
   );
   const go = (
     <button

@@ -1,8 +1,13 @@
 "use client";
 
+import { fromBase64Url } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
-import type { TourState } from "../demo-tour";
+import {
+  TOUR_ANDROMEDA_PUB,
+  TOUR_EARTH_PUB,
+  type TourState,
+} from "../demo-tour";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
 import { roundShort } from "../round-label";
@@ -20,6 +25,8 @@ import { Gate, RoundCard } from "./StardrawApp";
 export const FX_ITEMS = [
   { id: "fx-gate", label: "입구" },
   { id: "fx-issue", label: "연출: 등록증 발급" },
+  { id: "fx-issue-earth", label: "연출: 지구 출신 발급" },
+  { id: "fx-issue-andromeda", label: "연출: 안드로메다 출신 발급" },
   { id: "fx-welcome", label: "연출: 신분증 제시(입장)" },
   { id: "fx-submit", label: "연출: 응모" },
   { id: "fx-print", label: "연출: 영수증 출력" },
@@ -111,21 +118,34 @@ export function FxScreen({ id, s }: { id: FxId; s: TourState }): ReactNode {
         />
       );
     case "fx-issue":
+    case "fx-issue-earth":
+    case "fx-issue-andromeda": {
+      const issuePub =
+        id === "fx-issue-earth"
+          ? fromBase64Url(TOUR_EARTH_PUB)
+          : id === "fx-issue-andromeda"
+            ? fromBase64Url(TOUR_ANDROMEDA_PUB)
+            : pub;
       if (reduce)
         return (
           <IssuedView
             services={services}
             setup={stubSetup({
-              issued: { kind: "demo", pub, credentialId: new Uint8Array() },
+              issued: {
+                kind: "demo",
+                pub: issuePub,
+                credentialId: new Uint8Array(),
+              },
             })}
           />
         );
       return (
         <>
-          {!done && <IssueFx key={key} s={s} onDone={finish} />}
+          {!done && <IssueFx key={key} s={s} pub={issuePub} onDone={finish} />}
           {replay}
         </>
       );
+    }
     case "fx-welcome":
       if (reduce) return <AstronautPanel services={services} pub={pub} />;
       return (
@@ -167,7 +187,15 @@ export function FxScreen({ id, s }: { id: FxId; s: TourState }): ReactNode {
 }
 
 /** 발급: 등록증이 위에서 내려오고, 「별을 고르러 가 볼까요?」를 누르면 아래로 내려가 사라진다 */
-function IssueFx({ s, onDone }: { s: TourState; onDone: () => void }) {
+function IssueFx({
+  s,
+  pub,
+  onDone,
+}: {
+  s: TourState;
+  pub: Uint8Array;
+  onDone: () => void;
+}) {
   const [pocketing, setPocketing] = useState(false);
   return (
     <IssuedView
@@ -176,7 +204,7 @@ function IssueFx({ s, onDone }: { s: TourState; onDone: () => void }) {
       setup={stubSetup({
         issued: {
           kind: "demo",
-          pub: s.drawn.ticket.pub,
+          pub,
           credentialId: new Uint8Array(),
         },
         pocketing,

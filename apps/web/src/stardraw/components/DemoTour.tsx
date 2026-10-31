@@ -303,6 +303,8 @@ function Screen({
       );
     case "fx-gate":
     case "fx-issue":
+    case "fx-issue-earth":
+    case "fx-issue-andromeda":
     case "fx-welcome":
     case "fx-submit":
     case "fx-print":
