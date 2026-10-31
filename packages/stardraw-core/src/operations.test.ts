@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { equalBytes, toHex } from "./bytes";
+import { equalBytes, toBase64Url, toHex } from "./bytes";
 import { generateSigner, type Signer } from "./keys";
 import {
   type AffiliationFields,
@@ -17,9 +17,13 @@ import {
   parseDirectorKeys,
   scheduleFromRecords,
   sealDesignations,
+  sealFingerprint,
+  sealHistory,
+  sealKeyAt,
   selectOperations,
   signAsDirector,
   signAsSeal,
+  signSealProof,
 } from "./operations";
 import {
   decodeRecord,
@@ -407,7 +411,7 @@ describe("공격: 모두 거절된다", () => {
     ]);
     expect(await c.problems()).toEqual([
       expect.stringMatching(/관인은 이 운영 기록에 서명할 수 없다/),
-      expect.stringMatching(/관인 열쇠가 장부에 처음 실린 관인과 다르다/),
+      expect.stringMatching(/관인 열쇠가 이 회차에 쓰는 관인과 다르다/),
     ]);
   });
 
@@ -482,5 +486,188 @@ describe("서버·연습 장부가 쓰는 고르기", () => {
     expect(
       sealDesignations(state, 3, c.head(), [key], ctx).skipped,
     ).toMatchObject([{ reason: "지정이 취소된 적 있는 열쇠" }]);
+  });
+});
+
+describe("관인 교체(docs/36 11-25)", () => {
+  /** 26회차에 국장이 새 관인으로 교체를 싣는다(효력 30회차) */
+  const rotate = async (
+    c: Chain,
+    next: Signer,
+    opts: {
+      by?: SoftPasskey;
+      proofSigner?: Signer;
+      effectiveRound?: number;
+    } = {},
+  ) =>
+    signAsDirector(
+      c.body({
+        kind: "seal-rotate",
+        effectiveRound: opts.effectiveRound ?? c.next + 4,
+        pub: next.publicKey,
+        proof: await signSealProof(opts.proofSigner ?? next, c.head()),
+      }),
+      opts.by ?? director,
+    );
+
+  /** 관인 서명 국장 열쇠 지정(서명 열쇠를 고른다) */
+  const sealDesignate = (c: Chain, who: SoftPasskey, by: Signer) =>
+    signAsSeal(
+      c.body({
+        kind: "director-add",
+        effectiveRound: c.next + 25,
+        credentialId: who.credentialId,
+        pub: who.publicKey,
+      }),
+      by,
+    );
+
+  it("바이트로 오가고 운영 기록 id가 같다", async () => {
+    const c = await withDirector();
+    const next = await generateSigner();
+    const op = await rotate(c, next);
+    const back = decodeOperation(encodeOperation(op));
+    expect(toHex(opId(back))).toBe(toHex(opId(op)));
+    expect(back).toMatchObject({ kind: "seal-rotate" });
+  });
+
+  it("예고 뒤 효력 회차부터 새 관인만 관인 기록에 서명하고, 관인 내력에 남는다", async () => {
+    const c = await withDirector();
+    const next = await generateSigner();
+    await c.close([await rotate(c, next)]); // 26회차, 효력 30
+    let state = (await c.report()).operations;
+    expect(toHex(sealKeyAt(state, 29) as Uint8Array)).toBe(
+      toHex(seal.publicKey),
+    );
+    expect(toHex(sealKeyAt(state, 30) as Uint8Array)).toBe(
+      toHex(next.publicKey),
+    );
+    // 효력 전(29회차)에는 옛 관인, 새 관인은 아직 안 된다
+    await c.until(29);
+    await c.close([await sealDesignate(c, stranger, next)]);
+    expect(await c.problems()).toEqual([
+      expect.stringMatching(/^29: .*관인 열쇠가 이 회차에 쓰는 관인과 다르다/),
+    ]);
+    c.records.pop();
+    c.regs.pop();
+    await c.close();
+    // 효력 뒤(30회차)에는 옛 관인이 거절되고 새 관인이 통과한다
+    await c.close([await sealDesignate(c, stranger, seal)]);
+    expect(await c.problems()).toEqual([
+      expect.stringMatching(/^30: .*관인 열쇠가 이 회차에 쓰는 관인과 다르다/),
+    ]);
+    c.records.pop();
+    c.regs.pop();
+    await c.close([await sealDesignate(c, stranger, next)]);
+    const report = await c.report();
+    expect(report.problems).toEqual([]);
+    state = report.operations;
+    expect(state.seals.map((x) => x.from)).toEqual([1, 30]);
+    expect(sealHistory(state)).toMatchObject([
+      { fingerprint: sealFingerprint(seal.publicKey), from: 1, round: null },
+      {
+        fingerprint: sealFingerprint(next.publicKey),
+        from: 30,
+        round: 26,
+        signedBy: directorFingerprint(director.publicKey),
+        status: "applied",
+      },
+    ]);
+    expect(sealFingerprint(next.publicKey)).toMatch(
+      /^관인-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/,
+    );
+    const view = operationsView(state, c.records.length, c.head());
+    expect(view.sealKey).toBe(toBase64Url(next.publicKey));
+  });
+
+  it("국장이 예고 중인 교체를 취소하면 관인은 그대로다. 관인은 교체를 취소할 수 없다", async () => {
+    const c = await withDirector();
+    const next = await generateSigner();
+    const op = await rotate(c, next);
+    await c.close([op]);
+    await c.close([
+      await signAsSeal(
+        c.body({ kind: "cancel", effectiveRound: 0, target: opId(op) }),
+        seal,
+      ),
+    ]);
+    expect(await c.problems()).toEqual([
+      expect.stringMatching(/관인은 자기가 서명한 국장 열쇠 지정만 취소/),
+    ]);
+    c.records.pop();
+    c.regs.pop();
+    await c.close([
+      await signAsDirector(
+        c.body({ kind: "cancel", effectiveRound: 0, target: opId(op) }),
+        director,
+      ),
+    ]);
+    await c.until(32);
+    const report = await c.report();
+    expect(report.problems).toEqual([]);
+    expect(report.operations.seals).toHaveLength(1);
+    expect(sealHistory(report.operations).at(-1)).toMatchObject({
+      status: "cancelled",
+      cancelledIn: 27,
+    });
+  });
+
+  it("공격·실수는 모두 거절된다", async () => {
+    const c = await withDirector();
+    const next = await generateSigner();
+    const other = await generateSigner();
+    const cases: [string, Operation][] = [
+      // 옛 관인만으로 교체(훔친 관인)
+      [
+        "관인은 이 운영 기록에 서명할 수 없다",
+        await signAsSeal(
+          c.body({
+            kind: "seal-rotate",
+            effectiveRound: c.next + 4,
+            pub: next.publicKey,
+            proof: await signSealProof(next, c.head()),
+          }),
+          seal,
+        ),
+      ],
+      // 국장 아닌 패스키
+      ["국장 열쇠가 아니다", await rotate(c, next, { by: stranger })],
+      // 새 열쇠를 쥐지 않은 채(다른 열쇠의 증명)
+      [
+        "보유 증명이 맞지 않는다",
+        await rotate(c, next, { proofSigner: other }),
+      ],
+      // 지금 관인으로 다시
+      ["관인으로 쓴 적 있는 열쇠다", await rotate(c, seal)],
+      // 예고 모자람
+      [
+        "예고가 모자란다",
+        await rotate(c, next, { effectiveRound: c.next + 3 }),
+      ],
+    ];
+    for (const [message, op] of cases) {
+      await c.close([op]);
+      expect(await c.problems(), message).toEqual([
+        expect.stringContaining(message),
+      ]);
+      c.records.pop();
+      c.regs.pop();
+    }
+    // 한 번에 하나
+    await c.close([await rotate(c, next)]);
+    await c.close([await rotate(c, other)]);
+    expect(await c.problems()).toEqual([
+      expect.stringContaining("이미 예고 중인 관인 교체가 있다"),
+    ]);
+  });
+
+  it("관인이 아직 없는 장부에서는 교체할 수 없다", async () => {
+    const c = new Chain();
+    const state = newOpsState(HOURLY);
+    expect(sealKeyAt(state, 1)).toBeNull();
+    // 국장도 없으니 서명 확인에서 먼저 막히지만, 상태로도 관인이 없음을 본다
+    const next = await generateSigner();
+    await c.close([await rotate(c, next)]);
+    expect(await c.problems()).toHaveLength(1);
   });
 });

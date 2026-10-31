@@ -31,6 +31,7 @@ import {
   type OperationsView,
   operationsView,
   type QualPeriodView,
+  sealKeyAt,
 } from "./operations";
 import {
   fetchFailure,
@@ -567,7 +568,7 @@ export async function checkPublicLedger(
           status: "fail",
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
-    sealKeyItem(report, head),
+    sealKeyItem(report, head, records.length),
     await voidRoundsItem(records, tickets, report.schedule, {
       earlySeals,
       beacon:
@@ -613,12 +614,16 @@ export async function checkPublicLedger(
 }
 
 /**
- * 관인(서버 서명 열쇠): 장부에 처음 실린 관인 운영 기록의 열쇠가 head.json의 서버 공개 열쇠(영수증 확인용)와 같은지.
+ * 관인(서버 서명 열쇠): 다음 회차에 쓰는 관인(관인 내력, docs/36 11-25)이 head.json의 서버 공개 열쇠(영수증 확인용)와 같은지.
  * 관인 기록이 없으면 건너뜀(docs/36 11-12)
  */
-function sealKeyItem(report: VerifyReport, head: PublicHeadFile): CheckItem {
+function sealKeyItem(
+  report: VerifyReport,
+  head: PublicHeadFile,
+  records: number,
+): CheckItem {
   const label = "관인 열쇠(운영 기록과 영수증이 같은 우주국)";
-  const seal = report.operations.sealKey;
+  const seal = sealKeyAt(report.operations, records + 1);
   if (!seal)
     return {
       id: "seal-key",
@@ -631,7 +636,8 @@ function sealKeyItem(report: VerifyReport, head: PublicHeadFile): CheckItem {
       id: "seal-key",
       label,
       status: "fail",
-      detail: "장부의 관인 열쇠가 head.json의 서버 공개 열쇠와 다르다",
+      detail:
+        "장부가 정한 지금 관인 열쇠가 head.json의 서버 공개 열쇠와 다르다",
     };
   return { id: "seal-key", label, status: "pass" };
 }

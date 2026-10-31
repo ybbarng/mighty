@@ -58,6 +58,7 @@ import {
  *   7 일정 바꾸기     일정표 한 줄(schedule.ts writeScheduleEntry)
  *   8 자격 기간 열기  소속 id(32) ‖ 기간 번호(u16) ‖ startsAt(u64) ‖ endsAt(u64) ‖ 도장 방식(u8 = 1) ‖ 도장 열쇠(bytes, 96)
  *   9 발급 수         기간 id(32) ‖ 누적 발급 수(u32). 관인만, 실리는 즉시 효력(docs/36 11-13)
+ *  10 관인 교체       새 관인 pub(65) ‖ 보유 증명(64). 국장만(docs/36 11-25)
  * 운영 기록 = 본문 ‖ 서명자(u8: 1 관인, 2 국장) ‖ pub(65) ‖ 서명(관인 r‖s 64, 국장 패스키 서명)
  * 서명 대상 = "stardraw/op-sig/v1" ‖ 0x00 ‖ 본문, 운영 기록 id = taggedHash("stardraw/op/v1", 본문)
  *
@@ -77,6 +78,7 @@ export const OP_KINDS = [
   "schedule",
   "qual-period",
   "qual-issued",
+  "seal-rotate",
 ] as const;
 export type OpKind = (typeof OP_KINDS)[number];
 
@@ -91,6 +93,7 @@ export const OP_NAMES: Record<OpKind, string> = {
   schedule: "일정 바꾸기",
   "qual-period": "자격 기간 열기",
   "qual-issued": "발급 수",
+  "seal-rotate": "관인 교체",
 };
 
 /** 배지 종류(소속의 모양). 값은 바이트 */
@@ -134,7 +137,8 @@ export type OpPayload =
       scheme: number;
       issuerKey: Uint8Array;
     }
-  | { kind: "qual-issued"; period: Uint8Array; issued: number };
+  | { kind: "qual-issued"; period: Uint8Array; issued: number }
+  | { kind: "seal-rotate"; pub: Uint8Array; proof: Uint8Array };
 
 export type OpBody = OpPayload & {
   v: number;
@@ -206,6 +210,9 @@ function writeBody(w: ByteWriter, b: OpBody): void {
     case "qual-issued":
       w.fixed(b.period, 32).u32(b.issued);
       break;
+    case "seal-rotate":
+      w.fixed(b.pub, PUBLIC_KEY_LENGTH).fixed(b.proof, SIGNATURE_LENGTH);
+      break;
   }
 }
 
@@ -248,6 +255,13 @@ function readBody(r: ByteReader): OpBody {
       };
     case "qual-issued":
       return { ...head, kind, period: r.fixed(32), issued: r.u32() };
+    case "seal-rotate":
+      return {
+        ...head,
+        kind,
+        pub: r.fixed(PUBLIC_KEY_LENGTH),
+        proof: r.fixed(SIGNATURE_LENGTH),
+      };
   }
 }
 
@@ -352,6 +366,24 @@ export async function verifyOperationSignature(
       );
 }
 
+// ── 관인 교체 보유 증명(docs/36 11-25) ──
+
+/** 새 관인이 서명하는 바이트: 이 장부의 이 자리(after)에서 관인이 되겠다는 동의 */
+export function sealProofMessage(
+  after: Uint8Array,
+  pub: Uint8Array,
+): Uint8Array {
+  return concat(utf8("stardraw/seal-pop/v1"), new Uint8Array([0]), after, pub);
+}
+
+/** 새 관인 열쇠로 보유 증명을 만든다(서버가 다음 관인 열쇠로) */
+export async function signSealProof(
+  next: Signer,
+  after: Uint8Array,
+): Promise<Uint8Array> {
+  return next.sign(sealProofMessage(after, next.publicKey));
+}
+
 // ── 국장 열쇠 지문 ──
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -361,14 +393,23 @@ const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
  * 관리 화면·서버 시작 기록·검증 페이지에서 사람이 대조하는 보조 표시다. 판정은 늘 공개 열쇠 전체와 서명으로 한다
  */
 export function directorFingerprint(pub: Uint8Array): string {
-  const h = taggedHash("stardraw/director-fp/v1", pub);
+  return fingerprint("국장", "stardraw/director-fp/v1", pub);
+}
+
+/** 관인 지문 `관인-XXXX-XXXX-XXXX`(국장 지문과 같은 방식, 태그만 다르다) */
+export function sealFingerprint(pub: Uint8Array): string {
+  return fingerprint("관인", "stardraw/seal-fp/v1", pub);
+}
+
+function fingerprint(prefix: string, tag: string, pub: Uint8Array): string {
+  const h = taggedHash(tag, pub);
   let bits = 0n;
   for (let i = 0; i < 8; i++) bits = (bits << 8n) | BigInt(h[i] ?? 0);
   bits >>= 4n; // 앞 60비트
   let out = "";
   for (let i = 11; i >= 0; i--)
     out += CROCKFORD[Number((bits >> BigInt(i * 5)) & 31n)];
-  return `국장-${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8)}`;
+  return `${prefix}-${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8)}`;
 }
 
 // ── 장부의 운영 상태 ──
@@ -420,6 +461,14 @@ export interface AffiliationState {
   until: number | null;
 }
 
+/** 관인 내력 한 줄: 회차 from부터 쓰는 관인(docs/36 11-25) */
+export interface SealEntry {
+  pub: Uint8Array;
+  from: number;
+  /** 바꾼 관인 교체 운영 기록 id(hex). 처음 관인은 null */
+  by: string | null;
+}
+
 /**
  * 장부를 처음부터 읽으며 쌓는 운영 상태. 검사기(verifyLedger)·서버·연습 장부가 같은 함수로 만든다.
  * 맵 대신 배열만 써서 structuredClone으로 복사할 수 있다(서버가 다음 기록을 미리 맞춰 볼 때)
@@ -427,8 +476,10 @@ export interface AffiliationState {
 export interface OpsState {
   /** 처음 일정표에 일정 변경(옛 칸과 일정 바꾸기 운영 기록)을 반영한 일정표. 취소된 일정 바꾸기는 빠진다 */
   schedule: Schedule;
-  /** 장부에 처음 실린 관인 열쇠. 관인 기록이 없으면 null */
+  /** 지금(효력을 맞춘 회차) 쓰는 관인 열쇠. 관인 기록이 없으면 null */
   sealKey: Uint8Array | null;
+  /** 관인 내력(효력이 생긴 것만, 시작 회차 순) */
+  seals: SealEntry[];
   /** 실린 운영 기록(실린 차례) */
   ops: OpEntry[];
   directors: DirectorKey[];
@@ -452,6 +503,7 @@ export function newOpsState(genesis: Schedule): OpsState {
   return {
     schedule: genesis,
     sealKey: null,
+    seals: [],
     ops: [],
     directors: [],
     affiliations: [],
@@ -563,6 +615,10 @@ export function matureOps(state: OpsState, round: number): void {
         break;
       case "qual-issued":
         break;
+      case "seal-rotate":
+        state.sealKey = op.pub;
+        state.seals.push({ pub: op.pub, from: E, by: hex(e.id) });
+        break;
     }
   }
   state.matured = round;
@@ -650,7 +706,7 @@ export async function checkOperation(
       op.kind === "qual-issued";
     if (!sealAllowed) return "관인은 이 운영 기록에 서명할 수 없다";
     if (state.sealKey && !equalBytes(state.sealKey, op.signer.pub))
-      return "관인 열쇠가 장부에 처음 실린 관인과 다르다";
+      return "관인 열쇠가 이 회차에 쓰는 관인과 다르다";
   } else if (!activeDirector(state, op.signer.pub, round)) {
     return "국장 열쇠가 아니다(장부에 지정돼 쓰는 중인 열쇠만 서명할 수 있다)";
   }
@@ -678,6 +734,8 @@ export async function checkOperation(
         return "우주인으로 등록된 열쇠·패스키는 국장으로 지정할 수 없다";
       if (directorTaken(state, op.pub))
         return "이미 국장 열쇠이거나 지정 예고 중이다";
+      if (everSeal(state, op.pub))
+        return "관인으로 쓰였거나 교체 예고 중인 열쇠는 국장으로 지정할 수 없다";
       return null;
     case "director-remove": {
       const using = state.directors.some(
@@ -741,6 +799,8 @@ export async function checkOperation(
     }
     case "qual-period":
       return checkQualPeriod(state, op);
+    case "seal-rotate":
+      return checkSealRotate(state, op, ctx);
     case "qual-issued": {
       const p = state.periods.find((x) => equalBytes(x.id, op.period));
       if (!p) return "효력이 생긴 자격 기간이 아니다";
@@ -749,6 +809,57 @@ export async function checkOperation(
       return null;
     }
   }
+}
+
+/** 관인으로 쓰였거나(내력) 교체 예고 중인 열쇠인지 */
+function everSeal(state: OpsState, pub: Uint8Array): boolean {
+  if (state.sealKey && equalBytes(state.sealKey, pub)) return true;
+  if (state.seals.some((x) => equalBytes(x.pub, pub))) return true;
+  return pendingOn(
+    state,
+    "seal-rotate",
+    (o) => o.kind === "seal-rotate" && equalBytes(o.pub, pub),
+  );
+}
+
+/** 관인 교체 확인(docs/36 11-25): 국장만, 관인이 이미 있음, 새 열쇠, 보유 증명, 한 번에 하나 */
+async function checkSealRotate(
+  state: OpsState,
+  op: Extract<Operation, { kind: "seal-rotate" }>,
+  ctx: OpsContext,
+): Promise<string | null> {
+  if (op.signer.role !== "director") return "관인 교체는 국장만 서명한다";
+  if (!state.sealKey) return "장부에 아직 관인이 없다(바꿀 관인이 없다)";
+  if (op.pub.length !== PUBLIC_KEY_LENGTH || op.pub[0] !== 4)
+    return "새 관인은 압축하지 않은 65바이트 공개 열쇠(04로 시작)";
+  if (pendingOn(state, "seal-rotate", () => true))
+    return "이미 예고 중인 관인 교체가 있다";
+  if (everSeal(state, op.pub)) return "관인으로 쓴 적 있는 열쇠다";
+  if (everDirector(state, op.pub, null))
+    return "국장 열쇠로 지정된 적 있는 열쇠는 관인으로 쓸 수 없다";
+  if (ctx.isEntrant(op.pub, null))
+    return "우주인으로 등록된 열쇠는 관인으로 쓸 수 없다";
+  if (
+    !(await verifySignature(
+      op.pub,
+      sealProofMessage(op.after, op.pub),
+      op.proof,
+    ))
+  )
+    return "새 관인의 보유 증명이 맞지 않는다";
+  return null;
+}
+
+/** 회차 round에 쓰는 관인(예고 중인 교체도 효력 회차가 되면 반영). 관인이 없으면 null */
+export function sealKeyAt(state: OpsState, round: number): Uint8Array | null {
+  if (round <= state.matured) {
+    let key: Uint8Array | null = null;
+    for (const x of state.seals) if (x.from <= round) key = x.pub;
+    return key;
+  }
+  const s = cloneOpsState(state);
+  matureOps(s, round);
+  return s.sealKey;
 }
 
 /** 자격 기간 열기 확인: 쓰는 소속, 기간 길이, 겹치지 않음, 도장 열쇠 */
@@ -811,8 +922,11 @@ export function acceptOperation(
   round: number,
 ): void {
   const id = opId(op);
-  if (op.signer.role === "seal" && !state.sealKey)
+  if (op.signer.role === "seal" && !state.sealKey) {
     state.sealKey = op.signer.pub;
+    // 처음 관인은 장부 처음부터 영수증에 서명해 왔다
+    state.seals.push({ pub: op.signer.pub, from: 1, by: null });
+  }
   if (op.kind === "cancel") {
     state.ops.push({ id, op, round, status: "applied", cancelledIn: null });
     const target = find(state, op.target);
@@ -1049,7 +1163,10 @@ export interface QualPeriodView {
 }
 
 export interface OperationsView {
+  /** 다음 회차에 쓰는 관인(base64url) */
   sealKey: string | null;
+  /** 관인 내력(예고 중·취소된 교체 포함, docs/36 11-25) */
+  seals: SealHistoryLine[];
   /** 다음에 닫히는 기록 */
   next: {
     round: number;
@@ -1098,6 +1215,8 @@ function describe(state: OpsState, op: Operation): string {
       );
       return `자격 기간 열기: ${a?.fields.name ?? hex(op.affiliation).slice(0, 12)} ${op.number}기`;
     }
+    case "seal-rotate":
+      return `관인 교체 ${sealFingerprint(op.pub)}`;
     case "qual-issued": {
       const p = state.periods.find((x) => equalBytes(x.id, op.period));
       const a = p
@@ -1124,6 +1243,7 @@ export function operationsView(
   const opensAt = (r: number) => roundTimes(s.schedule, r).opensAt;
   return {
     sealKey: s.sealKey ? toBase64Url(s.sealKey) : null,
+    seals: sealHistory(s),
     next: {
       round: next,
       after: hex(head),
@@ -1273,6 +1393,54 @@ export function directorHistory(state: OpsState): DirectorHistoryLine[] {
         ]
       : [],
   );
+}
+
+export interface SealHistoryLine {
+  /** 관인 공개 열쇠(base64url) */
+  pub: string;
+  fingerprint: string;
+  /** 이 관인을 쓰기 시작하는(또는 예고된) 회차 */
+  from: number;
+  /** 관인 교체가 실린 회차. 처음 관인은 null */
+  round: number | null;
+  /** 바꾼 국장 열쇠 지문. 처음 관인은 null */
+  signedBy: string | null;
+  /** 처음 관인·적용된 교체는 "applied" */
+  status: OpStatus;
+  cancelledIn: number | null;
+}
+
+/**
+ * 관인 내력: 처음 관인, 그 뒤 관인 교체(예고 중·적용·취소)를 차례로. 검증 페이지와 터미널 검사기가 보여 준다.
+ * 서버가 몰래 열쇠를 바꾸면 영수증·관인 기록이 이 내력과 맞지 않아 드러난다(docs/36 11-25 S3)
+ */
+export function sealHistory(state: OpsState): SealHistoryLine[] {
+  const first = state.seals.find((x) => x.by === null);
+  const lines: SealHistoryLine[] = first
+    ? [
+        {
+          pub: toBase64Url(first.pub),
+          fingerprint: sealFingerprint(first.pub),
+          from: first.from,
+          round: null,
+          signedBy: null,
+          status: "applied",
+          cancelledIn: null,
+        },
+      ]
+    : [];
+  for (const e of state.ops)
+    if (e.op.kind === "seal-rotate")
+      lines.push({
+        pub: toBase64Url(e.op.pub),
+        fingerprint: sealFingerprint(e.op.pub),
+        from: e.op.effectiveRound,
+        round: e.round,
+        signedBy: directorFingerprint(e.op.signer.pub),
+        status: e.status,
+        cancelledIn: e.cancelledIn,
+      });
+  return lines;
 }
 
 /** 설정 값 한 줄 `<패스키 번호 base64url>.<공개 열쇠 base64url>`(관리 화면이 보여 주고 서버가 읽는다) */
