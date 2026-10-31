@@ -17,7 +17,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, "../src/stardraw/canopus-sky.json");
 
 /** 카노푸스(BSC HR 2326, J2000) */
-const CANOPUS = { ra: (6 + 23 / 60 + 57.1 / 3600) * 15, dec: -(52 + 41 / 60 + 45 / 3600) };
+const CANOPUS = {
+  ra: (6 + 23 / 60 + 57.1 / 3600) * 15,
+  dec: -(52 + 41 / 60 + 45 / 3600),
+};
 /** 카노푸스에서 이만큼(도) 안의 별과 선만 넣는다. 제주에서 남쪽을 본 시야(고도 0~40°, 방위 120~240°)를 다 덮는다 */
 const RADIUS = 62;
 /** 이보다 어두운 별은 뺀다(맨눈으로 시골 하늘에서 보이는 정도) */
@@ -59,7 +62,10 @@ const stars = bsc
   .sort((a, b) => a.mag - b.mag);
 
 const vectors = JSON.parse(
-  readFileSync(join(root, "build/database/vectors-constellations.json"), "utf8"),
+  readFileSync(
+    join(root, "build/database/vectors-constellations.json"),
+    "utf8",
+  ),
 );
 const lines = vectors
   .map((l) => ({
@@ -69,7 +75,9 @@ const lines = vectors
       return [round(ra, 3), round(deg(Math.asin(z)), 3)];
     }),
   }))
-  .filter((l) => l.pts.some(([ra, dec]) => sep({ ra, dec }, CANOPUS) <= RADIUS));
+  .filter((l) =>
+    l.pts.some(([ra, dec]) => sep({ ra, dec }, CANOPUS) <= RADIUS),
+  );
 
 writeFileSync(
   out,
