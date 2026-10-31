@@ -820,12 +820,13 @@ button {
   }
 }
 /* 밀어 올리기를 기다리는 용지: 아주 은은하게 떠올랐다 내려앉기를 되풀이 */
+/* transform이 아니라 translate로 떠오른다: 자리(transform)를 덮어쓰지 않아 누르거나 끌 때 순간이동하지 않는다 */
 .sd-sheet-hint {
   animation: sd-sheet-hint 2.6s ease-in-out infinite;
 }
 @keyframes sd-sheet-hint {
   50% {
-    transform: translateY(-6px);
+    translate: 0 -6px;
   }
 }
 /* 높이가 낮은 화면(휴대폰 가로): 용지와 별 줄을 작게 */

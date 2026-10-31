@@ -8,8 +8,8 @@ import { EASE, EASE_OUT, FX } from "../fx-timing";
 import type { Services } from "../services";
 import { useIssued } from "./AstronautPanel";
 
-/** 등록증 자리: 아래에 숨음 / 아래에서 살짝 올라와 내밀기를 기다림 / 가운데 떠 있음 */
-export type CardSpot = "hidden" | "peek" | "up";
+/** 등록증 자리: 아래에 숨음 / 아래에서 살짝 올라와 내밀기를 기다림 / 내밀어 조금 올라감 / 가운데 떠 있음 */
+export type CardSpot = "hidden" | "peek" | "lift" | "up";
 
 /**
  * 신분증 제시 화면(입장·응모). Apple Pay의 카드 제시처럼 한 번에 하나씩: 위쪽 문구 → 인증 → 등록증이 아래에서 올라옴 →
@@ -98,11 +98,15 @@ export function IdFlyer({
         )}
         <CheckMark shown={checked} />
       </div>
+      {/* 자리를 차지하지 않게 아래에 띄운다(사라질 때 등록증이 밀리지 않게) */}
       {press && (
         <button
           type="button"
           onClick={press.onCancel}
-          className="sd-text-in relative rounded-xl px-4 py-2 text-sm text-white/60 hover:text-white"
+          className="sd-text-in absolute left-1/2 -translate-x-1/2 rounded-xl px-4 py-2 text-sm text-white/60 hover:text-white"
+          style={{
+            bottom: "max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
+          }}
         >
           취소
         </button>
@@ -143,15 +147,19 @@ function FlyingCard({
       ? `translateY(calc(var(--peek) + ${drag}px)) scale(0.98)`
       : spot === "up"
         ? "translateY(0) scale(1)"
-        : spot === "peek"
-          ? "translateY(var(--peek)) scale(0.98)"
-          : "translateY(110vh) scale(0.96)";
+        : spot === "lift"
+          ? "translateY(calc(var(--peek) - 56px)) scale(1)"
+          : spot === "peek"
+            ? "translateY(var(--peek)) scale(0.98)"
+            : "translateY(110vh) scale(0.96)";
   const transition =
     drag !== null
       ? "none"
       : spot === "hidden"
         ? `transform ${FX.idOut}ms ${EASE_OUT}`
-        : `transform ${FX.idIn}ms ${EASE}`;
+        : spot === "lift"
+          ? `transform ${FX.idLift}ms ${EASE}`
+          : `transform ${FX.idIn}ms ${EASE}`;
   return (
     // biome-ignore lint/a11y/useSemanticElements: 등록증 그림 전체를 끌어 올리는 덩어리라 button으로 감싸지 않는다
     <div
@@ -160,6 +168,7 @@ function FlyingCard({
       aria-disabled={!pressable}
       tabIndex={pressable ? 0 : -1}
       data-id-card-press={pressable || undefined}
+      data-id-card
       onPointerDown={(e) => {
         if (!pressable) return;
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -200,13 +209,19 @@ function FlyingCard({
       }}
       className={cn(
         "relative w-[min(20rem,86vw)] touch-none select-none rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.55)] outline-none [--peek:22vh] focus-visible:ring-2 focus-visible:ring-amber-200/70",
+        // 떠오름은 지우지 않고 멈춘다(지우면 그만큼 튀어 보인다)
+        "sd-sheet-hint",
         pressable
           ? drag === null
-            ? "sd-sheet-hint cursor-grab"
+            ? "cursor-grab"
             : "cursor-grabbing"
           : "pointer-events-none",
       )}
-      style={{ transform, transition }}
+      style={{
+        transform,
+        transition,
+        animationPlayState: pressable && drag === null ? "running" : "paused",
+      }}
     >
       <div className="pointer-events-none">
         <AstronautCard astronaut={a} issued={issued} clock={services.clock} />

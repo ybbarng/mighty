@@ -392,23 +392,28 @@ function Sheet({
         data-awaiting={awaiting || undefined}
         className={cn(
           "flex touch-none select-none flex-col gap-3 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70 focus-visible:ring-offset-4 focus-visible:ring-offset-[#070b16]",
-          awaiting && !dragging && "sd-sheet-hint cursor-grab",
+          // 떠오름은 지우지 않고 멈춘다(지우면 그만큼 튀어 보인다)
+          "sd-sheet-hint",
+          awaiting && !dragging && "cursor-grab",
           dragging && "cursor-grabbing",
         )}
         style={{
           transform,
           transition,
+          animationPlayState: awaiting && !dragging ? "running" : "paused",
           filter: dragging
             ? `drop-shadow(0 ${16 + Math.min(24, -(drag ?? 0) / 6)}px 28px rgba(0,0,0,0.5))`
             : undefined,
         }}
       >
-        {awaiting && (
-          <span
-            aria-hidden="true"
-            className="mx-auto h-1.5 w-10 rounded-full bg-white/35"
-          />
-        )}
+        {/* 손잡이는 자리를 늘 차지하고 보일 때만 나타난다(생기고 사라질 때 용지가 밀리지 않게) */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "mx-auto h-1.5 w-10 rounded-full bg-white/35 transition-opacity duration-300",
+            awaiting ? "opacity-100" : "opacity-0",
+          )}
+        />
         {children}
       </div>
     </div>

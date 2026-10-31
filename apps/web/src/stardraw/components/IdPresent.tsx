@@ -90,19 +90,24 @@ export function useIdPresent(services: Services) {
           answer.current = res;
         });
         answer.current = null;
-        go({ asking: false });
         if (!ok) {
           setPresent(null);
           return null;
         }
+        // 내민 등록증이 조금 올라가는 동안 패스키를 연다(움직임은 보이기만, 패스키를 늦추지 않는다)
+        go({ asking: false, card: "lift" });
         try {
           r = await action();
         } catch (err) {
-          if (passkeyProblem(err) === "cancelled") continue;
+          if (passkeyProblem(err) === "cancelled") {
+            go({ card: "peek" });
+            continue;
+          }
           setPresent(null);
           throw err;
         }
         if (r !== null) break;
+        go({ card: "peek" });
       }
     } else {
       try {
