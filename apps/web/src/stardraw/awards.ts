@@ -12,6 +12,7 @@ import {
   type Ticket,
 } from "@mighty/stardraw-core";
 
+import { astronautOf } from "./astronaut/identity";
 import { SKY_STARS, starOf, tempWord } from "./sky";
 
 /**
@@ -38,6 +39,7 @@ export type AwardKind =
   | "임명장"
   | "위촉장"
   | "인증서"
+  | "증명서"
   | "기념증"
   | "개근상"
   | "근속상"
@@ -58,6 +60,7 @@ export type AwardCategory =
   | "별"
   | "결과"
   | "근속"
+  | "출신"
   | "우주국"
   | "함께";
 
@@ -157,6 +160,8 @@ interface Ctx {
   everMine: MyRound[];
   tickets: ReadonlyMap<number, readonly Ticket[]>;
   isMine: (t: Ticket) => boolean;
+  /** 내 우주인 공개 열쇠들(등록증 주소를 계산한다) */
+  myPubs: readonly Uint8Array[];
   registeredRound: number | null;
   now: number;
 }
@@ -317,6 +322,7 @@ const close: Record<AwardKind, string> = {
   임명장: "",
   위촉장: "",
   인증서: "이를 인증합니다.",
+  증명서: "",
   기념증: "이를 기념하여 이 증서를 드립니다.",
   개근상: "이에 상장을 드립니다.",
   근속상: "이에 상장을 드립니다.",
@@ -1106,6 +1112,32 @@ export const AWARDS: readonly AwardDef[] = [
       ),
   },
 
+  // 출신
+  {
+    id: "extragalactic",
+    category: "출신",
+    name: "외은하인 등록 사실 증명서",
+    kind: "증명서",
+    grade: "star",
+    // 등록증 주소가 우리 은하 밖(512명 중 1명꼴, identity.ts GALAXY_ROLL). 날짜는 장부 등록 회차의 마감
+    find: (c) => {
+      if (c.registeredRound === null) return [];
+      const a = c.myPubs.map(astronautOf).find((x) => x.otherGalaxy);
+      if (!a) return [];
+      const at = roundTimes(c.schedule, c.registeredRound).closesAt;
+      return [
+        {
+          step: null,
+          round: c.registeredRound,
+          at,
+          fill: { place: a.short.join(" ") },
+          results: [],
+        },
+      ];
+    },
+    text: (f) =>
+      `위 우주인은 ${f.place}에 주소를 둔 외은하인으로서 본 우주국에 정상적으로 등록되었음을 증명합니다.`,
+  },
   // 우주국 행사
   {
     id: "trial-observer",
@@ -1337,6 +1369,7 @@ function context(input: AwardInput): Ctx {
     everMine,
     tickets: input.tickets,
     isMine,
+    myPubs: input.myPubs,
     registeredRound: input.registeredRound,
     now: input.now,
   };

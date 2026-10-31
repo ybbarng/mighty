@@ -9,6 +9,7 @@ import {
 } from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
+import { astronautOf } from "./astronaut/identity";
 import {
   ASLEEP_DRAWS,
   AWARDS,
@@ -256,6 +257,35 @@ describe("기념 서류", () => {
     expect(five?.form).toBe("plaque");
   });
 
+  it("외은하인 등록 사실 증명서: 등록증 주소가 우리 은하 밖이면 등록 회차에 받는다", () => {
+    // 512명 중 1명꼴이라 열쇠를 차례로 만들어 다른 은하 주소인 것을 찾는다(결정적)
+    let far: Uint8Array | null = null;
+    let near: Uint8Array | null = null;
+    for (let i = 0; (!far || !near) && i < 100_000; i++) {
+      const pub = new Uint8Array([3, i & 255, (i >> 8) & 255, (i >> 16) & 255]);
+      if (astronautOf(pub).otherGalaxy) far ??= pub;
+      else near ??= pub;
+    }
+    if (!far || !near) throw new Error("열쇠를 찾지 못했다");
+    const base = world(plain(1, 1), { registeredRound: 1 });
+    const got = find(earnedAwards({ ...base, myPubs: [far] }), "extragalactic");
+    expect(got).toMatchObject({
+      round: 1,
+      kind: "증명서",
+      at: roundTimes(schedule, 1).closesAt,
+    });
+    expect(got?.text).toContain(astronautOf(far).short.join(" "));
+    expect(
+      find(earnedAwards({ ...base, myPubs: [near] }), "extragalactic"),
+    ).toBeUndefined();
+    expect(
+      find(
+        earnedAwards({ ...base, myPubs: [far], registeredRound: null }),
+        "extragalactic",
+      ),
+    ).toBeUndefined();
+  });
+
   it("시간과 우주국 행사", () => {
     // n회차 추첨은 n시. 3·4시 회차를 다섯 날 = 10회
     const night = [0, 1, 2, 3, 4].flatMap((d) =>
@@ -307,6 +337,7 @@ describe("기념 서류", () => {
       d: 2,
       con: "오리온자리",
       word: "푸른 별",
+      place: "국부은하군 안드로메다은하 M32",
       star: "시리우스",
       count: 12,
     };
