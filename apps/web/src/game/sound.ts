@@ -198,8 +198,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   yutLand: 5,
   yutBonus: 2,
   yutPiece: 12,
-  // 룰렛이 도는 동안 칸마다 나는 작은 유리 "띵". 다른 소리보다 한참 작게(몰리면 play가 더 줄인다)
-  starTick: 10,
+  // 룰렛이 도는 동안 칸마다 나는 작은 유리 "띵". 가장 작은 "삑" 수준(몰리면 play가 더 줄인다)
+  starTick: 15,
   yutCapture: 3,
   yutHome: 0,
 };
