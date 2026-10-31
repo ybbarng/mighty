@@ -21,6 +21,15 @@ import { SKY_STARS, starOf, tempWord } from "./sky";
  * 날짜는 조건을 처음 채운 회차의 추첨 시각이다(응모를 받은 시각은 공개 장부에 없다). 근속만 등록 날짜에서 센다.
  */
 
+/**
+ * 서류·훈장 전체 목록과 견본을 보여 주는 화면(/stardraw/awards)을 켤지. 받기 전에는 무엇이 있는지 모르게
+ * 운영 배포와 공개 데모에는 넣지 않는다(사용자). 개발 서버(pnpm dev)이거나, 로컬에서
+ * `NEXT_PUBLIC_STARDRAW_SPECIMENS=1`로 빌드했을 때만 켜진다. CI와 Docker 이미지 빌드는 이 값을 넣지 않는다
+ */
+export const AWARD_SPECIMENS =
+  process.env.NODE_ENV === "development" ||
+  process.env.NEXT_PUBLIC_STARDRAW_SPECIMENS === "1";
+
 /** 서류 종류. "~장·~상·~증·~서"는 종이, "~패"는 판, "훈장"은 메달로 그린다 */
 export type AwardKind =
   | "감사장"
