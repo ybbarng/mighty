@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { dealCues } from "@/game/cues";
-import { CUE_LABELS, type Cue, play, renderCue } from "@/game/sound";
+import { CUE_LABELS, CUE_ROLE, type Cue, play, renderCue } from "@/game/sound";
 import { SHUFFLE_MS } from "@/game/timing";
 import { starOf } from "@/stardraw/sky";
 
@@ -305,6 +305,7 @@ export function SoundBoard() {
                       <span
                         className="text-right font-mono text-white/60 text-xs tabular-nums"
                         data-level={cue}
+                        data-role={CUE_ROLE[cue] ?? "event"}
                         data-loudness={level?.loudness}
                         data-peak={level?.peak}
                       >

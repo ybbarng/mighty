@@ -103,6 +103,15 @@ export type Cue =
   | "yutHome";
 
 /** 소리 이름. 소리 미리 듣기 화면에 쓴다 */
+/**
+ * 소리의 역할. "사건"은 한 번 나는 소리(카드 내기·별 켜짐·당첨 등)로 서로 크기가 비슷해야 하고,
+ * "반복"은 빠르게 여러 번 겹쳐 나는 배경 소리(룰렛 불빛 등)로 사건 소리보다 일정하게 작아야 한다.
+ * 적지 않은 소리는 사건이다. 크기 시험(e2e/sounds.spec.ts)이 /sounds의 data-role로 이 값을 읽는다
+ */
+export const CUE_ROLE: Partial<Record<Cue, "event" | "repeat">> = {
+  starTick: "repeat",
+};
+
 export const CUE_LABELS: Record<Cue, string> = {
   card: "카드 내기",
   pickCard: "키티 받기·버릴 카드 고르기",
@@ -198,8 +207,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   yutLand: 5,
   yutBonus: 2,
   yutPiece: 12,
-  // 룰렛이 도는 동안 칸마다 나는 작은 유리 "띵". 가장 작은 "삑" 수준(몰리면 play가 더 줄인다)
-  starTick: 15,
+  // 룰렛이 도는 동안 칸마다 나는 작은 유리 "띵". 사건 소리보다 한참 작게(몰리면 play가 더 줄인다, 역할 "반복"이라 크기 시험 기준이 따로다)
+  starTick: 10,
   yutCapture: 3,
   yutHome: 0,
 };
