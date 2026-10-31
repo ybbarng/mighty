@@ -18,6 +18,7 @@ import { SubmitView } from "./EnterSubmit";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { Receipt } from "./Receipt";
 import { ReceiptPrint } from "./ReceiptPrint";
+import { type ApplyStage, RegisterForm } from "./RegisterForm";
 import { StageOverlay, useReducedMotion } from "./StageOverlay";
 import { Gate, RoundCard } from "./StardrawApp";
 
@@ -53,6 +54,9 @@ function stubSetup(
     create: async () => {},
     recover: async () => {},
     pocket: noop,
+    apply: null,
+    submitApply: async () => {},
+    cancelApply: noop,
     ...over,
   };
 }
@@ -197,6 +201,40 @@ function IssueFx({
   onDone: () => void;
 }) {
   const [pocketing, setPocketing] = useState(false);
+  // 실제 등록과 같은 차례: 신청서 → 내기 → 흉내 패스키 만들기 → 서명 → 위로 → 발급한 등록증
+  const [apply, setApply] = useState<ApplyStage | null>("text");
+  const { ask, open } = useAsk();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 처음 그릴 때 한 번
+  useEffect(() => {
+    const t = window.setTimeout(() => setApply("waiting"), FX.read);
+    return () => window.clearTimeout(t);
+  }, []);
+  const submit = async () => {
+    setApply("signing");
+    if (!(await open())) {
+      setApply("waiting");
+      return;
+    }
+    setApply("signed");
+    await sleep(FX.idCheck + FX.pause);
+    setApply("away");
+    await sleep(FX.paperAway + FX.pause);
+    setApply(null);
+  };
+  if (apply)
+    return (
+      <>
+        <RegisterForm
+          stage={apply}
+          now={Date.now()}
+          onSubmit={() => void submit()}
+          onCancel={onDone}
+        />
+        {ask && (
+          <DemoUnlockPrompt ask={{ id: 0, purpose: "create", answer: ask }} />
+        )}
+      </>
+    );
   return (
     <IssuedView
       services={s.services}
@@ -244,13 +282,16 @@ function WelcomeFx({ s, onDone }: { s: TourState; onDone: () => void }) {
       .run(async () => ((await open()) ? true : null), {
         verb: "제시",
         pub,
+        blank: true,
+        tap: true,
+        readFirst: true,
         done: `${residentPhrase(astronautOf(pub))} 님, ${greetNow(Date.now(), "enter")}`,
       })
       .then(onDone);
   }, []);
   return (
     <>
-      <IdPresentView services={s.services} id={id} verb="제시" />
+      <IdPresentView services={s.services} id={id} />
       {ask && (
         <DemoUnlockPrompt ask={{ id: 0, purpose: "check", answer: ask }} />
       )}
@@ -306,7 +347,7 @@ function SubmitFx({ s, onDone }: { s: TourState; onDone: () => void }) {
           )}
         </StageOverlay>
       )}
-      <IdPresentView services={services} id={id} verb="제출" backdrop={false} />
+      <IdPresentView services={services} id={id} backdrop={false} />
       {ask && (
         <DemoUnlockPrompt ask={{ id: 0, purpose: "sign", answer: ask }} />
       )}

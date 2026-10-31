@@ -305,15 +305,18 @@ export function SubmitView({
  */
 const TAP_SLOP = 8;
 
-function Sheet({
+export function Sheet({
   sheet,
   awaiting,
   onSwiped,
+  label = "용지 제출",
   children,
 }: {
   sheet: "below" | "in" | "away";
   awaiting: boolean;
   onSwiped: () => void;
+  /** 단추 이름(화면 읽기 프로그램) */
+  label?: string;
   children: React.ReactNode;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
@@ -372,7 +375,7 @@ function Sheet({
       {/* biome-ignore lint/a11y/useSemanticElements: 안에 번호 칸과 별 줄을 담은 덩어리라 button으로 감쌀 수 없다 */}
       <div
         role="button"
-        aria-label="용지 제출"
+        aria-label={label}
         aria-disabled={!awaiting}
         tabIndex={awaiting ? 0 : -1}
         onPointerDown={down}
@@ -391,7 +394,10 @@ function Sheet({
         data-sheet={sheet}
         data-awaiting={awaiting || undefined}
         className={cn(
-          "flex touch-none select-none flex-col gap-3 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70 focus-visible:ring-offset-4 focus-visible:ring-offset-[#070b16]",
+          "flex touch-none select-none flex-col gap-3 rounded-2xl outline-none",
+          // 초점 테두리는 내기를 기다릴 때만(낸 뒤에는 남지 않게)
+          awaiting &&
+            "focus-visible:ring-2 focus-visible:ring-amber-200/70 focus-visible:ring-offset-4 focus-visible:ring-offset-[#070b16]",
           // 떠오름은 지우지 않고 멈춘다(지우면 그만큼 튀어 보인다)
           "sd-sheet-hint",
           awaiting && !dragging && "cursor-grab",

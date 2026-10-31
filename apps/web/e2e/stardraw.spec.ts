@@ -201,6 +201,11 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await noSideScroll(page);
   await page.screenshot({ path: info.outputPath("stardraw-key-setup.png") });
   await setup.getByRole("button", REGISTER).click();
+  // 연출이 있으면 신청서가 올라와 기다린다: 내면(키보드 Enter도 같다) 그 누름에 패스키 만들기
+  if (motion)
+    await page
+      .locator("[aria-label='신청서 제출'][aria-disabled='false']")
+      .press("Enter", { timeout: 30_000 });
   // 발급한 등록증이 뜬다(연출이 있으면 입구 위 화면 전체 오버레이로)
   await expect(page.locator("[data-issued='new']")).toBeVisible();
   // 만들자마자 그 패스키로 등록 증명에 서명해 장부에 바로 등록한다
@@ -410,7 +415,14 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   );
   // 누르면 주인 확인: 패스키로 새 문제 값에 서명하고 이 기기에서 확인한다. 시각이 초 단위로 흐른다
   await myCard.click({ position: CARD_TAP });
-  await expect(myCard.locator("[data-owner-ok]")).toBeVisible();
+  // 연출이 있으면 본인 확인도 신분증 제시 틀: 아래에서 올라온 등록증을 내밀면 패스키
+  if (motion)
+    await page
+      .locator("[aria-label='신분증 확인'][aria-disabled='false']")
+      .press("Enter", { timeout: 30_000 });
+  await expect(myCard.locator("[data-owner-ok]")).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(myCard.locator("[data-owner-time]")).toHaveText(
     /^\d{2}:\d{2}:\d{2}$/,
   );
@@ -427,8 +439,14 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(back.locator("[data-key-mask]")).toBeVisible();
   await expect(back.locator("[data-public-key]")).toHaveCount(0);
   await back.locator("[data-key-mask]").click();
+  // 연출이 있으면 열쇠 꺼내기도 신분증 제시 틀(등록증을 내밀면 확인)
+  if (motion)
+    await page
+      .locator("[aria-label='신분증 확인'][aria-disabled='false']")
+      .press("Enter", { timeout: 30_000 });
   await expect(back.locator("[data-public-key]")).toHaveText(
     /^04[0-9a-f]{128}$/,
+    { timeout: 30_000 },
   );
   await expect(back.getByRole("button", { name: "복사" })).toBeVisible();
   expect(await passkeyCalls(page)).toEqual({ create: 0, get: 2 });
@@ -1112,7 +1130,13 @@ test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제�
   await expect(screen.locator("[data-full-address]")).toBeVisible();
   // 카드를 짧게 누르면 본인 확인(둘러보기는 확인을 바로 통과시킨다)
   await stage.locator("[data-idcard]").click({ position: CARD_TAP });
-  await expect(stage.locator("[data-owner-ok]")).toBeVisible();
+  // 본인 확인은 신분증 제시 틀: 아래에서 올라온 등록증을 내밀면(Enter도 같다) 확인, 연출이 끝나면 카드에 확인됨
+  await page
+    .locator("[aria-label='신분증 확인'][aria-disabled='false']")
+    .press("Enter", { timeout: 30_000 });
+  await expect(stage.locator("[data-owner-ok]")).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("당첨 축하: 맞은 내 별로 나만의 별자리, 1~3등은 당첨 직인, 5등은 가볍게", async ({
