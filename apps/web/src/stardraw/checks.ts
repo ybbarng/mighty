@@ -105,11 +105,26 @@ export class Checker {
   }
 
   /** 「확인 시작」: 임시 ECDH 열쇠를 만들어 링크에 요청을 붙인다(링크는 이때 쓰여 닫힌다) */
-  async start(token: string, rank: Rank): Promise<CheckSession> {
+  async start(
+    token: string,
+    rank: Rank,
+    /** 미리보기(peek)에서 공개 장부로 확인한 회차·응모권(hex). 서버의 시작 응답이 이와 다르면 멈춘다 */
+    expected?: { round: number; ticketId: string },
+  ): Promise<CheckSession> {
     const existing = await this.byLink(token);
     if (existing) return existing;
     const key = await generateSasKey();
     const opened = await this.relay.start(token, key.publicKey);
+    // 서버가 미리보기에서는 남의 1등 응모권을, 시작 응답에서는 다른 응모권을 내주면 바뀐 응모권의 서명이
+    // "1등 당첨자 본인"으로 보일 수 있었다(2026-10-31 보안 검토 B6)
+    if (
+      expected &&
+      (opened.request.round !== expected.round ||
+        toHex(opened.request.ticketId) !== expected.ticketId)
+    )
+      throw new Error(
+        "서버가 미리 본 응모권과 다른 응모권으로 확인을 시작했습니다. 확인을 멈춥니다",
+      );
     const session: CheckSession = {
       key: opened.id,
       linkHash: linkHashOf(token),

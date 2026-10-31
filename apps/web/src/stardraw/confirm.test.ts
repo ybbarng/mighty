@@ -129,6 +129,16 @@ async function winnerAnswers(
 }
 
 describe("확인 링크", () => {
+  it("시작 응답의 회차·응모권이 미리 본 것과 다르면 멈춘다(2026-10-31 보안 검토 B6)", async () => {
+    const me = await passkey();
+    const ticket = await ticketOf(me, 12);
+    const s = setup([ticket]);
+    const token = await makeLink(s, me, ticket);
+    await expect(
+      s.checker.start(token, 1, { round: 12, ticketId: "00".repeat(32) }),
+    ).rejects.toThrow("다른 응모권");
+  });
+
   it("열어 보면 회차·응모권이 보이고, 「확인 시작」하면 쓰여 닫힌다", async () => {
     const me = await passkey();
     const ticket = await ticketOf(me, 12);

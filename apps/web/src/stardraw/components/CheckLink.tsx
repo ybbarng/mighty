@@ -7,6 +7,7 @@ import {
   ticketId,
   toHex,
 } from "@mighty/stardraw-core";
+
 import { useCallback, useEffect, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
@@ -28,7 +29,14 @@ type State =
   | { kind: "missing" }
   | { kind: "used" }
   | { kind: "not-winner" }
-  | { kind: "ready"; round: number; rank: Rank; expiresAt: number }
+  | {
+      kind: "ready";
+      round: number;
+      rank: Rank;
+      expiresAt: number;
+      /** 미리보기에서 장부로 확인한 응모권(hex) */
+      ticketId: string;
+    }
   | { kind: "session"; session: CheckSession };
 
 /**
@@ -93,7 +101,13 @@ export function CheckLink({
     const rank = record && ticket ? myRank(record, ticket) : null;
     setState(
       rank
-        ? { kind: "ready", round: peek.round, rank, expiresAt: peek.expiresAt }
+        ? {
+            kind: "ready",
+            round: peek.round,
+            rank,
+            expiresAt: peek.expiresAt,
+            ticketId: toHex(peek.ticketId),
+          }
         : { kind: "not-winner" },
     );
   }, [checker, ledger, services.relay, token, fresh]);
@@ -115,11 +129,21 @@ export function CheckLink({
     return checker.watch(session, ticketOf, bump);
   }, [sessionKey, checker, ticketOf]);
 
-  const start = async (rank: Rank) => {
+  const start = async (ready: {
+    round: number;
+    rank: Rank;
+    ticketId: string;
+  }) => {
     setBusy(true);
     setError(null);
     try {
-      setState({ kind: "session", session: await checker.start(token, rank) });
+      setState({
+        kind: "session",
+        session: await checker.start(token, ready.rank, {
+          round: ready.round,
+          ticketId: ready.ticketId,
+        }),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === USED_LINK) setState({ kind: "used" });
@@ -252,7 +276,7 @@ export function CheckLink({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void start(state.rank)}
+            onClick={() => void start(state)}
             className="sd-cta rounded-xl py-3 font-bold text-slate-950 disabled:opacity-40"
           >
             {busy ? "요청을 보내고 있습니다" : "확인 시작"}
