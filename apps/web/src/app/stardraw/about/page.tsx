@@ -51,10 +51,11 @@ export default function StardrawAbout() {
           </a>
           <h1 className="font-black text-3xl">하늘의 별 따기 설명</h1>
           <p className="text-amber-100/90" data-agency>
-            하늘의 별 따기는 카노푸스 우주국이 정해진 시각마다 여는
-            추첨입니다(지어낸 기관입니다). 우주국장은 운영자지만, 당첨 번호를
-            고르거나 지난 기록을 고치거나 남의 등록증으로 응모할 수 없게
-            만들었습니다.
+            하늘의 별 따기는 카노푸스 우주국이 정해진 시각마다 여는 공개
+            추첨입니다. 당첨 번호는 하늘이 정하고, 우주국은 기록할 뿐입니다.
+            우주국장에게도 당첨 번호를 고르거나, 지난 기록을 고치거나, 남의
+            등록증으로 응모할 권한이 없습니다. 우주국은 처음부터 그렇게
+            세워졌습니다.
           </p>
           <details className="text-sm text-white/70">
             <summary className="cursor-pointer text-white/80">
@@ -65,7 +66,8 @@ export default function StardrawAbout() {
               위로 오르지 않아 우리 별 45개 목록에 없습니다. 우리나라에서는
               노인성이라 불렀고, 이 별을 보면 오래 산다고 여겼습니다. 제주 남쪽
               하늘에서나 아주 낮게 보이는 귀한 별입니다. 매리너 4호와 보이저
-              같은 탐사선은 방향을 잡는 기준 별로 카노푸스를 썼습니다.
+              같은 탐사선은 방향을 잡는 기준 별로 카노푸스를 썼습니다. 우주국이
+              이 별의 이름을 쓰는 까닭입니다.
             </p>
           </details>
           <p className="text-white/75">
@@ -97,9 +99,9 @@ export default function StardrawAbout() {
             <li>
               응모는 패스키로 합니다. 처음 우주인으로 등록할 때 Face
               ID·지문·화면 잠금으로 패스키가 만들어지고, 응모할 때마다 그
-              패스키로 응모권에 서명합니다. 이름·이메일은 받지 않고, 한 패스키는
-              회차마다 한 장만 낼 수 있습니다. 패스키에 응모권이나 확률 혜택은
-              없습니다.
+              패스키로 응모권에 서명합니다. 우주국은 우주인의 이름·이메일을 묻지
+              않고, 한 패스키는 회차마다 한 장만 낼 수 있습니다. 먼저 등록한
+              우주인이라고 확률이 높아지지는 않습니다.
             </li>
             <li>
               회차는 1시간이고, 마감 5분 뒤 공개 난수로 당첨 번호 6개와 보너스
@@ -155,7 +157,7 @@ export default function StardrawAbout() {
           <p className="text-white/85">
             눈에 보이는 별은 온 하늘에 약 9천 개입니다. 그중 하나를 콕 집어 맞힐
             확률은 약 1/9,000이고, 로또 1등(45개 중 6개)은 1/8,145,060입니다.
-            로또 1등이 약 900배 더 어렵습니다.
+            로또 1등이 약 900배 더 어렵습니다. 우주국은 별 따기를 권합니다.
           </p>
         </Section>
 
@@ -218,7 +220,7 @@ export default function StardrawAbout() {
           <PasskeyFaq />
         </Section>
 
-        <Section title="우리가 저장하는 것" id="privacy">
+        <Section title="우주국이 보관하는 것" id="privacy">
           <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm text-white/85">
             <li>
               저장하는 것: 공개 열쇠, 패스키 번호, 등록 회차. 응모권은 공개

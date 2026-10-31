@@ -544,7 +544,7 @@ test("설명 페이지: 별 45개와 데이터 출처", async ({ page }) => {
   await expect(page.getByText(/솔직한 한계/)).toBeVisible();
   await expect(page.locator("[data-agency]")).toContainText("카노푸스 우주국");
   await expect(
-    page.getByRole("heading", { name: "우리가 저장하는 것" }),
+    page.getByRole("heading", { name: "우주국이 보관하는 것" }),
   ).toBeVisible();
   await noSideScroll(page);
 });
