@@ -223,6 +223,13 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(page.locator("[data-full-address]")).toContainText(
     /^우리 우주 › 라니아케아 초은하단 › 처녀자리 초은하단 › /,
   );
+  // 주소 안내: 그 천체 설명이 위에, 바깥 단계는 접혀 있다가 누르면 펼친다
+  const guide = page.locator("[data-address-guide]");
+  await expect(guide.locator("[data-address-home] p")).not.toBeEmpty();
+  const universe = guide.locator("details").filter({ hasText: "우리 우주" });
+  await expect(universe.getByText(/138억 년/)).toBeHidden();
+  await universe.locator("summary").click();
+  await expect(universe.getByText(/138억 년/)).toBeVisible();
   // 패스키 마크를 누르면 짧은 설명
   await card.locator("[data-passkey-badge]").click();
   await expect(

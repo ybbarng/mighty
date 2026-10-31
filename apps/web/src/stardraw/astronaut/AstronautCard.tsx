@@ -11,6 +11,7 @@ import type { Astronaut } from "./identity";
 import { ART_H, ART_W, keyArt } from "./key-art";
 import { PasskeyMark, Seal } from "./marks";
 import { OWNER_CHECK_SECONDS } from "./owner-check";
+import type { AddressFact } from "./place-facts";
 import {
   CardSecurity,
   FoilPatch,
@@ -517,7 +518,7 @@ export function AstronautCard({
                 <button
                   type="button"
                   aria-expanded={fullAddress}
-                  aria-label={`주소: ${a.short.join(", ")}. 누르면 전체 주소`}
+                  aria-label={`주소: ${a.short.join(", ")}. 누르면 주소 안내`}
                   onClick={(e) => {
                     e.stopPropagation();
                     setFullAddress((v) => !v);
@@ -739,20 +740,80 @@ export function AstronautCard({
         </p>
       )}
 
-      {!flipped && fullAddress && (
-        <p
-          data-full-address
-          className="text-center text-white/80 text-xs leading-relaxed"
-        >
-          <PathNames names={a.address} />
-          {a.ly !== undefined && (
-            <span className="block text-white/55">
-              지구에서 약 {a.ly.toLocaleString("ko-KR")}광년
-            </span>
-          )}
-        </p>
-      )}
+      {!flipped && fullAddress && <AddressGuide astronaut={a} />}
     </div>
+  );
+}
+
+/**
+ * 주소 안내(주소를 누르면 카드 아래에 펼친다): 전체 주소 한 줄, 그 천체의 설명, 그리고 바깥쪽 단계마다 접어 둔 설명.
+ * 가까운 단계부터 멀어지는 차례로(그 천체 › … › 우리 우주) 읽게 한다. 설명은 place-facts.ts(글이 길어 펼칠 때 불러온다)
+ */
+function AddressGuide({ astronaut: a }: { astronaut: Astronaut }) {
+  const [facts, setFacts] = useState<AddressFact[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void import("./place-facts").then((m) => {
+      if (alive) setFacts(m.addressFacts(a.address, a.placeId));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [a.address, a.placeId]);
+  const home = facts[facts.length - 1];
+  const outer = facts.slice(0, -1).reverse();
+  return (
+    <section
+      aria-label="주소 안내"
+      data-address-guide
+      className="flex w-full max-w-md flex-col gap-2.5 text-left"
+    >
+      <p
+        data-full-address
+        className="text-center text-white/80 text-xs leading-relaxed"
+      >
+        <PathNames names={a.address} />
+        {a.ly !== undefined && (
+          <span className="block text-white/55">
+            지구에서 약 {a.ly.toLocaleString("ko-KR")}광년
+          </span>
+        )}
+      </p>
+      {home && (
+        <div
+          data-address-home
+          className="rounded-xl border border-sky-200/25 bg-sky-200/10 px-4 py-3"
+        >
+          <h3 className="break-keep font-bold text-sky-50 text-sm">
+            {home.name}
+          </h3>
+          <p className="mt-1 break-keep text-sky-50/85 text-xs leading-relaxed">
+            {home.text}
+          </p>
+        </div>
+      )}
+      <ul className="flex flex-col gap-1">
+        {outer.map((f, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 주소 차례가 곧 자리다(같은 이름이 두 번 나올 수 있다)
+          <li key={`${i}-${f.name}`}>
+            <details className="group rounded-lg bg-white/5 px-3 py-2">
+              <summary className="cursor-pointer list-none break-keep text-white/80 text-xs [&::-webkit-details-marker]:hidden">
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block text-white/40 transition-transform group-open:rotate-90"
+                >
+                  ›
+                </span>
+                {f.name}
+              </summary>
+              <p className="mt-1.5 break-keep text-white/65 text-xs leading-relaxed">
+                {f.text}
+              </p>
+            </details>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
