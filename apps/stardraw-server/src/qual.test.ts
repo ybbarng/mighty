@@ -13,6 +13,7 @@ import {
   opId,
   type QualHolding,
   qualKeyFromSeed,
+  qualLoginNonce,
   type Schedule,
   type SoftPasskey,
   STAMP_SCHEME_BLS,
@@ -43,7 +44,7 @@ import {
 /**
  * 상품 자격 발급(docs/36 11-13). 설정의 국장 열쇠는 1회차 기록에 실려 5회차부터, 국장이 5회차에 소속을 더하면
  * 9회차부터, 9회차에 자격 기간을 열면 13회차부터 도장을 받고 응모권에 붙인다(3회차 예고).
- * 구글 로그인은 흉내(토큰 "google:<이메일>:<hd>")로 바꿔 끼운다. 실제 토큰 확인은 google.test.ts가 본다
+ * 구글 로그인은 흉내(토큰 "google:<이메일>:<hd>:<nonce>")로 바꿔 끼운다. 실제 토큰 확인은 google.test.ts가 본다
  */
 
 const TRIAL: Schedule = {
@@ -64,10 +65,10 @@ const QUALIFICATION: QualificationOptions = {
     ["벌집 성단", { kind: "google", domain: "example.com" }],
   ]),
   verifyGoogle: async (token) => {
-    const [kind, email, hd] = token.split(":");
+    const [kind, email, hd, nonce] = token.split(":");
     if (kind !== "google" || !email)
       throw new GoogleTokenError("구글 서명이 맞지 않습니다");
-    return { email, emailVerified: true, hd: hd || null };
+    return { email, emailVerified: true, hd: hd || null, nonce: nonce ?? null };
   },
 };
 
@@ -141,7 +142,7 @@ async function receive(
   const request = blindStampRequest(id, qualKeyFromSeed(seed).publicKey);
   const { blindStamp } = await r.engine.issueStamp({
     periodId,
-    idToken: token,
+    idToken: `${token}:${qualLoginNonce(request.blinded)}`,
     blinded: request.blinded,
     ip: "203.0.113.7",
   });
@@ -220,7 +221,7 @@ describe("상품 자격 받기(기관 계정 → 블라인드 도장)", () => {
     const send = () =>
       r.engine.issueStamp({
         periodId,
-        idToken: "google:dave@example.com:example.com",
+        idToken: `google:dave@example.com:example.com:${qualLoginNonce(request.blinded)}`,
         blinded: request.blinded,
         ip: "203.0.113.7",
       });
@@ -318,7 +319,7 @@ describe("상품 자격 받기(기관 계정 → 블라인드 도장)", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          idToken: "google:ivy@example.com:example.com",
+          idToken: `google:ivy@example.com:example.com:${qualLoginNonce(request.blinded)}`,
           blinded: Buffer.from(request.blinded).toString("base64url"),
         }),
       });
@@ -369,5 +370,46 @@ describe("소속 1·2등 알림(서버 감시가 국장에게)", () => {
     expect(r.engine.qualWins(r.engine.now() + QUAL_WIN_WINDOW + 3600)).toEqual(
       [],
     );
+  }, 60_000);
+});
+
+describe("구글 로그인 nonce(2026-10-31 보안 검토 B7)", () => {
+  it("다른 가린 값을 위해 받은 ID 토큰(새어 나간 토큰)으로는 도장을 받지 못한다", async () => {
+    const { r, periodId } = await qualRig();
+    const id = Uint8Array.from(Buffer.from(periodId, "hex"));
+    const victim = blindStampRequest(
+      id,
+      qualKeyFromSeed(newQualSeed()).publicKey,
+    );
+    const thief = blindStampRequest(
+      id,
+      qualKeyFromSeed(newQualSeed()).publicKey,
+    );
+    const leaked = `google:judy@example.com:example.com:${qualLoginNonce(victim.blinded)}`;
+    await expect(
+      r.engine.issueStamp({
+        periodId,
+        idToken: leaked,
+        blinded: thief.blinded,
+        ip: "203.0.113.7",
+      }),
+    ).rejects.toMatchObject({ status: 401 });
+    // nonce 없는 토큰도 받지 않는다
+    await expect(
+      r.engine.issueStamp({
+        periodId,
+        idToken: "google:judy@example.com:example.com",
+        blinded: victim.blinded,
+        ip: "203.0.113.7",
+      }),
+    ).rejects.toMatchObject({ status: 401 });
+    // 주인은 그대로 받는다
+    const ok = await r.engine.issueStamp({
+      periodId,
+      idToken: leaked,
+      blinded: victim.blinded,
+      ip: "203.0.113.7",
+    });
+    expect(ok.blindStamp).toHaveLength(48);
   }, 60_000);
 });

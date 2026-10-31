@@ -46,6 +46,7 @@ import {
   phaseOf,
   type QualInfo,
   qualInfoOf,
+  qualLoginNonce,
   RawKeyRejected,
   type Receipt,
   type RoundRecord,
@@ -1098,6 +1099,12 @@ export class StardrawServer {
           throw new EntryError(err.message, 401);
         throw new EntryError("구글 로그인을 확인하지 못했습니다", 502);
       }
+      // ID 토큰이 이 가린 값을 위해 받은 것인지(새어 나간 토큰으로 남의 몫을 먼저 받지 못하게, 2026-10-31 보안 검토 B7)
+      if (who.nonce !== qualLoginNonce(input.blinded))
+        throw new EntryError(
+          "로그인과 요청이 맞지 않습니다. 다시 로그인해 주세요",
+          401,
+        );
       const domain = config.domain.toLowerCase();
       const email = who.email.toLowerCase();
       if (

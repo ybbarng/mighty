@@ -59,17 +59,19 @@ const GOOD = {
   email: "alice@example.com",
   email_verified: true,
   hd: "example.com",
+  nonce: "n0nce",
 };
 
 const verifier = () =>
   googleTokenVerifier(CLIENT, { fetch: fakeFetch, now: () => NOW });
 
 describe("구글 ID 토큰 확인", () => {
-  it("맞는 토큰에서 이메일·확인 여부·도메인만 꺼낸다", async () => {
+  it("맞는 토큰에서 이메일·확인 여부·도메인·nonce만 꺼낸다", async () => {
     expect(await verifier()(await token(GOOD))).toEqual({
       email: "alice@example.com",
       emailVerified: true,
       hd: "example.com",
+      nonce: "n0nce",
     });
   });
 

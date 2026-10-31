@@ -9,6 +9,7 @@ import {
   type QualInfo,
   type QualPeriodInfo,
   qualKeyFromSeed,
+  qualLoginNonce,
   toBase64Url,
   toHex,
   unblindStamp,
@@ -153,6 +154,32 @@ export async function receiveQualification(
   period: QualPeriodInfo,
   credential: string,
 ): Promise<QualHolding> {
+  const request = pendingRequest(ns, ledger, period);
+  const periodId = fromHex(period.id);
+  const ledgerId = ledger.id();
+  const blindStamp = await ledger.issueStamp(
+    period.id,
+    credential,
+    fromBase64Url(request.blinded),
+  );
+  const holding: QualHolding = {
+    periodId,
+    seed: fromBase64Url(request.seed),
+    stamp: unblindStamp(blindStamp, BigInt(`0x${request.factor}`)),
+  };
+  if (!checkHolding(period, holding))
+    throw new Error("받은 도장이 장부의 기간 열쇠와 맞지 않습니다");
+  saveHolding(ns, ledgerId, holding, ledger.status().round);
+  write(pendingKey(ns), null);
+  return holding;
+}
+
+/** 이 기간에 보낼 도장 요청(가린 값). 받기 전에 같은 값을 다시 쓰도록 기기에 남겨 둔다 */
+function pendingRequest(
+  ns: string,
+  ledger: Ledger,
+  period: QualPeriodInfo,
+): PendingRequest {
   const ledgerId = ledger.id();
   const periodId = fromHex(period.id);
   const saved = read<PendingRequest>(pendingKey(ns));
@@ -172,21 +199,18 @@ export async function receiveQualification(
     };
     write(pendingKey(ns), request);
   }
-  const blindStamp = await ledger.issueStamp(
-    period.id,
-    credential,
-    fromBase64Url(request.blinded),
+  return request;
+}
+
+/** 구글 로그인에 넣을 nonce(이 기기가 보낼 가린 값에 묶인다, docs/36 11-13) */
+export function qualLoginNonceFor(
+  ns: string,
+  ledger: Ledger,
+  period: QualPeriodInfo,
+): string {
+  return qualLoginNonce(
+    fromBase64Url(pendingRequest(ns, ledger, period).blinded),
   );
-  const holding: QualHolding = {
-    periodId,
-    seed: fromBase64Url(request.seed),
-    stamp: unblindStamp(blindStamp, BigInt(`0x${request.factor}`)),
-  };
-  if (!checkHolding(period, holding))
-    throw new Error("받은 도장이 장부의 기간 열쇠와 맞지 않습니다");
-  saveHolding(ns, ledgerId, holding, ledger.status().round);
-  write(pendingKey(ns), null);
-  return holding;
 }
 
 /** 복구 코드 불러오기: 장부의 기간에서 찾아 도장을 확인한 뒤 저장한다 */

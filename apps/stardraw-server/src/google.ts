@@ -12,6 +12,8 @@ export interface GoogleIdentity {
   emailVerified: boolean;
   /** Workspace 도메인. 개인 계정이면 null */
   hd: string | null;
+  /** 화면이 로그인할 때 넣은 nonce(가린 값에 묶인다). 없으면 null */
+  nonce: string | null;
 }
 
 export type GoogleTokenVerifier = (token: string) => Promise<GoogleIdentity>;
@@ -108,6 +110,7 @@ export function googleTokenVerifier(
       email: payload.email,
       emailVerified: payload.email_verified === true,
       hd: typeof payload.hd === "string" ? payload.hd : null,
+      nonce: typeof payload.nonce === "string" ? payload.nonce : null,
     };
   };
 }

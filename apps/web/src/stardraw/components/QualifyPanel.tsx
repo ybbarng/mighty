@@ -19,6 +19,7 @@ import {
   checkHolding,
   importRecoveryCode,
   loadHoldings,
+  qualLoginNonceFor,
   receiveQualification,
 } from "../qual-store";
 import { DEMO_NS, type Services } from "../services";
@@ -146,6 +147,7 @@ export function QualifyPanel({
               ) : GOOGLE_CLIENT_ID ? (
                 <GoogleButton
                   disabled={busy}
+                  nonce={qualLoginNonceFor(services.ns, services.ledger, p)}
                   onCredential={(token) =>
                     void act(async () => {
                       await receiveQualification(
@@ -309,6 +311,7 @@ interface GoogleId {
     client_id: string;
     callback: (r: { credential: string }) => void;
     auto_select?: boolean;
+    nonce?: string;
   }): void;
   renderButton(el: HTMLElement, o: Record<string, unknown>): void;
 }
@@ -341,9 +344,12 @@ function loadGoogle(): Promise<GoogleId> {
 /** 구글 단추. 로그인하면 ID 토큰을 넘긴다(서버가 서명·도메인을 확인한다) */
 function GoogleButton({
   disabled,
+  nonce,
   onCredential,
 }: {
   disabled: boolean;
+  /** ID 토큰을 이 기기의 가린 값에 묶는 값(서버가 확인한다, docs/36 11-13) */
+  nonce: string;
   onCredential: (token: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -359,6 +365,7 @@ function GoogleButton({
           client_id: GOOGLE_CLIENT_ID,
           callback: (r) => callback.current(r.credential),
           auto_select: false,
+          nonce,
         });
         id.renderButton(ref.current, {
           theme: "filled_black",
@@ -371,7 +378,7 @@ function GoogleButton({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [nonce]);
   return (
     <div className={cn(disabled && "pointer-events-none opacity-40")}>
       <div ref={ref} data-qual-google />

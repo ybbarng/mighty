@@ -6,6 +6,7 @@ import {
   concat,
   equalBytes,
   taggedHash,
+  toBase64Url,
   utf8,
 } from "./bytes";
 
@@ -154,6 +155,14 @@ export function blindFactorFromSeed(seed: Uint8Array): bigint {
   let n = 0n;
   for (const b of wide) n = (n << 8n) | BigInt(b);
   return (n % (Fn.ORDER - 1n)) + 1n;
+}
+
+/**
+ * 구글 로그인 nonce = base64url(taggedHash("stardraw/qual-nonce/v1", 가린 값))(2026-10-31 보안 검토 B7).
+ * ID 토큰을 이 가린 값에만 묶어, 새어 나간 토큰으로 남이 자기 가린 값을 보내 그 계정 몫을 먼저 받지 못하게 한다
+ */
+export function qualLoginNonce(blinded: Uint8Array): string {
+  return toBase64Url(taggedHash("stardraw/qual-nonce/v1", blinded));
 }
 
 /** 씨앗 하나로 정해지는 도장 요청(가린 값과 r). 같은 씨앗·기간이면 늘 같다 */
