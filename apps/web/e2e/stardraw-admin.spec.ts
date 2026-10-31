@@ -163,6 +163,11 @@ function serverState() {
       schedulePending: false,
     },
     submitted: [] as Record<string, unknown>[],
+    nextSeal: null as null | {
+      pub: string;
+      fingerprint: string;
+      proof: string;
+    },
   };
 }
 
@@ -263,6 +268,18 @@ test("관리 화면: 국장 패스키를 만들어 설정 값을 보이고, 장�
   await expect(
     console.locator("[data-live-start] option").first(),
   ).toContainText("시작 · 사슬");
+  // 관인 교체(docs/36 11-25): 서버에 다음 관인 열쇠가 있을 때만 버튼이 생긴다
+  await expect(console.locator("[data-seal-rotate]")).toHaveCount(0);
+  state.nextSeal = {
+    pub: Buffer.alloc(65, 4).toString("base64url"),
+    fingerprint: "관인-TEST-TEST-TEST",
+    proof: Buffer.alloc(64, 1).toString("base64url"),
+  };
+  await page.reload();
+  await expect(console.locator("[data-seal-current]")).toContainText("관인-");
+  await console.getByRole("button", { name: "관인 교체" }).click();
+  await expect(message(page)).toContainText("받았습니다");
+  expect(sent).toHaveLength(3);
   const overflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -

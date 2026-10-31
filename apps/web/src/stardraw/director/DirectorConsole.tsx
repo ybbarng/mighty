@@ -13,6 +13,7 @@ import {
   type OperationView,
   roundTimes,
   STAMP_SCHEME_BLS,
+  sealFingerprint,
 } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useState } from "react";
 
@@ -469,7 +470,104 @@ export function DirectorConsole({
           </ul>
         )}
       </Section>
+
+      <SealSection
+        state={state}
+        busy={busy}
+        onRotate={() =>
+          void act(() =>
+            sendBody((s) => {
+              if (!s.nextSeal)
+                throw new Error("서버에 다음 관인 열쇠가 없습니다");
+              return {
+                kind: "seal-rotate",
+                effectiveRound: s.view.next.earliestEffectiveRound,
+                pub: fromBase64Url(s.nextSeal.pub),
+                proof: fromBase64Url(s.nextSeal.proof),
+              };
+            }),
+          )
+        }
+      />
     </div>
+  );
+}
+
+/**
+ * 관인(서버 서명 열쇠)과 관인 교체(docs/36 11-25). 서버에 다음 관인 열쇠 파일이 있을 때만 교체할 수 있다.
+ * 절차는 deploy/stardraw/README.md "관인 교체"
+ */
+function SealSection({
+  state,
+  busy,
+  onRotate,
+}: {
+  state: DirectorState;
+  busy: boolean;
+  onRotate: () => void;
+}) {
+  const { view, schedule } = state;
+  // 관인 내력을 모르는 예전 서버 응답에서도 화면이 돌게 한다
+  const seals = view.seals ?? [];
+  const pending = seals.some((s) => s.status === "pending");
+  return (
+    <Section title="관인">
+      <p className="break-keep text-sm text-white/70">
+        관인은 영수증과 우주국 운영 기록에 찍는 서버 서명 열쇠입니다. 바꾸면
+        3회차 예고 뒤부터 새 관인으로 서명합니다.
+      </p>
+      <p className="text-sm text-white/80" data-seal-current>
+        지금 관인{" "}
+        <code className="text-amber-100/90">
+          {view.sealKey
+            ? sealFingerprint(fromBase64Url(view.sealKey))
+            : "아직 장부에 없음"}
+        </code>
+      </p>
+      {seals.length > 0 && (
+        <ul
+          className="flex flex-col gap-1 text-sm text-white/70"
+          data-seal-history
+        >
+          {seals.map((s) => (
+            <li key={`${s.pub}-${s.round}`}>
+              {s.round === null
+                ? "처음 관인 "
+                : `${roundShort(schedule, s.round)} 기록 · 교체 `}
+              <code className="text-amber-100/90">{s.fingerprint}</code> ·{" "}
+              {roundShort(schedule, s.from)}부터
+              {s.round !== null && ` · ${STATUS_LABEL[s.status]}`}
+            </li>
+          ))}
+        </ul>
+      )}
+      {state.nextSeal && !pending ? (
+        <>
+          <p className="break-keep text-sm text-white/70">
+            서버에 준비된 다음 관인{" "}
+            <code className="text-amber-100/90">
+              {state.nextSeal.fingerprint}
+            </code>
+            . 서버 시작 기록의 지문과 같은지 확인한 뒤 서명합니다.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRotate}
+            className="self-start rounded-lg border border-amber-200/40 px-3 py-1.5 text-amber-50 hover:bg-amber-200/15 disabled:opacity-40"
+            data-seal-rotate
+          >
+            관인 교체
+          </button>
+        </>
+      ) : (
+        !pending && (
+          <p className="break-keep text-sm text-white/55">
+            서버에 다음 관인 열쇠가 없어 교체할 수 없습니다.
+          </p>
+        )
+      )}
+    </Section>
   );
 }
 

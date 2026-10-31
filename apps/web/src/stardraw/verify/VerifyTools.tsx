@@ -259,6 +259,32 @@ export function LedgerCheck() {
               </ul>
             )}
           </div>
+          <div className="flex flex-col gap-1" data-seal-history>
+            <p className="font-semibold text-sm text-white/80">관인 내력</p>
+            {result.operations.seals.length === 0 ? (
+              <p className="text-white/55 text-xs">관인 기록이 아직 없습니다</p>
+            ) : (
+              <ul className="flex flex-col gap-0.5 text-white/65 text-xs">
+                {result.operations.seals.map((s) => (
+                  <li key={`${s.pub}-${s.round}`}>
+                    {s.round === null
+                      ? "처음 관인 "
+                      : `사슬 ${s.round} 기록 · 관인 교체 `}
+                    <code className="text-amber-100/90">{s.fingerprint}</code> ·{" "}
+                    {s.signedBy ? `서명 ${s.signedBy} · ` : ""}
+                    {s.from}회차부터
+                    {s.round === null
+                      ? ""
+                      : s.status === "pending"
+                        ? " · 예고 중"
+                        : s.status === "applied"
+                          ? " · 효력"
+                          : ` · 취소됨(사슬 ${s.cancelledIn})`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {result.qualification.length > 0 && (
             <div className="flex flex-col gap-1" data-qualification-summary>
               <p className="font-semibold text-sm text-white/80">소속</p>

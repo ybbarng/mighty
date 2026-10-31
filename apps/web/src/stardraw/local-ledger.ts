@@ -186,6 +186,8 @@ export interface DirectorState {
   schedule: Schedule;
   view: ReturnType<typeof operationsView>;
   submitted: { id: string; summary: string; effectiveRound: number }[];
+  /** 서버에 다음 관인 열쇠가 있으면 관인 교체 재료(docs/36 11-25). 연습 장부는 없다 */
+  nextSeal?: { pub: string; fingerprint: string; proof: string } | null;
 }
 
 export type LedgerPhase =

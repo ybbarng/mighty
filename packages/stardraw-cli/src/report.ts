@@ -101,6 +101,7 @@ export function ledgerReport(
   for (const p of whole) out.push(`        문제: ${problemText(p)}`);
   out.push("");
   out.push(...directorLines(result));
+  out.push(...sealLines(result));
   out.push(...qualificationLines(result));
   if (findings.length > 0) {
     out.push("");
@@ -178,6 +179,31 @@ export function directorLines(result: CheckResult): string[] {
         `  사슬 ${o.round} 기록 · ${o.summary} · 서명 ${o.signedBy} · ${o.kind === "cancel" ? "바로" : `${o.effectiveRound}회차부터`} · ${STATUS_TEXT[o.status]}`,
       );
   }
+  return out;
+}
+
+/**
+ * 관인 내력(docs/36 11-25): 처음 관인과 관인 교체(누가, 언제, 어느 열쇠로). 서버가 몰래 열쇠를 바꾸면
+ * 영수증·관인 기록이 이 내력과 맞지 않아 드러난다
+ */
+export function sealLines(result: CheckResult): string[] {
+  const out = ["[관인 내력]"];
+  const seals = result.operations.seals;
+  if (seals.length === 0) {
+    out.push("  관인 기록이 아직 없습니다");
+    return out;
+  }
+  const STATUS_TEXT = {
+    pending: "예고 중",
+    applied: "효력",
+    cancelled: "취소됨",
+  };
+  for (const s of seals)
+    out.push(
+      s.round === null
+        ? `  처음 관인 ${s.fingerprint} · ${s.from}회차부터`
+        : `  사슬 ${s.round} 기록 · 관인 교체 ${s.fingerprint} · 서명 ${s.signedBy} · ${s.from}회차부터 · ${STATUS_TEXT[s.status]}${s.cancelledIn ? `(사슬 ${s.cancelledIn}에서)` : ""}`,
+    );
   return out;
 }
 
