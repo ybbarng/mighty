@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
   output: "export",
   // 왼쪽 아래 개발 모드 표시가 게임 화면을 가리지 않게 한다.
   devIndicators: false,
+  // 기념 서류·훈장 견본 화면(page.specimen.tsx)은 개발 서버나 로컬 견본 빌드에서만 페이지가 된다.
+  // 운영·CI 빌드에는 파일이 페이지로 잡히지 않아 견본이 결과물에 실리지 않는다(stardraw/awards.ts AWARD_SPECIMENS)
+  pageExtensions:
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_STARDRAW_SPECIMENS === "1"
+      ? ["tsx", "ts", "jsx", "js", "specimen.tsx"]
+      : ["tsx", "ts", "jsx", "js"],
   generateBuildId: async () => sourceCommit(),
   transpilePackages: [
     "@mighty/engine",

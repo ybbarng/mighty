@@ -12,6 +12,7 @@ import { HDR_GLOW_SRC, useHdrScreen } from "../hdr-glow";
 import type { MyRecords, WinEntry } from "../my-records";
 import { roundShort, roundTitle } from "../round-label";
 import { starOf } from "../sky";
+import { Medal3D } from "./Medal3D";
 import { LottoBall, RANK_LABEL, shortId } from "./parts";
 import { StageOverlay, useReducedMotion } from "./StageOverlay";
 import { ticketUrl } from "./TicketView";
@@ -678,7 +679,28 @@ function Certificate({
  * 훈장(카노푸스 별 훈장): 1등 금장·2등 은장. 기울이면(끌거나 마우스를 올리면) 빛이 돈다.
  * HDR 화면이면 흰색보다 밝은 반짝임(hdr-glow)을 겹친다. 움직임 줄이기면 멈춘 그림
  */
+/** 훈장: 3D(실물 같은 금속·법랑·리본), WebGL이 없으면 평면 그림 */
 export function Medal({
+  award,
+  size = 160,
+}: {
+  award: EarnedAward;
+  size?: number;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <div role="img" aria-label={award.name} data-medal={award.id}>
+      <Medal3D
+        kind={award.id === "medal-gold" ? "gold" : "silver"}
+        width={size}
+        still={reduce}
+        fallback={<MedalFlat award={award} size={size} />}
+      />
+    </div>
+  );
+}
+
+function MedalFlat({
   award,
   size = 160,
 }: {
@@ -702,9 +724,7 @@ export function Medal({
   };
   return (
     <div
-      role="img"
-      aria-label={award.name}
-      data-medal={award.id}
+      aria-hidden="true"
       onPointerMove={onMove}
       onPointerLeave={() => setTilt({ x: 0, y: 0 })}
       className="relative flex flex-col items-center"
