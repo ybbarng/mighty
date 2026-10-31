@@ -36,6 +36,8 @@ export interface ServerConfig {
   ledgerDir: string;
   /** 서버 서명 열쇠(PKCS8 DER base64). 운영은 파일 비밀값으로 마운트한다 */
   serverKeyFile: string;
+  /** 다음 관인 열쇠 파일(관인 교체, docs/36 11-25). 없으면 교체를 준비하지 않은 것. 서버가 만들지 않는다(`seal-next` 명령) */
+  nextServerKeyFile: string;
   /** 열쇠 파일이 없을 때 새로 만들어 저장해도 되는지(개발만) */
   generateServerKey: boolean;
   /** 처음 일정표. 장부가 이미 있으면 장부의 것이 우선이다 */
@@ -173,6 +175,9 @@ export function loadConfig(): ServerConfig {
     ledgerDir: env("STARDRAW_LEDGER_DIR") ?? `${dataDir}/ledger`,
     serverKeyFile:
       env("STARDRAW_SERVER_KEY_FILE") ?? `${dataDir}/server-key.pkcs8`,
+    nextServerKeyFile:
+      env("STARDRAW_NEXT_SERVER_KEY_FILE") ??
+      `${dataDir}/server-key.next.pkcs8`,
     generateServerKey: env("STARDRAW_GENERATE_SERVER_KEY") === "1",
     // 새 장부일 때만 쓴다. 정해 두지 않으면 띄운 뒤 첫 맞춘 마감이 1회차 마감
     schedule: defaultSchedule(

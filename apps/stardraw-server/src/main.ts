@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { backup } from "node:sqlite";
 import { realClock } from "@mighty/fair-play";
 
-import { GOOGLE_CLIENT_ID } from "@mighty/stardraw-core";
+import {
+  GOOGLE_CLIENT_ID,
+  sealFingerprint,
+  toBase64Url,
+} from "@mighty/stardraw-core";
 import { loadConfig } from "./config";
 import { StardrawServer } from "./engine";
 import { googleTokenVerifier } from "./google";
@@ -23,7 +27,11 @@ import { Publisher } from "./publish";
 import { DEFAULT_RELAY_LIMITS, Relay } from "./relay";
 import { RoomHub } from "./room";
 import { parseScheduleLiveArgs, scheduleLive } from "./schedule-live";
-import { loadServerKey } from "./server-key";
+import {
+  createNextServerKey,
+  loadNextServerKey,
+  loadServerKey,
+} from "./server-key";
 import { Store } from "./store";
 
 /** 하늘의 별 따기 회차 서버 시작(docs/36 11-5 3번) */
@@ -36,6 +44,7 @@ async function main(): Promise<void> {
     config.serverKeyFile,
     config.generateServerKey,
   );
+  const nextServerKey = await loadNextServerKey(config.nextServerKeyFile);
   const log = (message: string) => console.log(`[stardraw] ${message}`);
 
   // 봉인 시각 증명: 공개 시각 인증 기관(기본). 끄면(개발용) 이 서버의 시계를 적는다(시각 증명 없음)
@@ -79,6 +88,7 @@ async function main(): Promise<void> {
     pow: config.pow,
     policy: config.policy,
     serverKey,
+    ...(nextServerKey ? { nextServerKey } : {}),
     drand: new HttpDrand(config.drandUrls),
     rootLog,
     anchor,
@@ -192,6 +202,20 @@ function scheduleLiveCommand(args: readonly string[]): void {
   }
 }
 
+/**
+ * 다음 관인 열쇠 파일을 만든다(관인 교체 준비, docs/36 11-25). 이미 있으면 거절한다.
+ * 공개 열쇠와 지문만 출력한다(비밀 열쇠는 파일에만)
+ */
+async function sealNextCommand(): Promise<void> {
+  const config = loadConfig();
+  const pub = await createNextServerKey(config.nextServerKeyFile);
+  console.log(
+    `[stardraw] 다음 관인 열쇠를 만들었다: ${config.nextServerKeyFile}\n` +
+      `  지문 ${sealFingerprint(pub)}\n  공개 열쇠 ${toBase64Url(pub)}\n` +
+      "  먼저 이 파일을 백업하고, 서버를 다시 띄운 뒤 국장 화면에서 「관인 교체」를 서명한다",
+  );
+}
+
 const [command, ...rest] = process.argv.slice(2);
 void (
   isPowWorker()
@@ -200,7 +224,9 @@ void (
       ? backupTo(rest[0])
       : command === "schedule-live"
         ? Promise.resolve().then(() => scheduleLiveCommand(rest))
-        : main()
+        : command === "seal-next"
+          ? sealNextCommand()
+          : main()
 ).catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);

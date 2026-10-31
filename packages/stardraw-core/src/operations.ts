@@ -852,14 +852,17 @@ async function checkSealRotate(
 
 /** 회차 round에 쓰는 관인(예고 중인 교체도 효력 회차가 되면 반영). 관인이 없으면 null */
 export function sealKeyAt(state: OpsState, round: number): Uint8Array | null {
-  if (round <= state.matured) {
-    let key: Uint8Array | null = null;
-    for (const x of state.seals) if (x.from <= round) key = x.pub;
-    return key;
-  }
-  const s = cloneOpsState(state);
-  matureOps(s, round);
-  return s.sealKey;
+  let key: Uint8Array | null = null;
+  for (const x of state.seals) if (x.from <= round) key = x.pub;
+  // 아직 효력을 맞추지 않은 교체(한 번에 하나만 예고하므로 많아야 하나)
+  for (const e of state.ops)
+    if (
+      e.status === "pending" &&
+      e.op.kind === "seal-rotate" &&
+      e.op.effectiveRound <= round
+    )
+      key = e.op.pub;
+  return key;
 }
 
 /** 자격 기간 열기 확인: 쓰는 소속, 기간 길이, 겹치지 않음, 도장 열쇠 */

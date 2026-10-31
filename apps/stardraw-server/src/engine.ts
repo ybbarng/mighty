@@ -63,12 +63,15 @@ import {
   scheduleFromRecords,
   sealDesignations,
   sealDigest,
+  sealFingerprint,
+  sealKeyAt,
   sealLogId,
   sealRoot,
   selectOperations,
   signAsSeal,
   signBlinded,
   signReceipt,
+  signSealProof,
   type Ticket,
   ticketContent,
   ticketId,
@@ -111,6 +114,8 @@ export interface EngineOptions {
   pow: PowParams;
   policy: WebAuthnPolicy;
   serverKey: ServerKey;
+  /** 다음 관인 열쇠(관인 교체, docs/36 11-25). 장부가 정한 효력 회차부터 이 열쇠로 서명한다 */
+  nextServerKey?: ServerKey;
   drand: DrandSource;
   rootLog: RootLog;
   anchor: Anchor;
@@ -341,6 +346,7 @@ export class StardrawServer {
         `국장 열쇠(설정) ${fp}: ${using ? "쓰는 중" : pending ? "지정 예고 중" : "다음 기록에 지정을 싣는다"}`,
       );
     }
+    for (const line of this.sealReport()) this.o.log?.(line);
   }
 
   /** 시험용: 운영 상태를 다 읽을 때까지 */
@@ -379,7 +385,7 @@ export class StardrawServer {
       ).length,
       head: toHex(this.head()),
       entries: round > 0 ? this.o.store.entryCount(round) : 0,
-      serverKey: toBase64Url(this.o.serverKey.publicKey),
+      serverKey: toBase64Url(this.sealFor(Math.max(1, round)).publicKey),
       mode: this.mode,
       liveFrom: liveStart(this.schedule()),
       qualWins: this.qualWins(now),
@@ -786,7 +792,7 @@ export class StardrawServer {
         String(Math.floor(receivedAt / 86400)),
         prefix,
       );
-    return signReceipt(this.o.serverKey, {
+    return signReceipt(this.sealFor(round), {
       round,
       ticketId: ticketId(ticket),
       receivedAt,
@@ -965,7 +971,7 @@ export class StardrawServer {
         `설정의 국장 열쇠 ${directorFingerprint(s.pub)}를 싣지 않는다: ${s.reason}`,
       );
     const sealOps = await Promise.all(
-      designations.bodies.map((b) => signAsSeal(b, this.o.serverKey)),
+      designations.bodies.map((b) => signAsSeal(b, this.sealFor(round))),
     );
     // 발급 수(kind 9): 효력이 생긴 기간마다 이 서버가 찍은 도장 수가 장부의 수보다 많으면 관인으로 싣는다
     const matured = cloneOpsState(this.ops);
@@ -984,7 +990,7 @@ export class StardrawServer {
               period: p.id,
               issued: count,
             },
-            this.o.serverKey,
+            this.sealFor(round),
           ),
         ];
       }),
@@ -1028,6 +1034,8 @@ export class StardrawServer {
     schedule: Schedule;
     view: OperationsView;
     submitted: { id: string; summary: string; effectiveRound: number }[];
+    /** 서버에 다음 관인 열쇠가 있으면: 관리 화면이 관인 교체 기록을 만들 재료(지금 장부 끝 해시에 대한 보유 증명) */
+    nextSeal: { pub: string; fingerprint: string; proof: string } | null;
   }> {
     await this.opsReady;
     const records = this.o.store.recordCount();
@@ -1042,6 +1050,31 @@ export class StardrawServer {
         summary: describeOp(op),
         effectiveRound: op.effectiveRound,
       })),
+      nextSeal: await this.nextSealView(),
+    };
+  }
+
+  private async nextSealView(): Promise<{
+    pub: string;
+    fingerprint: string;
+    proof: string;
+  } | null> {
+    const next = this.o.nextServerKey;
+    if (!next) return null;
+    // 이미 관인이거나 교체가 실린 열쇠면 더 쓸 데가 없다
+    const used =
+      this.ops.seals.some((x) => equalBytes(x.pub, next.publicKey)) ||
+      this.ops.ops.some(
+        (e) =>
+          e.op.kind === "seal-rotate" &&
+          e.status !== "cancelled" &&
+          equalBytes(e.op.pub, next.publicKey),
+      );
+    if (used) return null;
+    return {
+      pub: toBase64Url(next.publicKey),
+      fingerprint: sealFingerprint(next.publicKey),
+      proof: toBase64Url(await signSealProof(next, this.head())),
     };
   }
 
@@ -1515,7 +1548,7 @@ export class StardrawServer {
         rounds: to,
         head: toHex(recordHash(record)),
         sealed: to,
-        serverKey: toBase64Url(this.o.serverKey.publicKey),
+        serverKey: toBase64Url(this.sealFor(to + 1).publicKey),
       }),
     );
     return files.map((f) => ({
@@ -1561,8 +1594,47 @@ export class StardrawServer {
       rounds: this.o.store.recordCount(),
       head: toHex(this.head()),
       sealed: this.o.store.lastSealed(),
-      serverKey: toBase64Url(this.o.serverKey.publicKey),
+      serverKey: toBase64Url(
+        this.sealFor(this.o.store.recordCount() + 1).publicKey,
+      ),
     });
+  }
+
+  /**
+   * 회차 round에 쓰는 관인 열쇠(docs/36 11-25): 장부의 관인 내력이 다음 관인 열쇠를 가리키면 그것, 아니면 지금 열쇠.
+   * 효력 회차가 열리면 다시 띄우지 않아도 저절로 바뀐다
+   */
+  private sealFor(round: number): ServerKey {
+    const next = this.o.nextServerKey;
+    if (!next) return this.o.serverKey;
+    const key = sealKeyAt(this.ops, round);
+    return key && equalBytes(key, next.publicKey) ? next : this.o.serverKey;
+  }
+
+  /** 시작 기록에 찍을 관인 상태: 지금·다음 관인 지문과 장부가 정한 관인과 맞는지(운영 상태를 읽은 뒤) */
+  sealReport(): string[] {
+    const round = this.o.store.recordCount() + 1;
+    const current = this.o.serverKey.publicKey;
+    const next = this.o.nextServerKey?.publicKey ?? null;
+    const lines = [`관인 지문(지금 열쇠 파일) ${sealFingerprint(current)}`];
+    if (next) lines.push(`관인 지문(다음 열쇠 파일) ${sealFingerprint(next)}`);
+    const ledger = sealKeyAt(this.ops, round);
+    const pending = this.ops.ops.find(
+      (e) => e.status === "pending" && e.op.kind === "seal-rotate",
+    );
+    if (pending && pending.op.kind === "seal-rotate")
+      lines.push(
+        `관인 교체 예고 중: ${pending.op.effectiveRound}회차부터 ${sealFingerprint(pending.op.pub)}${next && equalBytes(next, pending.op.pub) ? "(다음 열쇠 파일과 같다)" : "(다음 열쇠 파일과 다르다! 그 회차부터 서명하지 못한다)"}`,
+      );
+    if (
+      ledger &&
+      !equalBytes(ledger, current) &&
+      !(next && equalBytes(ledger, next))
+    )
+      lines.push(
+        `오류: 장부가 정한 ${round}회차 관인 ${sealFingerprint(ledger)}의 열쇠 파일이 없다. 영수증·관인 기록 서명이 검사에서 틀린다`,
+      );
+    return lines;
   }
 }
 

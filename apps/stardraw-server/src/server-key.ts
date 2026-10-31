@@ -66,6 +66,29 @@ export async function newServerKeyPkcs8(): Promise<Uint8Array> {
   );
 }
 
+/** 다음 관인 열쇠 파일(관인 교체, docs/36 11-25)을 읽는다. 없으면 null(교체를 준비하지 않음) */
+export async function loadNextServerKey(
+  path: string,
+): Promise<ServerKey | null> {
+  if (!existsSync(path)) return null;
+  return loadServerKey(path, false);
+}
+
+/** 다음 관인 열쇠 파일을 새로 만든다. 이미 있으면 덮어쓰지 않고 오류. 공개 열쇠를 돌려준다 */
+export async function createNextServerKey(path: string): Promise<Uint8Array> {
+  if (existsSync(path))
+    throw new Error(
+      `다음 관인 열쇠 파일이 이미 있다: ${path} (덮어쓰지 않는다)`,
+    );
+  mkdirSync(dirname(path), { recursive: true });
+  const pkcs8 = await newServerKeyPkcs8();
+  writeFileSync(path, `${Buffer.from(pkcs8).toString("base64")}\n`, {
+    mode: 0o600,
+    flag: "wx",
+  });
+  return (await serverKeyFromPkcs8(pkcs8)).publicKey;
+}
+
 /** 파일에서 읽는다. 없고 `generate`면 새로 만들어 저장한다(개발용) */
 export async function loadServerKey(
   path: string,

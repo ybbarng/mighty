@@ -158,6 +158,8 @@ export async function makeRig(
     mirrorCommitBytes?: number;
     /** 서버 열쇠(기본: 새로 만듦) */
     serverKey?: ServerKey;
+    /** 다음 관인 열쇠(관인 교체, 기본: 없음) */
+    nextServerKey?: ServerKey;
     /** 서버 설정의 국장 열쇠(STARDRAW_DIRECTOR_KEYS) */
     directorKeys?: { credentialId: Uint8Array; pub: Uint8Array }[];
     /** 상품 자격 발급 설정 */
@@ -187,6 +189,7 @@ export async function makeRig(
     pow: TEST_POW,
     policy: { rpId: "game.byb.kr", origins: ["https://game.byb.kr"] },
     serverKey,
+    ...(limits.nextServerKey ? { nextServerKey: limits.nextServerKey } : {}),
     drand,
     rootLog: log,
     anchor: limits.anchor ?? noAnchor,
