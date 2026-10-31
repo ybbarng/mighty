@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 /**
  * 우주국장 관리 화면(docs/36 11-12).

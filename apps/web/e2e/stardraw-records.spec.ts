@@ -1,4 +1,6 @@
-import { expect, test } from "./test";
+import { expect, fixStardrawClock, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 /**
  * 「내 기록」(docs/36 11-23): 데모 둘러보기의 가짜 장부(1회 1~5등 응모권을 모두 내 것으로 친다)로

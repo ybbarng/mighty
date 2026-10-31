@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 // 하늘의 별 따기 보안 배우기: 단계마다 규칙 코드가 이 브라우저에서 실제로 계산하고,
 // 바꿔 보면 확인이 실패하는 것을 본다. 상호작용은 휴대폰 세로 한 크기로, 데스크톱은 배치와 스크린숏만 본다

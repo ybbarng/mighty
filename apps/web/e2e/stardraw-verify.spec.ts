@@ -1,4 +1,6 @@
-import { expect, test } from "./test";
+import { expect, fixStardrawClock, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 // 검증하기 페이지: 시험 값이 이 브라우저에서 다시 계산돼 기대값과 같고, 장부 전체 검사가 통과를 보이며,
 // 휴대폰 세로에서 가로로 넘치지 않는다(배치는 한 크기로 충분하다)

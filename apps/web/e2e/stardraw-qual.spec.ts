@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 /**
  * 소속(docs/36 11-13, 화면에서는 "상품 자격" 대신 "소속"). 실제 구글 로그인은 화면 시험에서 부르지 않는다(서버의 토큰 확인은 서버 시험이 본다).

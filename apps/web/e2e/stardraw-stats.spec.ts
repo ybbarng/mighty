@@ -1,4 +1,6 @@
-import { expect, test } from "./test";
+import { expect, fixStardrawClock, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 test("관측 기록: 지난 회차에서 들어가 공개 장부로 계산한 통계를 보고 돌아간다", async ({
   page,

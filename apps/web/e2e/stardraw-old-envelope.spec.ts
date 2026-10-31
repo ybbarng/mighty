@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 /** 패스키는 Chrome 가상 인증기(CDP WebAuthn)로 */
 async function virtualAuthenticator(page: Page) {

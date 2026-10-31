@@ -40,3 +40,16 @@ function waitForReady(page: Page): void {
     return response;
   };
 }
+
+/**
+ * 하늘의 별 따기 화면 시험의 시작 시각(2026-11-02 12:05 한국 시각). 연습 장부는 매시 :55에 마감하고 정각에 추첨해,
+ * 실제 시각이 :55~정각에 걸리면 "앞 회차 추첨이 끝나면 응모할 수 있습니다"로 바뀌어 같은 시험이 가끔 실패했다
+ * (2026-10-31 CI). 마감에서 50분 떨어진 이 시각에서 시작하게 고정하고, 그 뒤로는 시계가 저절로 흐른다
+ * (연출을 앞당기는 시험은 이 위에서 `page.clock.runFor`를 부른다). 실제 시각에 따라 결과가 달라지지 않는다
+ */
+export const STARDRAW_START = new Date("2026-11-02T03:05:00Z");
+
+/** 별 따기 시험마다 시작 전에 부른다: `test.beforeEach(({ page }) => fixStardrawClock(page))` */
+export async function fixStardrawClock(page: Page): Promise<void> {
+  await page.clock.install({ time: STARDRAW_START });
+}

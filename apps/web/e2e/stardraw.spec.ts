@@ -1,5 +1,7 @@
 import sky from "../src/stardraw/sky-data.json" with { type: "json" };
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 /**
  * 패스키는 Chrome 가상 인증기(CDP WebAuthn)로: 누르면 곧바로 지문이 확인된 것처럼 서명한다.
@@ -22,7 +24,7 @@ async function virtualAuthenticator(page: Page, verified = true) {
 
 /**
  * 추첨 화면에서 결과까지 간다. 움직임 줄이기(화면 시험 기본)면 연출 없이 결과가 바로 나온다.
- * 연출을 켠 시험은 먼저 page.clock.install()을 부르고 이 함수가 시계를 연출 길이만큼 앞당긴다
+ * 연출을 켠 시험은 이 함수가 시계(fixStardrawClock으로 설치됨)를 연출 길이만큼 앞당긴다
  * (처음 보는 추첨은 건너뛸 수 없다)
  */
 async function showDrawResult(page: Page, fastForward = false) {
@@ -364,7 +366,6 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("home-result.png"),
     fullPage: true,
   });
-  if (motion) await page.clock.install();
   await envelope.click();
   if (motion) {
     // 처음 보는 추첨은 건너뛰는 단추 없이 연출이 돈다

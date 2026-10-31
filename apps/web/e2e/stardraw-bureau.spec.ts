@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "./test";
+import { expect, fixStardrawClock, type Page, test } from "./test";
+
+test.beforeEach(({ page }) => fixStardrawClock(page));
 
 async function noSideScroll(page: Page) {
   const wide = await page.evaluate(
