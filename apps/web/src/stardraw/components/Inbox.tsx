@@ -14,6 +14,7 @@ import { AstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf } from "../astronaut/identity";
 import { myTicketFor, prepareAnswer } from "../confirm";
 import type { ConfirmOutcome, OpenRequest } from "../confirm-relay";
+import { FX } from "../fx-timing";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
@@ -21,6 +22,7 @@ import { starOf } from "../sky";
 import type { Sealed } from "../spoiler";
 import type { KeyInfo } from "../wallet";
 import { useIssued } from "./AstronautPanel";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 import { formatTime, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 
@@ -129,6 +131,8 @@ export function Inbox({
     return ticket && record ? myRank(record, ticket) : null;
   };
 
+  /** 확인 요청 승인도 신분증 제시 틀 */
+  const idp = useIdPresent(services);
   const accept = async (req: OpenRequest) => {
     setBusy(req.id);
     setError(null);
@@ -141,11 +145,24 @@ export function Inbox({
           "이 응모권을 낸 등록증이 이 기기에 없어 승인할 수 없습니다",
         );
       setApproving({ id: req.id, key, phase: "checking" });
-      const { answer, stars } = await prepareAnswer(
-        await services.wallet.signerFor(key),
-        ticket,
-        req,
+      // 신분증 제시 틀: 오버레이 → 우주국 말 → 등록증을 내밀면 그 누름에 바로 패스키
+      const prepared = await idp.run(
+        async () =>
+          prepareAnswer(await services.wallet.signerFor(key), ticket, req),
+        {
+          verb: "제시",
+          pub: key.pub,
+          tap: true,
+          readFirst: true,
+          done: "당첨 확인을 승인했습니다.",
+          hold: FX.idHoldSubmit,
+        },
       );
+      if (!prepared) {
+        setApproving(null);
+        return;
+      }
+      const { answer, stars } = prepared;
       await services.relay.answer(req.id, answer);
       const list = [
         ...loadAnswered(services.ns),
@@ -202,6 +219,7 @@ export function Inbox({
 
   return (
     <section className="flex flex-col gap-3" aria-label="당첨자 확인 요청">
+      <IdPresentView services={services} id={idp} />
       {error && (
         <p
           role="alert"

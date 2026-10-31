@@ -616,9 +616,11 @@ export function Home({
     return (
       <IssuedView services={services} setup={setup} header={<BackToGames />} />
     );
+  // 등록·제시 오버레이는 입구와 첫 화면 두 갈래의 같은 자리(맨 앞)에 둔다: 확인되어 갈래가 바뀌어도 끊기지 않게
   if (key === null)
     return (
       <>
+        <WelcomeFlyer services={services} setup={setup} />
         {setup.issued && (
           <IssuedView services={services} setup={setup} overlay />
         )}
@@ -1543,7 +1545,14 @@ function RecoverKey({
           services.wallet.recoverPasskey((id) =>
             services.ledger.passkeyPub(id),
           ),
-        { verb: "제시", pub: (k) => k.pub, hold: FX.idHoldSubmit },
+        {
+          verb: "제시",
+          pub: (k) => k.pub,
+          blank: true,
+          tap: true,
+          readFirst: true,
+          hold: FX.idHoldSubmit,
+        },
       );
       if (!key) {
         setState("missing");
@@ -1569,7 +1578,7 @@ function RecoverKey({
   };
   return (
     <div className="flex flex-col items-center gap-2 text-sm">
-      <IdPresentView services={services} id={idp} verb="제시" />
+      <IdPresentView services={services} id={idp} />
       <button
         type="button"
         disabled={state === "working"}

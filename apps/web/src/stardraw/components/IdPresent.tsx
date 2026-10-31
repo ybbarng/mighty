@@ -15,11 +15,17 @@ export interface IdPresent {
   closing: boolean;
   /** 사람이 등록증을 내밀기(밀어 올리거나 누르기)를 기다리는 중 */
   asking: boolean;
+  /** 카드 단추 이름(화면 읽기 프로그램) */
+  label: string;
+  /** 아직 누구인지 모를 때 실루엣 카드를 보인다(입장·발급) */
+  blank: boolean;
 }
 
+/** 신분증 제시 틀의 목적 */
+export type IdVerb = "제시" | "제출" | "확인";
+
 /** 신분증 제시 틀의 위쪽 문구. 목적 자리만 다르다 */
-export const idText = (verb: "제시" | "제출") =>
-  `패스키로 신분증을 ${verb}해 주세요.`;
+export const idText = (verb: IdVerb) => `패스키로 신분증을 ${verb}해 주세요.`;
 
 /**
  * 신분증 제시 틀: 패스키 서명을 요구하는 곳이 같은 차례·같은 문구 틀·같은 시간으로 쓴다(2026-10-31 사용자:
@@ -37,7 +43,18 @@ export function useIdPresent(services: Services) {
     action: () => Promise<T | null>,
     opts: {
       /** 문구의 목적 자리 */
-      verb: "제시" | "제출";
+      verb: IdVerb;
+      /** 위쪽 문구를 따로 정할 때(발급: "패스키로 우주인 등록증을 발급합니다.") */
+      text?: string;
+      /** 카드 단추 이름을 따로 정할 때(발급: "등록증 발급") */
+      label?: string;
+      /** 누구인지 모를 때 실루엣 카드로 기다린다 */
+      blank?: boolean;
+      /**
+       * 확인 뒤 등록증 올라옴·확인 표시·인사를 보인다(기본). false면 패스키가 끝나는 대로 걷지 않고 바로 넘긴다
+       * (발급: 다음 연출인 등록증 발급 화면이 이어서 뜬다)
+       */
+      reveal?: boolean;
       /** 등록증에 그릴 공개 열쇠(미리 알면), 아니면 결과에서 */
       pub?: Uint8Array | ((r: T) => Uint8Array);
       /** 확인 뒤 바뀌는 결과 문구(없으면 그대로) */
@@ -70,9 +87,11 @@ export function useIdPresent(services: Services) {
       pub: opts.pub instanceof Uint8Array ? opts.pub : null,
       card: "hidden",
       checked: false,
-      text: idText(opts.verb),
+      text: opts.text ?? idText(opts.verb),
       closing: false,
       asking: false,
+      label: opts.label ?? `신분증 ${opts.verb}`,
+      blank: opts.blank ?? false,
     };
     const go = (patch: Partial<IdPresent>) => {
       p = { ...p, ...patch };
@@ -123,6 +142,10 @@ export function useIdPresent(services: Services) {
     }
     const got = r;
     opts.onConfirmed?.(got);
+    if (opts.reveal === false) {
+      setPresent(null);
+      return got;
+    }
     if (typeof opts.pub === "function") go({ pub: opts.pub(got) });
     await wait(FX.pause);
     go({ card: "up" });
@@ -157,12 +180,10 @@ export function useIdPresent(services: Services) {
 export function IdPresentView({
   services,
   id,
-  verb,
   backdrop = true,
 }: {
   services: Services;
   id: ReturnType<typeof useIdPresent>;
-  verb: "제시" | "제출";
   backdrop?: boolean;
 }) {
   const p = id.present;
@@ -176,10 +197,11 @@ export function IdPresentView({
       text={p.text}
       closing={p.closing}
       backdrop={backdrop}
+      blank={p.blank}
       press={
         p.asking
           ? {
-              label: `신분증 ${verb}`,
+              label: p.label,
               onPress: () => id.confirm(true),
               onCancel: () => id.confirm(false),
             }

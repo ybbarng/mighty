@@ -27,7 +27,10 @@ export function IdFlyer({
   closing = false,
   backdrop = true,
   press,
+  blank = false,
 }: {
+  /** 아직 누구인지 모를 때(pub 없음) 실루엣 카드로 기다린다 */
+  blank?: boolean;
   /**
    * 사람이 할 일이 있을 때만: 등록증 자체가 단추다(「신분증 제출」). 위로 밀어 올리거나 한 번 누르면(Enter·Space·↑도)
    * `onPress`를 그 동작 안에서 바로 부른다(패스키 창은 누름 직후에만 열리는 브라우저가 있다). 작은 「취소」로 돌아간다.
@@ -87,7 +90,7 @@ export function IdFlyer({
         </p>
       )}
       <div className="relative flex w-full flex-1 flex-col items-center justify-center gap-5">
-        {pub && (
+        {(pub || blank) && (
           <FlyingCard
             services={services}
             pub={pub}
@@ -130,13 +133,12 @@ function FlyingCard({
   label,
 }: {
   services: Services;
-  pub: Uint8Array;
+  /** 없으면 실루엣 카드(누구인지 모를 때). 확인되면 같은 자리에서 실제 등록증으로 바뀐다 */
+  pub: Uint8Array | null;
   spot: CardSpot;
   onPress?: (() => void) | undefined;
   label?: string | undefined;
 }) {
-  const a = useMemo(() => astronautOf(pub), [pub]);
-  const issued = useIssued(services, pub);
   const [drag, setDrag] = useState<number | null>(null);
   const start = useRef<{ y: number; lastY: number; lastT: number } | null>(
     null,
@@ -208,7 +210,9 @@ function FlyingCard({
         }
       }}
       className={cn(
-        "relative w-[min(20rem,86vw)] touch-none select-none rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.55)] outline-none [--peek:22vh] focus-visible:ring-2 focus-visible:ring-amber-200/70",
+        "relative w-[min(20rem,86vw)] touch-none select-none rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.55)] outline-none [--peek:22vh]",
+        // 초점 테두리는 내밀기를 기다릴 때만(낸 뒤에는 남지 않게)
+        pressable && "focus-visible:ring-2 focus-visible:ring-amber-200/70",
         // 떠오름은 지우지 않고 멈춘다(지우면 그만큼 튀어 보인다)
         "sd-sheet-hint",
         pressable
@@ -224,7 +228,40 @@ function FlyingCard({
       }}
     >
       <div className="pointer-events-none">
-        <AstronautCard astronaut={a} issued={issued} clock={services.clock} />
+        {pub ? <RealCard services={services} pub={pub} /> : <BlankCard />}
+      </div>
+    </div>
+  );
+}
+
+function RealCard({ services, pub }: { services: Services; pub: Uint8Array }) {
+  const a = useMemo(() => astronautOf(pub), [pub]);
+  const issued = useIssued(services, pub);
+  return <AstronautCard astronaut={a} issued={issued} clock={services.clock} />;
+}
+
+/** 실루엣 카드: 아직 누구인지 모르는 등록증 자리(이름·사진 칸이 비어 있다) */
+function BlankCard() {
+  return (
+    <div
+      data-blank-card
+      className="relative flex aspect-[1.586] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/15 bg-[linear-gradient(135deg,#1e2a4a,#141c33_55%,#1b1736)] p-4"
+    >
+      <span className="font-bold text-white/80">우주인 등록증</span>
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex flex-1 flex-col gap-2">
+          <span className="h-2.5 w-2/3 rounded-full bg-white/20" />
+          <span className="h-2.5 w-1/2 rounded-full bg-white/20" />
+          <span className="h-2.5 w-3/4 rounded-full bg-white/20" />
+        </div>
+        <svg
+          viewBox="0 0 40 48"
+          aria-hidden="true"
+          className="h-20 w-16 shrink-0 rounded-lg border border-white/15 bg-white/5 p-2 text-white/30"
+        >
+          <circle cx="20" cy="17" r="8" fill="currentColor" />
+          <path d="M5 46c1-9 7-15 15-15s14 6 15 15z" fill="currentColor" />
+        </svg>
       </div>
     </div>
   );

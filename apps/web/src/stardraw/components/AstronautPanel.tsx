@@ -6,9 +6,11 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { checkOwner } from "../astronaut/owner-check";
+import { FX } from "../fx-timing";
 import { checkHolding, loadHoldings } from "../qual-store";
 import type { Services } from "../services";
 import { sitePolicy } from "../wallet";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 
 /** 날짜 "2026. 10. 30."(ms) */
 export function dateOf(ms: number): string {
@@ -75,13 +77,35 @@ export function AstronautPanel({
   const affiliation = useAffiliation(services, pub);
   const [copied, setCopied] = useState(false);
   // 앞면 주인 확인과 뒷면 열쇠 꺼내 보기가 같은 본인 확인을 쓴다(그 등록증의 패스키, 기기 안에서 확인)
-  const confirmOwner = async () =>
-    checkOwner(
-      pub,
-      await services.wallet.ownerSigner(pub),
-      sitePolicy(),
-      Math.floor(services.clock.now() / 1000),
-    );
+  /** 본인 확인도 신분증 제시 틀: 오버레이 → 우주국 말 → 등록증을 내밀면 그 누름에 바로 패스키 */
+  const idp = useIdPresent(services);
+  const confirmOwner = async () => {
+    try {
+      const ok = await idp.run(
+        async () => {
+          const yes = await checkOwner(
+            pub,
+            await services.wallet.ownerSigner(pub),
+            sitePolicy(),
+            Math.floor(services.clock.now() / 1000),
+          );
+          if (!yes) throw new Error("이 기기의 등록증이 아닙니다");
+          return true;
+        },
+        {
+          verb: "확인",
+          pub,
+          tap: true,
+          readFirst: true,
+          done: "본인이 맞습니다.",
+          hold: FX.idHoldSubmit,
+        },
+      );
+      return ok === true;
+    } catch {
+      return false;
+    }
+  };
 
   const share = async () => {
     const text = `${residentPhrase(a)}, 하늘의 별 따기 우주인으로 등록했어요.`;
@@ -109,6 +133,7 @@ export function AstronautPanel({
       data-astronaut={a.number}
     >
       {greeting}
+      <IdPresentView services={services} id={idp} />
       <AstronautCard
         astronaut={a}
         issued={issued}

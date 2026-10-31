@@ -296,6 +296,7 @@ export function EnterView({
   if (!key)
     return (
       <section className="flex flex-col gap-4" aria-label="응모">
+        <WelcomeFlyer services={services} setup={setup} />
         {setup.issued && (
           <IssuedView services={services} setup={setup} overlay />
         )}
@@ -320,6 +321,8 @@ export function EnterView({
   const submitting = stage !== "pick" && stage !== "busy";
   return (
     <section className="flex flex-col gap-4" aria-label="응모">
+      {/* 등록·제시 오버레이는 등록 전 화면과 같은 자리(맨 앞)에: 확인되어 화면이 바뀌어도 끊기지 않게 */}
+      <WelcomeFlyer services={services} setup={setup} />
       {/* 제출 연출은 화면 전체 오버레이 한 층에서(뒤의 고르는 화면은 흐려지고 조작되지 않는다) */}
       {submitting && (
         <StageOverlay label="응모">
@@ -343,7 +346,7 @@ export function EnterView({
           )}
         </StageOverlay>
       )}
-      <IdPresentView services={services} id={id} verb="제출" backdrop={false} />
+      <IdPresentView services={services} id={id} backdrop={false} />
       <EnterHeader onBack={onBack} />
 
       <SkyBoard
@@ -413,8 +416,6 @@ export function EnterView({
       )}
 
       {error && <ErrorBox error={error} />}
-
-      <WelcomeFlyer services={services} setup={setup} />
 
       <button
         type="button"

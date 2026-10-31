@@ -121,6 +121,8 @@ function NoticeCard({
       const made = await id.run(() => createInvite(services, ticket), {
         verb: "제시",
         pub: ticket.pub,
+        tap: true,
+        readFirst: true,
         done: "확인 링크를 만들었습니다.",
         hold: FX.idHoldSubmit,
         onConfirmed: (inv) => {
@@ -168,7 +170,7 @@ function NoticeCard({
       data-win-notice={ticket.round}
       className="flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
     >
-      <IdPresentView services={services} id={id} verb="제시" />
+      <IdPresentView services={services} id={id} />
       <p className="font-semibold text-amber-200 text-xs tracking-wide">
         카노푸스 우주국 당첨 안내
       </p>

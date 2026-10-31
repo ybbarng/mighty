@@ -12,10 +12,10 @@ import {
   toHex,
 } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import { InviteQr } from "@/components/InviteQr";
 import { cn } from "@/lib/cn";
 import { checkOwner } from "../astronaut/owner-check";
+import { FX } from "../fx-timing";
 import {
   checkHolding,
   importRecoveryCode,
@@ -27,6 +27,7 @@ import {
 import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
 import { sitePolicy } from "../wallet";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 
 /**
  * 상품 자격 받기·백업·불러오기(docs/36 11-13). 기관 계정으로 확인하면 이 기기에서 만든 자격 열쇠에
@@ -258,26 +259,44 @@ function Backup({
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
   const key = services.wallet.loadKey();
+  const idp = useIdPresent(services);
   const leaked = foreignUses(services, holding);
   const reveal = async () => {
     if (!key) return;
     setChecking(true);
     setDenied(false);
     try {
-      const ok = await checkOwner(
-        key.pub,
-        await services.wallet.ownerSigner(key.pub),
-        sitePolicy(),
-        Math.floor(services.clock.now() / 1000),
+      // 신분증 제시 틀: 오버레이 → 우주국 말 → 등록증을 내밀면 그 누름에 바로 패스키
+      const ok = await idp.run(
+        async () => {
+          const yes = await checkOwner(
+            key.pub,
+            await services.wallet.ownerSigner(key.pub),
+            sitePolicy(),
+            Math.floor(services.clock.now() / 1000),
+          );
+          if (!yes) throw new Error("이 기기의 등록증이 아닙니다");
+          return true;
+        },
+        {
+          verb: "확인",
+          pub: key.pub,
+          tap: true,
+          readFirst: true,
+          done: "본인이 맞습니다.",
+          hold: FX.idHoldSubmit,
+        },
       );
-      setShown(ok);
-      setDenied(!ok);
+      if (ok) setShown(true);
+    } catch {
+      setDenied(true);
     } finally {
       setChecking(false);
     }
   };
   return (
     <div className="flex flex-col gap-3" data-qual-holding={id}>
+      <IdPresentView services={services} id={idp} />
       <p className="font-semibold text-emerald-200">
         받았습니다 · 소속 번호 {id}
       </p>
