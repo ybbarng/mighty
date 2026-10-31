@@ -65,6 +65,19 @@ export function ledgerMirrorPath(ledger: string, file: string): string {
   return `ledgers/${ledger}/ledger/${file}`;
 }
 
+/**
+ * 추첨 전 봉인 사본(docs/36 11-20): 서버가 봉인하자마자, drand가 나오기 전에 올리는 봉인 파일(`seals/N.json`) 그대로.
+ * 회차 사본과 달리 나중 커밋에서 고치지 않는다. 이 회차를 무효로 닫았는데 여기에 drand 전 토큰이 있으면 검사가 실패로 잡는다
+ */
+export function earlySealPath(ledger: string, round: number): string {
+  return `ledgers/${ledger}/early-seals/${String(round).padStart(6, "0")}.json`;
+}
+
+/** 추첨 전 봉인 사본 커밋 메시지: "하늘의 별 따기 {회차}회 봉인(추첨 전) (장부 {id})" */
+export function earlySealCommitMessage(ledger: string, round: number): string {
+  return `하늘의 별 따기 ${round}회 봉인(추첨 전) (장부 ${ledger})`;
+}
+
 /** 앵커 저장소의 장부 사본 기준 주소(뒤에 `/ledger/…`를 붙여 받는다) */
 export function githubLedgerBase(
   repo: string,

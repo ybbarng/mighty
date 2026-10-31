@@ -332,6 +332,25 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
             <p className="text-white/80">
               무효 회차는 당첨 번호와 당첨자 없이 기록만 남습니다.
             </p>
+            <ul className={li}>
+              <li>
+                무효는 결과보다 먼저 정해져야 합니다. 서버는 봉인하자마자 drand
+                전에 봉인 파일을 공개하고 앵커 저장소에도{" "}
+                <code>ledgers/{"{장부 id}"}/early-seals/N.json</code>로
+                올립니다. 무효 회차인데 그 봉인 값의 맞는 토큰이 drand 시각 전에
+                있었다는 파일이 나오면(이 사본이나 누군가 받아 둔 파일) 검사는
+                실패입니다
+              </li>
+              <li>
+                무효 회차마다 drand 값을 받아 무효가 아니었다면 나왔을 결과를
+                계산해, 1~3등이 있었으면 「주의」 맨 앞에 적습니다
+              </li>
+              <li>
+                터미널 검사기 <code>stardraw-verify watch</code>는 봉인 파일을
+                나오는 대로 받아 두고, <code>--evidence &lt;폴더&gt;</code>로 그
+                파일들을 증거로 넣습니다
+              </li>
+            </ul>
           </Rule>
 
           <Rule title="봉인이 추첨보다 먼저였다는 증거" file="tsa.ts">
@@ -343,7 +362,8 @@ quicknet 회차 r의 시각 = 1692803367 + (r − 1) × 3`}</Code>
             <Code>{`log = { kind: "tsa", tokens: [{ tsa, genTime, token(DER, base64) }, …] }
 토큰에 실린 값(messageImprint, SHA-256) = SHA-256(sealDigest)
 rootLoggedAt = 맞는 토큰 가운데 가장 이른 genTime(초, 소수점 아래 버림)
-통과: 실린 토큰이 모두 맞고, 서로 다른 기관 1곳 이상, rootLoggedAt이 기록과 같다`}</Code>
+통과: 실린 토큰이 모두 맞고, 서로 다른 기관 1곳 이상, rootLoggedAt이 기록과 같다
+주의: 기관이 한 곳뿐인 유효 회차(서버는 두 곳을 받아야 봉인한다)`}</Code>
             <ul className={li}>
               <li>
                 토큰 서명: CMS SignedData의 서명된 속성(

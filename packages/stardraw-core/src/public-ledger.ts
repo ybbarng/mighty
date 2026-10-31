@@ -1,9 +1,11 @@
 import {
+  earlySealPath,
   GENESIS_ANCHOR_BRANCH,
   GENESIS_ANCHOR_PATH,
   githubAnchorVerifier,
   githubGenesisVerifier,
   githubLedgerBase,
+  ledgerId,
   parseGenesisAnchorFile,
   rawText,
 } from "./anchor";
@@ -15,8 +17,14 @@ import {
   toBase64Url,
   toHex,
 } from "./bytes";
-import type { BeaconVerifier } from "./drand";
-import { RANKS, type Rank } from "./draw";
+import {
+  type BeaconVerifier,
+  type DrandBeacon,
+  drandRandomness,
+  drandRoundForClose,
+  fetchQuicknetBeacon,
+} from "./drand";
+import { drawNumbers, drawSeed, RANKS, type Rank, rankOf } from "./draw";
 import {
   type DirectorHistoryLine,
   directorHistory,
@@ -31,12 +39,13 @@ import {
 } from "./polite-fetch";
 import { decodeRecord, type RoundRecord } from "./record";
 import { decodeRegistration, type KeyRegistration } from "./registration";
-import { sealDigest } from "./round";
-import { phaseOf, type Schedule } from "./schedule";
+import { isVoidRound, sealDigest } from "./round";
+import { phaseOf, roundTimes, type Schedule } from "./schedule";
 import { DEFAULT_WEBAUTHN_POLICY } from "./signature";
 import { decodeTicket, type Ticket, ticketId } from "./ticket";
 import {
   DEFAULT_TSA_MIN,
+  SERVER_TSA_MIN,
   type TsaAuthority,
   type TsaProof,
   verifyTsaProof,
@@ -180,6 +189,10 @@ export interface PublicCheckOptions {
   onProgress?: (done: number, total: number) => void;
   /** 이미 받아 둔 장부(`loadPublicLedger`). 주면 다시 받지 않는다 */
   ledger?: PublicLedger;
+  /** 무효 회차의 추첨 전 봉인 증거를 더 찾는 곳(터미널 검사기의 `--evidence` 폴더, docs/36 11-20) */
+  earlySeals?: EarlySealSource;
+  /** 무효 회차의 drand 값 받기(시험만 바꿔 끼운다. 기본은 drand 중계) */
+  voidBeacon?: (drandRound: number) => Promise<DrandBeacon | null>;
   /** 한꺼번에 받는 수·다시 받기(시험은 손으로 옮기는 시계를 넣는다) */
   polite?: PoliteFetchOptions;
 }
@@ -496,6 +509,13 @@ export async function checkPublicLedger(
     options.ledger ??
     (await loadPublicLedger(options.base, f, options.onProgress));
   const { genesis, head, records, tickets, registrations, seals } = ledger;
+  // 무효 회차의 추첨 전 봉인 증거(docs/36 11-20): 앵커 저장소의 추첨 전 사본 + 넣어 준 증거
+  const earlySeals = combineEarlySealSources(
+    ...(anchorRepo
+      ? [githubEarlySealSource({ repo: anchorRepo, genesis, fetchFn: f })]
+      : []),
+    ...(options.earlySeals ? [options.earlySeals] : []),
+  );
 
   const report = await verifyLedger(genesis, records, tickets, registrations, {
     powSample: options.powSample ?? 8,
@@ -548,7 +568,15 @@ export async function checkPublicLedger(
           detail: `계산 ${toHex(report.head)}, 파일 ${head.head}`,
         },
     sealKeyItem(report, head),
-    voidRoundsItem(records, report.schedule),
+    await voidRoundsItem(records, tickets, report.schedule, {
+      earlySeals,
+      beacon:
+        options.voidBeacon ??
+        ((round) => fetchQuicknetBeacon(round, { fetchFn: f })),
+      ...(options.tsaAuthorities
+        ? { tsaAuthorities: options.tsaAuthorities }
+        : {}),
+    }),
     await timestampItem(
       records,
       seals,
@@ -612,29 +640,158 @@ export const VOID_ROUNDS_LABEL =
   "무효 회차(봉인 증명 없이 닫혀 당첨이 없는 회차)";
 
 /**
- * 무효 회차를 "통과"에 묻히지 않게 따로 보인다(2026-10-31 보안 검토). 무효 회차는 규칙상 허용되지만
- * 운영자가 결과를 본 뒤 봉인 증명을 싣지 않아 회차를 지우는 데 쓰일 수 있으므로, 수와 목록을 주의로 남긴다.
- * 정식 단계 회차가 있으면 따로 적는다. 통과 여부는 바꾸지 않는다
+ * 추첨 전에 공개된 봉인 파일을 찾는 곳(docs/36 11-20). 그 회차에서 찾은 파일을 모두 돌려준다(없으면 빈 목록).
+ * 앵커 저장소의 추첨 전 봉인 사본, 터미널 검사기가 받아 둔 증거 폴더 등
  */
-export function voidRoundsItem(
+export type EarlySealSource = (round: number) => Promise<PublicSealFile[]>;
+
+/** 앵커 저장소의 추첨 전 봉인 사본(`early-seals/`). 브랜치는 main, trial 순으로 본다 */
+export function githubEarlySealSource(opts: {
+  repo: string;
+  genesis: Schedule;
+  fetchFn?: typeof fetch;
+}): EarlySealSource {
+  const ledger = ledgerId(opts.genesis);
+  const f = opts.fetchFn ?? ((...args) => fetch(...args));
+  return async (round) => {
+    const found: PublicSealFile[] = [];
+    for (const branch of [GENESIS_ANCHOR_BRANCH, "trial"]) {
+      const text = await rawText(
+        f,
+        opts.repo,
+        branch,
+        earlySealPath(ledger, round),
+      );
+      const file = text === null ? null : parseSealFile(text, round);
+      if (file) found.push(file);
+    }
+    return found;
+  };
+}
+
+/** 여러 원천을 합친다 */
+export function combineEarlySealSources(
+  ...sources: readonly EarlySealSource[]
+): EarlySealSource {
+  return async (round) =>
+    (await Promise.all(sources.map((s) => s(round)))).flat();
+}
+
+/** 봉인 파일 글을 읽는다. 모양이 아니거나 다른 회차면 null */
+export function parseSealFile(
+  text: string,
+  round?: number,
+): PublicSealFile | null {
+  try {
+    const file = JSON.parse(text) as PublicSealFile;
+    if (
+      typeof file?.round !== "number" ||
+      typeof file.digest !== "string" ||
+      (round !== undefined && file.round !== round)
+    )
+      return null;
+    return file;
+  } catch {
+    return null;
+  }
+}
+
+export interface VoidRoundsOptions {
+  /** 추첨 전 봉인 증거를 찾는 곳. 없으면 보지 않는다 */
+  earlySeals?: EarlySealSource;
+  /** 무효 회차의 drand 값을 받는다(있었을 결과 계산). 없으면 계산하지 않는다 */
+  beacon?: (drandRound: number) => Promise<DrandBeacon | null>;
+  tsaAuthorities?: readonly TsaAuthority[];
+}
+
+/**
+ * 무효 회차(docs/36 11-20, 보안 표 O10). 무효는 규칙상 허용되지만 운영자가 결과를 본 뒤 봉인 증거를 숨겨
+ * 남의 당첨을 지우는 데 쓰일 수 있다. 그래서 무효 회차마다
+ * ① 그 봉인 값의 맞는 시각 인증 토큰이 drand 전에 있었다는 증거(추첨 전 봉인 사본, 받아 둔 파일)가 나오면 **실패**
+ *    (증거를 받고도 무효로 닫았다),
+ * ② drand 값을 받아 "무효가 아니었다면 나왔을 결과"를 계산해, 1~3등이 있었으면 맨 앞에 적는다(주의).
+ * 무효 회차가 없으면 통과
+ */
+export async function voidRoundsItem(
   records: readonly RoundRecord[],
+  tickets: readonly (readonly Ticket[])[],
   schedule: Schedule,
-): CheckItem {
-  const voids = records.filter((r) => r.void).map((r) => r.round);
-  if (voids.length === 0)
-    return {
-      id: "void-rounds",
-      label: VOID_ROUNDS_LABEL,
-      status: "pass",
-      detail: "없음",
-    };
-  const live = voids.filter((n) => phaseOf(schedule, n) !== "trial");
-  return {
+  options: VoidRoundsOptions = {},
+): Promise<CheckItem> {
+  const item = (status: CheckStatus, detail: string): CheckItem => ({
     id: "void-rounds",
     label: VOID_ROUNDS_LABEL,
-    status: "warn",
-    detail: `${voids.length}회: ${voids.join(", ")}${live.length > 0 ? ` · 정식 단계 ${live.length}회: ${live.join(", ")}` : ""}`,
-  };
+    status,
+    detail,
+  });
+  const voids = records
+    .map((r, i) => ({ record: r, tickets: tickets[i] ?? [] }))
+    .filter((v) => v.record.void);
+  if (voids.length === 0) return item("pass", "없음");
+
+  const hidden: string[] = [];
+  const prized: string[] = [];
+  const unknown: number[] = [];
+  for (const { record, tickets: list } of voids) {
+    const { closesAt } = roundTimes(schedule, record.round);
+    const drandRound = drandRoundForClose(closesAt);
+    if (options.earlySeals) {
+      const digest = sealDigest(record);
+      for (const file of await options.earlySeals(record.round)) {
+        const log = file.log as TsaProof | null | undefined;
+        if (file.digest !== toHex(digest) || log?.kind !== "tsa") continue;
+        const check = await verifyTsaProof(log, {
+          digest,
+          minValid: 1,
+          ...(options.tsaAuthorities
+            ? { authorities: options.tsaAuthorities }
+            : {}),
+        });
+        if (check.ok && !isVoidRound(closesAt, check.loggedAt)) {
+          hidden.push(
+            `${record.round}회: 추첨 전에 봉인 증거(시각 인증)가 있었는데 무효로 닫혔다`,
+          );
+          break;
+        }
+      }
+    }
+    if (options.beacon) {
+      const beacon = await options.beacon(drandRound);
+      if (!beacon) {
+        unknown.push(record.round);
+        continue;
+      }
+      const draw = drawNumbers(drawSeed(record.round, drandRandomness(beacon)));
+      const counts = new Map<Rank, number>();
+      for (const t of list) {
+        const rank = rankOf(draw, t.numbers);
+        if (rank !== null && rank <= 3)
+          counts.set(rank, (counts.get(rank) ?? 0) + 1);
+      }
+      if (counts.size > 0)
+        prized.push(
+          `${record.round}회: 무효가 아니었다면 ${[...counts]
+            .sort((a, b) => a[0] - b[0])
+            .map(([rank, n]) => `${rank}등 ${n}장`)
+            .join(" · ")}`,
+        );
+    }
+  }
+  if (hidden.length > 0) return item("fail", hidden.join(" / "));
+  const rounds = voids.map((v) => v.record.round);
+  const live = rounds.filter((n) => phaseOf(schedule, n) !== "trial");
+  return item(
+    "warn",
+    [
+      ...prized,
+      `${rounds.length}회: ${rounds.join(", ")}${live.length > 0 ? ` · 정식 단계 ${live.length}회: ${live.join(", ")}` : ""}`,
+      ...(unknown.length > 0
+        ? [
+            `있었을 결과를 계산하지 못한 회차(drand를 받지 못함): ${unknown.join(", ")}`,
+          ]
+        : []),
+    ].join(" / "),
+  );
 }
 
 export const TIMESTAMP_LABEL =
@@ -656,6 +813,8 @@ async function timestampItem(
   const missing: number[] = [];
   let missingLive = false;
   const names = new Set<string>();
+  /** 기관이 서버 기본(SERVER_TSA_MIN)보다 적게 실린 유효 회차(docs/36 11-20: 통과 규칙은 그대로, 주의) */
+  const single: number[] = [];
   let proved = 0;
   let voided = 0;
   for (const [i, record] of records.entries()) {
@@ -683,6 +842,8 @@ async function timestampItem(
     else {
       proved++;
       for (const s of check.stamps) names.add(s.tsa);
+      const ok = new Set(check.stamps.filter((s) => s.ok).map((s) => s.tsa));
+      if (ok.size < SERVER_TSA_MIN) single.push(record.round);
     }
   }
   const item = (status: CheckStatus, detail: string): CheckItem => ({
@@ -701,6 +862,12 @@ async function timestampItem(
       voided > 0
         ? "모든 회차가 무효라 볼 토큰이 없습니다"
         : "닫힌 회차가 없습니다",
+    );
+  const done = `${proved}회차 확인(${[...names].join(", ")})${voided > 0 ? `, 무효 ${voided}회차` : ""}`;
+  if (single.length > 0)
+    return item(
+      "warn",
+      `${done} / 시각 인증 기관이 한 곳뿐인 회차: ${single.join(", ")}`,
     );
   return item(
     "pass",

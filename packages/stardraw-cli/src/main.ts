@@ -10,6 +10,7 @@ import {
 } from "@mighty/stardraw-core";
 
 import { type Command, parseArgs, USAGE } from "./args";
+import { folderEarlySealSource, watchOnce } from "./evidence";
 import { ledgerReport } from "./report";
 import {
   type BuildHashes,
@@ -98,6 +99,9 @@ async function runLedger(
     powSample: cmd.powSample,
     ...(cmd.anchorRepo !== undefined ? { anchorRepo: cmd.anchorRepo } : {}),
     ...(mine.length > 0 ? { mine } : {}),
+    ...(cmd.evidence
+      ? { earlySeals: folderEarlySealSource(cmd.evidence) }
+      : {}),
   });
   const failed =
     result.items.some((i) => i.status === "fail") ||
@@ -352,6 +356,29 @@ async function runSite(
   return ok ? 0 : 1;
 }
 
+/** 봉인 파일을 나오는 대로 받아 둔다(docs/36 11-20). --once가 아니면 끌 때까지 */
+async function runWatch(
+  cmd: Extract<Command, { kind: "watch" }>,
+  io: Io,
+): Promise<number> {
+  io.print(
+    `${cmd.base}의 봉인 파일을 ${cmd.out}에 받아 둡니다(${cmd.interval}초마다)`,
+  );
+  for (;;) {
+    try {
+      for (const line of await watchOnce(cmd.base, cmd.out, io.fetch))
+        io.print(line);
+    } catch (err) {
+      io.error(
+        `묻지 못했습니다: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      if (cmd.once) return 2;
+    }
+    if (cmd.once) return 0;
+    await new Promise((r) => setTimeout(r, cmd.interval * 1000));
+  }
+}
+
 export async function main(
   argv: readonly string[],
   overrides: Partial<Io> = {},
@@ -370,6 +397,7 @@ export async function main(
     return 0;
   }
   try {
+    if (cmd.kind === "watch") return await runWatch(cmd, io);
     return cmd.kind === "ledger"
       ? await runLedger(cmd, io)
       : await runSite(cmd, io);

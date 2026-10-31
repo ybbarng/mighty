@@ -79,8 +79,10 @@ export async function checkPracticeLedger(ledger: {
       checkItemsFrom(
         report.problems,
         [
-          voidRoundsItem(
+          // 연습 장부는 drand가 가짜이고 앵커가 없어 있었을 결과·추첨 전 증거는 보지 않는다
+          await voidRoundsItem(
             closed.map((c) => c.record),
+            closed.map((c) => c.tickets),
             report.schedule,
           ),
           {

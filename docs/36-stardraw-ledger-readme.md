@@ -31,6 +31,7 @@ ledgers/<장부 id>/ledger/rounds/000001.json  │ (https://game.byb.kr/stardraw
 ledgers/<장부 id>/ledger/seals/000001.json   │ 같은 바이트
 ledgers/<장부 id>/ledger/bundles/10/000001.json  │ 다 찬 10·100회차 묶음
 ledgers/<장부 id>/ledger/bundles/100/000001.json ┘
+ledgers/<장부 id>/early-seals/000001.json     추첨 전 봉인 사본: 봉인하자마자 drand 전에 올린 봉인 파일. 고치지 않는다
 ```
 
 - 장부 id는 처음 일정표 해시 앞 16자리입니다(`genesis.txt`의 `ledger` 줄).

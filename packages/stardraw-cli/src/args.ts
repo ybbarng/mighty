@@ -21,6 +21,18 @@ export type Command =
       powSample: number;
       anchorRepo: string | null | undefined;
       json: boolean;
+      /** 무효 회차의 추첨 전 봉인 증거로 넣을 폴더(`watch`가 받아 둔 봉인 파일, docs/36 11-20) */
+      evidence: string | undefined;
+    }
+  | {
+      kind: "watch";
+      base: string;
+      /** 봉인 파일을 받아 둘 폴더 */
+      out: string;
+      /** 몇 초마다 물을지 */
+      interval: number;
+      /** 한 번만 묻고 끝낸다 */
+      once: boolean;
     }
   | {
       kind: "site";
@@ -47,7 +59,13 @@ export const USAGE = `stardraw-verify — 하늘의 별 따기 독립 검사기
       --pow-all                작업 증명을 모두 계산(느림)
       --anchor-repo <소유자/이름>  앵커 저장소(기본 ybbarng/stardraw-ledger)
       --no-anchor              앵커 저장소를 보지 않음
+      --evidence <폴더>         watch로 받아 둔 봉인 파일을 무효 회차의 증거로 넣음
       --json                   결과를 JSON으로
+
+  stardraw-verify watch [서버 주소]          봉인 파일을 나오는 대로 받아 둠(추첨 전 증거 모으기)
+      --out <폴더>              받아 둘 폴더(기본 stardraw-evidence)
+      --interval <초>           몇 초마다 물을지(기본 15)
+      --once                   한 번만 묻고 끝냄
 
   stardraw-verify site [사이트 주소]         화면 코드 해시 비교(기본 ${DEFAULT_SITE})
       --hashes <파일|주소>      해시 목록(기본 <사이트>/build-hashes.json)
@@ -61,9 +79,9 @@ export const USAGE = `stardraw-verify — 하늘의 별 따기 독립 검사기
 export function parseArgs(argv: readonly string[]): Command {
   const args = [...argv];
   if (args.includes("--help") || args.includes("-h")) return { kind: "help" };
-  let kind: "ledger" | "site" = "ledger";
-  if (args[0] === "site" || args[0] === "ledger") {
-    kind = args.shift() as "ledger" | "site";
+  let kind: "ledger" | "site" | "watch" = "ledger";
+  if (args[0] === "site" || args[0] === "ledger" || args[0] === "watch") {
+    kind = args.shift() as "ledger" | "site" | "watch";
   }
   const positional: string[] = [];
   const tickets: string[] = [];
@@ -76,6 +94,10 @@ export function parseArgs(argv: readonly string[]): Command {
   let build: string | undefined;
   let all = false;
   let download = true;
+  let evidence: string | undefined;
+  let out = "stardraw-evidence";
+  let interval = 15;
+  let once = false;
   const value = (flag: string): string => {
     const v = args.shift();
     if (v === undefined || v.startsWith("--"))
@@ -84,7 +106,7 @@ export function parseArgs(argv: readonly string[]): Command {
   };
   while (args.length > 0) {
     const a = args.shift() as string;
-    const only = (k: "ledger" | "site") => {
+    const only = (k: "ledger" | "site" | "watch") => {
       if (kind !== k) throw new Error(`${a}는 ${k} 명령에서만 씁니다`);
     };
     switch (a) {
@@ -128,6 +150,26 @@ export function parseArgs(argv: readonly string[]): Command {
         only("ledger");
         anchorRepo = null;
         break;
+      case "--evidence":
+        only("ledger");
+        evidence = value(a);
+        break;
+      case "--out":
+        only("watch");
+        out = value(a);
+        break;
+      case "--interval": {
+        only("watch");
+        const n = Number(value(a));
+        if (!Number.isFinite(n) || n < 5)
+          throw new Error("--interval은 5초 이상입니다(서버에 짐이 되지 않게)");
+        interval = n;
+        break;
+      }
+      case "--once":
+        only("watch");
+        once = true;
+        break;
       case "--hashes":
         only("site");
         hashes = value(a);
@@ -162,6 +204,15 @@ export function parseArgs(argv: readonly string[]): Command {
       powSample,
       anchorRepo,
       json,
+      evidence,
+    };
+  if (kind === "watch")
+    return {
+      kind,
+      base: trim(positional[0] ?? DEFAULT_API),
+      out,
+      interval,
+      once,
     };
   if (!download && !build)
     throw new Error("--no-download이면 --build로 비교할 폴더를 주세요");

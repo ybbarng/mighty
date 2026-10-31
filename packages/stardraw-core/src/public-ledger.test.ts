@@ -8,7 +8,8 @@ import {
   ledgerId,
 } from "./anchor";
 import { toBase64Url, toHex } from "./bytes";
-import { drandRoundForClose } from "./drand";
+import { drandRandomness, drandRoundForClose, drandTime } from "./drand";
+import { drawNumbers, drawSeed } from "./draw";
 import { generateSigner } from "./keys";
 import { directorFingerprint, OP_VERSION, signAsSeal } from "./operations";
 import {
@@ -31,7 +32,7 @@ import { encodeRecord, genesisHash, recordHash } from "./record";
 import { closeRound, sealDigest, sortTickets } from "./round";
 import { roundTimes, type Schedule } from "./schedule";
 import { FakeTsa, registerKeys, signers, ticketFor } from "./testing";
-import { ticketId } from "./ticket";
+import { type Ticket, ticketId } from "./ticket";
 import { sealImprint, type TsaProof } from "./tsa";
 
 const checkServerLedger = checkPublicLedger;
@@ -180,11 +181,40 @@ describe("봉인 시각 증명(공개 시각 인증 토큰)", () => {
   const timestamp = async (fetch: typeof globalThis.fetch) =>
     (await check(fetch)).items.find((i) => i.id === "timestamp");
 
-  it("토큰이 봉인 값을 담고 가장 이른 시각이 기록과 같으면 통과한다", async () => {
+  it("토큰이 봉인 값을 담고 가장 이른 시각이 기록과 같으면 통과한다. 기관이 한 곳뿐이면 주의(docs/36 11-20)", async () => {
     const token = tokenFor(sealDigest(RECORD), RECORD.rootLoggedAt);
     expect(await timestamp(withLog(proof(token)))).toMatchObject({
+      status: "warn",
+      detail: "1회차 확인(tsa-a) / 시각 인증 기관이 한 곳뿐인 회차: 1",
+    });
+    const second = new FakeTsa("tsa-b", () => RECORD.rootLoggedAt);
+    const both: TsaProof = {
+      kind: "tsa",
+      tokens: [
+        ...proof(token).tokens,
+        {
+          tsa: "tsa-b",
+          genTime: RECORD.rootLoggedAt,
+          token: btoa(
+            String.fromCharCode(
+              ...second.stamp(
+                sealImprint(sealDigest(RECORD)),
+                RECORD.rootLoggedAt,
+              ),
+            ),
+          ),
+        },
+      ],
+    };
+    const result = await checkServerLedger({
+      base: "",
+      fetch: withLog(both),
+      beaconVerifier: () => true,
+      tsaAuthorities: [tsa.authority, second.authority],
+    });
+    expect(result.items.find((i) => i.id === "timestamp")).toMatchObject({
       status: "pass",
-      detail: "1회차 확인(tsa-a)",
+      detail: "1회차 확인(tsa-a, tsa-b)",
     });
   });
 
@@ -569,15 +599,87 @@ describe("무효 회차를 따로 보인다(통과에 묻히지 않게)", () => 
     ],
   };
 
-  it("무효 회차가 없으면 통과, 있으면 주의로 회차 목록과 정식 단계 회차를 적는다", () => {
-    expect(voidRoundsItem([rec(1, false)], SCHEDULE)).toMatchObject({
-      status: "pass",
-    });
+  it("무효 회차가 없으면 통과, 있으면 주의로 회차 목록과 정식 단계 회차를 적는다", async () => {
+    expect(await voidRoundsItem([rec(1, false)], [[]], SCHEDULE)).toMatchObject(
+      {
+        status: "pass",
+      },
+    );
     expect(
-      voidRoundsItem([rec(1, true), rec(2, false), rec(3, true)], withLive),
+      await voidRoundsItem(
+        [rec(1, true), rec(2, false), rec(3, true)],
+        [[], [], []],
+        withLive,
+      ),
     ).toMatchObject({
       status: "warn",
       detail: "2회: 1, 3 · 정식 단계 1회: 3",
     });
+  });
+});
+
+describe("무효 회차를 결과보다 먼저 정하기(docs/36 11-20, 보안 표 O10)", () => {
+  // 1회차를 운영자가 "봉인 증거를 못 받았다"며 무효로 닫은 장면
+  const voided = { ...RECORD, void: true, rootLoggedAt: 0 } as RoundRecord;
+  const drandRound = drandRoundForClose(closesAt);
+  const tsa = new FakeTsa("tsa-a", () => RECORD.rootLoggedAt);
+  const earlyFile = (genTime: number) => ({
+    round: 1,
+    digest: toHex(sealDigest(RECORD)),
+    loggedAt: genTime,
+    log: {
+      kind: "tsa",
+      tokens: [
+        {
+          tsa: "tsa-a",
+          genTime,
+          token: btoa(
+            String.fromCharCode(
+              ...tsa.stamp(sealImprint(sealDigest(RECORD)), genTime),
+            ),
+          ),
+        },
+      ],
+    } satisfies TsaProof,
+  });
+  const check = (files: ReturnType<typeof earlyFile>[]) =>
+    voidRoundsItem([voided], [[]], SCHEDULE, {
+      earlySeals: async (round) => (round === 1 ? files : []),
+      tsaAuthorities: [tsa.authority],
+    });
+
+  it("추첨 전에 받은 봉인 증거가 나오면 무효로 닫은 장부는 실패다(증거를 숨기고 결과를 본 뒤 무효)", async () => {
+    expect(await check([earlyFile(closesAt + 10)])).toMatchObject({
+      status: "fail",
+      detail: "1회: 추첨 전에 봉인 증거(시각 인증)가 있었는데 무효로 닫혔다",
+    });
+  });
+
+  it("drand 뒤에 찍힌 토큰이나 다른 봉인 값의 증거는 무효를 뒤집지 않는다(주의)", async () => {
+    const late = drandTime(drandRound) + 1;
+    expect((await check([earlyFile(late)])).status).toBe("warn");
+    expect(
+      (await check([{ ...earlyFile(closesAt + 10), digest: "00".repeat(32) }]))
+        .status,
+    ).toBe("warn");
+  });
+
+  it("무효가 아니었다면 나왔을 결과를 계산해, 1~3등이 있었으면 맨 앞에 적는다", async () => {
+    const beacon = { round: drandRound, signature: new Uint8Array(48).fill(7) };
+    const draw = drawNumbers(drawSeed(1, drandRandomness(beacon)));
+    const winner = { numbers: draw.numbers } as Ticket;
+    const item = await voidRoundsItem([voided], [[winner]], SCHEDULE, {
+      beacon: async (r) => (r === drandRound ? beacon : null),
+    });
+    expect(item).toMatchObject({
+      status: "warn",
+      detail: "1회: 무효가 아니었다면 1등 1장 / 1회: 1",
+    });
+    const unknown = await voidRoundsItem([voided], [[winner]], SCHEDULE, {
+      beacon: async () => null,
+    });
+    expect(unknown.detail).toContain(
+      "있었을 결과를 계산하지 못한 회차(drand를 받지 못함): 1",
+    );
   });
 });

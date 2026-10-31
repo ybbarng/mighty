@@ -13,7 +13,22 @@ describe("명령줄", () => {
       powSample: 8,
       anchorRepo: undefined,
       json: false,
+      evidence: undefined,
     });
+  });
+
+  it("watch: 봉인 파일을 받아 둘 폴더와 간격, --evidence로 넣기", () => {
+    expect(
+      parseArgs(["watch", "--out", "ev", "--interval", "30", "--once"]),
+    ).toEqual({
+      kind: "watch",
+      base: DEFAULT_API,
+      out: "ev",
+      interval: 30,
+      once: true,
+    });
+    expect(() => parseArgs(["watch", "--interval", "1"])).toThrow("5초 이상");
+    expect(parseArgs(["--evidence", "ev"])).toMatchObject({ evidence: "ev" });
   });
 
   it("장부 선택: 주소 끝 / 는 떼고, 응모권은 여러 번, 작업 증명 전부, 앵커 끄기", () => {

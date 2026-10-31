@@ -66,8 +66,14 @@ export const TSA_AUTHORITIES: readonly TsaAuthority[] = [
 /** 서버가 기본으로 묻는 기관 */
 export const DEFAULT_TSA_NAMES: readonly string[] = ["digicert", "sectigo"];
 
-/** 봉인 값이 몇 곳 이상의 유효한 토큰을 받아야 하는지 기본값(docs/36 11-1) */
+/** 봉인 값이 몇 곳 이상의 유효한 토큰을 받아야 하는지, 검사의 통과 규칙(docs/36 11-1). 지난 회차가 깨지지 않게 1로 둔다 */
 export const DEFAULT_TSA_MIN = 1;
+
+/**
+ * 서버가 봉인 성공으로 보는 기관 수 기본값(docs/36 11-20, 2026-10-31부터 2). 운영 장부 88회 모두 두 곳 토큰이 있었다.
+ * 기관 한 곳과 운영자가 짜는 것도 막는다. 검사는 이보다 적게 실린 유효 회차를 실패가 아니라 주의로 보인다
+ */
+export const SERVER_TSA_MIN = 2;
 
 export function tsaByName(name: string): TsaAuthority | undefined {
   return TSA_AUTHORITIES.find((a) => a.name === name);

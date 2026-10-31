@@ -71,3 +71,47 @@ export function randomnessMatches(
 ): boolean {
   return equalBytes(drandRandomness(beacon), randomness);
 }
+
+/** drand HTTP 중계(둘 다 CORS를 열어 두어 브라우저에서도 받는다, 2026-10-31 확인) */
+export const DRAND_RELAYS = [
+  "https://api.drand.sh",
+  "https://drand.cloudflare.com",
+] as const;
+
+/**
+ * 정해진 회차 값을 중계 여러 곳에 차례로 묻는다. 서명은 규칙의 quicknet 공개 열쇠로 직접 확인하므로 중계를 믿지 않는다.
+ * 아직 안 나왔거나 받지 못하면 null
+ */
+export async function fetchQuicknetBeacon(
+  round: number,
+  options: {
+    urls?: readonly string[];
+    verify?: BeaconVerifier;
+    fetchFn?: typeof fetch;
+    timeoutMs?: number;
+  } = {},
+): Promise<DrandBeacon | null> {
+  const f = options.fetchFn ?? ((...args) => fetch(...args));
+  const verify = options.verify ?? verifyQuicknetBeacon;
+  for (const base of options.urls ?? DRAND_RELAYS) {
+    try {
+      const res = await f(`${base}/${QUICKNET.hash}/public/${round}`, {
+        signal: AbortSignal.timeout(options.timeoutMs ?? 5000),
+      });
+      if (!res.ok) continue;
+      const body = (await res.json()) as {
+        round: number;
+        signature: string;
+        randomness: string;
+      };
+      const beacon = { round: body.round, signature: fromHex(body.signature) };
+      if (beacon.round !== round) continue;
+      if (!randomnessMatches(beacon, fromHex(body.randomness))) continue;
+      if (!verify(beacon)) continue;
+      return beacon;
+    } catch {
+      // 다음 중계로
+    }
+  }
+  return null;
+}
