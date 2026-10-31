@@ -253,6 +253,18 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 | B7 | **구글 ID 토큰에 nonce가 없어 새어 나간 토큰으로 남의 발급 자리를 선점** | 낮음 | 고침: nonce = base64url(taggedHash("stardraw/qual-nonce/v1", 가린 값)), 서버가 payload.nonce를 확인. 시험 `qual.test.ts` 「구글 로그인 nonce」 |
 | B8 | **구글 로그인 스크립트가 같은 출처에서 돌고 보안 헤더가 없음** | 낮음 | 일부: 별 따기 경로에 `frame-ancestors 'none'`·`X-Frame-Options: DENY`(클릭재킹), CI가 nginx 설정 문법을 운영 이미지로 검사. 전체 CSP·구글 로그인 분리는 계획(11-22) |
 | B9 | **작은 것**: 신분증 제시가 서버가 준 공개 열쇠를 그대로 저장, `/api/director/qual-key` 인증 없음, 쓰인 확인 링크 토큰이 기기에 남음 | 낮음 | 고침: 그 자리 서명으로 공개 열쇠 확인, 국장 패스키로 장부 끝 해시에 한 서명 요구(`issuerKeyRequestMessage`, 시험 `qual.test.ts` 「새 도장 열쇠는 국장 서명으로만」), 당첨 안내를 열 때 쓰였거나 기한 지난 링크를 지움 |
+| I1 | **회사 IP 하나 때문에 회사 전체가 그날 소속을 못 받음**(2026-10-31 서버·인프라 검토, 커밋 메시지에서는 D1~D12): 소속 받기 IP 앞부분 하루 200번, 없는 확인 링크 60번 상한이 남아, 엉터리 요청으로 그날 회사 전원을 막을 수 있었다. 모르는 구글 열쇠 번호마다 구글에 다시 물었다 | 높음 | 고침: 두 상한을 설정(`STARDRAW_QUAL_ISSUES_PER_PREFIX`, `STARDRAW_BAD_LINKS_PER_PREFIX`)으로 꺼내 운영에서 끔(진짜 상한은 계정마다 기간 한 번, 토큰 144비트). 모르는 kid는 5분에 한 번만 다시 받음(시험 `google.test.ts` 「5분에 한 번만」) |
+| I2 | **작업 증명 홍수로 정상 응모를 밀어내기**: 풀지 않은 응모를 되풀이하면 서버가 매번 Argon2(16MB)를 계산했고 계산이 이벤트 루프를 붙잡아, 가짜 1000건 뒤 정상 응모가 9.8초 기다렸다(마감 직전이면 마감으로 떨어짐) | 높음 | 고침: 회차 동안 떨어진 본문은 다시 계산하지 않고 같은 열쇠는 3번이면 막음(`PowFailures`), Argon2를 작업 스레드로(`pow-pool.ts`), 줄에서 5초 넘게 기다리면 503 + 화면이 1·2·3·4초 뒤 다시 냄, 소속 증서까지 확인된 응모는 앞줄. 재현: 같은 본문 300번은 Argon2 1번, 열쇠 150개 동시 홍수에서 정상 응모 1.5초 → 13ms 만에 503(다시 내기). 시험 `limits.test.ts` 「Argon2 줄」·「작업 증명 실패 기억」, `engine.test.ts` 「작업 증명 홍수 막기」, `remote-ledger.test.ts` 「작업 증명 줄이 가득 찼을 때」. 남은 것: 열쇠를 공짜로 계속 새로 만드는 홍수는 줄 상한·503으로 버틴다. 싼 앞단 작업 증명(요청에 SHA-256 한 줄, 장부 형식은 그대로)은 계획(11-24) |
+| I3 | 진짜 작업 증명으로 응모를 대량으로 넣어 디스크·장부 크기 키우기 | 중간 | 나중: 소속 증서 없는 응모에만 회차 상한, 응모가 늘면 국장이 다음 회차 `powTarget`을 올리는 절차, 디스크 감시(서버 저장소 호스트 스크립트) |
+| I4 | **장부 DB 백업이 없어 서버를 잃으면 끝** | 높음 | 서버 저장소에 매시 백업(`apps/stardraw/backup.sh`, 48시간치)과 집 서버가 gpg로 암호화해 끌어가는 길(`dump.sh`, `home/scripts/pull-stardraw-backup.sh`, 30일치). 크론 등록·집 서버 키·암호화 열쇠·관인 따로 보관은 사용자 일(deploy/stardraw/README.md 「백업과 되살리기」). 앵커 사본으로 DB를 다시 세우는 도구는 나중 |
+| I5 | **외부 PR 코드가 운영에 배포될 수 있음**: 이미지 워크플로가 실행된 CI의 브랜치 이름만 봐서, 포크의 `main` 브랜치 PR도 통과하면 배포로 이어졌다 | 높음 | 고침: 빌드 조건에 `workflow_run.event == 'push'`와 같은 저장소인지(`head_repository.full_name == github.repository`) |
+| I6 | CI 토큰이 쓰기 권한이고 .git에 남음, 써드파티 액션 태그 고정 | 중간 | 고침: CI `permissions: contents: read`, checkout `persist-credentials: false`, 액션 커밋 SHA 고정, pnpm `minimumReleaseAge` 7일, 배포 호스트 키를 비밀값 `SERVER_HOST_KEY`로 고정할 수 있게(넣는 것은 사용자). 저장소 설정(SHA 고정 강제, main 보호)은 사용자 |
+| I7 | **같은 출처의 바깥 통계 스크립트**: 화면 코드 해시 밖이라 바뀌어도 모르고, 복구 코드를 읽고 패스키 서명을 띄울 수 있다. 전체 CSP·HSTS 없음 | 중간 | 고침: `/stardraw` 아래에서 통계 스크립트를 싣지 않음, 별 따기 경로 CSP(보고 전용으로 먼저 → 막는 머리말로, 11-22), nosniff. HSTS는 서버 저장소 Traefik(재시작은 사용자) |
+| I8 | 시각 인증 두 곳이 모두 3분 안에 와야 해서 한 기관 장애로 무효, 실패 때 매초 두 곳 모두에 다시 물음 | 중간 | 고침: 받은 토큰은 들고 모자란 기관에만 15초 간격, 기한 30초 전엔 받은 한 곳으로 봉인(검사는 한 곳 통과·「주의」). 시험 `outside.test.ts` 「받은 토큰은 들고」 |
+| I9 | 앵커 저장소 보호 없음, 국장 운영 기록이 서명 확인 전에 장부 전체를 훑음 | 중간·낮음 | 고침: 운영 기록은 실릴 회차의 국장 열쇠인지부터 본다. 앵커 저장소 룰셋(강제 push·삭제 금지)은 사용자 |
+| I10 | 감시 빈곳(무효 회차·앵커 밀림·응답 시간·디스크·발급 수) | 중간 | 고침: `/api/state`에 `voidRecent`·`anchorLag`·`earlySealLag`·`sealOverdueSeconds`·`qualIssued`, 서버 저장소 gatus에 조건. 디스크·백업 날짜는 호스트 스크립트(나중) |
+| I11 | 서버·운영자 계정을 장악하면: 도장 비밀 열쇠로 증서 몰래 만들기(P10), 응모 골라 거절, 결과 모를 때 아무 회차나 무효, GitHub·DNS·구글 콘솔 계정 탈취 | 중간 | 발급 수 감시(I10)로 회사 인원보다 많으면 보인다. 계정 2단계 인증(보안 키), 국장 열쇠 두 개, 도장 비밀 열쇠 따로 보관은 사용자·나중 |
+| I12 | 작은 것: API 응답 nosniff, Traefik 전역 연결 제한, 장부 파일 CDN | 낮음 | 고침: API `X-Content-Type-Options: nosniff`. Traefik 연결 제한·CDN은 나중 |
 
 ### 개인정보
 
@@ -1151,9 +1163,9 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 
 ### 11-22. 전체 CSP와 구글 로그인 분리 계획(보안 표 B8, 2026-10-31)
 
-- 지금: 별 따기 경로(`/stardraw`, `/stardraw/…`)에만 `Content-Security-Policy: frame-ancestors 'none'`과 `X-Frame-Options: DENY`(deploy/nginx.conf). 다른 게임 페이지는 그대로다.
+- 지금(2026-10-31 보안 표 I7): 별 따기 경로(`/stardraw`, `/stardraw/…`)에 `frame-ancestors 'none'`·`X-Frame-Options: DENY`·`nosniff`와 전체 CSP. CSP: `default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob:; connect-src 'self' https://api.drand.sh https://drand.cloudflare.com https://raw.githubusercontent.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; …; object-src 'none'; base-uri 'self'; form-action 'self'`. `'unsafe-inline'`은 Next 정적 내보내기의 인라인 하이드레이션 스크립트 때문이고, `'wasm-unsafe-eval'`은 작업 증명(hash-wasm) 때문이다. 바깥 출처의 스크립트와 연결(통계 스크립트 포함)은 막힌다. 막는 머리말로 건 로컬 정적 서버에서 별 따기 화면 시험과 주요 화면 15곳에 위반이 없었고, 운영에는 보고 전용(`Content-Security-Policy-Report-Only`)으로 먼저 걸었다. 운영 화면(소속 받기의 구글 로그인 포함)에서 위반이 없으면 막는 머리말로 바꾼다. 통계 스크립트는 별 따기 경로에서 싣지 않는다. 다른 게임 페이지는 그대로다.
 - 왜 전체 CSP를 바로 걸지 않나: ① Next 정적 내보내기가 페이지마다 인라인 스크립트(하이드레이션 데이터)를 넣어 `script-src 'self'`만으로는 화면이 깨진다. 빌드할 때 인라인 스크립트 해시를 모아 페이지마다 헤더에 넣거나 `strict-dynamic`을 써야 한다. ② 구글 로그인(GIS)은 `accounts.google.com`의 스크립트·iframe·스타일을 같은 페이지에서 쓴다. ③ 같은 출처(game.byb.kr)에 다른 게임이 모두 있어, 별 따기만 엄격히 해도 다른 게임 페이지에서 스크립트가 주입되면 같은 localStorage(자격 씨앗)에 닿는다.
-- 계획: (1) 구글 로그인을 짧은 전용 페이지(`/stardraw/qualify/google`)로 떼어 ID 토큰만 받아 돌아오게 하고, 그 페이지에만 GIS 출처를 허용 (2) 빌드 후 단계에서 `out/stardraw/**.html`의 인라인 스크립트 해시를 모아 nginx `add_header`로(또는 `<meta http-equiv>`로) `script-src 'self' 'sha256-…'` (3) 자격 씨앗을 별 따기 전용 하위 도메인(예: stardraw.byb.kr)으로 옮겨 다른 게임과 저장소를 가르는 것은 주소가 바뀌어 패스키 rpId도 바뀌므로 정식 시작 전에만 할 수 있다 — 사용자 결정이 필요하다.
+- 남은 계획(인라인 스크립트까지 막기): (1) 구글 로그인을 짧은 전용 페이지(`/stardraw/qualify/google`)로 떼어 ID 토큰만 받아 돌아오게 하고, 그 페이지에만 GIS 출처를 허용 (2) 빌드 후 단계에서 `out/stardraw/**.html`의 인라인 스크립트 해시를 모아 nginx `add_header`로(또는 `<meta http-equiv>`로) `script-src 'self' 'sha256-…'` (3) 자격 씨앗을 별 따기 전용 하위 도메인(예: stardraw.byb.kr)으로 옮겨 다른 게임과 저장소를 가르는 것은 주소가 바뀌어 패스키 rpId도 바뀌므로 정식 시작 전에만 할 수 있다 — 사용자 결정이 필요하다.
 
 
 ### 11-23. 내 기록(2026-10-31, 사용자 "가능하면 즉시 만들어줘")
@@ -1168,3 +1180,10 @@ v(u8) ‖ round(u32) ‖ prev(32) ‖ count(u32) ‖ merkleRoot(32)
 - **스포일러**: 받지 않은 서류의 이름·조건·진행도는 어디에도 보이지 않는다. 모든 서류 견본 화면(`/stardraw/awards`, `AWARD_SPECIMENS`)은 아직 만들지 않았고 운영 빌드 검사(`stardraw-award-specimens.spec.ts`)는 그대로다.
 - **시험**: `my-records.test.ts`(등수별 모음·도장·당첨증, 가린 회차·무효 회차 빼기, 정식 회차만, 알림 표시와 건넬 하나), `wallet.test.ts`(본 표시 장부별), `stardraw-records.spec.ts`(실제 앱 흐름: 처음 받은 서류 띠 → 건네받기 → 내 기록, 다시 띠 없음, 당첨증 QR 주소가 공개 장부의 그 응모권을 찾음. 견본 둘러보기는 로컬 견본 빌드에서만).
 - **견본 둘러보기**: 데모의 `#tour-records`(1회 1~5등을 모두 받은 가짜 장부)는 스포일러라 운영·공개 데모 빌드에 넣지 않고 `AWARD_SPECIMENS`가 켜진 로컬 빌드에서만 보인다(2026-10-31 사용자). 견본 당첨증은 공개 장부에 없는 응모권이라 QR 자리에 "견본"을 찍는다. 운영 빌드 검사(`stardraw-award-specimens.spec.ts`)가 공개 데모 둘러보기에 내 기록이 없는지도 본다.
+
+### 11-24. 응모 앞단 작업 증명 계획(보안 표 I2, 2026-10-31)
+
+- 문제: 실패 기억(I2)은 같은 본문·같은 열쇠의 되풀이를 막지만, 가상 패스키로 열쇠를 공짜로 계속 새로 만들어 보내면 열쇠마다 Argon2를 한 번씩 계산시킨다. 지금은 작업 스레드 줄 상한과 503(화면이 다시 냄)으로 버틴다. 소속 증서가 붙은 응모는 앞줄이라 상품 대상 응모는 밀리지 않는다.
+- 계획: 응모·등록 **요청**(장부에 싣는 응모권·등록 형식은 그대로)에 `gate` 칸 하나를 더한다. `SHA-256("stardraw/gate/v1" ‖ 문제 값 ‖ 요청 본문 해시 ‖ n)`의 앞 18비트가 0인 n. 휴대폰 wasm SHA-256으로 0.1~0.3초, 서버 확인은 해시 한 번. 공격자가 요청 하나에 치르는 비용이 서버의 Argon2 한 번보다 커진다.
+- 배포 순서: 화면이 먼저 `gate`를 보내게 배포(서버는 모르는 칸을 무시) → 서버가 `gate`를 요구하게 배포. 오래 연 탭은 503·400을 받으면 다시 계산해 보낸다.
+

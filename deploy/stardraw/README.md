@@ -98,7 +98,7 @@ docker compose logs stardraw | head   # 시각 인증·앵커 줄, 1회차 시�
 
 ## 시각 인증과 앵커
 
-- **봉인 시각 인증**(docs/36 11-7): 마감 직후 봉인 값의 시각 인증 토큰을 공개 기관에서 받는다. 기본 `STARDRAW_TSA=digicert,sectigo`, `STARDRAW_TSA_MIN=1`(한 곳 이상). 서버가 바깥(80·443)으로 나갈 수 있어야 한다. 시작 기록에 `시각 인증: digicert, sectigo 중 1곳 이상`이 찍힌다. 마감 3분 뒤까지 한 곳도 못 받으면 그 회차는 무효다. 개발용으로 끄려면 `STARDRAW_TSA=off`(서버 시계를 적는다, 시각 증명 없음).
+- **봉인 시각 인증**(docs/36 11-7): 마감 직후 봉인 값의 시각 인증 토큰을 공개 기관에서 받는다. 운영은 `STARDRAW_TSA=digicert,sectigo`, `STARDRAW_TSA_MIN=2`(두 곳, 2026-10-31). 서버가 바깥(80·443)으로 나갈 수 있어야 한다. 시작 기록에 `시각 인증: digicert, sectigo 중 2곳 이상`이 찍힌다. 받은 토큰은 들고 모자란 기관에만 15초 간격으로 다시 묻고, 기한 30초 전까지 두 곳을 못 받으면 받은 한 곳으로 봉인한다(검사에서 「주의」, 보안 표 I8). 마감 3분 뒤까지 한 곳도 못 받으면 그 회차는 무효다. 개발용으로 끄려면 `STARDRAW_TSA=off`(서버 시계를 적는다, 시각 증명 없음).
 - **GitHub 앵커**: 회차마다 `ybbarng/stardraw-ledger`에 `ledgers/<장부 id>/<회차>.txt`를 커밋한다. 브랜치는 시험 `trial`, 정식 `main`(`STARDRAW_ANCHOR_BRANCH`로 바꿀 수 있다). 시작 기록에 `앵커: ybbarng/stardraw-ledger(trial 브랜치)`가 찍힌다.
 - 앵커 토큰은 저장소 밖 파일에만 둔다. 이 저장소 Contents 읽기·쓰기만 되는 fine-grained 토큰:
 
@@ -111,17 +111,18 @@ ${EDITOR:-vi} /home/ybbarng/secrets/stardraw-anchor.env   # STARDRAW_ANCHOR_TOKE
 - compose의 `env_file`이 이 파일을 `required: false`로 읽는다. 파일이 없으면 앵커만 꺼지고(`앵커 저장소 설정이 없어 …`) 서버는 뜬다. 앵커가 실패하면 1분 뒤 그 회차부터 다시 보내고, 회차 진행은 멈추지 않는다.
 - Rekor는 꺼 둔 선택지다(`STARDRAW_TSA=off` + `STARDRAW_REKOR_URL`일 때만).
 
-## 백업
+## 백업과 되살리기(docs/36 보안 표 I4)
 
-- 공개 장부 파일(`data/ledger/`)은 누구나 내려받고 정식은 앵커에도 해시가 남는다. 그래도 마감 전 응모권, 열쇠 등록, 당첨자 확인 전달은 SQLite에만 있다.
-- 서버를 멈추지 않고 뜨기(Node 내장 SQLite backup):
-
-```sh
-docker compose exec -T stardraw node server.mjs backup /data/backup/stardraw-$(date +%F-%H%M).sqlite
-```
-
-- x:55~x:01(마감·봉인·추첨)은 피해서 하루 한 번이면 된다. `backup/`을 서버 밖으로 옮기는 것은 다른 앱의 백업과 같은 방식으로.
-- 되살리기: 컨테이너를 멈추고 `stardraw.sqlite`를 백업본으로 바꾼 뒤 띄운다. 장부 파일이 DB보다 앞서 있으면(백업 뒤 닫힌 회차) 그 회차들은 DB에 다시 넣어야 하니, 백업은 회차 기록이 닫힌 직후가 좋다.
+- DB(`data/stardraw/ledger/stardraw.sqlite`, 운영 compose의 `STARDRAW_DATA_DIR=/data/ledger`)에만 있는 것: 마감 전 응모권·등록, 당첨자 확인 전달, **소속 도장 비밀 열쇠**(`qual_keys`), **발급 기록**(`qual_issued`), 계정 HMAC 열쇠. 공개 장부 파일(`ledger/`)은 앵커 저장소에도 사본이 있다. 서명 열쇠(관인, `server-key.pkcs8`)는 데이터 폴더에 있다.
+- **매시 백업**: servers 저장소 `byb.kr/apps/stardraw/backup.sh`가 추첨 직후(x:02) `node server.mjs backup /data/backup/stardraw-<날짜-시각>.sqlite`로 떠 두고 48시간치만 남긴다. 등록: `ssh byb-ops cron-add stardraw 2 hourly`.
+- **서버 밖 보관**: 집 서버가 `apps/stardraw/dump.sh`(forced-command)로 가장 최근 사본을 **gpg로 암호화해** 끌어간다(`home/scripts/pull-stardraw-backup.sh`, 30일치). 도장 비밀 열쇠가 들어 있어 평문으로 내보내지 않는다(VPS에 공개 열쇠 `~/secrets/stardraw-backup.pub.asc`가 없으면 dump.sh가 거절한다). 준비는 그 스크립트 머리 주석대로: 집 서버에서 키와 gpg 열쇠 만들기 → VPS `authorized_keys`에 forced-command 한 줄 → 집 서버 크론.
+- **관인**: `server-key.pkcs8`를 비밀번호 관리 앱에 따로 1부 둔다(서버를 통째로 잃어도 같은 관인으로 이어 가야 앵커·검사기가 같은 장부로 본다).
+- **되살리기**(연습해 둘 것):
+  1. 집 서버에서 `gpg -d stardraw-<시각>.sqlite.gz.gpg | gunzip > stardraw.sqlite`
+  2. VPS에 옮겨 `~/data/stardraw/ledger/stardraw.sqlite` 자리에 둔다(서버가 멈춘 상태에서, 원래 파일은 옆에 남겨 둔다). 관인은 `~/data/stardraw/server-key.pkcs8`에.
+  3. `ssh byb-ops up stardraw`. 서버는 DB의 처음 일정표와 기록으로 이어 가고, 공개 장부 파일을 DB에서 다시 쓴다.
+  4. 백업 뒤에 닫힌 회차가 있었다면 그 기록은 앵커 저장소 사본(`ledgers/<장부 id>/ledger/`)에만 있다. 사본에서 DB로 다시 넣는 도구는 아직 없다(나중) — 그래서 백업을 매시 추첨 직후에 뜬다(잃는 것은 많아야 마감 전 응모 한 회차).
+- 손으로 뜨기: `docker compose exec -T stardraw node server.mjs backup /data/backup/stardraw-$(date +%F-%H%M).sqlite`
 
 ## 4. 상품 자격(docs/36 11-13)
 
@@ -144,7 +145,7 @@ STARDRAW_QUAL_AFFILIATIONS=벌집 성단=google:<기관 도메인>
 1. 시험 운영을 언제 시작할지, 시험 회차 길이(기본 10분)
 2. 정식 시작 시각(관리 화면 「정식 시작 예약」, x:55, 하루 전까지. 예고 중에는 국장이 취소할 수 있다. 예비로 `schedule-live --from`)
 7. 국장 열쇠(`STARDRAW_DIRECTOR_KEYS`, 관리 화면에서 만든 값)
-3. 봉인 시각 인증: 공개 기관 DigiCert·Sectigo, 한 곳 이상으로 정함(2026-10-30). 더 엄격히 하려면 `STARDRAW_TSA_MIN=2`
+3. 봉인 시각 인증: 공개 기관 DigiCert·Sectigo. 2026-10-31부터 두 곳(`STARDRAW_TSA_MIN=2`), 기한 직전엔 한 곳으로 봉인
 4. 앵커 저장소: `ybbarng/stardraw-ledger`(공개)로 정함. 토큰은 `/home/ybbarng/secrets/stardraw-anchor.env`
 5. 서명 열쇠 보관(서버의 파일 + 비밀번호 관리 앱 백업)
 6. 저장소 변수 `STARDRAW_SERVER_IMAGE=true`로 이미지 빌드를 켤 때, 화면 빌드에 `NEXT_PUBLIC_STARDRAW_API`를 넣을 때
