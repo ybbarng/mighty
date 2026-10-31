@@ -735,8 +735,12 @@ test("데모: 1등으로 응모해 당첨자 확인 초록불까지(틀린 별, 
     )
     .toEqual(["①", "②", "③"]);
   for (const n of stars) await tapStar(page, sky, n);
+  // 이 흐름은 소속을 받지 않고 응모했다: 응모권 주인까지만 확인하고 소속 표시는 없음(2026-10-31 보안 검토 B1)
   await expect(checker.locator("[data-verdict='ok']")).toHaveText(
-    "1회 1등 당첨자 본인이 맞습니다",
+    "1회 1등 응모권의 주인이 맞습니다",
+  );
+  await expect(checker.locator("[data-qual-mark='none']")).toHaveText(
+    "소속 표시: 없음(증서를 붙이지 않은 응모권)",
   );
   await page.screenshot({
     path: info.outputPath("stardraw-demo-checker.png"),
