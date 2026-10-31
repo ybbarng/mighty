@@ -1130,6 +1130,11 @@ function DrawFor({
 }) {
   const record = services.ledger.record(round);
   const [replays, setReplays] = useState(0);
+  /** 이 화면에서 결과를 기다리다 들어온 추첨(실시간)이면 건너뛰기를 두지 않는다 */
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    if (!record) setLive(true);
+  }, [record]);
   // 아직 결과가 없는 회차: 남은 시간을 보이며 기다리다가 결과가 들어오는 순간 추첨 연출을 시작한다
   if (!record)
     return (
@@ -1152,6 +1157,9 @@ function DrawFor({
       instant={seen && replays === 0}
       onReplay={() => setReplays((n) => n + 1)}
       onNext={canEnter ? onEnter : undefined}
+      // 첫 추첨은 끝까지 보고, 그 뒤로는 이미 결과가 나온 회차를 나중에 열 때만 건너뛸 수 있다
+      canSkip={!live && services.wallet.watchedDraw()}
+      onWatched={() => services.wallet.markWatchedDraw()}
       record={record}
       ticket={mine.find((m) => m.ticket.round === round)?.ticket}
       onClose={onClose}

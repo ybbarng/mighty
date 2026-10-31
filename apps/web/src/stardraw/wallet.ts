@@ -147,6 +147,9 @@ export interface Wallet {
   /** 추첨이 끝났다는 알림 띠를 닫은 회차(다시 띄우지 않는다) */
   noticeClosedRounds(): Set<number>;
   closeNotice(rounds: readonly number[]): void;
+  /** 이 기기에서 추첨을 처음부터 끝까지 한 번이라도 봤는지(그 전에는 「추첨 건너뛰기」를 두지 않는다) */
+  watchedDraw(): boolean;
+  markWatchedDraw(): void;
   /** 이 이름공간의 지갑을 모두 지운다(데모 처음부터) */
   clear(): Promise<void>;
 }
@@ -164,6 +167,7 @@ export function createWallet(
   const TICKETS = `${ns}-tickets`;
   const OPENED = `${ns}-opened`;
   const NOTICE_CLOSED = `${ns}-notice-closed`;
+  const WATCHED_DRAW = `${ns}-watched-draw`;
   const PROOF = `${ns}-key-proof`;
 
   const saveKey = (key: KeyInfo) =>
@@ -399,6 +403,14 @@ export function createWallet(
 
     closeNotice(rounds) {
       addRounds(NOTICE_CLOSED, rounds);
+    },
+
+    watchedDraw() {
+      return readJson<boolean>(WATCHED_DRAW) === true;
+    },
+
+    markWatchedDraw() {
+      writeJson(WATCHED_DRAW, true);
     },
 
     async clear() {

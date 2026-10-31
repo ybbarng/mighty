@@ -964,6 +964,72 @@ test("추첨 보러 가기: 결과 전에는 기다리고, 결과가 오면 바�
   await expect(wait).toHaveCount(0);
 });
 
+/**
+ * 이 기기의 첫 추첨은 끝까지 보고(건너뛰기 없음), 그 뒤로는 이미 결과가 나온 회차를 열면 「추첨 건너뛰기」가 있다.
+ * 건너뛰면 바로 결과이고 열어 봄으로 친다. 실시간(기다리던 화면에서 결과가 들어와 시작한 추첨)에는 없다.
+ * 응모는 움직임 줄이기로 빨리 지나고, 추첨만 연출을 켜서 본다
+ */
+test("추첨 건너뛰기: 첫 추첨은 끝까지, 그 뒤 나중에 연 회차만", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  test.setTimeout(150_000);
+  await virtualAuthenticator(page);
+  const skipDraw = page.getByRole("button", { name: "추첨 건너뛰기" });
+  const result = page.locator("[data-draw-result]");
+  const enter = async (first: boolean) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/stardraw");
+    if (first) {
+      await page.getByRole("button", REGISTER).click();
+      await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
+    } else await page.getByRole("button", { name: TO_PICK }).click();
+    await page.getByRole("button", { name: "자동", exact: true }).click();
+    await page.getByRole("button", ENTER).click();
+    await expect(page.locator("[data-receipt]")).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.goto("/stardraw");
+  };
+  const skipToDraw = async () => {
+    const skip = page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ });
+    await skip.click();
+    await expect(skip).toBeEnabled({ timeout: 30_000 });
+  };
+
+  // (가) 첫 추첨: 건너뛰기 없이 끝까지
+  await enter(true);
+  await skipToDraw();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator("[data-envelope]").click();
+  await expect(page.locator("[data-draw-ball], canvas").first()).toBeVisible();
+  await expect(skipDraw).toHaveCount(0);
+  await expect(result).toBeVisible({ timeout: 60_000 });
+
+  // (나) 끝까지 본 뒤 나중에 연 회차: 건너뛰기가 있고, 누르면 바로 결과·열어 봄
+  await enter(false);
+  await skipToDraw();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator("[data-envelope]").click();
+  await skipDraw.click({ timeout: 10_000 });
+  await expect(result).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "← 돌아가기" }).click();
+  await expect(page.locator("[data-envelope]")).toHaveCount(0);
+
+  // (다) 실시간: 기다리는 화면에서 결과가 들어와 시작한 추첨에는 건너뛰기가 없다
+  await enter(false);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator("[data-card='entered'] [data-go-draw]").click();
+  await expect(page.locator("[data-draw-wait]")).toBeVisible();
+  await page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ }).click();
+  await expect(page.locator("[data-draw-wait]")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  await expect(skipDraw).toHaveCount(0);
+  await expect(result).toBeVisible({ timeout: 60_000 });
+  await expect(skipDraw).toHaveCount(0);
+});
+
 test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제자리, 세로는 기울기만, 단추는 그대로", async ({
   page,
 }, info) => {

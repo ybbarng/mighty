@@ -2,7 +2,7 @@
 
 import { type Clock, realClock } from "@mighty/fair-play";
 import type { RoundRecord, Ticket } from "@mighty/stardraw-core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
@@ -24,7 +24,7 @@ const TICK_GAP_MS = 45;
  * 정확히 당첨 별에서 멈춘다(그 별은 켜진 채). 이미 뽑힌 별은 건너뛰고 6번 멈춘 뒤 7번째는 보너스(하늘빛).
  * 멈추는 차례는 실제 로또처럼 나온 차례다. 결과는 기록의 drand 값으로 이미 정해져 있고 연출은 보여 줄 뿐이다.
  * 칸 위치는 지난 시간으로 계산해(`rouletteAt`) 화면이 늦게 그려져도 늘 목표 별에서 멈춘다.
- * 처음 보는 추첨은 끝까지 본다(2026-10-31 사용자: 건너뛰기 없음). 이미 본 회차(바깥이 instant로 연다)와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
+ * 이 기기의 첫 추첨은 끝까지 본다. 그 뒤로는 이미 결과가 나온 회차를 나중에 열 때 아래 「추첨 건너뛰기」로 바로 결과(canSkip, 실시간 추첨에는 없다, 2026-10-31 사용자). 이미 본 회차(바깥이 instant로 연다)와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
  * HDR 화면이면 켜지는 별이 흰색보다 밝게 한 번 번쩍이고, 결과에서 맞은 내 별이 은은하게 빛난다(hdr-glow.ts).
  */
 export function DrawView({
@@ -36,7 +36,16 @@ export function DrawView({
   label,
   onReplay,
   onNext,
+  canSkip = false,
+  onWatched,
 }: {
+  /**
+   * 연출 중 아래에 작은 「추첨 건너뛰기」(누르면 바로 결과). 이 기기에서 추첨을 끝까지 한 번 본 뒤, 이미 결과가 나온
+   * 회차를 나중에 열 때만(실시간으로 기다리다 시작한 추첨에는 두지 않는다, 2026-10-31 사용자)
+   */
+  canSkip?: boolean | undefined;
+  /** 연출을 건너뛰지 않고 끝까지 본 순간 */
+  onWatched?: (() => void) | undefined;
   record: RoundRecord;
   ticket?: Ticket | undefined;
   onClose: () => void;
@@ -66,6 +75,8 @@ export function DrawView({
   );
   /** 룰렛 연출을 실제로 보는 중인지(켜지는 별이 HDR로 번쩍인다). 움직임 줄이기면 false */
   const [animated, setAnimated] = useState(false);
+  /** 건너뛰었는지(연출을 멈추고 바로 결과, 끝까지 본 것으로 치지 않는다) */
+  const skipped = useRef(false);
   const done = frame.done;
   const rank = ticket ? myRank(record, ticket) : null;
 
@@ -84,7 +95,7 @@ export function DrawView({
     let last = rouletteAt(plan, 0);
     let lastTick = -Infinity;
     const tick = () => {
-      if (!alive) return;
+      if (!alive || skipped.current) return;
       const now = clock.now();
       const next = rouletteAt(plan, now - started);
       // 칸이 바뀌면 "틱", 멈춰 별이 켜지면 "딩"
@@ -104,6 +115,7 @@ export function DrawView({
         setFrame(next);
       last = next;
       if (!next.done) raf = requestAnimationFrame(tick);
+      else onWatched?.();
     };
     raf = requestAnimationFrame(tick);
     return () => {
@@ -314,6 +326,18 @@ export function DrawView({
                 </span>
               )}
             </div>
+          )}
+          {canSkip && animated && !done && (
+            <button
+              type="button"
+              onClick={() => {
+                skipped.current = true;
+                setFrame(finished);
+              }}
+              className="self-center rounded-lg px-3 py-1.5 text-sm text-white/55 hover:text-white"
+            >
+              추첨 건너뛰기
+            </button>
           )}
           {done && (onNext || onReplay) && (
             <div className="flex flex-col gap-2">
