@@ -165,6 +165,14 @@ export function qualLoginNonce(blinded: Uint8Array): string {
   return toBase64Url(taggedHash("stardraw/qual-nonce/v1", blinded));
 }
 
+/**
+ * 국장이 새 도장 열쇠를 만들게 할 때 서명하는 바이트: 태그 ‖ 0 ‖ 장부 끝 해시(32)(2026-10-31 보안 검토 B9).
+ * 장부 끝 해시가 회차마다 바뀌어 지난 요청을 오래 다시 쓸 수 없다
+ */
+export function issuerKeyRequestMessage(head: Uint8Array): Uint8Array {
+  return concat(utf8("stardraw/qual-key/v1"), new Uint8Array([0]), head);
+}
+
 /** 씨앗 하나로 정해지는 도장 요청(가린 값과 r). 같은 씨앗·기간이면 늘 같다 */
 export function blindStampRequestFromSeed(
   periodId: Uint8Array,

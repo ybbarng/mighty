@@ -9,6 +9,7 @@ import {
   createInvite,
   invitesOf,
   type MyInvite,
+  pruneInvites,
 } from "../invites";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
@@ -102,6 +103,9 @@ function NoticeCard({
   const id = useIdPresent(services);
   useEffect(() => {
     setLinks(invitesOf(services.ns, ticket, services.clock.now()));
+    void pruneInvites(services).then(() =>
+      setLinks(invitesOf(services.ns, ticket, services.clock.now())),
+    );
     setCanShare(typeof navigator !== "undefined" && "share" in navigator);
   }, [services, ticket]);
 

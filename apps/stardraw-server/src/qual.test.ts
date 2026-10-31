@@ -12,6 +12,7 @@ import {
   fromBase64Url,
   generateSasKey,
   generateSigner,
+  issuerKeyRequestMessage,
   newInviteToken,
   newQualSeed,
   OP_VERSION,
@@ -122,7 +123,10 @@ async function qualRig(): Promise<{ r: Rig; periodId: string }> {
   );
   await submit(r, add);
   await finishThrough(r, 8);
-  const { issuerKey } = r.engine.createIssuerKey("203.0.113.9");
+  const { issuerKey } = await r.engine.createIssuerKey("203.0.113.9", {
+    pub: director.publicKey,
+    signature: await director.sign(issuerKeyRequestMessage(r.engine.head())),
+  });
   const period = await signAsDirector(
     body(r, {
       kind: "qual-period",
@@ -474,5 +478,28 @@ describe("우주국장이 국장 패스키로 연 확인(2026-10-31 보안 검�
     );
     const open = r.relay.openFor([toBase64Url(ticketId(won))]);
     expect(open[0]?.director?.to).toBe(to);
+  }, 60_000);
+});
+
+describe("새 도장 열쇠는 국장 서명으로만(2026-10-31 보안 검토 B9)", () => {
+  it("국장이 아닌 열쇠의 서명이나 지난 장부 끝 해시에 한 서명은 거절한다", async () => {
+    const { r } = await qualRig();
+    const stranger = await player();
+    await expect(
+      r.engine.createIssuerKey("203.0.113.9", {
+        pub: stranger.signer.publicKey,
+        signature: await stranger.signer.sign(
+          issuerKeyRequestMessage(r.engine.head()),
+        ),
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const stale = await director.sign(issuerKeyRequestMessage(r.engine.head()));
+    await r.finish(13);
+    await expect(
+      r.engine.createIssuerKey("203.0.113.9", {
+        pub: director.publicKey,
+        signature: stale,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   }, 60_000);
 });

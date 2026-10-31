@@ -438,7 +438,7 @@ export function DirectorConsole({
                       disabled={busy}
                       onClick={() =>
                         void act(async () => {
-                          const issuerKey = await backend.issuerKey();
+                          const issuerKey = await backend.issuerKey(keyring);
                           return sendBody((s) => {
                             const startsAt = Math.max(
                               lastEnd,

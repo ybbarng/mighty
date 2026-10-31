@@ -3,7 +3,10 @@ import {
   directorFingerprint,
   directorKeyConfig,
   encodeOperation,
+  encodeSignatureData,
   fromBase64Url,
+  fromHex,
+  issuerKeyRequestMessage,
   type OpBody,
   type Operation,
   opMessage,
@@ -39,8 +42,11 @@ export interface SubmitResult {
 export interface DirectorBackend {
   state(): Promise<DirectorState>;
   submit(op: Operation): Promise<SubmitResult>;
-  /** 자격 기간 열기 전에: 새 도장 열쇠를 만들게 하고 공개 열쇠를 받는다(비밀은 서버에, docs/36 11-13) */
-  issuerKey(): Promise<Uint8Array>;
+  /**
+   * 자격 기간 열기 전에: 새 도장 열쇠를 만들게 하고 공개 열쇠를 받는다(비밀은 서버에, docs/36 11-13).
+   * 국장 패스키로 장부 끝 해시에 서명해 보낸다(2026-10-31 보안 검토 B9)
+   */
+  issuerKey(keyring: DirectorKeyring): Promise<Uint8Array>;
 }
 
 /** 서버 API(같은 출처 /stardraw-api) */
@@ -74,8 +80,21 @@ export function remoteDirectorBackend(
       });
       return (await read(res)) as unknown as SubmitResult;
     },
-    async issuerKey() {
-      const res = await f(`${base}/api/director/qual-key`, { method: "POST" });
+    async issuerKey(keyring) {
+      const state = (await read(
+        await f(`${base}/api/director/state`, { cache: "no-store" }),
+      )) as unknown as DirectorState;
+      const signed = await keyring.signBytes(
+        issuerKeyRequestMessage(fromHex(state.view.next.after)),
+      );
+      const res = await f(`${base}/api/director/qual-key`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          pub: toBase64Url(signed.pub),
+          signature: encodeSignatureData(signed.signature),
+        }),
+      });
       const body = await read(res);
       return fromBase64Url(String(body.issuerKey));
     },
@@ -87,6 +106,7 @@ export function practiceDirectorBackend(ledger: LocalLedger): DirectorBackend {
   return {
     state: () => ledger.directorState(),
     submit: (op) => ledger.submitOperation(op),
+    // 기기 안 연습 장부는 국장 서명을 따로 묻지 않는다
     issuerKey: async () => ledger.createIssuerKey(),
   };
 }

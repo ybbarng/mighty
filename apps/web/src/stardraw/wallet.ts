@@ -1,4 +1,5 @@
 import {
+  concat,
   decodeRegistrationProof,
   decodeTicket,
   type EntrantSigner,
@@ -16,8 +17,11 @@ import {
   softPasskeySigner,
   type Ticket,
   toBase64Url,
+  utf8,
+  verifyEntrantSignature,
   type WebAuthnAssertion,
   type WebAuthnPolicy,
+  webauthnChallenge,
 } from "@mighty/stardraw-core";
 
 import { astronautOf } from "./astronaut/identity";
@@ -266,9 +270,16 @@ export function createWallet(
     },
 
     async recoverPasskey(lookup) {
+      // 서버가 알려 준 공개 열쇠를 그대로 믿지 않고, 이 자리 서명으로 확인한다(2026-10-31 보안 검토 B9:
+      // 서버가 남의 공개 열쇠를 주면 남의 응모가 "내 응모"로 보일 수 있었다)
+      const message = concat(
+        utf8("stardraw/recover/v1"),
+        new Uint8Array([0]),
+        crypto.getRandomValues(new Uint8Array(32)),
+      );
       const credential = (await navigator.credentials.get({
         publicKey: {
-          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          challenge: new Uint8Array(webauthnChallenge(message)),
           rpId: location.hostname,
           userVerification: "required",
         },
@@ -277,6 +288,22 @@ export function createWallet(
       const credentialId = new Uint8Array(credential.rawId);
       const pub = await lookup(credentialId);
       if (!pub) return null;
+      const assertion = credential.response as AuthenticatorAssertionResponse;
+      const ok = await verifyEntrantSignature(
+        pub,
+        message,
+        {
+          kind: "webauthn",
+          authenticatorData: new Uint8Array(assertion.authenticatorData),
+          clientDataJSON: new Uint8Array(assertion.clientDataJSON),
+          signature: new Uint8Array(assertion.signature),
+        },
+        sitePolicy(),
+      );
+      if (!ok)
+        throw new Error(
+          "장부가 알려 준 등록증이 이 패스키와 맞지 않습니다. 다시 시도해 주세요",
+        );
       const handle = (credential.response as AuthenticatorAssertionResponse)
         .userHandle;
       if (handle) renamePasskey(new Uint8Array(handle), pub);

@@ -25,6 +25,7 @@ import {
   equalBytes,
   everDirector,
   genesisHash,
+  issuerKeyRequestMessage,
   isVoidRound,
   judgeRound,
   type KeyRegistration,
@@ -58,6 +59,7 @@ import {
   roundTimes,
   type Schedule,
   type ScheduleEntry,
+  type SignatureData,
   STAMP_LENGTH,
   scheduleFromRecords,
   sealDesignations,
@@ -73,6 +75,7 @@ import {
   ticketId,
   toBase64Url,
   toHex,
+  verifyEntrantSignature,
   verifyRegistrationProof,
   verifyStamp,
   verifyTicketSignature,
@@ -1020,7 +1023,20 @@ export class StardrawServer {
    * 국장이 자격 기간을 열기 전에: 새 도장 열쇠를 만들어 비밀은 서버에 두고 공개 열쇠를 돌려준다.
    * 국장은 이 공개 열쇠를 kind 8에 넣어 서명한다. 쓰이지 않은 열쇠는 그냥 남는다(장부에 실린 열쇠만 쓴다)
    */
-  createIssuerKey(ip: string): { issuerKey: string } {
+  async createIssuerKey(
+    ip: string,
+    /** 국장 패스키로 issuerKeyRequestMessage(장부 끝 해시)에 한 서명(2026-10-31 보안 검토 B9) */
+    auth: { pub: Uint8Array; signature: SignatureData },
+  ): Promise<{ issuerKey: string }> {
+    const ok =
+      this.isActiveDirector(auth.pub) &&
+      (await verifyEntrantSignature(
+        auth.pub,
+        issuerKeyRequestMessage(this.head()),
+        auth.signature,
+        this.o.policy,
+      ));
+    if (!ok) throw new EntryError("우주국장의 서명이 아닙니다", 403);
     const prefix = ipPrefix(ip);
     const day = String(Math.floor(this.now() / 86400));
     if (

@@ -86,3 +86,23 @@ export function invitesOf(ns: string, ticket: Ticket, now: number): MyInvite[] {
     .filter((i) => i.ticketId === hex && i.expiresAt > now)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
+
+/**
+ * 쓰였거나 없어진 링크를 기기에서 지운다(2026-10-31 보안 검토 B9). 쓰인 링크의 토큰이 기기에 평문으로 남아
+ * 화면 공유나 남의 손에서 다시 보일 이유가 없다. 기한이 지난 링크도 지운다
+ */
+export async function pruneInvites(services: Services): Promise<void> {
+  const now = services.clock.now();
+  const kept: MyInvite[] = [];
+  for (const i of loadInvites(services.ns)) {
+    if (i.expiresAt <= now) continue;
+    try {
+      const peek = await services.relay.peek(i.token);
+      if (peek.state !== "open") continue;
+    } catch {
+      // 닿지 않으면 그대로 둔다
+    }
+    kept.push(i);
+  }
+  saveInvites(services.ns, kept);
+}
