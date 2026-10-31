@@ -416,9 +416,6 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
   await expect(back.locator("[data-public-key]")).toHaveText(
     /^04[0-9a-f]{128}$/,
   );
-  await expect(
-    page.getByText("공개 기록에서 내 응모권을 찾는 값입니다"),
-  ).toBeVisible();
   await expect(back.getByRole("button", { name: "복사" })).toBeVisible();
   expect(await passkeyCalls(page)).toEqual({ create: 0, get: 2 });
   await noSideScroll(page);

@@ -701,11 +701,9 @@ export function AstronautCard({
         aria-live="polite"
       >
         {flipped
-          ? reveal === "shown"
-            ? "공개 기록에서 내 응모권을 찾는 값입니다"
-            : reveal === "checking"
-              ? "꺼내 보기 전에 본인 확인을 하고 있습니다"
-              : ""
+          ? reveal === "checking"
+            ? "꺼내 보기 전에 본인 확인을 하고 있습니다"
+            : ""
           : owner === "checking"
             ? "등록증을 확인하고 있습니다"
             : owner === "fail"

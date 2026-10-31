@@ -1462,6 +1462,9 @@ function RoundDetail({
                     className="flex flex-wrap items-center justify-between gap-2 text-sm"
                   >
                     <span className="font-mono text-white/70 tabular-nums">
+                      <span className="mr-1.5 font-sans text-white/45 text-xs">
+                        일련번호
+                      </span>
                       {shortId(hex)}
                     </span>
                     <span className="text-white/80">
