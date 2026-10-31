@@ -17,6 +17,10 @@ test("보안 배우기: 직접 해 보기 상자가 실제 계산으로 통과·
   await expect(
     page.getByRole("heading", { name: /하늘의 별 따기 보안/ }),
   ).toBeVisible();
+  // 단계는 접혀 있다(휴대폰에서 세로로 너무 길었다). 모두 펼쳐 차례로 해 본다
+  await expect(page.locator("[data-toy='sign']")).toBeHidden();
+  for (const toggle of await page.locator("[data-lesson-toggle]").all())
+    await toggle.click();
 
   // 1. 서명: 서명한 뒤 회차를 바꾸면 확인이 실패한다
   const sign = page.locator("[data-toy='sign']");
@@ -145,6 +149,9 @@ test("보안 배우기: 데스크톱 배치", async ({ page }, info) => {
     "data-ok",
     "pass",
   );
+  // 주소의 # 단계만 펼쳐 있다. 다른 단계는 목록에서 누르면 펼친다
+  await expect(verdict(page, "tsa")).toBeHidden();
+  await page.locator("nav a[href='#tsa']").click();
   await expect(verdict(page, "tsa")).toHaveAttribute("data-ok", "pass");
   await page.screenshot({
     path: info.outputPath("stardraw-learn-desktop.png"),

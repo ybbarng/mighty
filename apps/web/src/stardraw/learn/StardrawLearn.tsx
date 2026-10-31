@@ -487,6 +487,25 @@ export function StardrawLearn() {
       return next;
     });
   const doneCount = LESSONS.filter((l) => done.has(l.id)).length;
+  // 단계는 접어 둔다(휴대폰에서 다 펼치면 세로로 매우 길다). 주소의 # 단계와 목록에서 누른 단계를 펼친다.
+  // 접어도 화면에서 숨길 뿐 그대로 두어, 체험 상자의 상태를 잃지 않는다
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const show = (id: string) => setOpen((o) => new Set(o).add(id));
+  const toggle = (id: string) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  useEffect(() => {
+    const fromHash = () => {
+      const id = window.location.hash.slice(1);
+      if (LESSONS.some((l) => l.id === id)) setOpen((o) => new Set(o).add(id));
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
 
   return (
     <main
@@ -539,6 +558,7 @@ export function StardrawLearn() {
               <a
                 key={l.id}
                 href={`#${l.id}`}
+                onClick={() => show(l.id)}
                 className={cn(
                   "flex items-start gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-white/5",
                   done.has(l.id) ? "border-emerald-400/40" : "border-white/10",
@@ -583,28 +603,45 @@ export function StardrawLearn() {
             id={l.id}
             className="flex scroll-mt-6 flex-col gap-4"
           >
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono text-amber-200 text-sm">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <h2 className="font-bold text-xl">{l.title}</h2>
-              {done.has(l.id) && (
-                <span className="text-emerald-300 text-xs">✓ 마침</span>
-              )}
+            <h2>
+              <button
+                type="button"
+                onClick={() => toggle(l.id)}
+                aria-expanded={open.has(l.id)}
+                aria-controls={`${l.id}-body`}
+                data-lesson-toggle={l.id}
+                className="flex w-full items-baseline gap-2 text-left"
+              >
+                <span className="font-mono text-amber-200 text-sm">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-bold text-xl">{l.title}</span>
+                {done.has(l.id) && (
+                  <span className="text-emerald-300 text-xs">✓ 마침</span>
+                )}
+                <span aria-hidden className="ml-auto text-white/50 text-sm">
+                  {open.has(l.id) ? "▲" : "▼"}
+                </span>
+              </button>
+            </h2>
+            <div
+              id={`${l.id}-body`}
+              className={cn("flex flex-col gap-4", !open.has(l.id) && "hidden")}
+            >
+              {l.body}
+              {l.demo}
+              <ul className="flex flex-col gap-1 rounded-xl bg-white/[0.04] px-4 py-3 text-sm">
+                {l.points.map((p) => (
+                  <li key={p} className="flex gap-2">
+                    <span aria-hidden className="text-amber-200">
+                      ●
+                    </span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+              <Quiz items={l.quiz} onPass={() => mark(l.id)} />
             </div>
-            {l.body}
-            {l.demo}
-            <ul className="flex flex-col gap-1 rounded-xl bg-white/[0.04] px-4 py-3 text-sm">
-              {l.points.map((p) => (
-                <li key={p} className="flex gap-2">
-                  <span aria-hidden className="text-amber-200">
-                    ●
-                  </span>
-                  {p}
-                </li>
-              ))}
-            </ul>
-            <Quiz items={l.quiz} onPass={() => mark(l.id)} />
           </section>
         ))}
 
