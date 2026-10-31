@@ -170,13 +170,29 @@ export function Inbox({
     }
   };
 
-  const decline = async (req: OpenRequest) => {
-    await services.relay.answer(req.id, { declined: true });
-    await refresh();
+  // 거절은 서버에 보내지 않는다: 서명 없는 거절로 아무나 확인을 막을 수 있었다(2026-10-31 보안 검토 B2).
+  // 승인하지 않으면 24시간 뒤 끝나고, 이 기기에서만 목록에서 감춘다
+  const hideKey = `${services.ns}-confirm-hidden`;
+  const [hidden, setHidden] = useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(localStorage.getItem(hideKey) ?? "[]") as string[],
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const decline = (req: OpenRequest) => {
+    const next = new Set(hidden).add(req.id);
+    setHidden(next);
+    try {
+      localStorage.setItem(hideKey, JSON.stringify([...next]));
+    } catch {}
   };
 
   const shown = answered.filter((a) => !a.outcome || a.outcome);
-  if (open.length === 0 && shown.length === 0 && !approving) return null;
+  if (open.every((r) => hidden.has(r.id)) && shown.length === 0 && !approving)
+    return null;
 
   return (
     <section className="flex flex-col gap-3" aria-label="당첨자 확인 요청">
@@ -195,47 +211,49 @@ export function Inbox({
           phase={approving.phase}
         />
       )}
-      {open.map((req) => {
-        const rank = sealed?.(req.request.round) ? null : rankOfRequest(req);
-        return (
-          <div
-            key={req.id}
-            data-confirm-request={req.id}
-            className="sd-breathe flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
-          >
-            <p className="font-bold">
-              보낸 확인 링크로{" "}
-              {roundShort(services.ledger.schedule, req.request.round)}{" "}
-              {rank ? RANK_LABEL[rank] : ""} 당첨 확인 요청이 왔습니다
-            </p>
-            <p className="text-amber-100/60 text-xs">
-              {formatTime(req.invitedAt / 1000)}에 만든 링크 · 전달: 카노푸스
-              우주국
-            </p>
-            <p className="text-sm text-amber-100/80">
-              링크를 보낸 적이 없으면 거절하세요.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={busy !== null}
-                onClick={() => void accept(req)}
-                className="sd-cta rounded-xl py-2.5 font-bold text-slate-950 disabled:opacity-50"
-              >
-                {busy === req.id ? "확인하고 있습니다" : "등록증으로 승인"}
-              </button>
-              <button
-                type="button"
-                disabled={busy !== null}
-                onClick={() => void decline(req)}
-                className="rounded-xl border border-white/20 py-2.5 hover:bg-white/10"
-              >
-                거절
-              </button>
+      {open
+        .filter((req) => !hidden.has(req.id))
+        .map((req) => {
+          const rank = sealed?.(req.request.round) ? null : rankOfRequest(req);
+          return (
+            <div
+              key={req.id}
+              data-confirm-request={req.id}
+              className="sd-breathe flex flex-col gap-3 rounded-2xl border border-amber-200/40 bg-amber-200/10 p-4"
+            >
+              <p className="font-bold">
+                보낸 확인 링크로{" "}
+                {roundShort(services.ledger.schedule, req.request.round)}{" "}
+                {rank ? RANK_LABEL[rank] : ""} 당첨 확인 요청이 왔습니다
+              </p>
+              <p className="text-amber-100/60 text-xs">
+                {formatTime(req.invitedAt / 1000)}에 만든 링크 · 전달: 카노푸스
+                우주국
+              </p>
+              <p className="text-sm text-amber-100/80">
+                링크를 보낸 적이 없으면 승인하지 마세요.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void accept(req)}
+                  className="sd-cta rounded-xl py-2.5 font-bold text-slate-950 disabled:opacity-50"
+                >
+                  {busy === req.id ? "확인하고 있습니다" : "등록증으로 승인"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => decline(req)}
+                  className="rounded-xl border border-white/20 py-2.5 hover:bg-white/10"
+                >
+                  무시
+                </button>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
       {answered
         .slice()
         .reverse()

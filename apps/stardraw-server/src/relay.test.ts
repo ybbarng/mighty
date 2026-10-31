@@ -268,3 +268,48 @@ describe("저장소 옮기기", () => {
     again.close();
   });
 });
+
+describe("허락 없이 확인을 막지 못한다(2026-10-31 보안 검토 B2)", () => {
+  it("당첨 응모권 id만 아는 사람이 서명 없는 거절·가짜 응답을 올려도 진짜 승인이 통과한다", async () => {
+    rig = await makeRig({});
+    const winner = await player();
+    await rig.at(EPOCH + 10);
+    const won = (await enter(rig, winner, drawOf(1).numbers)).ticket;
+    await rig.finish(1);
+    const token = newInviteToken();
+    await rig.relay.createInvite({
+      invite: encodeInvite(await signInvite(winner.signer, won, token)),
+    });
+    const checker = await generateSasKey();
+    rig.relay.start({ token, checkerKey: toBase64Url(checker.publicKey) });
+    const open = rig.relay.openFor([toBase64Url(ticketId(won))]);
+    const id = open[0]?.id as string;
+    // 서명 없는 거절(예전 형식)과 아무 값이나 넣은 응답은 거절된다
+    await expect(
+      rig.relay.answer(id, { declined: true } as never),
+    ).rejects.toBeInstanceOf(EntryError);
+    await expect(
+      rig.relay.answer(id, { claim: "AAAA", winnerKey: "AAAA" }),
+    ).rejects.toBeInstanceOf(EntryError);
+    // 진짜 당첨자의 승인은 그대로 받는다
+    const req = decodeConfirmRequest(open[0]?.request as string);
+    const mine = await generateSasKey();
+    const claim = await makeChallengeClaim(
+      winner.signer,
+      won,
+      sasChallenge(
+        req.challenge,
+        fromBase64Url(open[0]?.checkerKey as string),
+        mine.publicKey,
+      ),
+      req.requester,
+    );
+    await rig.relay.answer(id, {
+      claim: encodeClaim(claim),
+      winnerKey: toBase64Url(mine.publicKey),
+    });
+    expect(rig.relay.get(id).answer).toMatchObject({
+      winnerKey: toBase64Url(mine.publicKey),
+    });
+  });
+});

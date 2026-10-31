@@ -233,17 +233,27 @@ export function CheckLink({
 
       {session && (
         <>
-          {session.status === "waiting" && (
-            <div
-              role="status"
-              className="sd-breathe rounded-2xl border border-sky-200/25 bg-sky-300/5 p-4 text-center"
-            >
-              <p className="font-semibold">당첨자의 승인을 기다리고 있습니다</p>
-              <p className="mt-1 text-sm text-white/60">
-                {formatTime(session.answerBy / 1000)}까지
-              </p>
-            </div>
-          )}
+          {session.status === "waiting" &&
+            services.clock.now() > session.answerBy && (
+              <Notice tone="info">
+                당첨자가 {formatTime(session.answerBy / 1000)}까지 응답하지
+                않았습니다.
+              </Notice>
+            )}
+          {session.status === "waiting" &&
+            services.clock.now() <= session.answerBy && (
+              <div
+                role="status"
+                className="sd-breathe rounded-2xl border border-sky-200/25 bg-sky-300/5 p-4 text-center"
+              >
+                <p className="font-semibold">
+                  당첨자의 승인을 기다리고 있습니다
+                </p>
+                <p className="mt-1 text-sm text-white/60">
+                  {formatTime(session.answerBy / 1000)}까지
+                </p>
+              </div>
+            )}
 
           {(session.status === "signed" || green) && (
             <div className="flex flex-col gap-3">
@@ -332,9 +342,6 @@ export function CheckLink({
                 다시 확인하려면 당첨자에게 새 링크를 받으세요.
               </p>
             </div>
-          )}
-          {session.status === "declined" && (
-            <Notice tone="info">당첨자가 거절했습니다.</Notice>
           )}
         </>
       )}

@@ -27,7 +27,7 @@ import type { Relay } from "./relay";
  *   POST /api/confirm/start             { token, checkerKey } → { id, request, checkerKey, answerBy, invitedAt, reportKey }
  *   POST /api/confirm/open              { ticketIds } → 열린 요청들
  *   GET  /api/confirm/:id               { answer, outcome }
- *   POST /api/confirm/:id/answer        { claim, winnerKey } | { declined: true }
+ *   POST /api/confirm/:id/answer        { claim, winnerKey }(서명 없는 거절은 받지 않는다)
  *   POST /api/confirm/:id/report        { reportKey, outcome }
  * 확인 링크 토큰은 주소에 넣지 않고 본문으로만 받는다(서버 로그에 남지 않게).
  *   GET  /api/director/state            국장 관리 화면: 다음 기록(서명할 장부 끝 해시), 국장 열쇠·운영 기록·소속, 받아 둔 요청
@@ -312,15 +312,15 @@ async function handle(
     if (method === "GET" && !action) return send(res, 200, relay.get(id));
     if (method === "POST" && action === "/answer") {
       const body = await readJson(req);
-      await relay.answer(
-        id,
-        body.declined === true
-          ? { declined: true }
-          : {
-              claim: str(body.claim, "서명"),
-              winnerKey: str(body.winnerKey, "임시 공개 열쇠"),
-            },
-      );
+      // 서명 없는 거절은 받지 않는다(아무나 확인을 막을 수 있었다, 2026-10-31 보안 검토 B2). 답이 없으면 기한 뒤 끝난다
+      if (body.declined === true)
+        throw new EntryError(
+          "거절은 보내지 않습니다. 승인하지 않으면 24시간 뒤 끝납니다",
+        );
+      await relay.answer(id, {
+        claim: str(body.claim, "서명"),
+        winnerKey: str(body.winnerKey, "임시 공개 열쇠"),
+      });
       return send(res, 200, { ok: true });
     }
     if (method === "POST" && action === "/report") {

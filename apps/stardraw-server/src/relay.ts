@@ -285,13 +285,19 @@ export class Relay {
 
   async answer(
     id: string,
-    answer: { claim: string; winnerKey: string } | { declined: true },
+    answer: { claim: string; winnerKey: string },
   ): Promise<void> {
     const { row, p } = this.load(id);
     if (row.answerBy <= this.clock.now())
       throw new EntryError("확인 요청 시간이 지났습니다(24시간)", 410);
     if (p.answer) throw new EntryError("이미 답한 확인 요청입니다", 409);
-    if (!("declined" in answer)) {
+    // 서명 없는 거절은 받지 않는다(2026-10-31 보안 검토 B2): 답은 늘 당첨 응모권의 서명이어야 한다
+    {
+      if (
+        typeof answer.claim !== "string" ||
+        typeof answer.winnerKey !== "string"
+      )
+        throw new EntryError("응답 형식이 틀렸습니다");
       if (answer.claim.length > MAX_CLAIM)
         throw new EntryError("응답이 너무 깁니다");
       const request = decodeConfirmRequest(p.request);
