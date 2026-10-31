@@ -43,7 +43,12 @@ export default function AwardSpecimens() {
       </section>
       <section className="flex flex-wrap items-end justify-center gap-6">
         {[true, false].map((gold) => (
-          <Medal key={String(gold)} award={medal(gold)} size={120} />
+          <Medal
+            key={String(gold)}
+            award={medal(gold)}
+            size={120}
+            live={false}
+          />
         ))}
       </section>
     </main>

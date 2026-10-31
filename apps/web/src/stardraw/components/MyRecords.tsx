@@ -73,7 +73,7 @@ export function MyRecordsView({
                 className="flex flex-col items-center gap-2"
                 data-record-medal={m.id}
               >
-                <Medal award={m} size={120} />
+                <Medal award={m} size={120} live={false} />
                 <span className="text-sm text-white/80">{m.name}</span>
               </button>
             ))}
@@ -683,9 +683,12 @@ function Certificate({
 export function Medal({
   award,
   size = 160,
+  live = true,
 }: {
   award: EarnedAward;
   size?: number;
+  /** false면 한 번 그린 정지 그림(목록의 작은 훈장, WebGL 화면 수를 늘리지 않는다) */
+  live?: boolean;
 }) {
   const reduce = useReducedMotion();
   return (
@@ -694,6 +697,7 @@ export function Medal({
         kind={award.id === "medal-gold" ? "gold" : "silver"}
         width={size}
         still={reduce}
+        snapshot={!live}
         fallback={<MedalFlat award={award} size={size} />}
       />
     </div>

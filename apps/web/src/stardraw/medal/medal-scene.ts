@@ -40,6 +40,11 @@ export interface MedalSceneOptions {
   kind: MedalKind;
   /** 움직임 줄이기: 한 장만 그리고 멈춘다 */
   still: boolean;
+  /**
+   * 가장 밝은 반짝임의 화면 자리(캔버스 기준 0~1)와 세기(0~1). HDR 화면이면 그 자리에 흰색보다 밝은
+   * 그림을 겹치는 데 쓴다(매 프레임 부른다)
+   */
+  onGlint?: (x: number, y: number, strength: number) => void;
 }
 
 export interface MedalScene {
@@ -352,7 +357,7 @@ function ribbonGeometry(): THREE.BufferGeometry {
 
 export function createMedalScene(
   canvas: HTMLCanvasElement,
-  { kind, still }: MedalSceneOptions,
+  { kind, still, onGlint }: MedalSceneOptions,
 ): MedalScene {
   const p = PALETTES[kind];
   const renderer = new THREE.WebGLRenderer({
@@ -639,16 +644,28 @@ export function createMedalScene(
     medal.rotation.y = 0.18 + swayY + now.y * 0.7;
     medal.updateMatrixWorld();
     half.copy(keyLight).add(view).normalize();
+    let best = 0;
+    let bestAt: THREE.Sprite | null = null;
     for (const gl of glints) {
       tmpN.copy(gl.normal).transformDirection(body.matrixWorld);
       const d = Math.max(0, tmpN.dot(half));
       const twinkle = still ? 1 : 0.75 + 0.25 * Math.sin(s * 3 + gl.phase);
       const o = d ** 40 * twinkle;
+      if (o > best) {
+        best = o;
+        bestAt = gl.sprite;
+      }
       (gl.sprite.material as THREE.SpriteMaterial).opacity = Math.min(
         1,
         o * 1.6,
       );
       gl.sprite.scale.setScalar(0.18 + 0.28 * o);
+    }
+    if (onGlint) {
+      if (bestAt) {
+        bestAt.getWorldPosition(tmpN).project(camera);
+        onGlint((tmpN.x + 1) / 2, (1 - tmpN.y) / 2, Math.min(1, best * 1.6));
+      } else onGlint(0, 0, 0);
     }
     renderer.render(scene, camera);
   };
