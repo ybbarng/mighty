@@ -1,11 +1,18 @@
 "use client";
 
-import { equalBytes, type Rank, ticketId, toHex } from "@mighty/stardraw-core";
+import {
+  equalBytes,
+  type Rank,
+  roundTimes,
+  ticketId,
+  toHex,
+} from "@mighty/stardraw-core";
 import { useCallback, useEffect, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import type { CheckSession } from "../checks";
 import { USED_LINK } from "../confirm-relay";
+import { type QualMark, qualMarks, qualMarkText } from "../qual-judge";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
@@ -151,6 +158,31 @@ export function CheckLink({
         ? titleOf(session.round, session.rank)
         : "당첨자";
   const green = session?.status === "confirmed";
+  // 소속 표시: 도장·자격 서명·기간·중복을 규칙 패키지로 판정한다(2026-10-31 보안 검토 B1)
+  const [mark, setMark] = useState<QualMark | null>(null);
+  const markRound = session?.round;
+  const markTicket = session?.ticketId;
+  useEffect(() => {
+    if (markRound === undefined || !markTicket) return;
+    let alive = true;
+    void ledger
+      .qualInfo()
+      .then((info) => {
+        if (!alive) return;
+        const marks = qualMarks(
+          ledger.schedule,
+          info,
+          markRound,
+          roundTimes(ledger.schedule, markRound).closesAt,
+          ledger.ticketsOf(markRound),
+        );
+        setMark(marks.get(markTicket) ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [ledger, markRound, markTicket]);
 
   return (
     <section
@@ -307,7 +339,20 @@ export function CheckLink({
               data-verdict="ok"
               className="sd-rise rounded-2xl border border-emerald-300/50 bg-emerald-400/15 p-4 text-center font-bold text-emerald-100 text-lg"
             >
-              {title} 당첨자 본인이 맞습니다
+              {mark?.kind === "yes"
+                ? `${title} 당첨자 본인이 맞습니다`
+                : `${title} 응모권의 주인이 맞습니다`}
+            </p>
+          )}
+          {green && mark && (
+            <p
+              data-qual-mark={mark.kind}
+              className={cn(
+                "text-center text-sm",
+                mark.kind === "yes" ? "text-emerald-100/80" : "text-amber-200",
+              )}
+            >
+              {qualMarkText(mark)}
             </p>
           )}
           {flash && session.status === "signed" && (

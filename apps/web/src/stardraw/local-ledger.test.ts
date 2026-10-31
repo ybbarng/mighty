@@ -16,9 +16,11 @@ import {
   type QualHolding,
   qualKeyFromSeed,
   rankOf,
+  roundTimes,
   signAsDirector,
   softCredentialId,
   softPasskeySigner,
+  type Ticket,
   ticketId,
   toHex,
   unblindStamp,
@@ -31,6 +33,7 @@ import {
   PRACTICE_POW,
   randomPick,
 } from "./local-ledger";
+import { qualMarks } from "./qual-judge";
 
 /** 흉내 패스키(UP·UV 켬). 장부는 패스키 모양 서명만 받는다 */
 const passkey = async () => softPasskeySigner(await generateSigner());
@@ -417,5 +420,62 @@ describe("연습 장부: 데모 상품 자격(docs/36 11-13)", () => {
     const records = ledger.closed().length;
     await setup(store).ledger.prepareDemoQualification();
     expect(setup(store).ledger.closed().length).toBe(records);
+  }, 60_000);
+});
+
+describe("당첨 확인 화면의 소속 표시(2026-10-31 보안 검토 B1)", () => {
+  it("유효한 증서는 있음, 같은 증서 두 장은 둘 다 중복, 증서 없는 응모권은 없음", async () => {
+    const { ledger } = setup();
+    await ledger.prepareDemoQualification();
+    const period = (await ledger.qualInfo()).periods[0];
+    if (!period) throw new Error("기간이 없다");
+    const issue = async () => {
+      const seed = newQualSeed();
+      const periodId = fromHex(period.id);
+      const request = blindStampRequest(
+        periodId,
+        qualKeyFromSeed(seed).publicKey,
+      );
+      const blind = await ledger.issueStamp(period.id, "demo", request.blinded);
+      return { periodId, seed, stamp: unblindStamp(blind, request.factor) };
+    };
+    const solo = await issue();
+    const shared = await issue();
+    const a = await enter(
+      ledger,
+      await passkey(),
+      [1, 2, 3, 4, 5, 6],
+      true,
+      solo,
+    );
+    const b = await enter(
+      ledger,
+      await passkey(),
+      [7, 8, 9, 10, 11, 12],
+      true,
+      shared,
+    );
+    const c = await enter(
+      ledger,
+      await passkey(),
+      [13, 14, 15, 16, 17, 18],
+      true,
+      shared,
+    );
+    const d = await enter(ledger, await passkey(), [19, 20, 21, 22, 23, 24]);
+    await ledger.skipToNextDraw();
+    const round = a.round;
+    const marks = qualMarks(
+      ledger.schedule,
+      await ledger.qualInfo(),
+      round,
+      roundTimes(ledger.schedule, round).closesAt,
+      ledger.ticketsOf(round),
+    );
+    const of = (t: Ticket) => marks.get(toHex(ticketId(t)))?.kind;
+    expect(of(a)).toBe("yes");
+    expect(of(b)).toBe("dup");
+    expect(of(c)).toBe("dup");
+    expect(of(d)).toBe("none");
   }, 60_000);
 });

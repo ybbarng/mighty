@@ -5,6 +5,7 @@ import {
   drandRoundForClose,
   drandTime,
   equalBytes,
+  type QualInfo,
   RANKS,
   type RoundRecord,
   roundTimes,
@@ -25,6 +26,7 @@ import { type CheckSession, isActive } from "../checks";
 import { FX } from "../fx-timing";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
+import { qualMarks } from "../qual-judge";
 import { ensureRegistered } from "../registrar";
 import { myRank, prizeEligible, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
@@ -1596,13 +1598,33 @@ function RoundDetail({
   const [checking, setChecking] = useState(false);
   /** 이 기기에서 당첨자 확인을 마친 응모권 */
   const [checked, setChecked] = useState<Map<string, CheckSession>>(new Map());
+  // 소속 표시는 규칙 패키지로 판정한다(도장·자격 서명·기간·중복, 2026-10-31 보안 검토 B1)
+  const [qualInfo, setQualInfo] = useState<QualInfo | null>(null);
+  useEffect(() => {
+    void services.ledger
+      .qualInfo()
+      .then(setQualInfo)
+      .catch(() => {});
+  }, [services]);
   useEffect(() => {
     void services.checker.confirmed().then(setChecked);
   }, [services]);
   if (!record) return null;
   const counts = winnerCounts(record);
   const myIds = new Set(mine.map((m) => toHex(ticketId(m.ticket))));
-  const prize = prizeEligible(services.ledger.ticketsOf(round));
+  const roundTickets = services.ledger.ticketsOf(round);
+  const prize = prizeEligible(
+    roundTickets,
+    qualInfo
+      ? qualMarks(
+          services.ledger.schedule,
+          qualInfo,
+          round,
+          roundTimes(services.ledger.schedule, round).closesAt,
+          roundTickets,
+        )
+      : undefined,
+  );
   const myExcluded = mine.some(
     (m) =>
       m.ticket.round === round &&
