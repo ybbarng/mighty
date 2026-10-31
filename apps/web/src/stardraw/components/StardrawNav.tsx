@@ -7,7 +7,7 @@ import { GAME_NS, type Services } from "../services";
 import type { KeyInfo } from "../wallet";
 
 /** 탭바가 가리키는 앱 안 화면 */
-export type NavTarget = "home" | "mine" | "rounds" | "stats";
+export type NavTarget = "home" | "mine" | "rounds" | "stats" | "records";
 
 /** 마우스로 쓰는 넓은 화면(PC): 탭바 대신 위쪽 메뉴 줄. 휴대폰 가로처럼 넓어도 손가락으로 쓰면 탭바 */
 export const WIDE_QUERY =
@@ -92,6 +92,9 @@ function MoreList({
           </span>
         </a>
       )}
+      <button type="button" className={row} onClick={() => onGo("records")}>
+        내 기록
+      </button>
       <button type="button" className={row} onClick={() => onGo("stats")}>
         관측 기록
       </button>

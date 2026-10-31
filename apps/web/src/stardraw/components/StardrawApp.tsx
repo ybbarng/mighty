@@ -25,6 +25,7 @@ import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
 import { FX } from "../fx-timing";
 import type { LedgerStatus } from "../local-ledger";
+import { myRecords, newestRecord, recordKeys } from "../my-records";
 import { passkeyProblem } from "../passkey-env";
 import { qualMarks } from "../qual-judge";
 import { ensureRegistered } from "../registrar";
@@ -41,6 +42,7 @@ import { EnterView, KeySetup, usePasskeyEnv } from "./EnterView";
 import { GameIntro } from "./GameIntro";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { Inbox } from "./Inbox";
+import { MyRecordsView, RecordHandover, RecordNotice } from "./MyRecords";
 import {
   DrawFirst,
   formatLeft,
@@ -65,6 +67,8 @@ type View =
   | { name: "receipt"; id: string }
   | { name: "draw"; round: number }
   | { name: "mine" }
+  /** 내 기록: 관측 수첩·당첨 내역·당첨증·훈장·기념 서류(/stardraw/mine#records) */
+  | { name: "records" }
   | { name: "rounds" }
   | { name: "round"; round: number }
   /** 관측 기록(공개 장부 통계) */
@@ -99,6 +103,8 @@ function urlOf(v: View): string {
       return PATH.enter;
     case "mine":
       return PATH.mine;
+    case "records":
+      return `${PATH.mine}#records`;
     case "receipt":
       return `${PATH.mine}#t-${v.id}`;
     case "rounds":
@@ -135,6 +141,7 @@ function viewOf(page: StardrawPage, hash: string): View {
   if (page === "check") return { name: "link", token: h };
   if (page === "stats") return { name: "stats" };
   if (page === "mine") {
+    if (h === "records") return { name: "records" };
     const t = /^t-([0-9a-f]{64})$/.exec(h);
     return t ? { name: "receipt", id: t[1] as string } : { name: "mine" };
   }
@@ -170,6 +177,13 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const [noticeClosed, setNoticeClosed] = useState<Set<number>>(new Set());
   /** 메뉴의 내 등록증 칸에 쓸 이 기기 등록증 */
   const [navKey, setNavKey] = useState<KeyInfo | null>(null);
+  /** 장부에 내 등록이 실린 회차(근속 서류의 날짜) */
+  const [regRound, setRegRound] = useState<number | null>(null);
+  /** 「내 기록」에서 이미 본 기념 서류·당첨증 표시 */
+  const [seenRecords, setSeenRecords] = useState<Set<string>>(new Set());
+  /** 처음 받은 서류를 건네받는 연출 중인지 */
+  const [handover, setHandover] = useState(false);
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     if (view.name !== "receipt") setPrinting(null);
   }, [view.name]);
@@ -187,7 +201,22 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     setOpened(services.wallet.openedRounds());
     setNoticeClosed(services.wallet.noticeClosedRounds());
     setNavKey(services.wallet.loadKey());
+    setSeenRecords(services.wallet.seenRecords());
   }, [version, services]);
+
+  useEffect(() => {
+    if (!services || !navKey) return;
+    let alive = true;
+    void services.ledger
+      .registeredRound(navKey.pub)
+      .then((r) => {
+        if (alive) setRegRound(r);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [services, navKey]);
 
   // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
   useEffect(() => {
@@ -247,6 +276,44 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const receiptOf = (id: string) =>
     mine.find((m) => toHex(ticketId(m.ticket)) === id);
 
+  /** 내 기록: 공개 장부와 내 공개 열쇠(이 기기 등록증 + 내 응모권의 열쇠)로 계산한다(my-records.ts) */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 장부·지갑·열어 본 회차가 바뀔 때만 다시 센다
+  const records = useMemo(() => {
+    if (!services || !loaded) return null;
+    const pubs = new Map<string, Uint8Array>();
+    if (navKey) pubs.set(toHex(navKey.pub), navKey.pub);
+    for (const m of mine) pubs.set(toHex(m.ticket.pub), m.ticket.pub);
+    if (pubs.size === 0) return null;
+    return myRecords({
+      schedule: services.ledger.schedule,
+      closed: services.ledger.closed(),
+      myPubs: [...pubs.values()],
+      registeredRound: regRound,
+      now: services.ledger.now(),
+      sealed,
+    });
+  }, [services, loaded, version, mine, opened, navKey, regRound]);
+  const newRecords = records
+    ? recordKeys(records).filter((k) => !seenRecords.has(k))
+    : [];
+  const markSeen = () => {
+    if (!services || !records) return;
+    services.wallet.markRecordsSeen(recordKeys(records));
+    setSeenRecords(services.wallet.seenRecords());
+  };
+  /** 내 기록으로: 처음 받은 것이 있으면 건네받는 연출부터(움직임 줄이기면 바로) */
+  const openRecords = () => {
+    go({ name: "records" });
+    if (newRecords.length > 0 && !reduceMotion) setHandover(true);
+    else markSeen();
+  };
+  // 주소로 바로 내 기록을 열었으면(연출 없이) 지금 받은 것을 본 것으로 남긴다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 내 기록을 열 때와 받은 것이 늘 때만
+  useEffect(() => {
+    if (view.name === "records" && !handover && newRecords.length > 0)
+      markSeen();
+  }, [view.name, handover, newRecords.length]);
+
   // 이미 응모한 회차의 응모판으로 들어오면(주소로 바로·뒤로가기) 빈 응모권 대신 그 영수증으로
   const enteredNow =
     view.name === "enter" && loaded && status?.phase === "open"
@@ -268,13 +335,16 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       ? "home"
       : view.name === "mine" || view.name === "receipt"
         ? "mine"
-        : view.name === "rounds" || view.name === "round"
-          ? "rounds"
-          : view.name === "stats"
-            ? "stats"
-            : null;
+        : view.name === "records"
+          ? "records"
+          : view.name === "rounds" || view.name === "round"
+            ? "rounds"
+            : view.name === "stats"
+              ? "stats"
+              : null;
   const onNav = (t: NavTarget) => {
-    if (t !== navActive || view.name !== t) go({ name: t });
+    if (t === "records") openRecords();
+    else if (t !== navActive || view.name !== t) go({ name: t });
   };
   return (
     <main
@@ -301,6 +371,27 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
             onClose={() => {
               services.wallet.closeNotice(noticeRounds);
               setNoticeClosed(services.wallet.noticeClosedRounds());
+            }}
+          />
+        )}
+        {view.name !== "draw" &&
+          view.name !== "enter" &&
+          view.name !== "records" && (
+            <RecordNotice
+              count={newRecords.length}
+              onOpen={openRecords}
+              onClose={markSeen}
+            />
+          )}
+        {handover && records && services && (
+          <RecordHandover
+            {...newestRecord(records, newRecords)}
+            count={newRecords.length}
+            schedule={services.ledger.schedule}
+            recipient={navKey ? astronautOf(navKey.pub).name : null}
+            onDone={() => {
+              setHandover(false);
+              markSeen();
             }}
           />
         )}
@@ -380,11 +471,30 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
               }}
             />
           )
+        ) : view.name === "records" ? (
+          records ? (
+            <MyRecordsView
+              records={records}
+              schedule={services.ledger.schedule}
+              recipient={navKey ? astronautOf(navKey.pub).name : null}
+              onBack={() => back({ name: "mine" })}
+              onOpenTicket={(w) => {
+                if (receiptOf(w.id)) go({ name: "receipt", id: w.id });
+              }}
+            />
+          ) : (
+            loaded && (
+              <p className="py-10 text-center text-white/60">
+                아직 응모한 기록이 없습니다.
+              </p>
+            )
+          )
         ) : view.name === "mine" ? (
           <MineView
             services={services}
             mine={mine}
             sealed={sealed}
+            onRecords={openRecords}
             onBack={() => back({ name: "home" })}
             onOpen={(m) =>
               go({ name: "receipt", id: toHex(ticketId(m.ticket)) })
@@ -1250,6 +1360,7 @@ export function MineView({
   onOpen,
   onDraw,
   onRecovered,
+  onRecords,
 }: {
   services: Services;
   mine: MyTicket[];
@@ -1258,6 +1369,8 @@ export function MineView({
   onOpen: (m: MyTicket) => void;
   onDraw?: (round: number) => void;
   onRecovered: () => void;
+  /** 「내 기록」으로(당첨 내역·관측 수첩·당첨증·훈장·기념 서류) */
+  onRecords?: (() => void) | undefined;
 }) {
   const sorted = [...mine].sort((a, b) => b.ticket.round - a.ticket.round);
   const [key, setKey] = useState(() => services.wallet.loadKey());
@@ -1274,6 +1387,20 @@ export function MineView({
         <h2 className="font-bold text-lg">내 응모</h2>
         <span className="w-16" />
       </div>
+      {onRecords && (
+        <button
+          type="button"
+          onClick={onRecords}
+          data-open-records
+          className="sd-glass flex items-center justify-between rounded-2xl px-4 py-3 text-left hover:bg-white/10"
+        >
+          <span className="flex flex-col">
+            <span className="font-semibold">내 기록</span>
+            <span className="text-white/55 text-xs">관측 수첩과 기념 서류</span>
+          </span>
+          <span className="text-sm text-white/60">→</span>
+        </button>
+      )}
       <WinNotice
         services={services}
         tickets={mine.map((m) => m.ticket)}

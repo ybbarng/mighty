@@ -842,6 +842,7 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["rank-5", (s) => s.getByText("5등 당첨")],
     ["lose", (s) => s.getByText("아쉽게도 당첨되지 않았습니다")],
     ["mine", (s) => s.getByText("제 1회").first()],
+    ["records", (s) => s.locator("[data-stamp-book]")],
     ["rounds", (s) => s.getByRole("heading", { name: "지난 회차" })],
     ["win-notice", (s) => s.locator("[data-check-url]")],
     ["link-open", (s) => s.getByRole("button", { name: "확인 시작" })],

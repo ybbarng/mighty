@@ -2,13 +2,14 @@
 
 import { fromBase64Url, type Rank } from "@mighty/stardraw-core";
 import { type ReactNode, useEffect, useState } from "react";
-
+import { astronautOf } from "../astronaut/identity";
 import {
   buildTour,
   TOUR_EARTH_PUB,
   TOUR_EGG_PUBS,
   type TourState,
 } from "../demo-tour";
+import { myRecords } from "../my-records";
 import { AstronautPanel } from "./AstronautPanel";
 import { CheckLink } from "./CheckLink";
 import { FX_ITEMS, FxScreen } from "./DemoTourFx";
@@ -16,6 +17,7 @@ import { DemoUnlockPrompt } from "./DemoUnlockSheet";
 import { DrawView } from "./DrawView";
 import { EnterView, KeySetup } from "./EnterView";
 import { Inbox } from "./Inbox";
+import { MyRecordsView } from "./MyRecords";
 import { Receipt } from "./Receipt";
 import { Home, MineView, RoundsView } from "./StardrawApp";
 import { WinNotice } from "./WinNotice";
@@ -33,6 +35,7 @@ export const TOUR_ITEMS = [
   { id: "rank-5", label: "5등" },
   { id: "lose", label: "낙첨" },
   { id: "mine", label: "내 응모" },
+  { id: "records", label: "내 기록" },
   { id: "rounds", label: "지난 회차" },
   { id: "win-notice", label: "당첨 안내·확인 링크" },
   { id: "link-open", label: "확인 링크 연 화면" },
@@ -213,6 +216,27 @@ function Screen({
           onRecovered={noop}
         />
       );
+    case "records": {
+      // 둘러보기만: 1회 1~5등 응모권을 모두 내 것으로 쳐 훈장·당첨증·별 도장·기념 서류가 몇 개씩 보이게
+      const pubs = [...s.byRank.entries()]
+        .filter(([rank]) => rank !== null)
+        .map(([, t]) => t.pub);
+      const key = services.wallet.loadKey();
+      return (
+        <MyRecordsView
+          records={myRecords({
+            schedule: services.ledger.schedule,
+            closed: services.ledger.closed(),
+            myPubs: pubs,
+            registeredRound: null,
+            now: services.ledger.now(),
+          })}
+          schedule={services.ledger.schedule}
+          recipient={key ? astronautOf(key.pub).name : null}
+          onBack={onBack}
+        />
+      );
+    }
     case "rounds":
       return (
         <RoundsView
