@@ -952,6 +952,12 @@
           "status": "open"
         },
         {
+          "id": "stardraw-live-draw",
+          "type": "idea",
+          "title": "실시간 추첨(2026-10-31 사용자 아이디어, 생각만): 정시에 '지금부터 추첨을 시작하겠습니다' → 모두 같은 추첨을 함께 보고, 결과가 정해진 뒤에야 다시 보기·결과 조회(추첨 1분이면 1분 뒤부터), 실시간 대화·별 응원 투표. 연결은 WebRTC 그물이 아니라 서버 1:n(SSE·WebSocket). drand 값은 누구나 먼저 볼 수 있어 결과 숨기기를 따져야 한다(docs/06)",
+          "status": "open"
+        },
+        {
           "id": "stardraw-director-key",
           "type": "fork",
           "title": "우주국장 패스키 지정: game.byb.kr/stardraw/admin에서 국장 패스키를 만들고 그 값을 서버 .env의 STARDRAW_DIRECTOR_KEYS에 넣어 다시 띄우기(시작 기록의 지문과 화면 지문 대조). 다음 기록에 관인 지정이 실리고 약 24시간 뒤부터 서명 가능(deploy/stardraw/README.md 3절)",
