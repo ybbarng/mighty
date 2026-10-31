@@ -1,6 +1,5 @@
 import {
   alignedEpoch,
-  DEFAULT_TSA_MIN,
   DEFAULT_TSA_NAMES,
   type Phase,
   POW_PARAMS,
@@ -10,6 +9,7 @@ import {
   rekorLogFor,
   type Schedule,
   type ScheduleEntry,
+  SERVER_TSA_MIN,
   type TsaAuthority,
   tsaByName,
   type WebAuthnPolicy,
@@ -218,7 +218,7 @@ export function loadConfig(): ServerConfig {
 /**
  * 바깥 기록 설정(docs/36 11-1, 11-6).
  * - 시각 인증(`STARDRAW_TSA`): 기관 이름을 쉼표로(기본 digicert,sectigo, core tsa.ts에 열쇠를 고정한 기관만).
- *   `off`면 끈다(개발용). `STARDRAW_TSA_MIN`(기본 1)곳 이상 맞는 토큰을 받아야 봉인 성공. 단계와 상관없이 켠다
+ *   `off`면 끈다(개발용). `STARDRAW_TSA_MIN`(기본 2, 기관을 하나만 정하면 1)곳 이상 맞는 토큰을 받아야 봉인 성공. 단계와 상관없이 켠다
  * - Rekor(꺼 둔 선택지, `STARDRAW_TSA=off`일 때만, `STARDRAW_REKOR_URL`): core에 공개 열쇠를 고정해 둔 로그만
  *   (rekor.sigstage.dev, rekor.sigstore.dev). 맞지 않는 주소면 서버를 띄우지 않는다.
  * - GitHub 앵커(`STARDRAW_ANCHOR_REPO`, `STARDRAW_ANCHOR_TOKEN`): 저장소와 토큰이 둘 다 있을 때만.
@@ -236,7 +236,10 @@ export function outsideConfig(
         throw new Error(`열쇠를 고정해 두지 않은 시각 인증 기관: ${name}`);
       return a;
     });
-    const minValid = Number(get("STARDRAW_TSA_MIN") ?? DEFAULT_TSA_MIN);
+    // 기본은 두 곳(docs/36 11-20). 기관을 하나만 정했으면 그 하나
+    const minValid = Number(
+      get("STARDRAW_TSA_MIN") ?? Math.min(SERVER_TSA_MIN, authorities.length),
+    );
     if (
       !Number.isInteger(minValid) ||
       minValid < 1 ||

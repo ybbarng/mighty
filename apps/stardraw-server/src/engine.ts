@@ -18,6 +18,8 @@ import {
   directorFingerprint,
   drandRoundForClose,
   drandTime,
+  earlySealCommitMessage,
+  earlySealPath,
   entrantId,
   equalBytes,
   everDirector,
@@ -648,6 +650,7 @@ export class StardrawServer {
 
   private async tickNow(): Promise<void> {
     await this.sealDue();
+    this.startEarlySeal();
     await this.drawDue();
     this.startAnchoring();
   }
@@ -1094,6 +1097,74 @@ export class StardrawServer {
    * 장부 JSON 사본(docs/36 11-16): 그 브랜치에 바로 앞 회차까지 사본이 있으면 회차 사본을 앵커와 같은 커밋에 싣는다.
    * 빠진 지난 회차는 먼저 몇 커밋으로 묶어 채운다. 사본을 올리지 못해도 앵커 파일은 따로 남기고, 사본은 10분 뒤 다시 채운다
    */
+  /**
+   * 추첨 전 봉인 사본(docs/36 11-20, 보안 표 O10): 봉인하자마자 drand가 나오기 전에 봉인 파일을 앵커 저장소에 올린다.
+   * 사본이 운영자 손을 떠나(포크, git clone, GH Archive의 커밋 해시) 나중에 그 회차를 무효로 닫으면 검사가 실패로 잡는다.
+   * 회차 앵커와 한 줄로 차례대로 돈다(둘이 겹치면 브랜치 옮기기가 한쪽 실패해 사본이 밀린다). 앵커를 보내는 중이면
+   * 앵커 흐름이 커밋마다 먼저 이것을 처리한다(추첨 전에 올려야 하므로 앞세운다).
+   * 추첨 시각이 지난 회차는 올려도 증거가 못 되므로 건너뛴다. 실패하면 15초 뒤 다시
+   */
+  private earlySealing: Promise<void> | null = null;
+  private nextEarlySealTry = 0;
+
+  private startEarlySeal(): void {
+    const { store } = this.o;
+    if (
+      this.earlySealing ||
+      this.anchoring ||
+      this.now() < this.nextEarlySealTry
+    )
+      return;
+    // 처음 일정표 앵커(main 브랜치를 만든다)가 먼저다. 그 뒤로는 앵커 흐름이 처음에 이것을 처리한다
+    if (!store.genesisAnchored() || store.earlySealed() >= store.lastSealed())
+      return;
+    this.earlySealing = this.earlySealDue().finally(() => {
+      this.earlySealing = null;
+    });
+  }
+
+  private async earlySealDue(): Promise<void> {
+    const { store } = this.o;
+    if (this.now() < this.nextEarlySealTry || !store.genesisAnchored()) return;
+    const ledger = ledgerId(this.genesis);
+    for (
+      let round = store.earlySealed() + 1;
+      round <= store.lastSealed();
+      round++
+    ) {
+      const schedule = this.schedule();
+      const { closesAt } = roundTimes(schedule, round);
+      const late = this.now() >= drandTime(drandRoundForClose(closesAt));
+      // 무효로 닫힌 봉인(증거 없음)과 추첨이 지난 회차는 올릴 까닭이 없다
+      if (late || !store.seal(round)?.log) {
+        store.setEarlySealed(round);
+        continue;
+      }
+      try {
+        await this.o.anchor.earlySeal(
+          anchorBranch(schedule, round),
+          {
+            path: earlySealPath(ledger, round),
+            text: this.o.publisher.sealFile(round).text,
+          },
+          earlySealCommitMessage(ledger, round),
+        );
+        store.setEarlySealed(round);
+      } catch (err) {
+        this.nextEarlySealTry = this.now() + 15;
+        this.o.log?.(
+          `${round}회차 추첨 전 봉인 사본을 올리지 못해 15초 뒤 다시 시도한다: ${String(err)}`,
+        );
+        return;
+      }
+    }
+  }
+
+  /** 시험용: 돌고 있는 추첨 전 봉인 사본 보내기가 끝날 때까지 */
+  async earlySealIdle(): Promise<void> {
+    await this.earlySealing;
+  }
+
   private anchoring: Promise<void> | null = null;
   private nextAnchorTry = 0;
   private nextMirrorTry = 0;
@@ -1112,9 +1183,13 @@ export class StardrawServer {
       !mirrorBehind
     )
       return;
-    this.anchoring = this.anchorDue().finally(() => {
-      this.anchoring = null;
-    });
+    // 추첨 전 봉인 사본을 보내는 중이면 그것이 끝난 뒤에(브랜치를 한 줄로 옮긴다)
+    const early = this.earlySealing ?? Promise.resolve();
+    this.anchoring = early
+      .then(() => this.anchorDue())
+      .finally(() => {
+        this.anchoring = null;
+      });
   }
 
   private async anchorDue(): Promise<void> {
@@ -1132,6 +1207,7 @@ export class StardrawServer {
         return;
       }
     }
+    await this.earlySealDue();
     // 이미 앵커를 남긴 회차의 사본이 빠졌으면(사본을 올리기 전 판에서 남긴 회차 등) 먼저 채운다
     const anchored = store.anchored();
     if (anchored > 0)
@@ -1153,6 +1229,7 @@ export class StardrawServer {
         record: toHex(recordHash(record)),
         seal: sealLogId(store.seal(round)?.log),
       };
+      await this.earlySealDue();
       const branch = anchorBranch(this.schedule(), round);
       await this.fillMirror(ledger, branch, round - 1);
       let files: RepoFile[] = [];
@@ -1202,6 +1279,7 @@ export class StardrawServer {
     const limit = this.o.mirrorCommitBytes ?? 2_000_000;
     while (store.mirrored(branch) < to && this.now() >= this.nextMirrorTry) {
       const from = store.mirrored(branch) + 1;
+      await this.earlySealDue();
       try {
         let last = from;
         let bytes = 0;

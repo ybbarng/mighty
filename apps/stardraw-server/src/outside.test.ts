@@ -53,18 +53,18 @@ const fetchBy =
 const env = (values: Record<string, string>) => (name: string) => values[name];
 
 describe("바깥 기록 설정(outsideConfig)", () => {
-  it("시각 인증: 기본은 DigiCert·Sectigo 중 1곳 이상, 단계와 상관없이 켠다", () => {
+  it("시각 인증: 기본은 DigiCert·Sectigo 두 곳 모두(docs/36 11-20), 단계와 상관없이 켠다", () => {
     const tsa = outsideConfig(env({})).tsa;
     expect(tsa?.authorities.map((a) => a.name)).toEqual([
       "digicert",
       "sectigo",
     ]);
-    expect(tsa?.minValid).toBe(1);
-    const both = outsideConfig(
-      env({ STARDRAW_TSA: "digicert,sectigo", STARDRAW_TSA_MIN: "2" }),
-    ).tsa;
-    expect(both?.authorities.length).toBe(2);
-    expect(both?.minValid).toBe(2);
+    expect(tsa?.minValid).toBe(2);
+    // 기관 하나가 없어지면 운영자가 1로 낮출 수 있다. 기관을 하나만 정하면 기본도 1
+    expect(outsideConfig(env({ STARDRAW_TSA_MIN: "1" })).tsa?.minValid).toBe(1);
+    expect(outsideConfig(env({ STARDRAW_TSA: "digicert" })).tsa?.minValid).toBe(
+      1,
+    );
     // FreeTSA(개인 운영)는 검사기가 믿지 않으므로 서버도 고를 수 없다
     expect(() =>
       outsideConfig(env({ STARDRAW_TSA: "digicert,freetsa" })),

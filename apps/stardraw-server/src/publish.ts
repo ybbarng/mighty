@@ -118,6 +118,11 @@ export class Publisher {
     return out;
   }
 
+  /** 봉인 파일 그대로(추첨 전 봉인 사본, docs/36 11-20) */
+  sealFile(round: number): MirrorFile {
+    return this.read(`seals/${pad(round)}.json`);
+  }
+
   genesisFile(): MirrorFile {
     return this.read("genesis.json");
   }

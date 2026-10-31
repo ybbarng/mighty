@@ -301,6 +301,22 @@ export class Store {
       .run();
   }
 
+  /** 추첨 전 봉인 사본(docs/36 11-20)을 올렸거나 건너뛴 마지막 회차(차례대로). 없으면 0 */
+  earlySealed(): number {
+    const row = this.db
+      .prepare("SELECT v FROM meta WHERE k = 'earlySealed'")
+      .get();
+    return row ? Number(row.v) : 0;
+  }
+
+  setEarlySealed(round: number): void {
+    this.db
+      .prepare(
+        "INSERT INTO meta (k, v) VALUES ('earlySealed', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+      )
+      .run(String(round));
+  }
+
   /** 앵커 저장소의 그 브랜치에 장부 JSON 사본을 올린 마지막 회차(1회차부터 빈틈없이). 없으면 0 */
   mirrored(branch: string): number {
     const row = this.db

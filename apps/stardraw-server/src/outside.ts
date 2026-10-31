@@ -5,15 +5,13 @@ import {
   anchorPath,
   type BeaconVerifier,
   type DrandBeacon,
-  fromHex,
+  fetchQuicknetBeacon,
   GENESIS_ANCHOR_BRANCH,
   GENESIS_ANCHOR_PATH,
   genesisAnchorCommitMessage,
   genesisAnchorFile,
   hashedRekordRequest,
-  QUICKNET,
   type RekorLog,
-  randomnessMatches,
   rekorLogFor,
   rekorProofFromResponse,
   type Schedule,
@@ -49,32 +47,12 @@ export class HttpDrand implements DrandSource {
     private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
-  async get(round: number): Promise<DrandBeacon | null> {
-    for (const base of this.urls) {
-      try {
-        const res = await this.fetchFn(
-          `${base}/${QUICKNET.hash}/public/${round}`,
-          { signal: AbortSignal.timeout(5000) },
-        );
-        if (!res.ok) continue;
-        const body = (await res.json()) as {
-          round: number;
-          signature: string;
-          randomness: string;
-        };
-        const beacon = {
-          round: body.round,
-          signature: fromHex(body.signature),
-        };
-        if (beacon.round !== round) continue;
-        if (!randomnessMatches(beacon, fromHex(body.randomness))) continue;
-        if (!this.verify(beacon)) continue;
-        return beacon;
-      } catch {
-        // 다음 중계로
-      }
-    }
-    return null;
+  get(round: number): Promise<DrandBeacon | null> {
+    return fetchQuicknetBeacon(round, {
+      urls: this.urls,
+      verify: this.verify,
+      fetchFn: this.fetchFn,
+    });
   }
 }
 
@@ -275,12 +253,18 @@ export interface Anchor {
     files: readonly RepoFile[],
     message: string,
   ): Promise<void>;
+  /**
+   * 추첨 전 봉인 사본(docs/36 11-20)을 커밋 하나로 올린다. 같은 내용이 이미 있으면 그대로, 다른 내용이 있으면 던진다
+   * (한 번 올린 추첨 전 사본은 고치지 않는다)
+   */
+  earlySeal(branch: string, file: RepoFile, message: string): Promise<void>;
 }
 
 export const noAnchor: Anchor = {
   anchor: async () => undefined,
   anchorGenesis: async () => undefined,
   mirror: async () => undefined,
+  earlySeal: async () => undefined,
 };
 
 /**
@@ -344,6 +328,21 @@ export class GitHubAnchor implements Anchor {
     message: string,
   ): Promise<void> {
     if (files.length > 0) await this.commit(branch, files, message);
+  }
+
+  async earlySeal(
+    branch: string,
+    file: RepoFile,
+    message: string,
+  ): Promise<void> {
+    const existing = await this.getText(file.path, branch);
+    if (existing !== null) {
+      if (existing === file.text) return;
+      throw new Error(
+        `추첨 전 봉인 사본이 이미 다른 내용으로 있다: ${branch}/${file.path}`,
+      );
+    }
+    await this.commit(branch, [file], message);
   }
 
   private async call(

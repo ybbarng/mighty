@@ -3,18 +3,20 @@ import { join } from "node:path";
 import {
   anchorCommitMessage,
   anchorPath,
+  earlySealPath,
   githubLedgerBase,
   ledgerId,
   ledgerMirrorPath,
   loadPublicLedger,
   recordHash,
+  roundTimes,
   toHex,
 } from "@mighty/stardraw-core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { GitHubAnchor } from "./outside";
 import { pad } from "./publish";
-import { EPOCH, FakeGitHub, makeRig, type Rig } from "./testing";
+import { drawTimeOf, EPOCH, FakeGitHub, makeRig, type Rig } from "./testing";
 
 /**
  * 장부 JSON 사본(docs/36 11-16): 회차 앵커 커밋에 서버가 공개한 장부 파일을 같은 바이트로 함께 올리고,
@@ -45,6 +47,10 @@ async function rigWith(
   await rig.engine.anchorIdle();
   return rig;
 }
+
+/** 회차 앵커·사본 커밋(추첨 전 봉인 사본 커밋은 빼고 센다, docs/36 11-20) */
+const anchorCommits = (gh: FakeGitHub) =>
+  gh.commits.filter((c) => !c.paths.some((p) => p.includes("/early-seals/")));
 
 /** 서버가 공개한 파일(장부 폴더 안 상대 경로) */
 const served = (rig: Rig, path: string) =>
@@ -102,7 +108,7 @@ describe("장부 JSON 사본", () => {
     });
 
     // 처음 일정표(Contents API) 다음은 회차마다 커밋 하나
-    const rounds = gh.commits.slice(1);
+    const rounds = anchorCommits(gh).slice(1);
     expect(rounds).toHaveLength(10);
     expect(rounds[0]?.paths.sort()).toEqual(
       [
@@ -165,11 +171,11 @@ describe("장부 JSON 사본", () => {
       mirrorCommitBytes: bytes,
     });
     rigs.push(again);
-    const before = gh.commits.length;
+    const before = anchorCommits(gh).length;
     await again.at(again.clock.now() / 1000 + 1);
     await again.engine.anchorIdle();
     expect(again.store.mirrored("main")).toBe(12);
-    const fills = gh.commits.slice(before);
+    const fills = anchorCommits(gh).slice(before);
     expect(fills.length).toBeGreaterThan(1);
     expect(fills.length).toBeLessThan(12);
     // 빈틈없이 이어지는 구간
@@ -193,10 +199,45 @@ describe("장부 JSON 사본", () => {
     // 다음 회차는 다시 앵커와 같은 커밋에
     await again.finish(13);
     await again.engine.anchorIdle();
-    expect(gh.commits.at(-1)?.paths).toContain(anchorPath(id, 13));
-    expect(gh.commits.at(-1)?.paths).toContain(
+    expect(anchorCommits(gh).at(-1)?.paths).toContain(anchorPath(id, 13));
+    expect(anchorCommits(gh).at(-1)?.paths).toContain(
       ledgerMirrorPath(id, "rounds/000013.json"),
     );
     expect(again.store.mirrored("main")).toBe(13);
+  });
+});
+
+describe("추첨 전 봉인 사본(docs/36 11-20)", () => {
+  it("봉인하자마자 drand 전에 봉인 파일을 같은 바이트로 올리고, 회차가 닫혀도 고치지 않는다", async () => {
+    const gh = new FakeGitHub();
+    const rig = await makeRig({
+      anchor: new GitHubAnchor(REPO, "test-token", gh.fetch),
+    });
+    rigs.push(rig);
+    const id = ledgerId(rig.engine.genesis);
+    const { closesAt } = roundTimes(rig.engine.schedule(), 1);
+    await rig.at(closesAt);
+    await rig.engine.earlySealIdle();
+    await rig.engine.anchorIdle();
+    const early = gh.text("main", earlySealPath(id, 1));
+    expect(early).toBe(served(rig, "seals/000001.json"));
+    await rig.finish(1);
+    await rig.engine.anchorIdle();
+    expect(gh.text("main", earlySealPath(id, 1))).toBe(early);
+    expect(rig.store.earlySealed()).toBe(1);
+  });
+
+  it("추첨 시각이 지난 뒤에야 봉인한 회차는 올리지 않는다(올려도 증거가 못 된다)", async () => {
+    const gh = new FakeGitHub();
+    const rig = await makeRig({
+      anchor: new GitHubAnchor(REPO, "test-token", gh.fetch),
+    });
+    rigs.push(rig);
+    const id = ledgerId(rig.engine.genesis);
+    await rig.at(drawTimeOf(1));
+    await rig.engine.earlySealIdle();
+    await rig.engine.anchorIdle();
+    expect(gh.text("main", earlySealPath(id, 1))).toBeUndefined();
+    expect(rig.store.earlySealed()).toBe(1);
   });
 });
