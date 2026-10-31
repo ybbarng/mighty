@@ -22,6 +22,7 @@ import {
 
 import { astronautOf } from "./astronaut/identity";
 import { requestUnlock, type UnlockPurpose } from "./demo-unlock";
+import { DEMO_CANCEL } from "./passkey-env";
 
 /**
  * 내 열쇠와 내 응모권(docs/36 11-2). 브라우저 응모는 패스키로만 한다(2026-10-29 사용자).
@@ -405,7 +406,7 @@ export function createDemoWallet(
   const confirm = async (purpose: UnlockPurpose) => {
     // 실제 패스키 창을 닫은 것과 같은 오류로 알린다(화면은 "응모되지 않았습니다"로 이어 간다)
     if (!(await unlock(purpose)))
-      throw new DOMException("확인을 취소했습니다", "NotAllowedError");
+      throw new DOMException(DEMO_CANCEL, "NotAllowedError");
   };
 
   const loadPair = async (): Promise<CryptoKeyPair | null> => {

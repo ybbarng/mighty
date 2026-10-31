@@ -15,6 +15,7 @@ import {
   inAppBrowser,
   type PasskeyProblem,
   passkeyApi,
+  passkeyFailText,
   passkeyProblem,
   platformUnlock,
 } from "../passkey-env";
@@ -127,7 +128,7 @@ export function EnterView({
       kind,
       text:
         kind === "cancelled"
-          ? `${what}. 확인을 취소했어요.`
+          ? passkeyFailText(err, what)
           : kind === "unsupported"
             ? "이 기기에서는 등록증을 만들 수 없어요. '다른 기기 사용'을 골라 휴대폰으로 만들어 주세요."
             : err instanceof Error

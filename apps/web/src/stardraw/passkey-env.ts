@@ -70,3 +70,20 @@ export function passkeyProblem(err: unknown): PasskeyProblem {
   }
   return "other";
 }
+
+/**
+ * 패스키 확인이 끝나지 않았을 때 앞 문장(`what`, 예: "응모되지 않았어요") 뒤에 붙일 까닭.
+ * 브라우저는 "창을 닫음"과 "이 기기에 맞는 패스키가 없음(지운 패스키, 다른 기기에만 있는 패스키)"을 일부러 같은
+ * 오류(NotAllowedError)로 돌려준다(어떤 패스키가 있는지 사이트가 알아내지 못하게). 그래서 둘을 함께 말하고,
+ * 가를 수 있는 시간 초과(AbortError)·우리가 만든 취소(흉내 창)는 따로 말한다
+ */
+export function passkeyFailText(err: unknown, what: string): string {
+  if (err instanceof DOMException && err.name === "AbortError")
+    return `${what}. 확인 시간이 지났어요.`;
+  if (err instanceof DOMException && err.message === DEMO_CANCEL)
+    return `${what}. 확인을 취소했어요.`;
+  return `${what}. 확인을 취소했거나, 이 기기에서 등록증의 패스키를 찾지 못했어요.`;
+}
+
+/** 흉내 창(데모)을 닫았을 때의 오류 문구(passkeyFailText가 취소로 읽는다) */
+export const DEMO_CANCEL = "확인을 취소했습니다";

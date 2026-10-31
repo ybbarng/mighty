@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { inAppBrowser, passkeyProblem, unlockWith } from "./passkey-env";
+import {
+  DEMO_CANCEL,
+  inAppBrowser,
+  passkeyFailText,
+  passkeyProblem,
+  unlockWith,
+} from "./passkey-env";
 
 const IPHONE_KAKAO =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.8.5";
@@ -41,5 +47,20 @@ describe("패스키 환경", () => {
       "unsupported",
     );
     expect(passkeyProblem(new Error("x"))).toBe("other");
+  });
+
+  it("취소와 맞는 패스키 없음은 브라우저가 가르지 않아 함께 말하고, 시간 초과·흉내 창 취소는 따로", () => {
+    const what = "응모되지 않았어요";
+    expect(
+      passkeyFailText(new DOMException("x", "NotAllowedError"), what),
+    ).toBe(
+      "응모되지 않았어요. 확인을 취소했거나, 이 기기에서 등록증의 패스키를 찾지 못했어요.",
+    );
+    expect(passkeyFailText(new DOMException("x", "AbortError"), what)).toBe(
+      "응모되지 않았어요. 확인 시간이 지났어요.",
+    );
+    expect(
+      passkeyFailText(new DOMException(DEMO_CANCEL, "NotAllowedError"), what),
+    ).toBe("응모되지 않았어요. 확인을 취소했어요.");
   });
 });
