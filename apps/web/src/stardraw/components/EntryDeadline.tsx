@@ -78,7 +78,7 @@ export function BounceSlip({
     <StageOverlay label="접수 반송" appear={false}>
       <p
         role="status"
-        className="sd-text-in sd-submit-status min-h-8 text-center font-bold text-amber-100 text-lg"
+        className="sd-text-in sd-submit-status min-h-14 break-keep text-center font-bold text-amber-100 text-lg"
       >
         응모가 마감되었습니다.
       </p>

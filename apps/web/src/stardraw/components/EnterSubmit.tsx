@@ -366,7 +366,7 @@ export function SubmitView({
         key={text}
         role="status"
         className={cn(
-          "sd-submit-status min-h-8 text-center font-bold text-amber-100 text-lg",
+          "sd-submit-status min-h-14 break-keep text-center font-bold text-amber-100 text-lg",
           // 옮겨 쓰기 첫 말은 반송 화면 말 그대로라 다시 나타나지 않는다
           !(transfer && text === "응모가 마감되었습니다.") && "sd-text-in",
         )}
