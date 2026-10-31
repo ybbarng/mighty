@@ -4,7 +4,7 @@ import { type CSSProperties, useId } from "react";
 
 import { Seal } from "../astronaut/marks";
 import { type CelebrationPlan, LINE_MS, METEOR_MS } from "../celebrate";
-import { ballColor, starOf } from "../sky";
+import { starLight, starOf } from "../sky";
 
 /**
  * 당첨 축하의 하늘 쪽(SkyBoard `overlay`): 나만의 별자리(별이 하나씩 켜지고 선이 그어진다), 빛줄기 반짝임, 별똥별.
@@ -43,8 +43,8 @@ export function SkyCelebration({
           {plan.order.map((n) => (
             <radialGradient key={n} id={`${ray}-${n}`}>
               <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
-              <stop offset="0.3" stopColor={ballColor(n)} stopOpacity="0.6" />
-              <stop offset="1" stopColor={ballColor(n)} stopOpacity="0" />
+              <stop offset="0.3" stopColor={starLight(n)} stopOpacity="0.6" />
+              <stop offset="1" stopColor={starLight(n)} stopOpacity="0" />
             </radialGradient>
           ))}
         </defs>
@@ -78,7 +78,7 @@ export function SkyCelebration({
                 cx={x}
                 cy={y}
                 r={1.5}
-                fill={ballColor(n)}
+                fill={starLight(n)}
                 opacity={0.5}
                 filter={`url(#${glow})`}
               />

@@ -20,7 +20,7 @@ async function virtualAuthenticator(page: Page) {
  * 처음 온 사람에게 무엇을 하는 곳인지: 별자리판에 정답 예시 별 6개와 가짜 별자리, 그 6개 번호 공(2026-11-01 사용자).
  * 화면 시험은 움직임 줄이기라 첫 예시에 멈춰 있다. 응모하고 나면 첫 화면에서 빠진다
  */
-test("첫 화면 정답 예시: 처음 온 사람에게만 별자리판과 번호 공 6개", async ({
+test("첫 화면 정답 예시: 별자리판과 번호 공(처음 온 사람도 다녀간 사람도)", async ({
   page,
 }, info) => {
   await virtualAuthenticator(page);
@@ -43,7 +43,7 @@ test("첫 화면 정답 예시: 처음 온 사람에게만 별자리판과 번�
     fullPage: true,
   });
 
-  // 등록하고 응모하면 다음부터는 예시가 없다
+  // 등록하고 응모한 뒤에도 첫 화면 모양은 같다(예시가 그대로 있다)
   await page.getByRole("button", { name: "별 6개 고르기" }).click();
   await page.getByRole("button", { name: "우주인 등록", exact: true }).click();
   await page.getByRole("button", { name: "별을 고르러 가 볼까요?" }).click();
@@ -52,5 +52,5 @@ test("첫 화면 정답 예시: 처음 온 사람에게만 별자리판과 번�
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   await page.goto("/stardraw");
   await expect(page.locator("[data-card]").first()).toBeVisible();
-  await expect(intro).toHaveCount(0);
+  await expect(intro).toBeVisible();
 });

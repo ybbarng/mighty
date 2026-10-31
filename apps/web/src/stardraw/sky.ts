@@ -85,6 +85,15 @@ export function tempColor(k: number): [number, number, number] {
   return [pale(r), pale(g), pale(b)];
 }
 
+/**
+ * 하늘에 켜진 별의 빛(빛 번짐·＋✕ 빛줄기) 색: 그 별의 진짜 별빛 색(tempColor). 진한 색(ballColor)은 번호 공에만 쓴다
+ * (2026-11-01 사용자: 별자리 쪽 별빛은 진짜 별 색)
+ */
+export function starLight(n: number): string {
+  const [r, g, b] = tempColor(starOf(n).k);
+  return `rgb(${r},${g},${b})`;
+}
+
 export function tempWord(k: number): string {
   if (k < 4000) return "붉은 별";
   if (k < 5500) return "주황빛 별";

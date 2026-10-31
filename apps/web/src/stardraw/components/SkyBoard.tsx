@@ -155,6 +155,24 @@ export function SkyBoard({
     repaintRef.current?.();
   }, [state]);
 
+  // 켜진 별의 움직임(state.motion)이 있으면 그동안 매 프레임 다시 그린다(서서히 켜짐·반짝임·흐려짐)
+  const moving = !!state.motion;
+  useEffect(() => {
+    if (!moving) return;
+    if (
+      typeof matchMedia === "function" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    let raf = 0;
+    const loop = () => {
+      repaintRef.current?.();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [moving]);
+
   return (
     <div className={cn("relative w-full max-w-full", className)}>
       <canvas

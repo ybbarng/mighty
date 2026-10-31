@@ -458,13 +458,9 @@ export function Home({
   const [skipping, setSkipping] = useState(false);
   // 이 기기의 등록증(첫 그리기 뒤에 읽는다: 서버에서 그린 화면과 어긋나지 않게)
   const [key, setKey] = useState<KeyInfo | null | undefined>(undefined);
-  /** 처음 온 사람(등록 전이거나 이 기기에 응모 기록이 없음): 무엇을 하는 곳인지 정답 예시로 보인다 */
-  const [newcomer, setNewcomer] = useState(false);
   useEffect(() => {
     const found = services.wallet.loadKey();
     setKey(found);
-    // 지갑을 여기서 함께 읽는다(응모 기록이 늦게 읽혀 다녀간 사람에게 예시가 잠깐 비치지 않게)
-    setNewcomer(!found || services.wallet.loadTickets().length === 0);
     // 등록이 아직 장부에 오르지 않았으면 이어서 올린다(증명이 없는 예전 열쇠는 첫 응모 때)
     if (found && services.ns === GAME_NS)
       void ensureRegistered(services, found).catch(() => {});
@@ -485,7 +481,8 @@ export function Home({
         {key !== undefined && <Greeting services={services} keyInfo={key} />}
       </header>
 
-      {newcomer && mine.length === 0 && <GameIntro />}
+      {/* 정답 예시 하늘은 처음 온 사람이든 다녀간 사람이든 늘 같은 자리에(첫 화면 모양이 달라 헷갈렸다, 사용자) */}
+      <GameIntro />
 
       <RoundCard
         services={services}
