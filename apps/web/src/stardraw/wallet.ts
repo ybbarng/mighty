@@ -147,6 +147,9 @@ export interface Wallet {
   /** 추첨이 끝났다는 알림 띠를 닫은 회차(다시 띄우지 않는다) */
   noticeClosedRounds(): Set<number>;
   closeNotice(rounds: readonly number[]): void;
+  /** 「내 기록」에서 이미 본 기념 서류·당첨증 표시(my-records.ts recordKeys). 새로 생긴 것만 알린다 */
+  seenRecords(): Set<string>;
+  markRecordsSeen(keys: readonly string[]): void;
   /** 이 기기에서 추첨을 처음부터 끝까지 한 번이라도 봤는지(그 전에는 「추첨 건너뛰기」를 두지 않는다) */
   watchedDraw(): boolean;
   markWatchedDraw(): void;
@@ -168,6 +171,7 @@ export function createWallet(
   const OPENED = `${ns}-opened`;
   const NOTICE_CLOSED = `${ns}-notice-closed`;
   const WATCHED_DRAW = `${ns}-watched-draw`;
+  const SEEN_RECORDS = `${ns}-seen-records`;
   const PROOF = `${ns}-key-proof`;
 
   const saveKey = (key: KeyInfo) =>
@@ -405,6 +409,21 @@ export function createWallet(
       addRounds(NOTICE_CLOSED, rounds);
     },
 
+    seenRecords() {
+      const ledger = ledgerId();
+      const all = readJson<Record<string, string[]>>(SEEN_RECORDS) ?? {};
+      return new Set(ledger && !Array.isArray(all) ? (all[ledger] ?? []) : []);
+    },
+
+    markRecordsSeen(keys) {
+      const ledger = ledgerId();
+      if (!ledger) return;
+      const saved = readJson<Record<string, string[]>>(SEEN_RECORDS);
+      const all = saved && !Array.isArray(saved) ? saved : {};
+      all[ledger] = [...new Set([...(all[ledger] ?? []), ...keys])];
+      writeJson(SEEN_RECORDS, all);
+    },
+
     watchedDraw() {
       return readJson<boolean>(WATCHED_DRAW) === true;
     },
@@ -414,7 +433,14 @@ export function createWallet(
     },
 
     async clear() {
-      for (const k of [KEY, TICKETS, OPENED, NOTICE_CLOSED, PROOF]) {
+      for (const k of [
+        KEY,
+        TICKETS,
+        OPENED,
+        NOTICE_CLOSED,
+        PROOF,
+        SEEN_RECORDS,
+      ]) {
         try {
           localStorage.removeItem(k);
         } catch {
