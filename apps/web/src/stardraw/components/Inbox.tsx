@@ -14,6 +14,7 @@ import { AstronautCard } from "../astronaut/AstronautCard";
 import { astronautOf } from "../astronaut/identity";
 import { myTicketFor, prepareAnswer } from "../confirm";
 import type { ConfirmOutcome, OpenRequest } from "../confirm-relay";
+import { errorText } from "../errors";
 import { FX } from "../fx-timing";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
@@ -181,13 +182,7 @@ export function Inbox({
       await refresh();
     } catch (err) {
       setApproving(null);
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "등록증 확인을 취소했습니다"
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
+      setError(errorText(err, "승인", "승인하지 않았어요"));
     } finally {
       setBusy(null);
     }

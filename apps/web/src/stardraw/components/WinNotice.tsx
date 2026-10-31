@@ -3,6 +3,7 @@
 import { type Rank, type Ticket, ticketId, toHex } from "@mighty/stardraw-core";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { errorText } from "../errors";
 import { FX } from "../fx-timing";
 import {
   checkLinkUrl,
@@ -132,13 +133,7 @@ function NoticeCard({
       });
       if (!made) return;
     } catch (err) {
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "등록증 확인을 취소했습니다"
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
+      setError(errorText(err, "확인 링크를 발급", "링크를 만들지 않았어요"));
     } finally {
       setBusy(false);
     }

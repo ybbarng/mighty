@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { InviteQr } from "@/components/InviteQr";
 import { cn } from "@/lib/cn";
 import { checkOwner } from "../astronaut/owner-check";
+import { errorText } from "../errors";
 import { FX } from "../fx-timing";
 import {
   checkHolding,
@@ -52,7 +53,7 @@ export function QualifyPanel({
       setInfo(await services.ledger.qualInfo());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err, "소속 안내를 확인"));
     }
   }, [services]);
 
@@ -68,7 +69,7 @@ export function QualifyPanel({
       setVersion((v) => v + 1);
       onChange?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err, "소속 증서를 발급"));
     } finally {
       setBusy(false);
       await load();

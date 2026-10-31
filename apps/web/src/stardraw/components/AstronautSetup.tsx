@@ -3,14 +3,11 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
+import { errorText } from "../errors";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
 import { originGreeting } from "../origin-greeting";
-import {
-  type PasskeyProblem,
-  passkeyFailText,
-  passkeyProblem,
-} from "../passkey-env";
+import { type PasskeyProblem, passkeyProblem } from "../passkey-env";
 import { ensureRegistered } from "../registrar";
 import type { Services } from "../services";
 import type { KeyInfo } from "../wallet";
@@ -22,18 +19,22 @@ import { StageOverlay } from "./StageOverlay";
 export type Failure = { kind: PasskeyProblem; text: string };
 
 /** 패스키 오류를 화면 문구로 */
-export function failureOf(err: unknown, what: string): Failure {
+/**
+ * 실패를 화면 문구로(오류 → 창구 말은 errors.ts 한 곳). `doing`은 "○○하지 못했습니다"의 ○○,
+ * `cancelWhat`은 패스키를 취소했을 때의 앞 문장
+ */
+export function failureOf(
+  err: unknown,
+  doing: string,
+  cancelWhat: string,
+): Failure {
   const kind = passkeyProblem(err);
   return {
     kind,
     text:
-      kind === "cancelled"
-        ? passkeyFailText(err, what)
-        : kind === "unsupported"
-          ? "이 기기에서는 등록증을 만들 수 없어요. '다른 기기 사용'을 골라 휴대폰으로 만들어 주세요."
-          : err instanceof Error
-            ? err.message
-            : String(err),
+      kind === "unsupported"
+        ? "이 기기에서는 등록증을 만들 수 없어요. '다른 기기 사용'을 골라 휴대폰으로 만들어 주세요."
+        : errorText(err, doing, cancelWhat),
   };
 }
 
@@ -88,7 +89,7 @@ export function useAstronautSetup(
     try {
       setIssued(await makeKey());
     } catch (err) {
-      setError(failureOf(err, "등록하지 않았어요"));
+      setError(failureOf(err, "등록", "등록하지 않았어요"));
     } finally {
       setWorking(null);
     }
@@ -114,7 +115,7 @@ export function useAstronautSetup(
       if (passkeyProblem(err) === "cancelled") setApply("waiting");
       else {
         setApply(null);
-        setError(failureOf(err, "등록하지 않았어요"));
+        setError(failureOf(err, "등록", "등록하지 않았어요"));
       }
     } finally {
       setWorking(null);
@@ -160,7 +161,7 @@ export function useAstronautSetup(
       if (!found) setWorking(null);
     } catch (err) {
       setWorking(null);
-      setError(failureOf(err, "등록증을 찾지 못했어요"));
+      setError(failureOf(err, "신분증을 확인", "등록증을 찾지 못했어요"));
     }
   };
 

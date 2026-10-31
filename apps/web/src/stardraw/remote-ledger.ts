@@ -38,7 +38,7 @@ import {
   verifyLedger,
   type WebAuthnPolicy,
 } from "@mighty/stardraw-core";
-
+import { HttpError } from "./errors";
 import { type Ledger, RegisterLater } from "./ledger";
 import type { LedgerPhase, LedgerStatus } from "./local-ledger";
 
@@ -361,7 +361,10 @@ export class RemoteLedger implements Ledger {
     if (!res.ok) {
       // 국장 패스키면 서버가 그렇다고 알린다(403)
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `장부에 묻지 못했습니다(${res.status})`);
+      throw new HttpError(
+        body.error ?? `장부에 묻지 못했습니다(${res.status})`,
+        res.status,
+      );
     }
     const { pub } = (await res.json()) as { pub: string };
     return fromBase64Url(pub);
@@ -383,7 +386,10 @@ export class RemoteLedger implements Ledger {
     };
     if (res.status === 409) throw new RegisterLater(body.error);
     if (!res.ok || typeof body.round !== "number")
-      throw new Error(body.error ?? `등록하지 못했습니다(${res.status})`);
+      throw new HttpError(
+        body.error ?? `등록하지 못했습니다(${res.status})`,
+        res.status,
+      );
     const key = toBase64Url(registration.pub);
     this.registered.add(key);
     this.registeredAt.set(key, body.round);
@@ -405,7 +411,10 @@ export class RemoteLedger implements Ledger {
       receivedAt?: number;
     };
     if (!res.ok || body.receivedAt === undefined)
-      throw new Error(body.error ?? `응모를 내지 못했습니다(${res.status})`);
+      throw new HttpError(
+        body.error ?? `응모를 내지 못했습니다(${res.status})`,
+        res.status,
+      );
     this.registered.add(toBase64Url(ticket.pub));
     await this.settle(true);
     return { receivedAt: body.receivedAt };
@@ -448,7 +457,10 @@ export class RemoteLedger implements Ledger {
       blindStamp?: string;
     };
     if (!res.ok || !body.blindStamp)
-      throw new Error(body.error ?? `소속을 받지 못했습니다(${res.status})`);
+      throw new HttpError(
+        body.error ?? `소속을 받지 못했습니다(${res.status})`,
+        res.status,
+      );
     return fromBase64Url(body.blindStamp);
   }
 

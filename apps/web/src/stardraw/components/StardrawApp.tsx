@@ -23,6 +23,7 @@ import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import { track } from "@/stats/track";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
+import { errorText } from "../errors";
 import { FX } from "../fx-timing";
 import type { LedgerStatus } from "../local-ledger";
 import { myRecords, newestRecord, recordKeys } from "../my-records";
@@ -1572,7 +1573,7 @@ function RecoverKey({
       if (passkeyProblem(err) === "cancelled") setState("cancelled");
       else {
         setState("error");
-        setMessage(err instanceof Error ? err.message : null);
+        setMessage(errorText(err, "응모 기록을 복구", "찾지 않았어요"));
       }
     }
   };
