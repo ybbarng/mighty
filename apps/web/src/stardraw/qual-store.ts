@@ -1,5 +1,5 @@
 import {
-  blindStampRequest,
+  blindStampRequestFromSeed,
   fromBase64Url,
   fromHex,
   matchPeriod,
@@ -161,7 +161,8 @@ export async function receiveQualification(
     request = saved;
   } else {
     const seed = newQualSeed();
-    const made = blindStampRequest(periodId, qualKeyFromSeed(seed).publicKey);
+    // r을 씨앗에서 정해, 복구 코드만 있으면 나중에 발급 기록과 맞춰 볼 수 있게 한다(docs/36 11-13)
+    const made = blindStampRequestFromSeed(periodId, seed);
     request = {
       ledger: ledgerId,
       periodId: period.id,

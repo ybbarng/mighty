@@ -2,7 +2,9 @@ import { bls12_381 } from "@noble/curves/bls12-381.js";
 import { describe, expect, it } from "vitest";
 import { ByteReader, fromHex, sha256, toHex, utf8 } from "./bytes";
 import {
+  blindFactorFromSeed,
   blindStampRequest,
+  blindStampRequestFromSeed,
   checkIssuerKey,
   encodeQualCert,
   matchPeriod,
@@ -119,6 +121,38 @@ describe("자격 열쇠·복구 코드·자격 번호(파이썬과 같은 값)",
 });
 
 describe("블라인드 도장(우주국도 무엇에 찍었는지 모른다)", () => {
+  it("씨앗에서 정한 r: 복구 코드의 씨앗만으로 가린 값을 다시 계산해 발급 기록과 맞출 수 있고, 다른 씨앗과는 맞지 않는다", () => {
+    const issuer = newIssuerKey();
+    const req = blindStampRequestFromSeed(PERIOD, SEED);
+    // 서버가 남기는 것은 가린 값뿐(qual_issued.blinded)
+    const recorded = toHex(req.blinded);
+    expect(toHex(blindStampRequestFromSeed(PERIOD, SEED).blinded)).toBe(
+      recorded,
+    );
+    expect(blindFactorFromSeed(SEED)).toBe(req.factor);
+    expect(
+      toHex(blindStampRequestFromSeed(PERIOD, newQualSeed()).blinded),
+    ).not.toBe(recorded);
+    // 가린 값은 도장(장부에 나오는 값)과 다르고, 벗기면 보통 도장이 된다
+    const stamp = unblindStamp(
+      signBlinded(issuer.secretKey, req.blinded),
+      req.factor,
+    );
+    expect(toHex(stamp)).not.toBe(recorded);
+    expect(
+      verifyStamp(
+        issuer.publicKey,
+        PERIOD,
+        qualKeyFromSeed(SEED).publicKey,
+        stamp,
+      ),
+    ).toBe(true);
+    // 기간이 다르면 가린 값도 다르다
+    expect(
+      toHex(blindStampRequestFromSeed(sha256(PERIOD), SEED).blinded),
+    ).not.toBe(recorded);
+  });
+
   it("가려서 받은 도장을 벗기면 기간 열쇠로 확인된다", () => {
     const issuer = newIssuerKey();
     const h = issue(issuer.secretKey, PERIOD);

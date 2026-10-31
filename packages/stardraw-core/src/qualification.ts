@@ -129,14 +129,43 @@ function randomScalar(): bigint {
   }
 }
 
-/** 기기: m을 곡선 위 점 H(m)으로 바꾸고 무작위 r을 곱해 가린다 */
+/** 기기: m을 곡선 위 점 H(m)으로 바꾸고 r을 곱해 가린다. r을 주지 않으면 무작위 */
 export function blindStampRequest(
   periodId: Uint8Array,
   qualPub: Uint8Array,
+  factor: bigint = randomScalar(),
 ): BlindRequest {
-  const factor = randomScalar();
   const blinded = stampPoint(periodId, qualPub).multiply(factor).toBytes(true);
   return { blinded, factor };
+}
+
+/**
+ * 씨앗 → 블라인드 계수 r(2026-10-31 보안 검토). r = taggedHash("stardraw/qual-blind/v1", 씨앗 ‖ 0) ‖
+ * taggedHash(…, 씨앗 ‖ 1)(512비트) mod (r의 군 위수 − 1) + 1. 씨앗은 복구 코드에 이미 들어 있어, 복구 코드만
+ * 있으면 나중에 r과 가린 값을 다시 계산해 서버 발급 기록(가린 값)과 맞춰 볼 수 있다(상품을 받을 때 발급받은
+ * 계정에 묶기). 씨앗은 비밀이라 서버는 여전히 가린 값에서 자격 열쇠를 알 수 없다(블라인드 성질 유지)
+ */
+export function blindFactorFromSeed(seed: Uint8Array): bigint {
+  if (seed.length !== QUAL_SEED_LENGTH) throw new Error("씨앗은 16바이트");
+  const wide = concat(
+    taggedHash("stardraw/qual-blind/v1", seed, new Uint8Array([0])),
+    taggedHash("stardraw/qual-blind/v1", seed, new Uint8Array([1])),
+  );
+  let n = 0n;
+  for (const b of wide) n = (n << 8n) | BigInt(b);
+  return (n % (Fn.ORDER - 1n)) + 1n;
+}
+
+/** 씨앗 하나로 정해지는 도장 요청(가린 값과 r). 같은 씨앗·기간이면 늘 같다 */
+export function blindStampRequestFromSeed(
+  periodId: Uint8Array,
+  seed: Uint8Array,
+): BlindRequest {
+  return blindStampRequest(
+    periodId,
+    qualKeyFromSeed(seed).publicKey,
+    blindFactorFromSeed(seed),
+  );
 }
 
 /**
