@@ -45,6 +45,13 @@ test("데모 소속: 데모 기관 계정으로 받아 복구 코드를 보고, 
   );
   await panel.getByRole("button", { name: "QR 보기" }).click();
   await expect(panel.getByRole("img", { name: "복구 코드 QR" })).toBeVisible();
+  // 복구 코드는 받은 직후에만 보이고, 다시 열면 등록증 확인을 거쳐야 보인다(2026-10-31 보안 검토 B5)
+  await page.reload();
+  await expect(panel.locator("[data-qual-holding]")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(panel.locator("[data-qual-code]")).toHaveCount(0);
+  await expect(panel.locator("[data-qual-reveal]")).toBeVisible();
   await noSideScroll(page);
   await page.screenshot({
     path: info.outputPath("demo-qualify.png"),

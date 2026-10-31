@@ -8,21 +8,25 @@ import {
   qualDisplayId,
   qualKeyFromSeed,
   recoveryCode,
+  ticketId,
   toHex,
 } from "@mighty/stardraw-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { InviteQr } from "@/components/InviteQr";
 import { cn } from "@/lib/cn";
-
+import { checkOwner } from "../astronaut/owner-check";
 import {
   checkHolding,
   importRecoveryCode,
   loadHoldings,
   qualLoginNonceFor,
   receiveQualification,
+  removeHolding,
 } from "../qual-store";
+import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
+import { sitePolicy } from "../wallet";
 
 /**
  * 상품 자격 받기·백업·불러오기(docs/36 11-13). 기관 계정으로 확인하면 이 기기에서 만든 자격 열쇠에
@@ -120,7 +124,17 @@ export function QualifyPanel({
                 </p>
               </div>
               {holding ? (
-                <Backup holding={holding} />
+                <Backup
+                  services={services}
+                  holding={holding}
+                  fresh={justReceived.has(p.id)}
+                  onRemoved={() => {
+                    removeHolding(services.ns, ledgerId, p.id);
+                    justReceived.delete(p.id);
+                    setVersion((v) => v + 1);
+                    onChange?.();
+                  }}
+                />
               ) : !p.open ? (
                 <p className="text-sm text-white/60">
                   지금은 받을 수 없습니다.
@@ -137,6 +151,7 @@ export function QualifyPanel({
                         p,
                         "demo",
                       );
+                      justReceived.add(p.id);
                     })
                   }
                   className="sd-cta self-start rounded-lg px-4 py-2 font-bold text-slate-950 disabled:opacity-40"
@@ -156,6 +171,7 @@ export function QualifyPanel({
                         p,
                         token,
                       );
+                      justReceived.add(p.id);
                     })
                   }
                 />
@@ -171,7 +187,8 @@ export function QualifyPanel({
           busy={busy}
           onImport={(code) =>
             void act(async () => {
-              importRecoveryCode(services.ns, ledgerId, info, code);
+              const got = importRecoveryCode(services.ns, ledgerId, info, code);
+              justReceived.add(toHex(got.periodId));
             })
           }
         />
@@ -193,69 +210,194 @@ function day(seconds: number): string {
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 }
 
-/** 받은 자격과 복구 코드(평문 백업) */
-function Backup({ holding }: { holding: QualHolding }) {
+/** 이번 방문에서 막 받거나 불러온 기간(복구 코드를 바로 한 번 보여 준다) */
+const justReceived = new Set<string>();
+
+/** 이 기기에서 내지 않은 응모에 내 소속 증서가 쓰였는지(복구 코드가 새어 나간 신호) */
+function foreignUses(services: Services, holding: QualHolding): number[] {
+  const qualPub = toHex(qualKeyFromSeed(holding.seed).publicKey);
+  const mine = new Set(
+    services.wallet.loadTickets().map((m) => toHex(ticketId(m.ticket))),
+  );
+  const rounds = new Set<number>();
+  for (const { tickets } of services.ledger.closed())
+    for (const t of tickets)
+      if (
+        t.qual &&
+        toHex(t.qual.cert.qualPub) === qualPub &&
+        !mine.has(toHex(ticketId(t)))
+      )
+        rounds.add(t.round);
+  return [...rounds].sort((a, b) => a - b);
+}
+
+/**
+ * 받은 자격과 복구 코드(평문 백업). 2026-10-31 보안 검토 B5: 코드는 받거나 불러온 직후에만 보이고, 다시 볼 때는
+ * 등록증 주인 확인(패스키)을 거친다. 공용 PC·잠금이 풀린 기기에서 남이 코드를 베껴 가지 못하게 한다
+ */
+function Backup({
+  services,
+  holding,
+  fresh,
+  onRemoved,
+}: {
+  services: Services;
+  holding: QualHolding;
+  fresh: boolean;
+  onRemoved: () => void;
+}) {
   const code = recoveryCode(holding);
   const id = qualDisplayId(
     holding.periodId,
     qualKeyFromSeed(holding.seed).publicKey,
   );
+  const [shown, setShown] = useState(fresh);
+  const [checking, setChecking] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  const key = services.wallet.loadKey();
+  const leaked = foreignUses(services, holding);
+  const reveal = async () => {
+    if (!key) return;
+    setChecking(true);
+    setDenied(false);
+    try {
+      const ok = await checkOwner(
+        key.pub,
+        await services.wallet.ownerSigner(key.pub),
+        sitePolicy(),
+        Math.floor(services.clock.now() / 1000),
+      );
+      setShown(ok);
+      setDenied(!ok);
+    } finally {
+      setChecking(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-3" data-qual-holding={id}>
       <p className="font-semibold text-emerald-200">
         받았습니다 · 소속 번호 {id}
       </p>
-      <div className="flex flex-col gap-2 rounded-xl border border-amber-200/30 bg-amber-200/5 p-3">
-        <p className="break-keep text-sm text-amber-50">
-          복구 코드를 가진 사람은 이 기간 이 소속으로 응모할 수 있습니다.
-          비밀번호처럼 보관하세요. 패스키를 잃어도 이 코드로 새 등록증에 불러올
-          수 있습니다.
-        </p>
-        <code
-          className="select-all break-all rounded-lg bg-black/40 p-2 font-mono text-xs"
-          data-qual-code
+      {leaked.length > 0 && (
+        <p
+          role="alert"
+          className="break-keep rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-rose-100 text-sm"
+          data-qual-leak
         >
-          {code}
-        </code>
-        <div className="flex flex-wrap gap-2 text-sm">
+          이 기기에서 내지 않은 응모에 내 소속 증서가 쓰였습니다(
+          {leaked
+            .map((r) => roundShort(services.ledger.schedule, r))
+            .join(", ")}
+          ).
+        </p>
+      )}
+      {!shown ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <button
             type="button"
-            onClick={() =>
-              void navigator.clipboard
-                ?.writeText(code)
-                .then(() => setCopied(true))
-                .catch(() => setCopied(false))
-            }
-            className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
+            disabled={!key || checking}
+            onClick={() => void reveal()}
+            className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10 disabled:opacity-40"
+            data-qual-reveal
           >
-            {copied ? "복사됨" : "복사"}
+            {checking ? "확인하고 있습니다" : "복구 코드 다시 보기"}
+          </button>
+          {denied && (
+            <span className="text-rose-200">
+              등록증 확인을 마치지 못했습니다.
+            </span>
+          )}
+          {!key && (
+            <span className="text-white/60">
+              이 기기에 등록증이 있어야 다시 볼 수 있습니다.
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-200/30 bg-amber-200/5 p-3">
+          <p className="break-keep text-sm text-amber-50">
+            복구 코드를 가진 사람은 이 기간 이 소속으로 응모할 수 있습니다.
+            비밀번호처럼 보관하세요. 패스키를 잃어도 이 코드로 새 등록증에
+            불러올 수 있습니다.
+          </p>
+          <code
+            className="select-all break-all rounded-lg bg-black/40 p-2 font-mono text-xs"
+            data-qual-code
+          >
+            {code}
+          </code>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() =>
+                void navigator.clipboard
+                  ?.writeText(code)
+                  .then(() => setCopied(true))
+                  .catch(() => setCopied(false))
+              }
+              className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
+            >
+              {copied ? "복사됨" : "복사"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setQr((v) => !v)}
+              className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
+            >
+              {qr ? "QR 닫기" : "QR 보기"}
+            </button>
+            <button
+              type="button"
+              onClick={() => download(`stardraw-${id}.txt`, `${code}\n`)}
+              className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
+            >
+              파일로 받기
+            </button>
+          </div>
+          {qr && (
+            <div className="self-start">
+              <InviteQr url={code} size={200} label="복구 코드 QR" />
+            </div>
+          )}
+          <p className="text-white/50 text-xs">
+            받은 다음 회차 응모부터 붙습니다.
+          </p>
+        </div>
+      )}
+      {removing ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="break-keep text-rose-100">
+            복구 코드를 보관하지 않았다면 되돌릴 수 없습니다.
+          </span>
+          <button
+            type="button"
+            onClick={onRemoved}
+            className="rounded-lg border border-rose-300/50 px-3 py-1.5 text-rose-100 hover:bg-rose-500/10"
+            data-qual-remove-confirm
+          >
+            지우기
           </button>
           <button
             type="button"
-            onClick={() => setQr((v) => !v)}
+            onClick={() => setRemoving(false)}
             className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
           >
-            {qr ? "QR 닫기" : "QR 보기"}
-          </button>
-          <button
-            type="button"
-            onClick={() => download(`stardraw-${id}.txt`, `${code}\n`)}
-            className="rounded-lg border border-white/20 px-3 py-1.5 hover:bg-white/10"
-          >
-            파일로 받기
+            그대로 두기
           </button>
         </div>
-        {qr && (
-          <div className="self-start">
-            <InviteQr url={code} size={200} label="복구 코드 QR" />
-          </div>
-        )}
-        <p className="text-white/50 text-xs">
-          받은 다음 회차 응모부터 붙습니다.
-        </p>
-      </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setRemoving(true)}
+          className="self-start text-sm text-white/60 underline underline-offset-4 hover:text-white"
+          data-qual-remove
+        >
+          이 기기에서 지우기
+        </button>
+      )}
     </div>
   );
 }
