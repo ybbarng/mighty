@@ -165,13 +165,19 @@ describe("공개 시각 인증(가짜 기관)", () => {
     const b = new FakeTsa("tsa-b", () => t + 1);
     const digest = new Uint8Array(32).fill(7);
     const logs: string[] = [];
-    const two = new TsaRootLog(authorities(a, b), 2, fetchBy(a, b), (m) =>
-      logs.push(m),
+    let now = 0;
+    const two = new TsaRootLog(
+      authorities(a, b),
+      2,
+      fetchBy(a, b),
+      (m) => logs.push(m),
+      () => now,
     );
     b.status = 503;
     expect(await two.log(digest)).toBeNull();
     b.status = 200;
     b.wrongImprint = true;
+    now += 15_000;
     expect(await two.log(digest)).toBeNull();
     expect(logs.join("\n")).toMatch(/tsa-b 시각 인증 실패: HTTP 503/);
     expect(logs.join("\n")).toMatch(/tsa-b 시각 인증 토큰 확인 실패/);
@@ -181,8 +187,58 @@ describe("공개 시각 인증(가짜 기관)", () => {
     expect(got.loggedAt).toBe(t);
     expect((got.proof as TsaProof).tokens.map((k) => k.tsa)).toEqual(["tsa-a"]);
     b.wrongImprint = false;
+    now += 15_000;
     expect((await two.log(digest))?.loggedAt).toBe(t);
     expect(() => new TsaRootLog(authorities(a, b), 3)).toThrow();
+  });
+
+  it("받은 토큰은 들고 모자란 기관에만 15초 간격으로 다시 묻고, 기한 직전에는 한 곳으로 봉인한다(D8)", async () => {
+    const t = 1793324472;
+    const a = new FakeTsa("tsa-a", () => t);
+    const b = new FakeTsa("tsa-b", () => t + 1);
+    const asked: string[] = [];
+    const fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      asked.push(String(input));
+      return fetchBy(a, b)(input, init);
+    }) as typeof globalThis.fetch;
+    let now = 0;
+    const log = new TsaRootLog(
+      authorities(a, b),
+      2,
+      fetch,
+      () => {},
+      () => now,
+    );
+    const digest = new Uint8Array(32).fill(9);
+    b.status = 503;
+    expect(await log.log(digest)).toBeNull();
+    expect(asked).toEqual([a.authority.url, b.authority.url]);
+    // 15초 안에는 아무에게도 다시 묻지 않는다
+    expect(await log.log(digest)).toBeNull();
+    expect(asked).toHaveLength(2);
+    // 15초 뒤에는 모자란 b에게만 묻는다(a 토큰은 들고 있다)
+    now += 15_000;
+    expect(await log.log(digest)).toBeNull();
+    expect(asked.slice(2)).toEqual([b.authority.url]);
+    // 기한 직전: 한 곳(a)으로 봉인한다
+    const last = (await log.log(digest, { lastChance: true })) as LogResult;
+    expect((last.proof as TsaProof).tokens.map((k) => k.tsa)).toEqual([
+      "tsa-a",
+    ]);
+    expect(asked).toHaveLength(3);
+    // 기한 직전이어도 한 곳도 없으면 봉인하지 않는다
+    const none = new TsaRootLog(
+      authorities(a, b),
+      2,
+      fetch,
+      () => {},
+      () => 0,
+    );
+    a.status = 503;
+    expect(await none.log(digest, { lastChance: true })).toBeNull();
   });
 
   it("기한(마감 3분 뒤)까지 못 받으면 무효로 닫고, drand보다 늦은 시각이면 무효다", async () => {

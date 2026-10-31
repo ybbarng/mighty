@@ -775,7 +775,10 @@ export class StardrawServer {
         registrationRoot: registrationRoot(registrations),
       };
       const digest = sealDigest(parts);
-      const logged = await this.o.rootLog.log(digest);
+      // 기한 30초 전부터는 시각 인증을 최소 수만큼 못 채워도 받은 만큼으로 봉인한다(D8)
+      const logged = await this.o.rootLog.log(digest, {
+        lastChance: now >= closesAt + this.o.sealDeadline - 30,
+      });
       if (!logged && now < closesAt + this.o.sealDeadline) return; // 다음 번에 다시
       const loggedAt = logged?.loggedAt ?? 0;
       if (!logged)

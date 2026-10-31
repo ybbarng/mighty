@@ -66,8 +66,14 @@ export interface LogResult {
 }
 
 export interface RootLog {
-  /** 봉인 값을 올린다. 실패하면 null(기한 안이면 다시 시도) */
-  log(digest: Uint8Array): Promise<LogResult | null>;
+  /**
+   * 봉인 값을 올린다. 실패하면 null(기한 안이면 다시 시도).
+   * `lastChance`: 기한이 거의 다 됐다(엔진이 알려 준다). 그때는 최소 수를 못 채워도 받은 만큼으로 봉인할 수 있다(D8)
+   */
+  log(
+    digest: Uint8Array,
+    options?: { lastChance?: boolean },
+  ): Promise<LogResult | null>;
 }
 
 /** 가짜 로그: 지금 시각을 적는다(시험·로컬 개발). 시각 증명이 없다는 것을 장부에 남긴다 */
@@ -147,7 +153,10 @@ export class RekorRootLog implements RootLog {
  * 공개 시각 인증 기관(RFC 3161) 여러 곳: SHA-256(봉인 값)을 동시에 보내 토큰을 받는다(docs/36 8-1 O1, 11-1).
  * 받은 토큰은 검사기와 같은 규칙(`verifyTimestampToken`)으로 먼저 확인해 맞는 것만 싣는다.
  * 서로 다른 기관 minValid곳 이상이 맞으면 성공이고, 봉인 시각은 그중 가장 이른 시각이다.
- * 모자라면 null을 돌려 다음 번에 모두에게 다시 묻는다(마감 3분 뒤까지 못 받으면 엔진이 무효로 닫는다).
+ * 모자라면 null을 돌리고, 받은 토큰은 들고 있다가 모자란 기관에만 `retryMs`(기본 15초) 간격으로 다시 묻는다
+ * (장애 때 기관에 요청을 몰아쳐 차단당하지 않게, D8). 기한이 거의 다 됐는데(`lastChance`) 한 곳이라도 받았으면
+ * 그것으로 봉인한다: 검사 규칙은 한 곳이면 통과(「주의」로 표시)라, 한 기관 장애로 회차가 무효가 되는 일을 줄인다.
+ * 마감 3분 뒤까지 한 곳도 못 받으면 엔진이 무효로 닫는다.
  */
 export class TsaRootLog implements RootLog {
   constructor(
@@ -155,6 +164,8 @@ export class TsaRootLog implements RootLog {
     private readonly minValid: number,
     private readonly fetchFn: typeof fetch = fetch,
     private readonly warn: (message: string) => void = () => undefined,
+    private readonly nowMs: () => number = () => Date.now(),
+    private readonly retryMs = 15_000,
   ) {
     if (minValid < 1 || minValid > authorities.length)
       throw new Error(
@@ -162,20 +173,55 @@ export class TsaRootLog implements RootLog {
       );
   }
 
-  async log(digest: Uint8Array): Promise<LogResult | null> {
+  /** 봉인 값마다 받은 토큰과 기관마다 마지막으로 물은 시각(봉인이 끝나면 그 값은 다시 오지 않는다) */
+  private pending = new Map<
+    string,
+    {
+      got: Map<string, { tsa: string; genTime: number; token: Uint8Array }>;
+      asked: Map<string, number>;
+    }
+  >();
+
+  async log(
+    digest: Uint8Array,
+    options: { lastChance?: boolean } = {},
+  ): Promise<LogResult | null> {
+    const key = toHex(digest);
+    // 지난 봉인 값은 잊는다(같은 때 봉인하는 회차는 하나뿐이다)
+    for (const k of this.pending.keys()) if (k !== key) this.pending.delete(k);
+    let state = this.pending.get(key);
+    if (!state) {
+      state = { got: new Map(), asked: new Map() };
+      this.pending.set(key, state);
+    }
     const imprint = sealImprint(digest);
     const request = timestampRequest(imprint);
-    const got = (
-      await Promise.all(
-        this.authorities.map((a) => this.ask(a, request, imprint)),
-      )
-    ).filter((t) => t !== null);
-    if (got.length < this.minValid) {
-      this.warn(
-        `시각 인증을 ${this.minValid}곳 이상 받지 못했다(${got.length}곳). 다시 시도한다`,
-      );
+    const now = this.nowMs();
+    const due = this.authorities.filter(
+      (a) =>
+        !state.got.has(a.name) &&
+        now - (state.asked.get(a.name) ?? -Infinity) >= this.retryMs,
+    );
+    for (const a of due) state.asked.set(a.name, now);
+    for (const t of await Promise.all(
+      due.map((a) => this.ask(a, request, imprint)),
+    ))
+      if (t) state.got.set(t.tsa, t);
+    const got = [...state.got.values()];
+    const enough =
+      got.length >= this.minValid || (options.lastChance && got.length >= 1);
+    if (!enough) {
+      if (due.length > 0)
+        this.warn(
+          `시각 인증을 ${this.minValid}곳 이상 받지 못했다(${got.length}곳). 모자란 곳에 다시 묻는다`,
+        );
       return null;
     }
+    if (got.length < this.minValid)
+      this.warn(
+        `기한이 다 돼 시각 인증 ${got.length}곳으로 봉인한다(최소 ${this.minValid}곳, 검사에서 「주의」)`,
+      );
+    this.pending.delete(key);
     const proof: TsaProof = {
       kind: "tsa",
       tokens: got.map((t) => ({

@@ -39,7 +39,13 @@ async function main(): Promise<void> {
 
   // 봉인 시각 증명: 공개 시각 인증 기관(기본). 끄면(개발용) 이 서버의 시계를 적는다(시각 증명 없음)
   const rootLog: RootLog = config.tsa
-    ? new TsaRootLog(config.tsa.authorities, config.tsa.minValid, fetch, log)
+    ? new TsaRootLog(
+        config.tsa.authorities,
+        config.tsa.minValid,
+        fetch,
+        log,
+        () => clock.now(),
+      )
     : config.rekor
       ? new RekorRootLog(config.rekor.url, serverKey, fetch, log)
       : new LocalRootLog(() => Math.floor(clock.now() / 1000));
