@@ -27,7 +27,7 @@ test("오래 열지 않은 결과 봉투: 응모 단추는 늘 있고, 봉투는
 }) => {
   await virtualAuthenticator(page);
   await page.goto("/stardraw");
-  await page.getByRole("button", { name: "별 6개 고르기" }).click();
+  // 처음 온 사람은 첫 화면 입구에서 바로 우주인 등록
   await page.getByRole("button", { name: "우주인 등록", exact: true }).click();
   await page.getByRole("button", { name: "별을 고르러 가 볼까요?" }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();

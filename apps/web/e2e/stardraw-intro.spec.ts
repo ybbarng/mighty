@@ -34,9 +34,9 @@ test("첫 화면 정답 예시: 별자리판과 번호 공(처음 온 사람도 
   // 당첨 별 6개 + 보너스 1개, 별자리 선은 6개끼리만(5개)
   await expect(intro.locator("[data-ball]")).toHaveCount(7);
   await expect(intro.locator("line")).toHaveCount(5);
-  // 바로 아래 응모 단추로 이어진다
+  // 처음 온 사람은 입구: 바로 아래 우주인 등록으로 이어진다
   await expect(
-    page.getByRole("button", { name: "별 6개 고르기" }),
+    page.getByRole("button", { name: "우주인 등록", exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: info.outputPath("intro-first.png"),
@@ -44,7 +44,7 @@ test("첫 화면 정답 예시: 별자리판과 번호 공(처음 온 사람도 
   });
 
   // 등록하고 응모한 뒤에도 첫 화면 모양은 같다(예시가 그대로 있다)
-  await page.getByRole("button", { name: "별 6개 고르기" }).click();
+  // 처음 온 사람은 첫 화면 입구에서 바로 우주인 등록
   await page.getByRole("button", { name: "우주인 등록", exact: true }).click();
   await page.getByRole("button", { name: "별을 고르러 가 볼까요?" }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();

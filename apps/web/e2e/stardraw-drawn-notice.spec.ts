@@ -18,13 +18,13 @@ async function virtualAuthenticator(page: Page) {
 
 /** 첫 화면에서 자동으로 별 6개를 골라 응모하고 첫 화면으로 돌아온다 */
 async function enterAuto(page: Page, first: boolean) {
-  await page.getByRole("button", { name: "별 6개 고르기" }).click();
+  // 처음엔 첫 화면 입구에서 우주인 등록, 그 뒤로는 회차 카드의 「별 6개 고르기」
   if (first) {
     await page
       .getByRole("button", { name: "우주인 등록", exact: true })
       .click();
     await page.getByRole("button", { name: "별을 고르러 가 볼까요?" }).click();
-  }
+  } else await page.getByRole("button", { name: "별 6개 고르기" }).click();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", { name: "응모하기", exact: true }).click();
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });

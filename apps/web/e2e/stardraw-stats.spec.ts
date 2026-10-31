@@ -9,7 +9,7 @@ test("관측 기록: 지난 회차에서 들어가 공개 장부로 계산한 �
   const skip = page.getByRole("button", { name: /다음 추첨까지 건너뛰기/ });
   await skip.click();
   await skip.click();
-  await page.getByRole("button", { name: /지난 회차/ }).click();
+  await page.locator("[data-tab='rounds']").click();
   await page.getByRole("button", { name: "관측 기록" }).click();
   await expect(page).toHaveURL(/\/stardraw\/stats$/);
 
