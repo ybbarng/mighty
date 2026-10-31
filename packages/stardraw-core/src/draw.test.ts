@@ -70,6 +70,25 @@ describe("고르게 뽑힌다(docs/36 4절 「왜 고른가」)", () => {
     expect(chi(first, N / 45)).toBeLessThan(78.75);
     expect(chi(bonus, N / 45)).toBeLessThan(78.75);
   });
+
+  // 묶음마다 치우쳤다가 합치면 고르게 보이는 일이 없는지(5천 회차씩 네 묶음, 묶음마다 따로 검사)
+  it("5천 회차씩 나눈 네 묶음도 각각 고르다", () => {
+    const W = 5_000;
+    for (let start = 1; start <= 20_000; start += W) {
+      const won = new Array(46).fill(0);
+      for (let round = start; round < start + W; round++)
+        for (const n of drawNumbers(drawSeed(round, RANDOMNESS)).numbers)
+          won[n]++;
+      const expected = (W * 6) / 45;
+      const chi = won
+        .slice(1)
+        .reduce(
+          (s, o) => s + (o - expected) ** 2 / (expected * (1 - 6 / 45)),
+          0,
+        );
+      expect(chi, `${start}~${start + W - 1}회차`).toBeLessThan(78.75);
+    }
+  });
 });
 
 describe("등수(6/45 로또와 같다)", () => {
