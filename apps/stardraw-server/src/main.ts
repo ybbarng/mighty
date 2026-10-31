@@ -89,10 +89,16 @@ async function main(): Promise<void> {
     },
     log,
   });
-  const relay = new Relay(store, clock, config.policy, {
-    ...DEFAULT_RELAY_LIMITS,
-    invitesPerPrefixPerDay: config.invitesPerPrefixPerDay,
-  });
+  const relay = new Relay(
+    store,
+    clock,
+    config.policy,
+    {
+      ...DEFAULT_RELAY_LIMITS,
+      invitesPerPrefixPerDay: config.invitesPerPrefixPerDay,
+    },
+    (pub) => engine.isActiveDirector(pub),
+  );
   const http = createHttpServer(engine, relay, {
     basePath: config.basePath,
     ledgerDir: config.ledgerDir,

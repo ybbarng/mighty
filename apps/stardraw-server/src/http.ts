@@ -24,7 +24,7 @@ import type { Relay } from "./relay";
  *   POST /api/enter                     { ticket, registration? } → { receipt, receivedAt }
  *   POST /api/confirm/invites           당첨자: { invite }(서명한 확인 링크 초대) → { expiresAt }
  *   POST /api/confirm/peek              확인하는 사람: { token } → { state: "open", round, ticketId, expiresAt } | { state: "used" }
- *   POST /api/confirm/start             { token, checkerKey } → { id, request, checkerKey, answerBy, invitedAt, reportKey }
+ *   POST /api/confirm/start             { token, checkerKey, director?: { pub, signature, to } } → { id, request, checkerKey, answerBy, invitedAt, reportKey }
  *   POST /api/confirm/open              { ticketIds } → 열린 요청들
  *   GET  /api/confirm/:id               { answer, outcome }
  *   POST /api/confirm/:id/answer        { claim, winnerKey }(서명 없는 거절은 받지 않는다)
@@ -283,13 +283,26 @@ async function handle(
 
   if (method === "POST" && path === "/api/confirm/start") {
     const body = await readJson(req);
+    const d =
+      body.director && typeof body.director === "object"
+        ? (body.director as Record<string, unknown>)
+        : null;
     return send(
       res,
       200,
-      relay.start({
+      await relay.start({
         token: str(body.token, "링크"),
         checkerKey: str(body.checkerKey, "임시 공개 열쇠"),
         ip: clientIp(req, o.trustProxy),
+        ...(d
+          ? {
+              director: {
+                pub: str(d.pub, "국장 공개 열쇠"),
+                signature: str(d.signature, "국장 서명"),
+                to: str(d.to, "받는 분"),
+              },
+            }
+          : {}),
       }),
     );
   }

@@ -1,11 +1,13 @@
 import type { Clock } from "@mighty/fair-play";
 import {
+  checkStartMessage,
   decodeConfirmRequest,
   encodeConfirmRequest,
   fromBase64Url,
   generateSasKey,
   inviteTokenHash,
   type Rank,
+  type SignatureData,
   type Ticket,
   toBase64Url,
   toHex,
@@ -110,11 +112,26 @@ export class Checker {
     rank: Rank,
     /** 미리보기(peek)에서 공개 장부로 확인한 회차·응모권(hex). 서버의 시작 응답이 이와 다르면 멈춘다 */
     expected?: { round: number; ticketId: string },
+    /** 우주국장으로 여는 확인: 임시 열쇠에 국장 패스키로 서명해 받는 분을 묶는다(2026-10-31 보안 검토 B3) */
+    director?: {
+      to: string;
+      sign: (
+        message: Uint8Array,
+      ) => Promise<{ pub: Uint8Array; signature: SignatureData }>;
+    },
   ): Promise<CheckSession> {
     const existing = await this.byLink(token);
     if (existing) return existing;
     const key = await generateSasKey();
-    const opened = await this.relay.start(token, key.publicKey);
+    const proof = director
+      ? {
+          ...(await director.sign(
+            checkStartMessage(token, key.publicKey, director.to),
+          )),
+          to: director.to,
+        }
+      : undefined;
+    const opened = await this.relay.start(token, key.publicKey, proof);
     // 서버가 미리보기에서는 남의 1등 응모권을, 시작 응답에서는 다른 응모권을 내주면 바뀐 응모권의 서명이
     // "1등 당첨자 본인"으로 보일 수 있었다(2026-10-31 보안 검토 B6)
     if (

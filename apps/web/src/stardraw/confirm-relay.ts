@@ -4,6 +4,7 @@ import {
   type ConfirmRequest,
   decodeConfirmRequest,
   decodeInvite,
+  directorRequester,
   encodeConfirmRequest,
   equalBytes,
   fromBase64Url,
@@ -11,6 +12,7 @@ import {
   inviteTokenHash,
   isInviteToken,
   newChallengeText,
+  type SignatureData,
   toBase64Url,
   toHex,
 } from "@mighty/stardraw-core";
@@ -59,6 +61,15 @@ export interface OpenRequest {
   answerBy: number;
   /** 이 요청이 붙은 확인 링크를 만든 시각 */
   invitedAt: number;
+  /** 우주국장이 국장 패스키로 서명해 연 확인이면 국장 공개 열쇠와 받는 분(2026-10-31 보안 검토 B3) */
+  director?: { pub: Uint8Array; to: string };
+}
+
+/** 국장의 「확인 시작」 서명(checkStartMessage에 대한 국장 패스키 서명) */
+export interface DirectorStartProof {
+  pub: Uint8Array;
+  signature: SignatureData;
+  to: string;
 }
 
 export type ConfirmAnswer =
@@ -71,7 +82,11 @@ export interface ConfirmRelay {
   /** 확인하는 사람: 링크를 열어 본다(초대를 쓰지 않는다) */
   peek(token: string): Promise<InvitePeek>;
   /** 확인하는 사람: 「확인 시작」. 링크에 요청을 붙이고 링크를 닫는다 */
-  start(token: string, checkerKey: Uint8Array): Promise<OpenRequest>;
+  start(
+    token: string,
+    checkerKey: Uint8Array,
+    director?: DirectorStartProof,
+  ): Promise<OpenRequest>;
   /** 당첨자: 내 응모권들에 온, 아직 답하지 않은 요청 */
   openFor(ticketIds: readonly Uint8Array[]): Promise<OpenRequest[]>;
   /** 당첨자: 서명을 올리거나 거절한다. 요청은 한 번만 답할 수 있다 */
@@ -97,6 +112,7 @@ interface Entry {
   keepUntil: number;
   answer?: { claim: string; winnerKey: string } | { declined: true };
   outcome?: ConfirmOutcome;
+  director?: { pub: string; to: string };
 }
 
 /** 같은 기기 안 전달에 쓰는 저장소(기본은 localStorage). 시험은 메모리를 넣는다 */
@@ -264,7 +280,11 @@ export class LocalConfirmRelay implements ConfirmRelay {
     };
   }
 
-  async start(token: string, checkerKey: Uint8Array): Promise<OpenRequest> {
+  async start(
+    token: string,
+    checkerKey: Uint8Array,
+    director?: DirectorStartProof,
+  ): Promise<OpenRequest> {
     const invite = this.liveInvite(token);
     if (!invite)
       throw new Error(
@@ -279,7 +299,10 @@ export class LocalConfirmRelay implements ConfirmRelay {
     const request: ConfirmRequest = {
       // 매번 새 문구라 미리 서명해 두거나 지난 서명을 다시 쓸 수 없다
       challenge: newChallengeText(),
-      requester: CHECK_LINK_REQUESTER,
+      // 연습 장부의 같은 기기 전달은 국장 서명을 따로 확인하지 않는다(실제 서버가 장부의 국장 열쇠로 확인한다)
+      requester: director
+        ? directorRequester(director.to)
+        : CHECK_LINK_REQUESTER,
       round: invite.round,
       ticketId: fromHex(invite.ticketHex),
     };
@@ -291,6 +314,9 @@ export class LocalConfirmRelay implements ConfirmRelay {
       answerBy,
       invitedAt: invite.createdAt,
       keepUntil: now + CONFIRM_KEEP_MS,
+      ...(director
+        ? { director: { pub: toBase64Url(director.pub), to: director.to } }
+        : {}),
     });
     return {
       id,
@@ -318,6 +344,14 @@ export class LocalConfirmRelay implements ConfirmRelay {
           checkerKey: fromBase64Url(entry.checkerKey),
           answerBy: entry.answerBy,
           invitedAt: entry.invitedAt,
+          ...(entry.director
+            ? {
+                director: {
+                  pub: fromBase64Url(entry.director.pub),
+                  to: entry.director.to,
+                },
+              }
+            : {}),
         });
     }
     return out.sort((a, b) => a.answerBy - b.answerBy);

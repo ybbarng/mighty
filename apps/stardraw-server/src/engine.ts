@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import type { Clock } from "@mighty/fair-play";
 import {
+  activeDirector,
   anchorBranch,
   applyRecordOps,
   checkNumbers,
@@ -344,6 +345,12 @@ export class StardrawServer {
     number,
     { closesAt: number; wins: { rank: 1 | 2; ticket: string }[] }
   >();
+  /** 지금 회차에 쓰는 중인 국장 열쇠인지(확인 시작 서명 확인용, 2026-10-31 보안 검토 B3) */
+  isActiveDirector(pub: Uint8Array): boolean {
+    const round = roundAt(this.schedule(), this.now()) ?? 0;
+    return activeDirector(this.ops, pub, round) !== undefined;
+  }
+
   /** 시각 now(초) 기준의 소속 1·2등(state가 부른다, 시험은 창이 지난 시각으로 직접 부른다) */
   qualWins(now: number): ServerState["qualWins"] {
     const out: ServerState["qualWins"] = [];

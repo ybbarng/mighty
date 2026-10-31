@@ -8,15 +8,16 @@ import {
   toHex,
 } from "@mighty/stardraw-core";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import type { CheckSession } from "../checks";
 import { USED_LINK } from "../confirm-relay";
+import { demoKeyring, passkeyKeyring } from "../director/director";
 import { type QualMark, qualMarks, qualMarkText } from "../qual-judge";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
-import type { Services } from "../services";
+import { GAME_NS, type Services } from "../services";
 import { starOf } from "../sky";
 import type { Sealed } from "../spoiler";
 import { DrawFirst, formatTime, RANK_LABEL } from "./parts";
@@ -129,20 +130,43 @@ export function CheckLink({
     return checker.watch(session, ticketOf, bump);
   }, [sessionKey, checker, ticketOf]);
 
-  const start = async (ready: {
-    round: number;
-    rank: Rank;
-    ticketId: string;
-  }) => {
+  // 이 기기에 국장 패스키가 있으면 「우주국장으로 확인 시작」(받는 분을 국장 서명으로 묶는다, 2026-10-31 보안 검토 B3)
+  const keyring = useMemo(
+    () =>
+      services.ns === GAME_NS ? passkeyKeyring() : demoKeyring(services.ns),
+    [services.ns],
+  );
+  const [hasDirector, setHasDirector] = useState(false);
+  useEffect(() => setHasDirector(keyring.saved().length > 0), [keyring]);
+  const [recipient, setRecipient] = useState("");
+
+  const start = async (
+    ready: {
+      round: number;
+      rank: Rank;
+      ticketId: string;
+    },
+    asDirector = false,
+  ) => {
     setBusy(true);
     setError(null);
     try {
       setState({
         kind: "session",
-        session: await checker.start(token, ready.rank, {
-          round: ready.round,
-          ticketId: ready.ticketId,
-        }),
+        session: await checker.start(
+          token,
+          ready.rank,
+          {
+            round: ready.round,
+            ticketId: ready.ticketId,
+          },
+          asDirector
+            ? {
+                to: recipient.trim(),
+                sign: (m) => keyring.signBytes(m),
+              }
+            : undefined,
+        ),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -273,11 +297,39 @@ export function CheckLink({
           <p className="font-bold text-lg">
             {title} 당첨자가 보낸 확인 링크입니다
           </p>
+          {hasDirector && (
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-200/25 p-3">
+              <label className="flex flex-col gap-1 text-sm">
+                받는 분
+                <input
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  maxLength={40}
+                  data-check-recipient
+                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-2"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={busy || !recipient.trim()}
+                onClick={() => void start(state, true)}
+                data-check-director
+                className="sd-cta rounded-xl py-3 font-bold text-slate-950 disabled:opacity-40"
+              >
+                {busy ? "요청을 보내고 있습니다" : "우주국장으로 확인 시작"}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             disabled={busy}
             onClick={() => void start(state)}
-            className="sd-cta rounded-xl py-3 font-bold text-slate-950 disabled:opacity-40"
+            className={cn(
+              "rounded-xl py-3 font-bold disabled:opacity-40",
+              hasDirector
+                ? "border border-white/20 hover:bg-white/10"
+                : "sd-cta text-slate-950",
+            )}
           >
             {busy ? "요청을 보내고 있습니다" : "확인 시작"}
           </button>

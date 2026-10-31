@@ -33,8 +33,73 @@ import { type Ticket, ticketId } from "./ticket";
 const INVITE_VERSION = 1;
 export const INVITE_TOKEN_BYTES = 18;
 
-/** 확인 요청에 적는 요청자 칸. 이름 칸이 없어져, 링크로 온 요청은 모두 이 값이다 */
+/** 확인 요청에 적는 요청자 칸. 링크를 받은 누구든 연 요청은 이 값이다 */
 export const CHECK_LINK_REQUESTER = "확인 링크";
+
+/**
+ * 우주국장이 국장 패스키로 서명해 연 확인(2026-10-31 보안 검토 B3). 요청자 칸 = 이 앞말 ‖ 받는 분 이름.
+ * 당첨자는 이 칸까지 서명하므로, 자랑하려고 보낸 링크를 받은 사람이 국장에게 넘겨도 당첨자 화면에
+ * "받는 분: ○○"가 보여 허락하지 않은 사람에게 커피가 가는 것을 알아챈다
+ */
+export const DIRECTOR_REQUESTER_PREFIX = "우주국장 · 받는 분 ";
+const MAX_RECIPIENT = 40;
+
+export function directorRequester(to: string): string {
+  const trimmed = to.trim();
+  if (!trimmed || trimmed !== to || to.length > MAX_RECIPIENT)
+    throw new Error(`받는 분은 앞뒤 공백 없이 1~${MAX_RECIPIENT}자`);
+  return `${DIRECTOR_REQUESTER_PREFIX}${to}`;
+}
+
+/** 우주국장이 연 확인이면 받는 분 이름, 아니면 null */
+export function directorRecipient(requester: string): string | null {
+  return requester.startsWith(DIRECTOR_REQUESTER_PREFIX)
+    ? requester.slice(DIRECTOR_REQUESTER_PREFIX.length)
+    : null;
+}
+
+/** 국장이 「확인 시작」에 서명하는 바이트: 태그 ‖ 0 ‖ 토큰 해시(32) ‖ 확인하는 쪽 임시 공개 열쇠(65) ‖ 받는 분 */
+export function checkStartMessage(
+  token: string,
+  checkerKey: Uint8Array,
+  to: string,
+): Uint8Array {
+  return concat(
+    utf8("stardraw/check-start/v1"),
+    new Uint8Array([0]),
+    inviteTokenHash(token),
+    checkerKey,
+    utf8(to),
+  );
+}
+
+/** 국장의 「확인 시작」 서명(공개 열쇠가 장부의 국장 열쇠인지는 부르는 쪽이 본다) */
+export function verifyCheckStart(
+  token: string,
+  checkerKey: Uint8Array,
+  to: string,
+  pub: Uint8Array,
+  signature: SignatureData,
+  policy: WebAuthnPolicy,
+): Promise<boolean> {
+  return verifyEntrantSignature(
+    pub,
+    checkStartMessage(token, checkerKey, to),
+    signature,
+    policy,
+  );
+}
+
+export function encodeSignatureData(s: SignatureData): string {
+  return toBase64Url(writeSignature(new ByteWriter(), s).done());
+}
+
+export function decodeSignatureData(text: string): SignatureData {
+  const r = new ByteReader(fromBase64Url(text));
+  const s = readSignature(r);
+  r.end();
+  return s;
+}
 
 export interface ConfirmInvite {
   round: number;

@@ -1,6 +1,7 @@
 import type { Clock } from "@mighty/fair-play";
 import {
   decodeConfirmRequest,
+  encodeSignatureData,
   fromBase64Url,
   toBase64Url,
 } from "@mighty/stardraw-core";
@@ -9,6 +10,7 @@ import type {
   ConfirmAnswer,
   ConfirmOutcome,
   ConfirmRelay,
+  DirectorStartProof,
   InvitePeek,
   OpenRequest,
 } from "./confirm-relay";
@@ -29,6 +31,7 @@ interface OpenJson {
   checkerKey: string;
   answerBy: number;
   invitedAt: number;
+  director?: { pub: string; signature: string; to: string };
 }
 
 export interface TokenStore {
@@ -65,6 +68,9 @@ const toOpen = (o: OpenJson): OpenRequest => ({
   checkerKey: fromBase64Url(o.checkerKey),
   answerBy: o.answerBy,
   invitedAt: o.invitedAt,
+  ...(o.director
+    ? { director: { pub: fromBase64Url(o.director.pub), to: o.director.to } }
+    : {}),
 });
 
 /** 서버가 낸 오류(상태 번호를 함께 둔다) */
@@ -131,10 +137,26 @@ export class RemoteConfirmRelay implements ConfirmRelay {
     }
   }
 
-  async start(token: string, checkerKey: Uint8Array): Promise<OpenRequest> {
+  async start(
+    token: string,
+    checkerKey: Uint8Array,
+    director?: DirectorStartProof,
+  ): Promise<OpenRequest> {
     const created = await this.call<OpenJson & { reportKey: string }>(
       "/api/confirm/start",
-      { token, checkerKey: toBase64Url(checkerKey) },
+      {
+        token,
+        checkerKey: toBase64Url(checkerKey),
+        ...(director
+          ? {
+              director: {
+                pub: toBase64Url(director.pub),
+                signature: encodeSignatureData(director.signature),
+                to: director.to,
+              },
+            }
+          : {}),
+      },
     );
     this.tokens.set(created.id, created.reportKey);
     return toOpen(created);

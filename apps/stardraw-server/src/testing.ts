@@ -211,6 +211,7 @@ export async function makeRig(
     clock,
     { rpId: "game.byb.kr", origins: ["https://game.byb.kr"] },
     { ...DEFAULT_RELAY_LIMITS, ...limits.relay },
+    (pub) => engine.isActiveDirector(pub),
   );
   const at = async (seconds: number) => {
     const now = clock.now();

@@ -3,9 +3,16 @@ import { join } from "node:path";
 import {
   type AffiliationFields,
   blindStampRequest,
+  checkStartMessage,
+  decodeConfirmRequest,
+  directorRequester,
+  encodeInvite,
   encodeOperation,
+  encodeSignatureData,
   fromBase64Url,
+  generateSasKey,
   generateSigner,
+  newInviteToken,
   newQualSeed,
   OP_VERSION,
   type OpBody,
@@ -18,7 +25,10 @@ import {
   type SoftPasskey,
   STAMP_SCHEME_BLS,
   signAsDirector,
+  signInvite,
   softPasskeySigner,
+  ticketId,
+  toBase64Url,
   toHex,
   unblindStamp,
   verifyLedger,
@@ -411,5 +421,58 @@ describe("구글 로그인 nonce(2026-10-31 보안 검토 B7)", () => {
       ip: "203.0.113.7",
     });
     expect(ok.blindStamp).toHaveLength(48);
+  }, 60_000);
+});
+
+describe("우주국장이 국장 패스키로 연 확인(2026-10-31 보안 검토 B3)", () => {
+  it("국장 서명이면 요청자 칸에 받는 분이 적히고, 국장이 아닌 열쇠의 서명은 거절한다", async () => {
+    const { r } = await qualRig();
+    const winner = await player();
+    const won = (await enter(r, winner, drawOf(13).numbers, "203.0.113.7"))
+      .ticket;
+    await r.finish(13);
+    const token = newInviteToken();
+    await r.relay.createInvite({
+      invite: encodeInvite(await signInvite(winner.signer, won, token)),
+    });
+    const checker = await generateSasKey();
+    const to = "홍길동";
+    const msg = checkStartMessage(token, checker.publicKey, to);
+    const base = { token, checkerKey: toBase64Url(checker.publicKey) };
+    // 우주인 열쇠로 서명한 가짜 국장
+    await expect(
+      r.relay.start({
+        ...base,
+        director: {
+          pub: toBase64Url(winner.signer.publicKey),
+          signature: encodeSignatureData(await winner.signer.sign(msg)),
+          to,
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    // 받는 분을 바꾼 서명
+    await expect(
+      r.relay.start({
+        ...base,
+        director: {
+          pub: toBase64Url(director.publicKey),
+          signature: encodeSignatureData(await director.sign(msg)),
+          to: "말로리",
+        },
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const created = await r.relay.start({
+      ...base,
+      director: {
+        pub: toBase64Url(director.publicKey),
+        signature: encodeSignatureData(await director.sign(msg)),
+        to,
+      },
+    });
+    expect(decodeConfirmRequest(created.request).requester).toBe(
+      directorRequester(to),
+    );
+    const open = r.relay.openFor([toBase64Url(ticketId(won))]);
+    expect(open[0]?.director?.to).toBe(to);
   }, 60_000);
 });

@@ -61,7 +61,7 @@ async function invite(p: Player, ticket: Ticket, ip?: string) {
 /** 확인하는 사람 기기: 링크를 열어 「확인 시작」 */
 async function start(token: string, ip?: string) {
   const checker = await generateSasKey();
-  const created = rig.relay.start({
+  const created = await rig.relay.start({
     token,
     checkerKey: toBase64Url(checker.publicKey),
     ...(ip ? { ip } : {}),
@@ -281,7 +281,10 @@ describe("허락 없이 확인을 막지 못한다(2026-10-31 보안 검토 B2)"
       invite: encodeInvite(await signInvite(winner.signer, won, token)),
     });
     const checker = await generateSasKey();
-    rig.relay.start({ token, checkerKey: toBase64Url(checker.publicKey) });
+    await rig.relay.start({
+      token,
+      checkerKey: toBase64Url(checker.publicKey),
+    });
     const open = rig.relay.openFor([toBase64Url(ticketId(won))]);
     const id = open[0]?.id as string;
     // 서명 없는 거절(예전 형식)과 아무 값이나 넣은 응답은 거절된다

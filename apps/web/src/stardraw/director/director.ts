@@ -8,6 +8,7 @@ import {
   type Operation,
   opMessage,
   rawPublicKeyFromSpki,
+  type SignatureData,
   signAsDirector,
   signerFromKeyPair,
   softCredentialId,
@@ -111,6 +112,13 @@ export interface DirectorKeyring {
   create(): Promise<DirectorKey>;
   /** 패스키를 고르게 해 서명한다. 장부의 국장 열쇠(directors)가 아니면 NotDirectorError */
   sign(body: OpBody, directors: readonly DirectorView[]): Promise<Operation>;
+  /**
+   * 운영 기록이 아닌 바이트(「확인 시작」 등)에 서명한다. 이 기기에 저장한 국장 패스키로만.
+   * 장부의 국장 열쇠인지는 받는 쪽(서버)이 확인한다
+   */
+  signBytes(
+    message: Uint8Array,
+  ): Promise<{ pub: Uint8Array; signature: SignatureData }>;
 }
 
 export const DIRECTOR_PASSKEY_NAME = "카노푸스 우주국장";
@@ -199,6 +207,39 @@ export function passkeyKeyring(
       };
       writeKeys(storageKey, [...readKeys(storageKey), key]);
       return key;
+    },
+
+    async signBytes(message) {
+      const saved = readKeys(storageKey);
+      const credential = (await navigator.credentials.get({
+        publicKey: {
+          challenge: new Uint8Array(webauthnChallenge(message)),
+          rpId: location.hostname,
+          userVerification: "required",
+          allowCredentials: saved.map((k) => ({
+            type: "public-key" as const,
+            id: new Uint8Array(k.credentialId),
+          })),
+        },
+      })) as PublicKeyCredential | null;
+      if (!credential)
+        throw new DOMException("서명하지 않았습니다", "NotAllowedError");
+      const rawId = new Uint8Array(credential.rawId);
+      const key = saved.find(
+        (k) => toBase64Url(k.credentialId) === toBase64Url(rawId),
+      );
+      if (!key)
+        throw new NotDirectorError("이 기기에 저장된 국장 패스키가 아닙니다");
+      const response = credential.response as AuthenticatorAssertionResponse;
+      return {
+        pub: key.pub,
+        signature: {
+          kind: "webauthn",
+          authenticatorData: new Uint8Array(response.authenticatorData),
+          clientDataJSON: new Uint8Array(response.clientDataJSON),
+          signature: new Uint8Array(response.signature),
+        },
+      };
     },
 
     async sign(body, directors) {
@@ -334,6 +375,16 @@ export function demoKeyring(
         body,
         softPasskeySigner(signer, { policy: sitePolicy() }),
       );
+    },
+
+    async signBytes(message) {
+      const pair = await loadPair();
+      if (!pair) throw new NotDirectorError("먼저 국장 패스키를 만들어 주세요");
+      const signer = softPasskeySigner(await signerFromKeyPair(pair), {
+        policy: sitePolicy(),
+      });
+      await confirm("sign");
+      return { pub: signer.publicKey, signature: await signer.sign(message) };
     },
 
     async signAsStranger(body) {

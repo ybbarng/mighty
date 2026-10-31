@@ -5,6 +5,8 @@ import {
   decodeClaim,
   decodeConfirmRequest,
   decodeInvite,
+  decodeSignatureData,
+  directorRequester,
   encodeConfirmRequest,
   equalBytes,
   fromBase64Url,
@@ -19,6 +21,7 @@ import {
   ticketId,
   toBase64Url,
   toHex,
+  verifyCheckStart,
   verifyClaim,
   verifyInvite,
   type WebAuthnPolicy,
@@ -56,6 +59,15 @@ interface Payload {
   invitedAt: number;
   answer?: { claim: string; winnerKey: string } | { declined: true };
   outcome?: unknown;
+  /** 우주국장이 국장 패스키로 서명해 연 확인이면 그 서명(당첨자 화면이 국장 지문을 보인다) */
+  director?: DirectorStart;
+}
+
+/** 국장의 「확인 시작」 서명(base64url) */
+export interface DirectorStart {
+  pub: string;
+  signature: string;
+  to: string;
 }
 
 export interface OpenRequestJson {
@@ -64,6 +76,7 @@ export interface OpenRequestJson {
   checkerKey: string;
   answerBy: number;
   invitedAt: number;
+  director?: DirectorStart;
 }
 
 export type InvitePeek =
@@ -94,6 +107,8 @@ export class Relay {
     private readonly clock: Clock,
     private readonly policy: WebAuthnPolicy,
     private readonly limits: RelayLimits = DEFAULT_RELAY_LIMITS,
+    /** 지금 쓰는 중인 국장 열쇠인지(장부의 운영 기록으로 엔진이 판단한다) */
+    private readonly isDirector: (pub: Uint8Array) => boolean = () => false,
   ) {}
 
   /** 닫힌 회차의 당첨 응모권(id로 찾음) */
@@ -203,11 +218,13 @@ export class Relay {
   }
 
   /** 확인하는 사람: 「확인 시작」. 초대에 요청을 붙이고 초대를 닫는다 */
-  start(input: {
+  async start(input: {
     token: string;
     checkerKey: string;
     ip?: string;
-  }): OpenRequestJson & { reportKey: string } {
+    /** 우주국장이 국장 패스키로 서명해 여는 확인(2026-10-31 보안 검토 B3) */
+    director?: DirectorStart;
+  }): Promise<OpenRequestJson & { reportKey: string }> {
     const row = this.invite(input.token, input.ip);
     let checkerKey: Uint8Array;
     try {
@@ -221,13 +238,35 @@ export class Relay {
     const id = fromHex(row.ticketHex);
     if (!this.winningTicket(row.round, id))
       throw new EntryError("그 회차의 당첨 응모권이 아닙니다", 404);
+    let requester = CHECK_LINK_REQUESTER;
+    if (input.director) {
+      const d = input.director;
+      let ok = false;
+      try {
+        requester = directorRequester(d.to);
+        const pub = fromBase64Url(d.pub);
+        ok =
+          this.isDirector(pub) &&
+          (await verifyCheckStart(
+            input.token,
+            checkerKey,
+            d.to,
+            pub,
+            decodeSignatureData(d.signature),
+            this.policy,
+          ));
+      } catch {
+        ok = false;
+      }
+      if (!ok) throw new EntryError("우주국장의 서명이 아닙니다", 403);
+    }
     const now = this.clock.now();
     const relayId = toHex(crypto.getRandomValues(new Uint8Array(12)));
     // 여기까지 기다림이 없어 다른 요청이 끼어들 수 없지만, 저장소에서도 한 번만 쓰이게 한다
     if (!this.store.inviteUse(row.tokenHash, relayId)) throw usedLink();
     const request: ConfirmRequest = {
       challenge: newChallengeText(),
-      requester: CHECK_LINK_REQUESTER,
+      requester,
       round: row.round,
       ticketId: id,
     };
@@ -236,6 +275,7 @@ export class Relay {
       checkerKey: input.checkerKey,
       reportKey: toBase64Url(crypto.getRandomValues(new Uint8Array(18))),
       invitedAt: row.createdAt,
+      ...(input.director ? { director: input.director } : {}),
     };
     const answerBy = now + ANSWER_TTL_MS;
     this.store.relayPut({
@@ -252,6 +292,7 @@ export class Relay {
       answerBy,
       invitedAt: row.createdAt,
       reportKey: payload.reportKey,
+      ...(input.director ? { director: input.director } : {}),
     };
   }
 
@@ -272,6 +313,7 @@ export class Relay {
         checkerKey: p.checkerKey,
         answerBy: row.answerBy,
         invitedAt: p.invitedAt,
+        ...(p.director ? { director: p.director } : {}),
       }))
       .sort((a, b) => a.answerBy - b.answerBy);
   }

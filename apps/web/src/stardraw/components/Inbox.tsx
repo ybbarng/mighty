@@ -1,6 +1,12 @@
 "use client";
 
-import { equalBytes, type Ticket, ticketId } from "@mighty/stardraw-core";
+import {
+  directorFingerprint,
+  directorRecipient,
+  equalBytes,
+  type Ticket,
+  ticketId,
+} from "@mighty/stardraw-core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
@@ -230,9 +236,26 @@ export function Inbox({
                 {formatTime(req.invitedAt / 1000)}에 만든 링크 · 전달: 카노푸스
                 우주국
               </p>
-              <p className="text-sm text-amber-100/80">
-                링크를 보낸 적이 없으면 승인하지 마세요.
-              </p>
+              {/* 누가 연 확인인지(2026-10-31 보안 검토 B3): 받는 분은 승인하면 함께 서명하는 요청자 칸에서 읽는다 */}
+              {req.director &&
+              directorRecipient(req.request.requester) !== null ? (
+                <p
+                  className="text-sm text-amber-50"
+                  data-confirm-from="director"
+                >
+                  우주국장({directorFingerprint(req.director.pub)})이 확인을
+                  시작했습니다 · 받는 분:{" "}
+                  <b>{directorRecipient(req.request.requester)}</b>
+                </p>
+              ) : (
+                <p
+                  className="text-sm text-amber-100/80"
+                  data-confirm-from="other"
+                >
+                  우주국장이 아닌 사람이 확인을 요청했습니다. 링크를 보낸 적이
+                  없으면 승인하지 마세요.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
