@@ -14,6 +14,7 @@ import {
   toHex,
 } from "@mighty/stardraw-core";
 import { cn } from "@/lib/cn";
+import { FX } from "../fx-timing";
 import { myRank } from "../results";
 import { roundShort } from "../round-label";
 import { starOf } from "../sky";
@@ -50,10 +51,10 @@ export function Receipt({
   const id = toHex(ticketId(ticket));
   const record = sealed ? undefined : shownRecord;
   const rank: Rank | null = record ? myRank(record, ticket) : null;
-  return (
+  const paper = (
     <article
       aria-label={`${roundShort(schedule, ticket.round)} 응모권`}
-      data-receipt={id}
+      data-receipt={printing ? undefined : id}
       className={cn(
         "sd-paper relative mx-auto w-full max-w-sm px-5 pt-6 pb-7 text-slate-100",
         printing && "sd-print",
@@ -211,6 +212,23 @@ export function Receipt({
         발행 · 카노푸스 우주국
       </p>
     </article>
+  );
+  if (!printing) return paper;
+  // 막 응모했으면 위쪽 출력구에서 부드럽게 내려온다(globals.css .sd-printer, 시간은 FX)
+  return (
+    <div
+      className="sd-printer mx-auto w-full max-w-sm"
+      data-printing
+      style={
+        {
+          "--print-feed": `${FX.printFeed}ms`,
+          "--print-delay": `${FX.printDelay}ms`,
+        } as React.CSSProperties
+      }
+    >
+      <div aria-hidden="true" className="sd-printer-slot" />
+      <div className="sd-printer-feed">{paper}</div>
+    </div>
   );
 }
 

@@ -3,13 +3,18 @@
 import {
   type KeyRegistration,
   makeRegistration,
-  makeTicket,
+  signTicket,
+  solvePow,
   type Ticket,
+  ticketContent,
+  unsignedTicket,
 } from "@mighty/stardraw-core";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
+import { FX } from "../fx-timing";
+import { greetNow } from "../greeting";
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -23,14 +28,26 @@ import { usableHolding } from "../qual-store";
 import { ensureRegistered, registering, signProof } from "../registrar";
 import { roundShort } from "../round-label";
 import { DEMO_NS, type Services } from "../services";
-import { SKY_STARS, starOf } from "../sky";
 import type { KeyInfo } from "../wallet";
-import { AstronautPanel } from "./AstronautPanel";
+import {
+  type Failure,
+  failureOf,
+  IssuedView,
+  useAstronautSetup,
+  WelcomeFlyer,
+} from "./AstronautSetup";
+import { PickedRow, SubmitView } from "./EnterSubmit";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 import { KeyIcon } from "./PasskeyHelp";
-import { LottoBall, StardrawTitle, StarInfo } from "./parts";
+import { StardrawTitle, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
+import { StageOverlay, useReducedMotion } from "./StageOverlay";
 
-type Step = "pick" | "working" | "folding";
+/**
+ * 응모 단계. pick: 별 고르기. busy: 움직임 줄이기에서 응모하는 중(고르는 화면 그대로).
+ * 그 밖은 제출 연출(EnterSubmit.tsx): 용지 마킹 → 용지 제출 → 신분증 제시(패스키 서명) → 출력구
+ */
+type Stage = "pick" | "busy" | "paper" | "id" | "print";
 
 /** 패스키를 쓸 수 있는 환경(첫 그리기 뒤에 잰다) */
 export interface Env {
@@ -41,7 +58,22 @@ export interface Env {
   ua: string;
 }
 
-type Failure = { kind: PasskeyProblem; text: string };
+/** 패스키를 쓸 수 있는 환경(첫 그리기 뒤에 잰다) */
+export function usePasskeyEnv(): Env | null {
+  const [env, setEnv] = useState<Env | null>(null);
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    let alive = true;
+    void platformUnlock().then((platform) => {
+      if (alive)
+        setEnv({ inApp: inAppBrowser(ua), api: passkeyApi(), platform, ua });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return env;
+}
 
 /** 응모: 네모 하늘이나 아래 번호 칸에서 별 6개를 고르고 낸다 */
 export function EnterView({
@@ -65,23 +97,21 @@ export function EnterView({
   const [focus, setFocus] = useState<number | null>(null);
   /** 6개를 다 고른 뒤 또 누른 횟수: 응모권 칸이 짧게 흔들린다(글 없이) */
   const [nudges, setNudges] = useState(0);
-  const [step, setStep] = useState<Step>("pick");
-  const [work, setWork] = useState("");
+  const [stage, setStage] = useState<Stage>("pick");
+  /** 제출 연출에서 용지가 제출(위로 올라가 사라짐)됐을 때 이어 갈 곳 */
+  const paperRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<Failure | null>(null);
-  const [env, setEnv] = useState<Env | null>(null);
+  const env = usePasskeyEnv();
   /** 이 기기·브라우저의 패스키. 없으면 별을 고르기 전에 먼저 만든다(등록과 서명을 나눈다, 2026-10-30 사용자) */
   const [key, setKey] = useState<KeyInfo | null>(() =>
     services.wallet.loadKey(),
   );
-  const [keyWork, setKeyWork] = useState<null | "create" | "recover">(null);
-  const [keyNote, setKeyNote] = useState<string | null>(null);
-  /** 방금 등록했거나 찾은 등록증(별을 고르기 전에 한 번 보여 준다) */
-  const [issued, setIssued] = useState<{
-    kind: "new" | "found";
-    key: KeyInfo;
-  } | null>(null);
+  const setup = useAstronautSetup(services, setKey);
+  const reduce = useReducedMotion();
   /** 이 회차에 붙일 수 있는 상품 자격(docs/36 11-13)과 붙일지 */
   const [qual, setQual] = useState<ReturnType<typeof usableHolding>>(null);
+  /** 응모할 때 신분증 제출(신분증 제시 틀) */
+  const id = useIdPresent(services);
   const [useQual, setUseQual] = useState(true);
   const full = picked.length === 6;
   const open = status.phase === "open";
@@ -109,32 +139,9 @@ export function EnterView({
     };
   }, [services, status.round]);
 
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    let alive = true;
-    void platformUnlock().then((platform) => {
-      if (alive)
-        setEnv({ inApp: inAppBrowser(ua), api: passkeyApi(), platform, ua });
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const fail = (err: unknown, what = "응모되지 않았어요") => {
-    setStep("pick");
-    const kind = passkeyProblem(err);
-    setError({
-      kind,
-      text:
-        kind === "cancelled"
-          ? passkeyFailText(err, what)
-          : kind === "unsupported"
-            ? "이 기기에서는 등록증을 만들 수 없어요. '다른 기기 사용'을 골라 휴대폰으로 만들어 주세요."
-            : err instanceof Error
-              ? err.message
-              : String(err),
-    });
+  const fail = (err: unknown) => {
+    setStage("pick");
+    setError(failureOf(err, "응모되지 않았어요"));
   };
 
   const toggle = (n: number) => {
@@ -168,48 +175,99 @@ export function EnterView({
     play("beep");
   };
 
+  /**
+   * 응모: 누르는 순간 서명 앞에 할 수 있는 일(등록 확인, 응모권 작업 증명)을 시작하고, 그동안 용지 작성·제출 연출을 겹친다.
+   * 응모권은 작업 증명을 먼저 풀고 그 결과까지 패스키로 서명하므로(makeTicket 순서) 용지를 낸 뒤
+   * "패스키로 신분증을 제출해 주세요."에서 서명한다. 차례(Apple Pay의 카드 제시처럼): 문구 → 패스키 → 등록증이 아래에서
+   * 올라옴 → 확인 표시 → 내려감 → 출력구가 영수증을 기다림. 서명 뒤 제출은 등록증 연출과 겹쳐 진행한다.
+   * 실제 처리가 먼저 끝나도 연출은 끝까지 보인다. 취소·실패면 고른 별을 그대로 둔 채 고르는 화면으로.
+   * 움직임 줄이기면 연출 없이 바로 서명한다
+   */
   const submit = async (key: KeyInfo) => {
-    setStep("working");
     setError(null);
-    try {
-      const { ledger } = services;
-      const entry = ledger.status().times.entry;
-      const challenge = ledger.head();
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const { ledger } = services;
+    const entry = ledger.status().times.entry;
+    const challenge = ledger.head();
+    const round = status.round;
+    const numbers = [...picked];
+    const holding = qual && useQual ? qual.holding : null;
+    const prep = (async () => {
       const signer = await services.wallet.signerFor(key);
-      let registration: KeyRegistration | null | undefined;
-      if (!(await ledger.isRegistered(key.pub))) {
-        setWork("등록하고 있습니다");
-        // 우주인 등록 직후 올리던 등록이 아직 돌고 있으면 그것을 기다린다
+      let registration: KeyRegistration | undefined;
+      // 우주인 등록 직후 올리던 등록이 아직 돌고 있으면 그것을 기다린다
+      if (!(await ledger.isRegistered(key.pub)))
         await registering(services, key)?.catch(() => null);
-      }
       if (!(await ledger.isRegistered(key.pub))) {
         // 등록 증명이 없는 예전 열쇠나 올리지 못한 등록은 응모권과 함께 낸다
-        registration = await makeRegistration(
+        const made = await makeRegistration(
           { publicKey: key.pub },
           key.credentialId,
           challenge,
           entry.registerPowTarget,
           { params: ledger.powParams },
         );
+        if (!made) throw new Error("응모권을 만들지 못했습니다");
+        registration = made;
       }
-      setWork("계산하고 있습니다");
-      const ticket = await makeTicket(
-        signer,
-        status.round,
-        picked,
+      const unsigned = unsignedTicket(signer, round, numbers, holding);
+      const nonce = await solvePow(
         challenge,
+        ticketContent(unsigned),
         entry.powTarget,
         { params: ledger.powParams },
-        qual && useQual ? qual.holding : null,
       );
-      if (!ticket || registration === null)
-        throw new Error("응모권을 만들지 못했습니다");
-      setWork("내고 있습니다");
-      const { receivedAt } = await ledger.submit(ticket, registration);
-      setStep("folding");
+      if (nonce === null) throw new Error("응모권을 만들지 못했습니다");
+      return { signer, unsigned, nonce, registration };
+    })();
+    // 연출 중에 실패해도 처리되지 않은 거절로 남지 않게(아래에서 기다릴 때 다시 받는다)
+    prep.catch(() => {});
+    const wait = (ms: number) =>
+      new Promise<void>((r) => services.clock.after(ms, r));
+    try {
+      if (reduce) {
+        setStage("busy");
+        const p = await prep;
+        const ticket = await signTicket(p.signer, p.unsigned, p.nonce);
+        const { receivedAt } = await ledger.submit(ticket, p.registration);
+        play("starBall");
+        onDone(ticket, receivedAt);
+        return;
+      }
+      window.scrollTo({ top: 0 });
+      await new Promise<void>((r) => {
+        paperRef.current = r;
+        setStage("paper");
+      });
+      // 신분증 제출(신분증 제시 틀): 문구 → 「신분증 제출」 누름 → 패스키 → 등록증 올라옴 → 확인 → 내려감.
+      // 응모하기를 누른 지 시간이 흘러 브라우저가 패스키 창을 막을 수 있어 여기서 한 번 누름을 받는다
+      setStage("id");
+      const p = await prep;
+      let sent: ReturnType<typeof ledger.submit> | null = null;
+      const ticket = await id.run(
+        () => signTicket(p.signer, p.unsigned, p.nonce),
+        {
+          verb: "제출",
+          pub: key.pub,
+          readFirst: true,
+          tap: true,
+          hold: FX.idHoldSubmit,
+          keep: true,
+          done: `${residentPhrase(astronautOf(key.pub))} 님, ${greetNow(services.clock.now(), "submit")}`,
+          onConfirmed: (t) => {
+            sent = ledger.submit(t, p.registration);
+            sent.catch(() => {});
+          },
+        },
+      );
+      if (!ticket || !sent) {
+        setStage("pick");
+        return;
+      }
+      setStage("print");
+      const { receivedAt } = await (sent as ReturnType<typeof ledger.submit>);
       play("starBall");
-      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      services.clock.after(reduce ? 0 : 900, () => onDone(ticket, receivedAt));
+      onDone(ticket, receivedAt);
     } catch (err) {
       fail(err);
     }
@@ -220,91 +278,27 @@ export function EnterView({
     if (key) await submit(key);
   };
 
-  /** 우주인 등록 = 패스키 만들기(확인 한 번). 서명은 별을 고른 뒤 응모할 때 한다 */
-  const createKey = async () => {
-    setKeyWork("create");
-    setKeyNote(null);
-    setError(null);
-    try {
-      const made = await services.wallet.createPasskey();
-      // 바로 장부에 등록한다: 그 패스키로 등록 증명에 서명하고(확인 한 번 더), 작업 증명·올리기는 뒤에서
-      try {
-        await signProof(services, made);
-        void ensureRegistered(services, made).catch(() => {});
-      } catch {
-        // 서명을 취소하면 첫 응모 때 응모권과 함께 등록한다
-      }
-      setIssued({ kind: "new", key: made });
-      setKey(made);
-    } catch (err) {
-      fail(err, "등록하지 않았어요");
-    } finally {
-      setKeyWork(null);
-    }
-  };
-
-  /** 다른 기기에서 만든(따라온) 패스키를 찾아 장부의 등록을 확인한다 */
-  const recoverKey = async () => {
-    setKeyWork("recover");
-    setKeyNote(null);
-    setError(null);
-    try {
-      const found = await services.wallet.recoverPasskey((id) =>
-        services.ledger.passkeyPub(id),
-      );
-      if (found) {
-        void ensureRegistered(services, found).catch(() => {});
-        setIssued({ kind: "found", key: found });
-        setKey(found);
-      } else setKeyNote("장부에 없는 등록증이에요.");
-    } catch (err) {
-      fail(err, "등록증을 찾지 못했어요");
-    } finally {
-      setKeyWork(null);
-    }
-  };
-
-  if (issued) {
-    const phrase = residentPhrase(astronautOf(issued.key.pub));
+  // 발급한 등록증: 움직임 줄이기면 이 화면 대신, 아니면 화면 전체 오버레이로 위에 뜬다
+  if (setup.issued && reduce)
     return (
-      <section className="flex flex-col gap-4" aria-label="우주인 등록증 발급">
-        <EnterHeader
-          onBack={onBack}
-          round={roundShort(services.ledger.schedule, status.round)}
-        />
-        <AstronautPanel
-          services={services}
-          pub={issued.key.pub}
-          greeting={
-            <p
-              role="status"
-              data-issued={issued.kind}
-              className="flex flex-col items-center gap-1 break-keep text-center text-amber-100"
-            >
-              <span className="text-sm text-amber-100/75">{phrase} 님,</span>
-              <span className="font-bold text-xl">
-                {issued.kind === "new"
-                  ? "우주인으로 등록되었습니다. 환영합니다!"
-                  : "다시 만나 반갑습니다"}
-              </span>
-            </p>
-          }
-        >
-          <button
-            type="button"
-            onClick={() => setIssued(null)}
-            className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950"
-          >
-            별을 고르러 가 볼까요?
-          </button>
-        </AstronautPanel>
-      </section>
+      <IssuedView
+        services={services}
+        setup={setup}
+        header={
+          <EnterHeader
+            onBack={onBack}
+            round={roundShort(services.ledger.schedule, status.round)}
+          />
+        }
+      />
     );
-  }
 
   if (!key)
     return (
       <section className="flex flex-col gap-4" aria-label="응모">
+        {setup.issued && (
+          <IssuedView services={services} setup={setup} overlay />
+        )}
         <EnterHeader
           onBack={onBack}
           round={roundShort(services.ledger.schedule, status.round)}
@@ -312,55 +306,68 @@ export function EnterView({
         <KeySetup
           demo={demo}
           env={env}
-          working={keyWork}
-          note={keyNote}
-          error={error}
-          onCreate={() => void createKey()}
-          onRecover={() => void recoverKey()}
+          working={setup.working}
+          note={setup.note}
+          error={setup.error}
+          onCreate={() => void setup.create()}
+          onRecover={() => void setup.recover()}
         />
       </section>
     );
 
+  const title = `${roundShort(services.ledger.schedule, status.round)} 응모권`;
+  const picking = stage === "pick";
+  const submitting = stage !== "pick" && stage !== "busy";
   return (
     <section className="flex flex-col gap-4" aria-label="응모">
+      {/* 제출 연출은 화면 전체 오버레이 한 층에서(뒤의 고르는 화면은 흐려지고 조작되지 않는다) */}
+      {submitting && (
+        <StageOverlay label="응모">
+          {stage === "paper" && (
+            <SubmitView
+              title={title}
+              picked={picked}
+              onSubmitted={() => paperRef.current?.()}
+            />
+          )}
+          {stage === "print" && (
+            <div
+              className="sd-text-in sd-printer relative mx-auto w-full max-w-sm"
+              data-printer-wait
+            >
+              <div
+                aria-hidden="true"
+                className="sd-printer-slot sd-printer-idle"
+              />
+            </div>
+          )}
+        </StageOverlay>
+      )}
+      <IdPresentView services={services} id={id} verb="제출" backdrop={false} />
       <EnterHeader onBack={onBack} />
 
-      <EntrySlip
-        key={nudges}
-        shake={nudges > 0}
-        title={`${roundShort(services.ledger.schedule, status.round)} 응모권`}
-        picked={picked}
-        onRemove={step === "pick" ? toggle : undefined}
+      <SkyBoard
+        state={{ mode: "pick", picked, focus, lit: [], bonus: null }}
+        onPick={picking ? toggle : undefined}
+        label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
       />
-
-      <div
-        className={cn(
-          "relative",
-          step === "folding" && "sd-fold",
-          step === "working" && "sd-breathe",
-        )}
-      >
-        <SkyBoard
-          state={{ mode: "pick", picked, focus, lit: [], bonus: null }}
-          onPick={step === "pick" ? toggle : undefined}
-          label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
-        />
-      </div>
 
       <StarInfo n={focus} />
 
       {extra}
 
-      <NumberSlip
+      <PickedRow
+        key={nudges}
+        shake={nudges > 0}
+        title={title}
         picked={picked}
-        onToggle={toggle}
-        disabled={step !== "pick"}
+        onRemove={picking ? toggle : undefined}
       />
 
       <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
-          disabled={step !== "pick"}
+          disabled={!picking}
           onClick={() => fill([])}
           className="rounded-xl border border-white/15 bg-white/5 py-2 text-sm hover:bg-white/10 disabled:opacity-40"
         >
@@ -368,7 +375,7 @@ export function EnterView({
         </button>
         <button
           type="button"
-          disabled={step !== "pick" || full}
+          disabled={!picking || full}
           onClick={() => fill(picked)}
           className="rounded-xl border border-white/15 bg-white/5 py-2 text-sm hover:bg-white/10 disabled:opacity-40"
         >
@@ -376,7 +383,7 @@ export function EnterView({
         </button>
         <button
           type="button"
-          disabled={step !== "pick" || picked.length === 0}
+          disabled={!picking || picked.length === 0}
           onClick={() => {
             setPicked([]);
             setFocus(null);
@@ -395,7 +402,7 @@ export function EnterView({
           <input
             type="checkbox"
             checked={useQual}
-            disabled={step !== "pick"}
+            disabled={!picking}
             onChange={(e) => setUseQual(e.target.checked)}
             className="size-4 accent-amber-300"
           />
@@ -407,27 +414,30 @@ export function EnterView({
 
       {error && <ErrorBox error={error} />}
 
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={!full || !open || step !== "pick"}
-          onClick={() => void start()}
-          className="sd-cta rounded-2xl py-4 font-black text-slate-950 text-xl disabled:opacity-40"
-        >
-          {step === "working" || step === "folding"
-            ? work || "응모하고 있습니다"
-            : !open
-              ? status.phase === "waiting"
-                ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
-                : "이번 회차 응모가 마감되었습니다"
-              : "응모하기"}
-        </button>
-      </div>
+      <WelcomeFlyer services={services} setup={setup} />
+
+      <button
+        type="button"
+        disabled={!full || !open || !picking}
+        onClick={() => void start()}
+        className="sd-cta rounded-2xl py-4 font-black text-slate-950 text-xl disabled:opacity-40"
+      >
+        {stage === "busy"
+          ? "응모하고 있습니다"
+          : !open
+            ? status.phase === "waiting"
+              ? "앞 회차 추첨이 끝나면 응모할 수 있습니다"
+              : "이번 회차 응모가 마감되었습니다"
+            : "응모하기"}
+      </button>
     </section>
   );
 }
 
-/** 응모 화면 머리: 돌아가기와 첫 화면과 같은 제목·소개 문구(등록 단계는 회차 이름도) */
+/**
+ * 응모 화면 머리: 돌아가기. 등록 단계는 첫 화면과 같은 제목·소개 문구와 회차 이름도 둔다.
+ * 별을 고르는 화면은 응모권 이름이 머리 역할이라 제목을 두지 않는다(같은 정보가 겹쳐 보였다, 2026-10-31 사용자)
+ */
 function EnterHeader({
   onBack,
   round,
@@ -451,82 +461,8 @@ function EnterHeader({
           </span>
         )}
       </div>
-      <StardrawTitle />
+      {round && <StardrawTitle />}
     </header>
-  );
-}
-
-/**
- * 응모권(응모 용지): 이번 회차 이름과 칸 6개. 별을 고르면 빈 칸이 번호 공과 별 이름으로 채워진다(작은 수부터).
- * 채운 칸을 누르면 그 별을 뺀다
- */
-function EntrySlip({
-  title,
-  picked,
-  onRemove,
-  shake = false,
-}: {
-  /** 막 그려질 때 한 번 흔들린다(6개를 다 고른 뒤 또 누름) */
-  shake?: boolean;
-  title: string;
-  picked: readonly number[];
-  onRemove: ((n: number) => void) | undefined;
-}) {
-  const sorted = [...picked].sort((a, b) => a - b);
-  return (
-    <section
-      aria-label={title}
-      data-entry-slip={picked.length}
-      className={cn(
-        "sd-slip relative rounded-2xl px-3.5 pt-3 pb-3.5",
-        picked.length === 6 && "sd-slip-full",
-        shake && "sd-shake",
-      )}
-    >
-      <div className="mb-2.5 flex items-baseline justify-between gap-3 px-0.5">
-        <h2 className="font-bold text-base text-rose-50 tabular-nums">
-          {title}
-        </h2>
-        <span
-          className="font-mono text-rose-100/70 text-sm tabular-nums"
-          aria-live="polite"
-        >
-          {picked.length}/6
-        </span>
-      </div>
-      <ol className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {[0, 1, 2, 3, 4, 5].map((i) => {
-          const n = sorted[i];
-          if (n === undefined)
-            return (
-              <li
-                key={`empty-${i}`}
-                className="sd-slip-cell grid h-[4.6rem] place-items-center rounded-xl border border-rose-200/25 border-dashed"
-              >
-                <span className="size-7 rounded-full border border-rose-200/25 border-dashed" />
-              </li>
-            );
-          const s = starOf(n);
-          return (
-            <li key={n} className="h-[4.6rem]">
-              <button
-                type="button"
-                disabled={!onRemove}
-                onClick={() => onRemove?.(n)}
-                aria-label={`${n} ${s.ko} 빼기`}
-                data-slip-star={n}
-                className="sd-pop flex size-full flex-col items-center justify-center gap-1 rounded-xl border border-amber-200/45 bg-amber-100/10 px-1 hover:bg-amber-100/15"
-              >
-                <LottoBall n={n} size="sm" />
-                <span className="line-clamp-2 break-keep text-center font-semibold text-[11px] text-amber-50 leading-tight">
-                  {s.ko}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
   );
 }
 
@@ -564,7 +500,10 @@ export function KeySetup({
   error,
   onCreate,
   onRecover,
+  gate = false,
 }: {
+  /** 첫 화면 입구: 우주국 인사가 위에 있어 그림·제목·설명을 두지 않고, 찾기는 「신분증 제시」 */
+  gate?: boolean;
   demo: boolean;
   env: Env | null;
   working: null | "create" | "recover";
@@ -579,11 +518,15 @@ export function KeySetup({
       className="sd-glass flex flex-col items-center gap-3 rounded-3xl px-5 py-7 text-center"
       data-key-setup
     >
-      <KeyIcon className="size-9 text-amber-100" />
-      <h2 className="font-bold text-xl">우주인 등록</h2>
-      <p className="break-keep text-sm text-white/80">
-        하늘의 별 따기는 등록한 우주인만 응모할 수 있습니다.
-      </p>
+      {!gate && (
+        <>
+          <KeyIcon className="size-9 text-amber-100" />
+          <h2 className="font-bold text-xl">우주인 등록</h2>
+          <p className="break-keep text-sm text-white/80">
+            하늘의 별 따기는 등록한 우주인만 응모할 수 있습니다.
+          </p>
+        </>
+      )}
       {blocked ? (
         env?.inApp ? (
           <InAppNotice app={env.inApp} />
@@ -617,7 +560,9 @@ export function KeySetup({
             >
               {working === "recover"
                 ? "찾고 있습니다"
-                : "이미 우주인 등록증이 있어요"}
+                : gate
+                  ? "신분증 제시"
+                  : "이미 우주인 등록증이 있어요"}
             </button>
           )}
         </>
@@ -634,56 +579,6 @@ export function KeySetup({
         </a>
       </p>
     </div>
-  );
-}
-
-/** 실제 로또 용지처럼 1~45 칸. 하늘에서 고른 것과 같다 */
-function NumberSlip({
-  picked,
-  onToggle,
-  disabled,
-}: {
-  picked: readonly number[];
-  onToggle: (n: number) => void;
-  disabled: boolean;
-}) {
-  return (
-    <fieldset
-      className="rounded-2xl border border-rose-300/25 bg-[linear-gradient(180deg,rgba(255,228,230,0.07),rgba(255,228,230,0.03))] p-3"
-      aria-label="번호 칸"
-    >
-      <div className="grid grid-cols-7 gap-1.5">
-        {SKY_STARS.map((s) => {
-          const on = picked.includes(s.n);
-          return (
-            <button
-              key={s.n}
-              type="button"
-              disabled={disabled}
-              aria-pressed={on}
-              aria-label={`${s.n} ${starOf(s.n).ko}`}
-              onClick={() => onToggle(s.n)}
-              className={cn(
-                "relative grid h-9 place-items-center rounded-md font-semibold text-sm tabular-nums transition",
-                on
-                  ? "bg-amber-200 text-slate-950 shadow-[0_0_14px_rgba(253,230,138,0.55)]"
-                  : "text-rose-100/85 hover:bg-rose-200/10",
-              )}
-            >
-              {/* 용지의 칸 괄호 */}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "absolute inset-x-1 inset-y-1 rounded-sm border-rose-300/40 border-x",
-                  on && "border-transparent",
-                )}
-              />
-              {s.n}
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
   );
 }
 
