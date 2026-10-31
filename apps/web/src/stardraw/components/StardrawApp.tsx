@@ -686,6 +686,31 @@ export function Home({
   );
 }
 
+/**
+ * 건너뛴 뒤 바뀐 회차 카드로 눈이 가게: 화면 가운데로 옮기고 한 번 은은하게 빛낸다.
+ * 응모하지 않은 상태에서는 회차 번호와 남은 시간만 바뀌어, 단추가 아래에 있으면 반응이 없는 것처럼 보였다(2026-10-31)
+ */
+function showSkipped(): void {
+  const card = document.querySelector<HTMLElement>(
+    "[data-card], [data-gate-round], [data-draw-wait]",
+  );
+  if (!card) return;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  card.scrollIntoView({
+    block: "center",
+    behavior: reduce ? "auto" : "smooth",
+  });
+  if (reduce) return;
+  card.animate(
+    [
+      { boxShadow: "0 0 0 0 rgba(253, 230, 138, 0)" },
+      { boxShadow: "0 0 0 3px rgba(253, 230, 138, 0.55)" },
+      { boxShadow: "0 0 0 0 rgba(253, 230, 138, 0)" },
+    ],
+    { duration: 1200, easing: "ease-out" },
+  );
+}
+
 /** 연습 장부에서 다음 추첨까지 건너뛰기(서버 장부는 시간을 건너뛸 수 없다) */
 function PracticeSkip({ onSkip }: { onSkip: () => Promise<void> }) {
   const [skipping, setSkipping] = useState(false);
@@ -697,6 +722,7 @@ function PracticeSkip({ onSkip }: { onSkip: () => Promise<void> }) {
         setSkipping(true);
         try {
           await onSkip();
+          showSkipped();
         } finally {
           setSkipping(false);
         }
