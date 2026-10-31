@@ -32,6 +32,7 @@ import type { KeyInfo, MyTicket } from "../wallet";
 import { CheckLink } from "./CheckLink";
 import { DrawView } from "./DrawView";
 import { EnterView } from "./EnterView";
+import { GameIntro } from "./GameIntro";
 import { Inbox } from "./Inbox";
 import {
   formatLeft,
@@ -128,9 +129,12 @@ let navigated = false;
 /**
  * 라우터로 다른 페이지로 갈 때 갈 화면. 새 페이지가 처음 그려지는 순간에는 주소의 # 조각이 아직 바뀌지 않았을 수 있어
  * (안드로이드 폰에서 첫 화면의 결과 봉투를 누르면 /stardraw/rounds#draw-28 대신 지난 회차 목록이 떠 갇혔다, 2026-10-31)
- * 주소를 기다리지 않고 이 값으로 시작한다. 한 번 쓰면 지운다
+ * 주소를 기다리지 않고 이 값으로 시작한다. 새 페이지가 한 번 더 만들어져도(라우터가 화면 데이터를 받은 뒤 다시 그리는 등)
+ * 같은 화면으로 시작하게, 읽자마자 지우지 않고 주소가 그 화면으로 바뀐 뒤(늦어도 PENDING_MS 뒤) 지운다.
+ * 페이지를 새로 불러오면 이 값은 사라지지만 그때는 새 주소에 # 조각이 이미 있다
  */
-let pendingView: { path: string; view: View } | null = null;
+let pendingView: { path: string; view: View; at: number } | null = null;
+const PENDING_MS = 5000;
 
 /** 하늘의 별 따기(docs/36 11절). 서버 주소가 없으면 이 기기 안 연습 장부로 돈다 */
 export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
@@ -141,13 +145,41 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const [view, setView] = useState<View>(() => {
     if (typeof window === "undefined") return viewOf(page, "");
     const pending = pendingView;
-    if (pending && pending.path === PATH[page]) {
-      pendingView = null;
+    if (
+      pending &&
+      pending.path === PATH[page] &&
+      Date.now() - pending.at < PENDING_MS
+    ) {
       startedFromPending.current = true;
       return pending.view;
     }
     return viewOf(page, window.location.hash);
   });
+  // 넘겨받은 화면으로 시작했으면 주소가 그 화면으로 바뀐 뒤(늦어도 PENDING_MS 뒤) 넘겨받은 값을 지운다
+  useEffect(() => {
+    if (!startedFromPending.current) return;
+    const done = () => {
+      if (pendingView?.path === PATH[page]) pendingView = null;
+    };
+    const timer = window.setInterval(() => {
+      const want = pendingView ? urlOf(pendingView.view) : null;
+      if (
+        !want ||
+        `${window.location.pathname}${window.location.hash}` === want
+      ) {
+        done();
+        window.clearInterval(timer);
+      }
+    }, 100);
+    const stop = window.setTimeout(() => {
+      done();
+      window.clearInterval(timer);
+    }, PENDING_MS);
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(stop);
+    };
+  }, [page]);
   // 별을 고르거나 추첨을 보다 화면이 당겨져 새로고침되지 않게(그 밖의 화면은 당겨서 새로고침이 된다)
   useNoPullRefresh(view.name === "enter" || view.name === "draw");
   const [mine, setMine] = useState<MyTicket[]>([]);
@@ -206,7 +238,11 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       else window.history.pushState(window.history.state, "", url);
       setView(v);
     } else {
-      pendingView = { path: url.split("#")[0] as string, view: v };
+      pendingView = {
+        path: url.split("#")[0] as string,
+        view: v,
+        at: Date.now(),
+      };
       if (replace) router.replace(url);
       else router.push(url);
     }
@@ -422,9 +458,13 @@ export function Home({
   const [skipping, setSkipping] = useState(false);
   // 이 기기의 등록증(첫 그리기 뒤에 읽는다: 서버에서 그린 화면과 어긋나지 않게)
   const [key, setKey] = useState<KeyInfo | null | undefined>(undefined);
+  /** 처음 온 사람(등록 전이거나 이 기기에 응모 기록이 없음): 무엇을 하는 곳인지 정답 예시로 보인다 */
+  const [newcomer, setNewcomer] = useState(false);
   useEffect(() => {
     const found = services.wallet.loadKey();
     setKey(found);
+    // 지갑을 여기서 함께 읽는다(응모 기록이 늦게 읽혀 다녀간 사람에게 예시가 잠깐 비치지 않게)
+    setNewcomer(!found || services.wallet.loadTickets().length === 0);
     // 등록이 아직 장부에 오르지 않았으면 이어서 올린다(증명이 없는 예전 열쇠는 첫 응모 때)
     if (found && services.ns === GAME_NS)
       void ensureRegistered(services, found).catch(() => {});
@@ -445,6 +485,8 @@ export function Home({
         {key !== undefined && <Greeting services={services} keyInfo={key} />}
       </header>
 
+      {newcomer && mine.length === 0 && <GameIntro />}
+
       <RoundCard
         services={services}
         status={status}
@@ -455,13 +497,15 @@ export function Home({
         onDraw={onDraw}
       />
 
-      <LastRound
-        services={services}
-        mine={mine}
-        hide={envelope?.ticket.round}
-        onRounds={onRounds}
-        onDraw={onDraw}
-      />
+      {/* 봉투가 떠 있는 동안은 지난 회차 카드를 두지 않는다(둘이 같은 곳으로 가는 것처럼 보였다, 2026-11-01 사용자). 봉투를 열면 다시 보인다 */}
+      {!envelope && (
+        <LastRound
+          services={services}
+          mine={mine}
+          onRounds={onRounds}
+          onDraw={onDraw}
+        />
+      )}
 
       <WinNotice
         services={services}
@@ -703,20 +747,17 @@ function RoundCard({
 function LastRound({
   services,
   mine,
-  hide,
   onRounds,
   onDraw,
 }: {
   services: Services;
   mine: MyTicket[];
-  /** 아직 열지 않은 결과 회차(번호를 먼저 보여 주지 않는다) */
-  hide: number | undefined;
   onRounds: () => void;
   onDraw: (round: number) => void;
 }) {
   const closed = services.ledger.closed();
   const record = closed.at(-1)?.record;
-  if (!record || record.round === hide) return null;
+  if (!record) return null;
   const my = mine.find((m) => m.ticket.round === record.round);
   const rank = my && !record.void ? myRank(record, my.ticket) : null;
   return (

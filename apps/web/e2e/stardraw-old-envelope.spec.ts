@@ -44,6 +44,8 @@ test("오래 열지 않은 결과 봉투: 응모 단추는 늘 있고, 봉투는
   await page.reload();
   const card = page.locator("[data-card='result']");
   await expect(card).toContainText("1회 추첨 끝");
+  // 봉투가 있는 동안은 아래 지난 회차 카드를 두지 않는다(둘이 같은 곳으로 가는 것처럼 보였다)
+  await expect(page.locator("[data-last-round]")).toHaveCount(0);
   // (가) 봉투가 있어도 지금 회차 응모 단추
   await expect(
     card.getByRole("button", { name: "별 6개 고르기" }),
@@ -61,4 +63,5 @@ test("오래 열지 않은 결과 봉투: 응모 단추는 늘 있고, 봉투는
   await page.goto("/stardraw");
   await expect(page.locator("[data-card='open']")).toBeVisible();
   await expect(page.locator("[data-envelope]")).toHaveCount(0);
+  await expect(page.locator("[data-last-round]")).toBeVisible();
 });
