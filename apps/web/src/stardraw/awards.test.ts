@@ -22,17 +22,20 @@ import {
 const MIDNIGHT = Date.UTC(2026, 9, 31, 15, 0) / 1000;
 const LIVE_FROM = 2000;
 
-function entry(fromRound: number, phase: "trial" | "live"): ScheduleEntry {
+function entry(fromRound: number, phase?: "trial" | "live"): ScheduleEntry {
   return {
     fromRound,
     length: 3600,
     closeMargin: 300,
     powTarget: 0,
     registerPowTarget: 0,
-    phase,
+    ...(phase ? { phase } : {}),
   } as ScheduleEntry;
 }
-const schedule: Schedule = {
+/** 단계가 없는 일정표(연습 장부처럼 모든 회차를 센다). 조건 시험은 이것으로 */
+const schedule: Schedule = { epoch: MIDNIGHT - 300, entries: [entry(1)] };
+/** 운영 장부처럼 시험 → 정식. 회차 시각은 schedule과 같다 */
+const phased: Schedule = {
   epoch: MIDNIGHT - 300,
   entries: [entry(1, "trial"), entry(LIVE_FROM, "live")],
 };
@@ -258,17 +261,44 @@ describe("기념 서류", () => {
     const night = [0, 1, 2, 3, 4].flatMap((d) =>
       [3, 4].map((h) => ({ round: d * 24 + h, win: FAR, mine: [LOSE] })),
     );
+    expect(find(earnedAwards(world(night)), "night")?.round).toBe(4 * 24 + 4);
     const got = earnedAwards(
-      world([
-        ...night,
-        { round: LIVE_FROM, win: FAR, mine: [LOSE] },
-        { round: LIVE_FROM + 99, win: FAR, mine: [LOSE] },
-      ]),
+      world(
+        [
+          { round: 3, win: FAR, mine: [LOSE] },
+          { round: LIVE_FROM, win: FAR, mine: [LOSE] },
+          { round: LIVE_FROM + 99, win: FAR, mine: [LOSE] },
+        ],
+        { schedule: phased },
+      ),
     );
-    expect(find(got, "night")?.round).toBe(4 * 24 + 4);
     expect(find(got, "trial-observer")?.round).toBe(3);
     expect(find(got, "first-live")?.form).toBe("plaque");
     expect(find(got, "milestone-round", 100)?.round).toBe(LIVE_FROM + 99);
+  });
+
+  describe("시험 회차는 정식 기록과 섞지 않는다", () => {
+    it("횟수는 정식 회차만 센다(시험 회차 응모는 위촉장에만)", () => {
+      const got = earnedAwards(
+        world([...plain(LIVE_FROM - 9, 9), ...plain(LIVE_FROM, 10)], {
+          schedule: phased,
+        }),
+      );
+      expect(find(got, "entries", 10)?.round).toBe(LIVE_FROM + 9);
+      expect(find(got, "trial-observer")?.round).toBe(LIVE_FROM - 9);
+      const trialOnly = earnedAwards(world(plain(1, 30), { schedule: phased }));
+      expect(trialOnly.map((a) => a.id)).toEqual(["trial-observer"]);
+    });
+
+    it("시험에서 정식으로 이어진 연속 응모는 정식 첫 회차부터 다시 센다", () => {
+      const specs = [...plain(LIVE_FROM - 6, 6), ...plain(LIVE_FROM, 11)];
+      const got = earnedAwards(world(specs, { schedule: phased }));
+      expect(find(got, "streak", 12)).toBeUndefined();
+      const more = earnedAwards(
+        world([...specs, ...plain(LIVE_FROM + 11, 1)], { schedule: phased }),
+      );
+      expect(find(more, "streak", 12)?.round).toBe(LIVE_FROM + 11);
+    });
   });
 
   it("모든 서류 본문은 마침표로 끝나고, 패는 판·훈장은 메달로 그린다", () => {

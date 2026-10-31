@@ -1,7 +1,9 @@
 "use client";
 
 import { RANKS, roundTimes } from "@mighty/stardraw-core";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+
+import { cn } from "@/lib/cn";
 
 import { roundShort } from "../round-label";
 import type { Services } from "../services";
@@ -10,8 +12,11 @@ import { NOTHING_SEALED, type Sealed } from "../spoiler";
 import {
   computeStats,
   type GroupStat,
+  inPeriod,
   type StarStat,
   type Stats,
+  type StatsPeriod,
+  statsPeriods,
 } from "../stats";
 import { formatTime, LottoBall, RANK_LABEL } from "./parts";
 import { SkyBoard } from "./SkyBoard";
@@ -20,6 +25,10 @@ import { SkyBoard } from "./SkyBoard";
 const FEW_DRAWS = 30;
 /** 응모 추이 막대 수 */
 const SERIES = 48;
+const PERIOD_LABEL: Record<StatsPeriod, string> = {
+  live: "정식",
+  trial: "시험 기간",
+};
 
 /** 관측 기록(/stardraw/stats): 공개 장부만으로 계산한 통계(docs/36 11-18) */
 export function StatsView({
@@ -34,21 +43,31 @@ export function StatsView({
   sealed?: Sealed;
   onBack: () => void;
 }) {
+  const schedule = services.ledger.schedule;
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 계산한다
+  const closed = useMemo(() => services.ledger.closed(), [services, version]);
+  const { periods, initial } = statsPeriods(
+    schedule,
+    closed.map(({ record }) => record.round),
+  );
+  /** 고른 기간(고르지 않았으면 처음 보일 기간) */
+  const [chosen, setChosen] = useState<StatsPeriod | null>(null);
+  const period = chosen ?? initial;
   const stats = useMemo(
     () =>
       computeStats(
-        services.ledger
-          .closed()
-          .filter(({ record }) => !sealed(record.round))
+        closed
+          .filter(
+            ({ record }) =>
+              inPeriod(schedule, record.round, period) && !sealed(record.round),
+          )
           .map(({ record, tickets }) => ({
             record,
             qualified: tickets.filter((t) => t.qual).length,
           })),
       ),
-    [services, version, sealed],
+    [closed, schedule, period, sealed],
   );
-  const schedule = services.ledger.schedule;
 
   return (
     <section className="flex flex-col gap-4" aria-label="관측 기록">
@@ -60,9 +79,43 @@ export function StatsView({
         >
           ← 지난 회차
         </button>
-        <h2 className="font-bold text-lg">관측 기록</h2>
+        <h2 className="flex items-center gap-1.5 font-bold text-lg">
+          관측 기록
+          {periods.length === 1 && period === "trial" && (
+            <span
+              data-stats-period="trial"
+              className="rounded-full border border-white/20 px-2 py-0.5 font-normal text-white/60 text-xs"
+            >
+              시험 기간
+            </span>
+          )}
+        </h2>
         <span className="w-16" />
       </div>
+      {periods.length > 1 && (
+        <div
+          role="tablist"
+          aria-label="기간"
+          className="mx-auto flex rounded-full border border-white/15 p-0.5 text-sm"
+        >
+          {periods.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="tab"
+              aria-selected={period === p}
+              data-stats-period={p}
+              onClick={() => setChosen(p)}
+              className={cn(
+                "rounded-full px-3 py-1",
+                period === p ? "bg-white/15 text-white" : "text-white/60",
+              )}
+            >
+              {PERIOD_LABEL[p]}
+            </button>
+          ))}
+        </div>
+      )}
       {stats.draws === 0 ? (
         <p className="py-10 text-center text-white/60">
           아직 추첨한 회차가 없습니다

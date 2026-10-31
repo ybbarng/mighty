@@ -1,7 +1,17 @@
-import { emptyWinners, type RoundRecord } from "@mighty/stardraw-core";
+import {
+  emptyWinners,
+  type RoundRecord,
+  type Schedule,
+} from "@mighty/stardraw-core";
 import { describe, expect, it } from "vitest";
 
-import { type ClosedRound, chiSquareTail, computeStats } from "./stats";
+import {
+  type ClosedRound,
+  chiSquareTail,
+  computeStats,
+  inPeriod,
+  statsPeriods,
+} from "./stats";
 
 function round(
   n: number,
@@ -122,5 +132,41 @@ describe("공정성(카이제곱)", () => {
       return round(i + 1, nums, ((i * 6 + 6) % 45) + 1);
     });
     expect(computeStats(rounds).fairness?.verdict).toBe("even");
+  });
+});
+
+describe("기간: 시험 회차와 정식 회차는 섞어 세지 않는다", () => {
+  const entry = (fromRound: number, phase?: "trial" | "live") =>
+    ({
+      fromRound,
+      length: 3600,
+      closeMargin: 300,
+      powTarget: 0,
+      registerPowTarget: 0,
+      ...(phase ? { phase } : {}),
+    }) as Schedule["entries"][number];
+  const phased: Schedule = {
+    epoch: 0,
+    entries: [entry(1, "trial"), entry(100, "live")],
+  };
+
+  it("정식 회차가 닫혔으면 정식이 먼저, 시험 기간은 따로 고른다", () => {
+    expect(statsPeriods(phased, [98, 99])).toEqual({
+      periods: ["trial"],
+      initial: "trial",
+    });
+    expect(statsPeriods(phased, [98, 99, 100])).toEqual({
+      periods: ["live", "trial"],
+      initial: "live",
+    });
+    expect(inPeriod(phased, 99, "live")).toBe(false);
+    expect(inPeriod(phased, 100, "live")).toBe(true);
+    expect(inPeriod(phased, 99, "trial")).toBe(true);
+  });
+
+  it("단계가 없는 일정표(연습 장부)는 나누지 않고 모두 센다", () => {
+    const plain: Schedule = { epoch: 0, entries: [entry(1)] };
+    expect(statsPeriods(plain, [1, 2])).toEqual({ periods: [], initial: null });
+    expect(inPeriod(plain, 2, null)).toBe(true);
   });
 });

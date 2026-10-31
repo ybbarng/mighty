@@ -148,10 +148,13 @@ interface MyRound {
 
 interface Ctx {
   schedule: Schedule;
-  /** 닫힌 회차 전체(회차 순) */
+  /** 세는 닫힌 회차(회차 순). 단계가 있는 일정표면 정식 회차만(countsFor) */
   records: RoundRecord[];
   atOf: (r: RoundRecord) => number;
+  /** 세는 회차의 내 응모 */
   mine: MyRound[];
+  /** 단계와 상관없이 모든 내 응모(시험 관측 위원처럼 단계가 조건인 서류만 쓴다) */
+  everMine: MyRound[];
   tickets: ReadonlyMap<number, readonly Ticket[]>;
   isMine: (t: Ticket) => boolean;
   registeredRound: number | null;
@@ -1110,7 +1113,12 @@ export const AWARDS: readonly AwardDef[] = [
     name: "시험 관측 위원 위촉장",
     kind: "위촉장",
     grade: "silver",
-    find: (c) => nth(c, 1, (m) => phaseOf(c.schedule, m.round) === "trial"),
+    find: (c) =>
+      nth(
+        { ...c, mine: c.everMine },
+        1,
+        (m) => phaseOf(c.schedule, m.round) === "trial",
+      ),
     text: () =>
       "귀하는 우주국이 문을 열기 전 시험 관측에 참여하여 장부와 하늘을 함께 점검하였습니다. 이에 귀하를 시험 관측 위원으로 위촉하고 그 노고에 감사드립니다.",
   },
@@ -1276,15 +1284,25 @@ export function earnedAwards(input: AwardInput): EarnedAward[] {
   return out.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }
 
+/**
+ * 기념 서류가 세는 회차: 단계가 있는 일정표면 정식 회차만, 단계가 없으면(연습 장부) 모두.
+ * 시험 회차는 짧은 주기·시험 참가자로 돌아 정식 기록과 섞으면 횟수·연속이 부풀기 때문이다(docs/36 11-19)
+ */
+export function countsFor(schedule: Schedule, round: number): boolean {
+  const phase = phaseOf(schedule, round);
+  return phase === null || phase === "live";
+}
+
 function context(input: AwardInput): Ctx {
-  const records = [...input.records].sort((a, b) => a.round - b.round);
+  const everRecords = [...input.records].sort((a, b) => a.round - b.round);
+  const records = everRecords.filter((r) => countsFor(input.schedule, r.round));
   const isMine = (t: Ticket) => input.myPubs.some((p) => sameBytes(p, t.pub));
   const atOf = (r: RoundRecord) =>
     r.void
       ? roundTimes(input.schedule, r.round).closesAt + DRAND_DELAY
       : drandTime(r.drandRound);
-  const mine: MyRound[] = [];
-  for (const record of records) {
+  const everMine: MyRound[] = [];
+  for (const record of everRecords) {
     const all = input.tickets.get(record.round) ?? [];
     const picks = all
       .filter(isMine)
@@ -1300,7 +1318,7 @@ function context(input: AwardInput): Ctx {
         if (r !== null && (rank === null || r < rank)) rank = r;
         bestHits = Math.max(bestHits, hitsOf(record, p));
       }
-    mine.push({
+    everMine.push({
       round: record.round,
       record,
       picks,
@@ -1315,7 +1333,8 @@ function context(input: AwardInput): Ctx {
     schedule: input.schedule,
     records,
     atOf,
-    mine,
+    mine: everMine.filter((m) => countsFor(input.schedule, m.round)),
+    everMine,
     tickets: input.tickets,
     isMine,
     registeredRound: input.registeredRound,

@@ -1,4 +1,10 @@
-import { RANKS, type Rank, type RoundRecord } from "@mighty/stardraw-core";
+import {
+  phaseOf,
+  RANKS,
+  type Rank,
+  type RoundRecord,
+  type Schedule,
+} from "@mighty/stardraw-core";
 
 import { SKY_STARS, type SkyStar, tempWord } from "./sky";
 
@@ -11,6 +17,31 @@ export interface ClosedRound {
   record: RoundRecord;
   /** 이 회차 응모권 중 상품 자격을 붙인 장 수 */
   qualified: number;
+}
+
+/** 관측 기록이 세는 기간. 시험 회차와 정식 회차는 섞어 세지 않는다(docs/36 11-18) */
+export type StatsPeriod = "trial" | "live";
+
+/**
+ * 닫힌 회차에 있는 기간과 처음 보일 기간. 정식 회차가 하나라도 닫혔으면 정식, 아니면 시험.
+ * 단계가 없는 일정표(연습 장부)면 기간을 나누지 않는다(null)
+ */
+export function statsPeriods(
+  schedule: Schedule,
+  rounds: readonly number[],
+): { periods: StatsPeriod[]; initial: StatsPeriod | null } {
+  const has = new Set(rounds.map((r) => phaseOf(schedule, r)));
+  const periods = (["live", "trial"] as const).filter((p) => has.has(p));
+  return { periods, initial: periods[0] ?? null };
+}
+
+/** 이 회차가 그 기간에 드는지(기간이 null이면 모두) */
+export function inPeriod(
+  schedule: Schedule,
+  round: number,
+  period: StatsPeriod | null,
+): boolean {
+  return period === null || phaseOf(schedule, round) === period;
 }
 
 /** 별빛 다섯 갈래(표면 온도가 높은 순서) */
