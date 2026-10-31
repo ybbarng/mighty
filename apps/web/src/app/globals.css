@@ -970,6 +970,81 @@ button {
     transform: scale(1.6);
   }
 }
+/* 첫 화면 정답 예시(GameIntro): 별·선·번호 공이 차례로 서서히 켜지고, 거꾸로 서서히 꺼진다 */
+.sd-intro-line {
+  stroke: rgba(253, 230, 138, 0.85);
+  stroke-width: 0.55;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  filter: drop-shadow(0 0 1.2px rgba(253, 230, 138, 0.9));
+  transition: stroke-dashoffset 0.45s ease-in-out;
+}
+.sd-intro-star {
+  transition: opacity 0.5s ease-in-out;
+}
+.sd-intro-ball {
+  display: inline-block;
+  opacity: 0;
+  transform: scale(0.7);
+  transition:
+    opacity 0.5s ease-in-out,
+    transform 0.5s ease-in-out;
+}
+.sd-intro-ball[data-shown] {
+  opacity: 1;
+  transform: scale(1);
+}
+/* 다 보이면 별이 차례로 한 번씩 반짝이고(빛 번짐·빛줄기가 커졌다 사라짐), 그 공도 살짝 커졌다 돌아온다 */
+.sd-intro-twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sd-intro-twinkle 0.65s ease-out both;
+}
+@keyframes sd-intro-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+.sd-intro-pop {
+  display: inline-block;
+}
+.sd-intro-pop[data-twinkle] {
+  animation: sd-intro-pop 0.45s ease-out;
+}
+@keyframes sd-intro-pop {
+  40% {
+    transform: scale(1.15);
+  }
+}
+/* 사라질 때는 전체가 한 번에 서서히(GameIntro INTRO_TIMING.fade와 같게) */
+.sd-intro-fade {
+  transition: opacity 0.7s ease-in-out;
+}
+.sd-intro-fade[data-fading] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-intro-line,
+  .sd-intro-star,
+  .sd-intro-ball,
+  .sd-intro-fade {
+    transition: none;
+  }
+  .sd-intro-twinkle,
+  .sd-intro-pop[data-twinkle] {
+    animation: none;
+  }
+}
+
 .sd-cel-line {
   stroke: rgba(253, 230, 138, 0.85);
   stroke-width: 0.55;

@@ -27,9 +27,12 @@ test("첫 화면 정답 예시: 처음 온 사람에게만 별자리판과 번�
   await page.goto("/stardraw");
   const intro = page.locator("section[aria-label='정답 예시']");
   await expect(intro).toBeVisible();
-  await expect(intro.getByRole("heading")).toHaveText("별 6개를 맞혀 보세요");
+  await expect(intro.getByRole("heading")).toHaveText(
+    "45개의 별 중 이번에 빛날 별 6개를 맞혀 보세요",
+  );
   await expect(intro.locator("canvas")).toBeVisible();
-  await expect(intro.locator("[data-ball]")).toHaveCount(6);
+  // 당첨 별 6개 + 보너스 1개, 별자리 선은 6개끼리만(5개)
+  await expect(intro.locator("[data-ball]")).toHaveCount(7);
   await expect(intro.locator("line")).toHaveCount(5);
   // 바로 아래 응모 단추로 이어진다
   await expect(
