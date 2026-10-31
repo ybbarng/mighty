@@ -339,6 +339,9 @@ function Screen({
     case "fx-welcome":
     case "fx-submit":
     case "fx-print":
+    case "fx-bounce":
+    case "fx-error-busy":
+    case "fx-error-offline":
     case "fx-card-open":
     case "fx-card-entered":
     case "fx-card-drawing":

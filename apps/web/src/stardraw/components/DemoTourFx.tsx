@@ -8,6 +8,7 @@ import {
   TOUR_EARTH_PUB,
   type TourState,
 } from "../demo-tour";
+import { errorText, HttpError } from "../errors";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
 import { roundShort } from "../round-label";
@@ -15,6 +16,7 @@ import { AstronautPanel } from "./AstronautPanel";
 import { IssuedView, type useAstronautSetup } from "./AstronautSetup";
 import { DemoUnlockPrompt } from "./DemoUnlockSheet";
 import { SubmitView } from "./EnterSubmit";
+import { BounceSlip, ErrorStage } from "./EntryDeadline";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { Receipt } from "./Receipt";
 import { ReceiptPrint } from "./ReceiptPrint";
@@ -31,6 +33,9 @@ export const FX_ITEMS = [
   { id: "fx-welcome", label: "연출: 신분증 제시(입장)" },
   { id: "fx-submit", label: "연출: 응모" },
   { id: "fx-print", label: "연출: 영수증 출력" },
+  { id: "fx-bounce", label: "오류: 접수 반송(마감 뒤 도착)" },
+  { id: "fx-error-busy", label: "오류: 우주국이 바쁨" },
+  { id: "fx-error-offline", label: "오류: 연락이 닿지 않음" },
   { id: "fx-card-open", label: "회차 카드: 응모 중" },
   { id: "fx-card-entered", label: "회차 카드: 응모함" },
   { id: "fx-card-drawing", label: "회차 카드: 마감(응모함)" },
@@ -59,6 +64,38 @@ function stubSetup(
     cancelApply: noop,
     ...over,
   };
+}
+
+const BOUNCE_PICKS = [3, 11, 19, 24, 33, 41];
+
+/** 접수 반송 장면: 돌려받은 용지 → 「같은 별로 다음 회차 응모」 → 다음 회차 용지로 옮겨 쓰고 밀어 올려 제출 */
+function BounceTour({ onDone }: { onDone: () => void }) {
+  const [moving, setMoving] = useState(false);
+  if (!moving)
+    return (
+      <BounceSlip
+        title="7회 응모 용지"
+        picked={BOUNCE_PICKS}
+        deadline="18:54:55"
+        received="18:55:03"
+        onRetry={() => setMoving(true)}
+        onClose={onDone}
+      />
+    );
+  return (
+    <StageOverlay label="응모" appear={false}>
+      <SubmitView
+        title="8회 응모권"
+        picked={BOUNCE_PICKS}
+        transfer={{
+          from: "7회 응모 용지",
+          to: "8회 응모 용지",
+          ready: Promise.resolve(),
+        }}
+        onSubmitted={onDone}
+      />
+    </StageOverlay>
+  );
 }
 
 /**
@@ -97,6 +134,33 @@ export function FxScreen({ id, s }: { id: FxId; s: TourState }): ReactNode {
           setup={stubSetup()}
           onSkip={null}
         />
+      );
+    case "fx-bounce":
+      return (
+        <>
+          {!done && <BounceTour key={key} onDone={finish} />}
+          {replay}
+        </>
+      );
+    case "fx-error-busy":
+    case "fx-error-offline":
+      return (
+        <>
+          {!done && (
+            <ErrorStage
+              key={key}
+              text={errorText(
+                id === "fx-error-busy"
+                  ? new HttpError("바쁨", 503)
+                  : new TypeError("Failed to fetch"),
+                "응모를 접수",
+              )}
+              onRetry={finish}
+              onClose={finish}
+            />
+          )}
+          {replay}
+        </>
       );
     case "fx-card-open":
     case "fx-card-entered":

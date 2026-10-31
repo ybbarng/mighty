@@ -896,6 +896,16 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["fx-welcome", (s) => s.locator("[data-idcard]")],
     ["fx-submit", (s) => s.locator("[data-receipt]")],
     ["fx-print", (s) => s.locator("[data-receipt]")],
+    ["fx-bounce", () => page.locator("[data-bounce]")],
+    [
+      "fx-error-busy",
+      () => page.locator("[data-entry-error]").filter({ hasText: "너무 바빠" }),
+    ],
+    [
+      "fx-error-offline",
+      () =>
+        page.locator("[data-entry-error]").filter({ hasText: "연락이 닿지" }),
+    ],
     ["fx-card-open", (s) => s.locator("[data-card='open']")],
     ["fx-card-entered", (s) => s.locator("[data-card='entered']")],
     ["fx-card-drawing", (s) => s.locator("[data-round-note='closed-entered']")],
@@ -1045,6 +1055,150 @@ test("추첨 건너뛰기: 첫 추첨은 끝까지, 그 뒤 나중에 연 회차
   await expect(skipDraw).toHaveCount(0);
   await expect(result).toBeVisible({ timeout: 60_000 });
   await expect(skipDraw).toHaveCount(0);
+});
+
+/** 마감 직전 응모까지 가는 길: 등록하고, 연습 장부 시각을 화면 마감(12:54:55) 15초 전으로 옮겨 응모를 시작한다 */
+async function toEntryEdge(page: Page) {
+  await virtualAuthenticator(page);
+  await page.goto("/stardraw");
+  await page.getByRole("button", REGISTER).click();
+  await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
+  await page.clock.setSystemTime(new Date("2026-11-02T03:54:40Z"));
+  await expect(page.locator("[data-hurry]")).toContainText(
+    "응모 접수에 시간이 걸리니 서둘러 주세요.",
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.getByRole("button", { name: "자동", exact: true }).click();
+  await page.getByRole("button", ENTER).click();
+  // 남은 시간이 연출보다 짧아 용지는 한 번에 칠해져 곧바로 내기를 기다린다
+  await page
+    .locator("[aria-label='용지 제출'][aria-disabled='false']")
+    .press("Enter", { timeout: 10_000 });
+  return page.locator("[aria-label='신분증 제출'][aria-disabled='false']");
+}
+
+/**
+ * 마감 안내는 장부(서버) 시각으로 화면 마감 1분 전부터, 하늘판 위쪽 가장자리에 겹쳐 뜬다.
+ * 자리를 차지하지 않아 들어올 때 화면이 1px도 밀리지 않고, 「← 처음으로」와 겹치지 않는다
+ */
+test("마감 안내: 1분 전부터, 화면을 밀지 않고 하늘판 위에", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  await virtualAuthenticator(page);
+  await page.goto("/stardraw");
+  await page.getByRole("button", REGISTER).click();
+  await page.getByRole("button", { name: TO_PICK_ISSUED }).click();
+  const hurry = page.locator("[data-hurry]");
+  const sky = page.locator("[data-sky-wrap]");
+  const cta = page.getByRole("button", ENTER);
+  await page.clock.setSystemTime(new Date("2026-11-02T03:53:54Z"));
+  await expect(hurry).toHaveCount(0);
+  const skyBefore = await sky.boundingBox();
+  const ctaBefore = await cta.boundingBox();
+  await page.clock.setSystemTime(new Date("2026-11-02T03:53:56Z"));
+  await expect(hurry).toContainText("마감까지 0:59");
+  expect(await sky.boundingBox()).toEqual(skyBefore);
+  expect(await cta.boundingBox()).toEqual(ctaBefore);
+  const back = await page
+    .getByRole("button", { name: "← 처음으로" })
+    .boundingBox();
+  const box = await hurry.boundingBox();
+  expect(box && back && box.y >= back.y + back.height).toBe(true);
+  expect(box && skyBefore && box.y >= skyBefore.y).toBe(true);
+  await page.clock.setSystemTime(new Date("2026-11-02T03:53:54Z"));
+  await expect(hurry).toHaveCount(0);
+});
+
+/** 마감 직전: 위에 "마감까지 …" 안내가 뜨고, 연출을 줄여 마감 전에 접수된다 */
+test("마감 직전 응모: 줄인 연출로 마감 전에 접수", async ({ page }, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  const card = await toEntryEdge(page);
+  await card.press("Enter", { timeout: 10_000 });
+  await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+});
+
+/**
+ * 내밀기를 미루다 마감을 넘기면 영수증 대신 냈던 용지가 「접수 반송」 도장과 함께 돌아오고, 「같은 별로 다음 회차
+ * 응모」는 다음 회차가 열리길 기다려 새 용지로 옮겨 쓴 뒤 다시 서명해 낸다. 반송은 내 응모에 남지 않는다
+ */
+test("마감을 넘긴 응모: 용지가 반송되고 다음 회차로 옮겨 낸다", async ({
+  page,
+}) => {
+  // 휴대폰 두 크기와 PC 모두: 누르는 순간 돌려받은 용지 크기·자리가 튀지 않는지 본다
+  const card = await toEntryEdge(page);
+  await card.waitFor({ timeout: 10_000 });
+  await page.clock.runFor(25_000);
+  await card.press("Enter");
+  const bounce = page.locator("[data-bounce]");
+  await expect(bounce).toContainText("응모 마감(12:54:55) 뒤에 도착했습니다.", {
+    timeout: 30_000,
+  });
+  // 냈던 1회 용지가 칠한 칸 그대로 「접수 반송」 도장과 함께 돌아온다
+  const returned = bounce.getByRole("group", { name: "1회 응모 용지" });
+  await expect(returned.locator("[data-marked]")).toHaveCount(6);
+  await expect(bounce).toContainText("접수 반송");
+  await expect(
+    page
+      .getByRole("dialog", { name: "접수 반송" })
+      .getByRole("button", { name: "닫기" }),
+  ).toBeVisible();
+  // 누르기 전후 여러 프레임 동안 돌려받은 용지의 자리·크기가 그대로다(반송 화면과 옮겨 쓰기 장면이 이어진다)
+  await bounce.evaluate((el) =>
+    Promise.all(
+      el.getAnimations({ subtree: true }).map((a) => a.finished),
+    ).then(() => {}),
+  );
+  const frames = await page.evaluate(async () => {
+    const box = () => {
+      const r = document
+        .querySelector("[aria-label='1회 응모 용지']")
+        ?.getBoundingClientRect();
+      return r ? [r.x, r.y, r.width, r.height] : null;
+    };
+    const before = box();
+    const button = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("같은 별로 다음 회차 응모"),
+    );
+    button?.click();
+    const after: (number[] | null)[] = [];
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => requestAnimationFrame(r));
+      after.push(box());
+    }
+    return { before, after };
+  });
+  expect(frames.before).not.toBeNull();
+  for (const f of frames.after)
+    for (const [i, v] of (f ?? []).entries())
+      expect(Math.abs(v - (frames.before?.[i] ?? 0))).toBeLessThan(0.5);
+  expect(frames.after.every((f) => f !== null)).toBe(true);
+  // 2회가 열리기(1회 추첨) 전이면 기다렸다가 2회 용지로 옮겨 쓴다
+  await expect(
+    page.getByText("다음 회차 응모가 열리면 이어서 접수하겠습니다."),
+  ).toBeVisible();
+  // 1회 추첨(마감 5분 뒤 13:00)이 끝나면 2회가 열린다
+  await page.clock.setSystemTime(new Date("2026-11-02T04:00:30Z"));
+  const next = page.getByRole("group", { name: "2회 응모 용지" });
+  await expect(next.locator("[data-marked]")).toHaveCount(6, {
+    timeout: 30_000,
+  });
+  // 새 용지도 돌려받은 용지와 같은 너비
+  expect(
+    Math.abs(
+      ((await next.boundingBox())?.width ?? 0) - (frames.before?.[2] ?? 0),
+    ),
+  ).toBeLessThan(0.5);
+  await page
+    .locator("[aria-label='용지 제출'][aria-disabled='false']")
+    .press("Enter", { timeout: 10_000 });
+  await card.press("Enter", { timeout: 10_000 });
+  await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  // 반송된 1회 용지는 내 응모에 남지 않고 다시 낸 2회 하나만
+  await page.goto("/stardraw/mine");
+  await expect(
+    page.getByRole("region", { name: "내 응모" }).getByRole("listitem"),
+  ).toHaveCount(1);
 });
 
 test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제자리, 세로는 기울기만, 단추는 그대로", async ({

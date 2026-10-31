@@ -3,6 +3,7 @@
 import {
   type KeyRegistration,
   makeRegistration,
+  roundTimes,
   signTicket,
   solvePow,
   type Ticket,
@@ -13,6 +14,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
+import { closedAt, errorText } from "../errors";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
 import type { LedgerStatus } from "../local-ledger";
@@ -36,7 +38,13 @@ import {
   useAstronautSetup,
   WelcomeFlyer,
 } from "./AstronautSetup";
-import { PickedRow, SubmitView } from "./EnterSubmit";
+import {
+  PickedRow,
+  paperFullMs,
+  QUICK_SPARE_MS,
+  SubmitView,
+} from "./EnterSubmit";
+import { BounceSlip, ErrorStage, HurryNotice, kstClock } from "./EntryDeadline";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { KeyIcon } from "./PasskeyHelp";
 import { StardrawTitle, StarInfo } from "./parts";
@@ -73,6 +81,15 @@ export function usePasskeyEnv(): Env | null {
     };
   }, []);
   return env;
+}
+
+/** 마감 뒤에 도착해 돌려받은 응모: 회차, 칠한 별, 소속으로 냈는지, 화면 마감 시각, 우주국이 받은 시각 */
+interface Bounced {
+  round: number;
+  numbers: readonly number[];
+  qual: boolean;
+  deadline: string;
+  received: string;
 }
 
 /** 응모: 네모 하늘이나 아래 번호 칸에서 별 6개를 고르고 낸다 */
@@ -112,6 +129,23 @@ export function EnterView({
   const [qual, setQual] = useState<ReturnType<typeof usableHolding>>(null);
   /** 응모할 때 신분증 제출(신분증 제시 틀) */
   const id = useIdPresent(services);
+  /** 마감이 가까워 연출을 줄여 내는 중 */
+  const [quick, setQuickState] = useState(false);
+  const quickRef = useRef(false);
+  const setQuick = (v: boolean) => {
+    quickRef.current = v;
+    setQuickState(v);
+  };
+  /** 연출 중에 난 오류(오버레이 안에서 보인다) */
+  const [entryError, setEntryError] = useState<string | null>(null);
+  /** 마감 뒤에 도착해 돌려받은 응모(돌려받은 용지) */
+  const [bounce, setBounce] = useState<Bounced | null>(null);
+  /** 돌려받은 용지를 다음 회차 용지로 옮겨 쓰는 중(SubmitView의 transfer) */
+  const [transfer, setTransfer] = useState<{
+    from: string;
+    to: string;
+    ready: Promise<void>;
+  } | null>(null);
   const [useQual, setUseQual] = useState(true);
   const full = picked.length === 6;
   const open = status.phase === "open";
@@ -139,9 +173,26 @@ export function EnterView({
     };
   }, [services, status.round]);
 
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  /** `round` 다음 회차 응모가 열릴 때까지 기다린다(앞 회차 추첨이 끝나야 열린다). 화면을 떠나면 더 잇지 않는다 */
+  const nextRoundOpen = async (round: number) => {
+    for (;;) {
+      if (!alive.current) await new Promise<never>(() => {});
+      const s = services.ledger.status();
+      if (s.round > round && s.phase === "open") return;
+      await new Promise<void>((r) => services.clock.after(1000, r));
+    }
+  };
+
   const fail = (err: unknown) => {
     setStage("pick");
-    setError(failureOf(err, "응모되지 않았어요"));
+    setError(failureOf(err, "응모를 접수", "응모되지 않았어요"));
   };
 
   const toggle = (n: number) => {
@@ -181,17 +232,52 @@ export function EnterView({
    * "패스키로 신분증을 제출해 주세요."에서 서명한다. 차례(Apple Pay의 카드 제시처럼): 문구 → 패스키 → 등록증이 아래에서
    * 올라옴 → 확인 표시 → 내려감 → 출력구가 영수증을 기다림. 서명 뒤 제출은 등록증 연출과 겹쳐 진행한다.
    * 실제 처리가 먼저 끝나도 연출은 끝까지 보인다. 취소·실패면 고른 별을 그대로 둔 채 고르는 화면으로.
-   * 움직임 줄이기면 연출 없이 바로 서명한다
+   * 움직임 줄이기면 연출 없이 바로 서명한다.
+   * `from`(접수 반송 뒤 옮겨 쓰기)이면 돌려받은 용지를 보이며 다음 회차가 열리길 기다린 뒤, 그 회차로 응모권을 새로
+   * 만들어 서명한다(서명은 회차에 묶인다). 소속으로 냈던 응모면 새 회차로 소속 서명도 새로 붙인다
    */
-  const submit = async (key: KeyInfo) => {
+  const submit = async (key: KeyInfo, from?: Bounced) => {
     setError(null);
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const { ledger } = services;
-    const entry = ledger.status().times.entry;
+    let paperDone: Promise<void> | null = null;
+    if (from) {
+      setBounce(null);
+      const ready = nextRoundOpen(from.round);
+      const schedule = ledger.schedule;
+      setTransfer({
+        from: `${roundShort(schedule, from.round)} 응모 용지`,
+        to: `${roundShort(schedule, from.round + 1)} 응모 용지`,
+        ready,
+      });
+      if (!reduce) {
+        window.scrollTo({ top: 0 });
+        paperDone = new Promise<void>((r) => {
+          paperRef.current = r;
+          setStage("paper");
+        });
+      } else setStage("busy");
+      await ready;
+    } else setTransfer(null);
+    const now = ledger.status();
+    const entry = now.times.entry;
     const challenge = ledger.head();
-    const round = status.round;
-    const numbers = [...picked];
-    const holding = qual && useQual ? qual.holding : null;
+    const round = from ? now.round : status.round;
+    const numbers = from ? [...from.numbers] : [...picked];
+    // 소속: 옮겨 쓰기면 원래 응모에서 켰을 때만, 새 회차 기준으로 처음 응모와 같은 규칙(usableHolding)으로 다시 고른다.
+    // 소속 서명은 응모권을 만들 때(unsignedTicket) 그 회차로 새로 한다
+    const holding = from
+      ? from.qual
+        ? (usableHolding(
+            services.ns,
+            ledger.id(),
+            await ledger.qualInfo().catch(() => null),
+            round,
+          )?.holding ?? null)
+        : null
+      : qual && useQual
+        ? qual.holding
+        : null;
     const prep = (async () => {
       const signer = await services.wallet.signerFor(key);
       let registration: KeyRegistration | undefined;
@@ -222,8 +308,12 @@ export function EnterView({
     })();
     // 연출 중에 실패해도 처리되지 않은 거절로 남지 않게(아래에서 기다릴 때 다시 받는다)
     prep.catch(() => {});
-    const wait = (ms: number) =>
-      new Promise<void>((r) => services.clock.after(ms, r));
+    // 마감까지 남은 시간이 연출보다 짧으면 용지 작성을 한 번에 칠해 신분증 제출까지 빨리 간다(연출 때문에 마감을 넘기지 않게)
+    setQuick(
+      !from &&
+        (now.times.entryDeadline - now.now) * 1000 <
+          paperFullMs() + QUICK_SPARE_MS,
+    );
     try {
       if (reduce) {
         setStage("busy");
@@ -234,11 +324,14 @@ export function EnterView({
         onDone(ticket, receivedAt);
         return;
       }
-      window.scrollTo({ top: 0 });
-      await new Promise<void>((r) => {
-        paperRef.current = r;
-        setStage("paper");
-      });
+      if (paperDone) await paperDone;
+      else {
+        window.scrollTo({ top: 0 });
+        await new Promise<void>((r) => {
+          paperRef.current = r;
+          setStage("paper");
+        });
+      }
       // 신분증 제출(신분증 제시 틀): 문구 → 「신분증 제출」 누름 → 패스키 → 등록증 올라옴 → 확인 → 내려감.
       // 응모하기를 누른 지 시간이 흘러 브라우저가 패스키 창을 막을 수 있어 여기서 한 번 누름을 받는다
       setStage("id");
@@ -249,7 +342,7 @@ export function EnterView({
         {
           verb: "제출",
           pub: key.pub,
-          readFirst: true,
+          readFirst: !quickRef.current,
           tap: true,
           hold: FX.idHoldSubmit,
           keep: true,
@@ -269,6 +362,26 @@ export function EnterView({
       play("starBall");
       onDone(ticket, receivedAt);
     } catch (err) {
+      // 마감 뒤에 도착했으면 영수증 대신 출력구에서 냈던 용지가 반송 도장과 함께 돌아온다(내 응모에는 남기지 않는다)
+      const at = closedAt(err);
+      if (at && !reduce) {
+        setStage("pick");
+        setBounce({
+          round,
+          numbers,
+          qual: holding !== null,
+          // 사용자에게 보이는 마감은 화면 마감 하나로(안내 카운트다운과 같은 시각)
+          deadline: kstClock(roundTimes(ledger.schedule, round).entryDeadline),
+          received: at,
+        });
+        return;
+      }
+      // 연출 중 다른 오류는 오버레이 안에서 까닭과 「다시 시도」(패스키 취소는 신분증 단계가 이미 다시 기다린다)
+      if (!reduce && passkeyProblem(err) !== "cancelled") {
+        setStage("pick");
+        setEntryError(errorText(err, "응모를 접수", "응모되지 않았어요"));
+        return;
+      }
       fail(err);
     }
   };
@@ -323,13 +436,15 @@ export function EnterView({
     <section className="flex flex-col gap-4" aria-label="응모">
       {/* 등록·제시 오버레이는 등록 전 화면과 같은 자리(맨 앞)에: 확인되어 화면이 바뀌어도 끊기지 않게 */}
       <WelcomeFlyer services={services} setup={setup} />
-      {/* 제출 연출은 화면 전체 오버레이 한 층에서(뒤의 고르는 화면은 흐려지고 조작되지 않는다) */}
+      {/* 제출 연출은 화면 전체 오버레이 한 층에서(뒤의 고르는 화면은 흐려지고 조작되지 않는다). 옮겨 쓰기는 반송 화면에서 그대로 이어져 다시 나타나지 않는다 */}
       {submitting && (
-        <StageOverlay label="응모">
+        <StageOverlay label="응모" appear={!transfer}>
           {stage === "paper" && (
             <SubmitView
               title={title}
               picked={picked}
+              quick={quick}
+              transfer={transfer ?? undefined}
               onSubmitted={() => paperRef.current?.()}
             />
           )}
@@ -347,13 +462,44 @@ export function EnterView({
         </StageOverlay>
       )}
       <IdPresentView services={services} id={id} backdrop={false} />
+      {bounce && (
+        <BounceSlip
+          title={`${roundShort(services.ledger.schedule, bounce.round)} 응모 용지`}
+          picked={bounce.numbers}
+          deadline={bounce.deadline}
+          received={bounce.received}
+          onRetry={() => {
+            if (key) void submit(key, bounce);
+          }}
+          onClose={onBack}
+        />
+      )}
+      {entryError && (
+        <ErrorStage
+          text={entryError}
+          onRetry={() => {
+            setEntryError(null);
+            void start();
+          }}
+          onClose={() => setEntryError(null)}
+        />
+      )}
       <EnterHeader onBack={onBack} />
 
-      <SkyBoard
-        state={{ mode: "pick", picked, focus, lit: [], bonus: null }}
-        onPick={picking ? toggle : undefined}
-        label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
-      />
+      {/* 마감 안내는 하늘판 위쪽 가장자리에 겹쳐 뜬다(들어올 때 화면이 밀리지 않게) */}
+      <div className="relative" data-sky-wrap>
+        <SkyBoard
+          state={{ mode: "pick", picked, focus, lit: [], bonus: null }}
+          onPick={picking ? toggle : undefined}
+          label={`응모판: 서울 하늘의 밝은 별 45개. 고른 별 ${picked.join(", ") || "없음"}`}
+        />
+        {status.phase === "open" && (
+          <HurryNotice
+            left={status.times.entryDeadline - status.now}
+            floating={submitting || !!entryError}
+          />
+        )}
+      </div>
 
       <StarInfo n={focus} />
 

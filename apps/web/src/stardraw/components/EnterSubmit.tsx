@@ -97,17 +97,32 @@ export const PickedRow = forwardRef<
   );
 });
 
-/** 실제 로또 용지처럼 1~45 칸(누를 수 없다). `marked` 칸은 펜으로 칠하듯 채워진다 */
-const NumberPaper = forwardRef<
+/**
+ * 실제 로또 용지처럼 1~45 칸(누를 수 없다). `marked` 칸은 펜으로 칠하듯 채워진다.
+ * `title`(예: "2회 응모 용지")은 용지 위쪽 회차 표시(옮겨 쓰기와 반송에서 어느 회차 용지인지 보인다)
+ */
+export const NumberPaper = forwardRef<
   HTMLFieldSetElement,
-  { marked: readonly number[] }
->(function NumberPaper({ marked }, ref) {
+  {
+    marked: readonly number[];
+    title?: string | undefined;
+    className?: string | undefined;
+  }
+>(function NumberPaper({ marked, title, className }, ref) {
   return (
     <fieldset
       ref={ref}
-      aria-label="응모 용지"
-      className="rounded-2xl border border-rose-300/25 bg-[#1b1622] p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)]"
+      aria-label={title ?? "응모 용지"}
+      className={cn(
+        "rounded-2xl border border-rose-300/25 bg-[#1b1622] p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)]",
+        className,
+      )}
     >
+      {title && (
+        <p className="mb-2 px-0.5 font-bold text-rose-50 text-sm tabular-nums">
+          {title}
+        </p>
+      )}
       <div className="grid grid-cols-7 gap-1.5">
         {SKY_STARS.map((s) => {
           const on = marked.includes(s.n);
@@ -141,25 +156,63 @@ const NumberPaper = forwardRef<
 
 const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
+/** 용지 작성 연출 전체 길이(내기를 기다리기 전까지, ms) */
+export function paperFullMs(): number {
+  const star = FX.starLift + FX.starFlight + FX.starMark + FX.starRest;
+  return (
+    FX.read +
+    FX.sheetIn +
+    FX.pause +
+    6 * star +
+    FX.pause +
+    FX.rowFade +
+    FX.pause +
+    FX.read
+  );
+}
+
+/**
+ * 연출을 다 보고도 마감 전에 내려면 남아야 하는 여유(ms): 용지를 밀고, 신분증 문구를 읽고, 등록증을 내밀어 패스키를
+ * 마치는 데 드는 사람 시간. 남은 시간이 연출 + 이 여유보다 짧으면 연출을 줄인다
+ */
+export const QUICK_SPARE_MS = 20_000;
+
 /**
  * 응모 용지 작성과 제출(오버레이 안, 움직임 줄이기가 아닐 때). 차례대로 하나씩:
  * 위쪽 "응모 용지를 작성해 주세요." → 고른 별 줄과 용지가 함께 아래에서 미끄러져 올라와 아래쪽에 붙음 → 별이 하나씩
  * 자기 칸으로 옮겨 가 칸을 칠함 → "용지를 밀어 올려 제출해 주세요." → 사람이 용지를 위로 밀어 올리거나 용지를 한 번
  * 누름 → 용지가 위(우주국)로 올라가 사라지면 `onSubmitted`.
- * 용지는 아래(내 앞)에 두고 위로 제출한다(2026-10-31 사용자). 시간은 fx-timing의 FX
+ * 용지는 아래(내 앞)에 두고 위로 제출한다(2026-10-31 사용자). 시간은 fx-timing의 FX.
+ *
+ * 옮겨 쓰기(`transfer`, 접수 반송 뒤 「같은 별로 다음 회차 응모」): 돌려받은 용지가 가운데 남아 있고, 다음 회차가
+ * 아직 안 열렸으면 "다음 회차 응모가 열리면 이어서 접수하겠습니다."로 기다린다. 열리면 새 회차 용지가 아래에서
+ * 올라와 칠한 칸이 한 번에 옮겨지고, 돌려받은 용지는 아래로 접혀 사라진 뒤 밀어 올리기를 기다린다.
+ * 서명은 회차에 묶이므로 같은 종이를 다시 내지 않고 새 용지로 옮겨 쓴다
  */
 export function SubmitView({
   title,
   picked,
+  quick = false,
+  transfer,
   onSubmitted,
 }: {
   title: string;
   picked: readonly number[];
+  /** 마감이 가까우면: 용지를 한 번에 칠하고 바로 내기를 기다린다(별이 하나씩 날아가지 않는다) */
+  quick?: boolean;
+  /** 옮겨 쓰기: 돌려받은 용지의 회차 표시, 새 용지의 회차 표시, 다음 회차가 열리면 풀리는 약속 */
+  transfer?: { from: string; to: string; ready: Promise<void> } | undefined;
   onSubmitted: () => void;
 }) {
   const rowEl = useRef<HTMLElement>(null);
   const paper = useRef<HTMLFieldSetElement>(null);
-  const [text, setText] = useState("응모 용지를 작성해 주세요.");
+  const [text, setText] = useState(
+    transfer ? "응모가 마감되었습니다." : "응모 용지를 작성해 주세요.",
+  );
+  /** 옮겨 쓰기에서 돌려받은 용지 */
+  const [old, setOld] = useState<"shown" | "folding" | "gone">(
+    transfer ? "shown" : "gone",
+  );
   const [sheet, setSheet] = useState<"below" | "in" | "away">("below");
   const [flown, setFlown] = useState<number[]>([]);
   const [marked, setMarked] = useState<number[]>([]);
@@ -174,6 +227,46 @@ export function SubmitView({
     const clones: HTMLElement[] = [];
     const sorted = [...picked].sort((a, b) => a - b);
     void (async () => {
+      if (transfer) {
+        setRow("gone");
+        const early = await Promise.race([
+          transfer.ready.then(() => true),
+          wait(0).then(() => false),
+        ]);
+        if (!alive) return;
+        if (!early) {
+          setText("다음 회차 응모가 열리면 이어서 접수하겠습니다.");
+          await transfer.ready;
+          if (!alive) return;
+        }
+        setText("다음 회차 용지에 옮겨 적습니다.");
+        setSheet("in");
+        await wait(FX.sheetIn);
+        if (!alive) return;
+        setMarked(sorted);
+        setFlown(sorted);
+        play("starTick");
+        await wait(FX.starMark + FX.pause);
+        if (!alive) return;
+        setOld("folding");
+        await wait(FX.paperAway);
+        if (!alive) return;
+        setOld("gone");
+        setText("용지를 밀어 올려 제출해 주세요.");
+        setAwaiting(true);
+        return;
+      }
+      if (quick) {
+        setRow("gone");
+        setMarked(sorted);
+        setFlown(sorted);
+        setSheet("in");
+        setText("용지를 밀어 올려 제출해 주세요.");
+        await wait(FX.sheetIn);
+        if (!alive) return;
+        setAwaiting(true);
+        return;
+      }
       await wait(FX.read);
       if (!alive) return;
       setSheet("in");
@@ -272,11 +365,41 @@ export function SubmitView({
       <p
         key={text}
         role="status"
-        className="sd-text-in sd-submit-status min-h-8 text-center font-bold text-amber-100 text-lg"
+        className={cn(
+          "sd-submit-status min-h-8 text-center font-bold text-amber-100 text-lg",
+          // 옮겨 쓰기 첫 말은 반송 화면 말 그대로라 다시 나타나지 않는다
+          !(transfer && text === "응모가 마감되었습니다.") && "sd-text-in",
+        )}
       >
         {text}
       </p>
-      <div className="flex-1" />
+      {/*
+        돌려받은 용지: 반송 화면(BounceSlip)과 같은 자리·같은 너비에서 시작해 누르는 순간 크기가 바뀌지 않는다
+        (출력구 위 여백 10px까지 같게). 새 용지가 올라올 때 함께 작아지며 물러나고, 아래로 접혀 사라진다.
+        자리를 차지하지 않아(absolute) 새 용지가 밀리지 않는다
+      */}
+      <div className="relative min-h-0 flex-1">
+        {transfer && old !== "gone" && (
+          <div
+            data-returned
+            className="absolute inset-x-0 top-[10px] transition-[transform,opacity]"
+            style={{
+              transformOrigin: "50% 0",
+              transform:
+                old === "folding"
+                  ? "perspective(700px) translateY(40%) rotateX(80deg) scale(0.8)"
+                  : sheet === "below"
+                    ? "none"
+                    : "scale(0.8)",
+              opacity: old === "folding" ? 0 : 1,
+              transitionDuration: `${old === "folding" ? FX.paperAway : FX.sheetIn}ms`,
+              transitionTimingFunction: EASE,
+            }}
+          >
+            <ReturnedPaper title={transfer.from} marked={picked} />
+          </div>
+        )}
+      </div>
       <Sheet sheet={sheet} awaiting={awaiting} onSwiped={() => void submit()}>
         {row !== "gone" && (
           <PickedRow
@@ -291,9 +414,45 @@ export function SubmitView({
             }}
           />
         )}
-        <NumberPaper ref={paper} marked={marked} />
+        <NumberPaper
+          ref={paper}
+          marked={marked}
+          title={transfer?.to}
+          className={cn(transfer && "shadow-[0_-12px_40px_rgba(0,0,0,0.6)]")}
+        />
       </Sheet>
     </section>
+  );
+}
+
+/**
+ * 돌려받은 응모 용지: 냈던 용지(칠한 칸 그대로, 회차 표시)에 빨간 「접수 반송」 도장.
+ * `stampDelay`는 출력구에서 다 나온 뒤 도장이 찍히게 미루는 시간(ms). 없으면 이미 찍힌 도장(옮겨 쓰기)
+ */
+export function ReturnedPaper({
+  title,
+  marked,
+  stampDelay,
+}: {
+  title: string;
+  marked: readonly number[];
+  stampDelay?: number;
+}) {
+  return (
+    <div className="relative">
+      <NumberPaper title={title} marked={marked} />
+      <span
+        aria-hidden="true"
+        className="sd-stamp pointer-events-none absolute top-1/2 left-1/2 whitespace-nowrap rounded-lg border-4 border-rose-500 px-4 py-1.5 font-black text-3xl text-rose-500 tracking-widest"
+        style={
+          stampDelay === undefined
+            ? { animation: "none" }
+            : { ["--stamp-delay" as string]: `${stampDelay}ms` }
+        }
+      >
+        접수 반송
+      </span>
+    </div>
   );
 }
 

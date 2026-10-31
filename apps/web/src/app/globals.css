@@ -901,6 +901,23 @@ button {
     opacity: 0;
   }
 }
+/* 돌려받은 응모 용지 위 「접수 반송」 도장: 용지가 다 나온 뒤 위에서 찍힌다(--stamp-delay) */
+.sd-stamp {
+  transform: translate(-50%, -50%) rotate(-12deg);
+  opacity: 0.92;
+  animation: sd-stamp 0.35s cubic-bezier(0.3, 1.4, 0.5, 1)
+    var(--stamp-delay, 0ms) both;
+}
+@keyframes sd-stamp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-12deg) scale(1.8);
+  }
+  to {
+    opacity: 0.92;
+    transform: translate(-50%, -50%) rotate(-12deg) scale(1);
+  }
+}
 
 /* 데모의 패스키 흉내 시트: 아래에서 올라오고, 잠금 그림 위로 빛이 훑고 지나간다 */
 .sd-unlock-in {
@@ -1757,6 +1774,7 @@ button {
   .sd-idcard[data-owner="ok"] .sd-twinkle,
   .sd-print,
   .sd-printer-slot,
+  .sd-stamp,
   .sd-id-drop,
   .sd-id-pocket,
   .sd-stage,
