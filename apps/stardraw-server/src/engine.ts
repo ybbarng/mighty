@@ -230,6 +230,8 @@ export interface ServerState {
   sealOverdueSeconds: number;
   /** 자격 기간마다 발급한 소속 도장 수. 회사 인원보다 많으면 몰래 찍은 것일 수 있다(D10, P10) */
   qualIssued: { period: string; issued: number }[];
+  /** qualIssued 가운데 가장 많은 발급 수(감시가 숫자 하나로 비교한다, 없으면 0) */
+  qualIssuedMax: number;
 }
 
 /** 무효 회차를 상태에 남겨 두는 시간(초) */
@@ -396,6 +398,7 @@ export class StardrawServer {
     | "earlySealLag"
     | "sealOverdueSeconds"
     | "qualIssued"
+    | "qualIssuedMax"
   > {
     const { store } = this.o;
     const schedule = this.schedule();
@@ -405,6 +408,7 @@ export class StardrawServer {
       if (store.record(r)?.void) voidRecent.push(r);
     }
     const anchoring = this.o.anchor !== noAnchor;
+    const qualIssued = store.qualIssuedCounts();
     const next = store.lastSealed() + 1;
     const due = round > 0 ? roundTimes(schedule, next).closesAt : now;
     return {
@@ -412,7 +416,8 @@ export class StardrawServer {
       anchorLag: anchoring ? store.recordCount() - store.anchored() : null,
       earlySealLag: anchoring ? store.lastSealed() - store.earlySealed() : null,
       sealOverdueSeconds: round > next ? Math.max(0, now - due) : 0,
-      qualIssued: store.qualIssuedCounts(),
+      qualIssued,
+      qualIssuedMax: Math.max(0, ...qualIssued.map((q) => q.issued)),
     };
   }
 

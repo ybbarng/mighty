@@ -52,6 +52,7 @@ describe("HTTP", () => {
       earlySealLag: null,
       sealOverdueSeconds: 0,
       qualIssued: [],
+      qualIssuedMax: 0,
     });
 
     const p = await player();
