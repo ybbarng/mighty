@@ -162,6 +162,29 @@ export function Receipt({
 
       <Cut />
 
+      {record && !record.void && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-center gap-1.5"
+          data-result-numbers
+          role="img"
+          aria-label={`당첨 번호 ${record.numbers.join(", ")}, 보너스 ${record.bonus}`}
+        >
+          {record.numbers.map((n) => (
+            <LottoBall
+              key={n}
+              n={n}
+              size="sm"
+              ring={ticket.numbers.includes(n)}
+            />
+          ))}
+          <span className="px-0.5 text-slate-500">+</span>
+          <LottoBall
+            n={record.bonus}
+            size="sm"
+            ring={ticket.numbers.includes(record.bonus)}
+          />
+        </div>
+      )}
       {record ? (
         <p className="text-center font-bold" data-result>
           {record.void
