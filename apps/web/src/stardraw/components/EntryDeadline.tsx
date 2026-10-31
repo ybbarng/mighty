@@ -1,6 +1,7 @@
 "use client";
 
-import { FX } from "../fx-timing";
+import { useState } from "react";
+import { EASE, FX } from "../fx-timing";
 import { ReturnedPaper } from "./EnterSubmit";
 import { formatLeft } from "./parts";
 import { StageOverlay } from "./StageOverlay";
@@ -53,14 +54,18 @@ export function kstClock(seconds: number): string {
 /**
  * 접수 반송: 마감 뒤에 도착한 응모권은 영수증 대신 출력구에서 냈던 응모 용지(칠한 칸 그대로, 회차 표시)가 돌아오고,
  * 다 나오면 빨간 「접수 반송」 도장이 찍힌다. 아래에 사유와 우주국이 받은 시각(작게). 반송은 내 응모에 남기지 않는다.
- * 「같은 별로 다음 회차 응모」는 다음 회차 용지로 옮겨 써서 다시 낸다(서명은 회차에 묶여 새로 한다), 「닫기」는 첫 화면으로
+ * 「이 용지 보관하기」는 용지를 아래로 내려 챙기고(onKeep, 다음 회차 카드의 「보관한 용지로 응모하기」), 이어서
+ * "이번 회차 추첨을 보러 갈까요?"로 「추첨 보러 가기」·「첫 화면으로」. 작은 「닫기」는 보관하지 않고 버린다.
+ * 다음 회차가 열리기까지(앞 회차 추첨) 몇 분 걸려 이 자리에 붙잡아 두지 않는다(2026-11-01 사용자)
  */
 export function BounceSlip({
   title,
   picked,
   deadline,
   received,
-  onRetry,
+  onKeep,
+  onDraw,
+  onHome,
   onClose,
 }: {
   /** 돌려받은 용지의 회차 표시 "1회 응모 용지" */
@@ -70,59 +75,105 @@ export function BounceSlip({
   deadline: string;
   /** 우주국이 받은 시각 "18:55:03" */
   received: string;
-  onRetry: () => void;
+  onKeep: () => void;
+  onDraw: () => void;
+  onHome: () => void;
   onClose: () => void;
 }) {
   const feed = FX.printFeed / 2;
+  const [phase, setPhase] = useState<"slip" | "keeping" | "kept">("slip");
+  const keep = () => {
+    if (phase !== "slip") return;
+    onKeep();
+    setPhase("keeping");
+    window.setTimeout(() => setPhase("kept"), FX.paperAway);
+  };
   return (
     <StageOverlay label="접수 반송" appear={false}>
       <p
+        key={phase === "kept" ? "kept" : "slip"}
         role="status"
         className="sd-text-in sd-submit-status min-h-14 break-keep text-center font-bold text-amber-100 text-lg"
       >
-        응모가 마감되었습니다.
+        {phase === "kept"
+          ? "이번 회차 추첨을 보러 갈까요?"
+          : "응모가 마감되었습니다."}
       </p>
-      <div
-        className="sd-printer w-full"
-        style={
-          {
-            "--print-feed": `${feed}ms`,
-            "--print-delay": `${FX.printDelay}ms`,
-          } as React.CSSProperties
-        }
-      >
-        <div aria-hidden="true" className="sd-printer-slot" />
-        <div className="sd-printer-feed">
-          <div data-bounce className="sd-print flex flex-col gap-3">
-            <ReturnedPaper
-              title={title}
-              marked={picked}
-              stampDelay={FX.printDelay + feed}
-            />
-            <p className="break-keep text-center text-slate-100 text-sm">
-              응모 마감({deadline}) 뒤에 도착했습니다.
-            </p>
-            <p className="text-center font-mono text-slate-400 text-xs tabular-nums">
-              우주국이 받은 시각 {received}
-            </p>
+      {phase !== "kept" && (
+        <div
+          className="sd-printer w-full"
+          style={
+            {
+              "--print-feed": `${feed}ms`,
+              "--print-delay": `${FX.printDelay}ms`,
+            } as React.CSSProperties
+          }
+        >
+          <div aria-hidden="true" className="sd-printer-slot" />
+          <div
+            className="sd-printer-feed transition-[transform,opacity]"
+            data-keeping={phase === "keeping" || undefined}
+            style={{
+              transform: phase === "keeping" ? "translateY(110vh)" : undefined,
+              opacity: phase === "keeping" ? 0.6 : 1,
+              transitionDuration: `${FX.paperAway}ms`,
+              transitionTimingFunction: EASE,
+            }}
+          >
+            <div data-bounce className="sd-print flex flex-col gap-3">
+              <ReturnedPaper
+                title={title}
+                marked={picked}
+                stampDelay={FX.printDelay + feed}
+              />
+              <p className="break-keep text-center text-slate-100 text-sm">
+                응모 마감({deadline}) 뒤에 도착했습니다.
+              </p>
+              <p className="text-center font-mono text-slate-400 text-xs tabular-nums">
+                우주국이 받은 시각 {received}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <div className="mt-auto flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onRetry}
-          className="sd-cta w-full max-w-sm rounded-2xl py-3.5 font-bold text-lg text-slate-950"
-        >
-          같은 별로 다음 회차 응모
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-xl px-4 py-2 text-sm text-white/60 hover:text-white"
-        >
-          닫기
-        </button>
+        {phase === "kept" ? (
+          <>
+            <button
+              type="button"
+              onClick={onDraw}
+              className="sd-text-in sd-cta w-full max-w-sm rounded-2xl py-3.5 font-bold text-lg text-slate-950"
+            >
+              추첨 보러 가기
+            </button>
+            <button
+              type="button"
+              onClick={onHome}
+              className="sd-text-in w-full max-w-sm rounded-2xl border border-white/25 py-3 font-semibold hover:bg-white/10"
+            >
+              첫 화면으로
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={keep}
+              disabled={phase !== "slip"}
+              className="sd-cta w-full max-w-sm rounded-2xl py-3.5 font-bold text-lg text-slate-950"
+            >
+              이 용지 보관하기
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={phase !== "slip"}
+              className="rounded-xl px-4 py-2 text-sm text-white/60 hover:text-white"
+            >
+              닫기
+            </button>
+          </>
+        )}
       </div>
     </StageOverlay>
   );

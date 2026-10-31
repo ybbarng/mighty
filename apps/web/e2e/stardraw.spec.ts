@@ -1118,14 +1118,8 @@ test("마감 직전 응모: 줄인 연출로 마감 전에 접수", async ({ pag
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
 });
 
-/**
- * 내밀기를 미루다 마감을 넘기면 영수증 대신 냈던 용지가 「접수 반송」 도장과 함께 돌아오고, 「같은 별로 다음 회차
- * 응모」는 다음 회차가 열리길 기다려 새 용지로 옮겨 쓴 뒤 다시 서명해 낸다. 반송은 내 응모에 남지 않는다
- */
-test("마감을 넘긴 응모: 용지가 반송되고 다음 회차로 옮겨 낸다", async ({
-  page,
-}) => {
-  // 휴대폰 두 크기와 PC 모두: 누르는 순간 돌려받은 용지 크기·자리가 튀지 않는지 본다
+/** 내밀기를 미루다 마감을 넘겨 반송받고, 「이 용지 보관하기」로 챙긴다 */
+async function bounceAndKeep(page: Page) {
   const card = await toEntryEdge(page);
   await card.waitFor({ timeout: 10_000 });
   await page.clock.runFor(25_000);
@@ -1135,70 +1129,84 @@ test("마감을 넘긴 응모: 용지가 반송되고 다음 회차로 옮겨 �
     timeout: 30_000,
   });
   // 냈던 1회 용지가 칠한 칸 그대로 「접수 반송」 도장과 함께 돌아온다
-  const returned = bounce.getByRole("group", { name: "1회 응모 용지" });
-  await expect(returned.locator("[data-marked]")).toHaveCount(6);
+  await expect(
+    bounce
+      .getByRole("group", { name: "1회 응모 용지" })
+      .locator("[data-marked]"),
+  ).toHaveCount(6);
   await expect(bounce).toContainText("접수 반송");
   await expect(
     page
       .getByRole("dialog", { name: "접수 반송" })
       .getByRole("button", { name: "닫기" }),
   ).toBeVisible();
-  // 누르기 전후 여러 프레임 동안 돌려받은 용지의 자리·크기가 그대로다(반송 화면과 옮겨 쓰기 장면이 이어진다)
-  await bounce.evaluate((el) =>
-    Promise.all(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
-    ).then(() => {}),
-  );
-  const frames = await page.evaluate(async () => {
-    const box = () => {
-      const r = document
-        .querySelector("[aria-label='1회 응모 용지']")
-        ?.getBoundingClientRect();
-      return r ? [r.x, r.y, r.width, r.height] : null;
-    };
-    const before = box();
-    const button = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("같은 별로 다음 회차 응모"),
-    );
-    button?.click();
-    const after: (number[] | null)[] = [];
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => requestAnimationFrame(r));
-      after.push(box());
-    }
-    return { before, after };
-  });
-  expect(frames.before).not.toBeNull();
-  for (const f of frames.after)
-    for (const [i, v] of (f ?? []).entries())
-      expect(Math.abs(v - (frames.before?.[i] ?? 0))).toBeLessThan(0.5);
-  expect(frames.after.every((f) => f !== null)).toBe(true);
-  // 2회가 열리기(1회 추첨) 전이면 기다렸다가 2회 용지로 옮겨 쓴다
-  await expect(
-    page.getByText("다음 회차 응모가 열리면 이어서 접수하겠습니다."),
-  ).toBeVisible();
-  // 1회 추첨(마감 5분 뒤 13:00)이 끝나면 2회가 열린다
+  await page.getByRole("button", { name: "이 용지 보관하기" }).click();
+  await expect(page.getByText("이번 회차 추첨을 보러 갈까요?")).toBeVisible();
+  return card;
+}
+
+/**
+ * 마감을 넘겨 반송된 용지를 보관하면 추첨을 보러 갈지 묻고, 다음 회차가 열리면 회차 카드에 「보관한 용지로 응모하기」와
+ * 「새로 고르기」가 함께 있다. 보관한 용지로 내면 새 회차 용지에 칸이 옮겨 적히고 다시 서명해 접수된다.
+ * 반송은 내 응모에 남지 않고, 낸 뒤에는 보관한 용지가 사라진다
+ */
+test("반송된 용지 보관: 추첨 보러 가기, 다음 회차 카드에서 보관한 용지로 응모", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  const card = await bounceAndKeep(page);
+  await page.getByRole("button", { name: "추첨 보러 가기" }).click();
+  await expect(page).toHaveURL(/\/stardraw\/rounds#draw-1$/);
+  // 1회 추첨(마감 5분 뒤 13:00)이 끝나 2회가 열리면 첫 화면 회차 카드에 두 단추
   await page.clock.setSystemTime(new Date("2026-11-02T04:00:30Z"));
-  const next = page.getByRole("group", { name: "2회 응모 용지" });
-  await expect(next.locator("[data-marked]")).toHaveCount(6, {
-    timeout: 30_000,
-  });
-  // 새 용지도 돌려받은 용지와 같은 너비
-  expect(
-    Math.abs(
-      ((await next.boundingBox())?.width ?? 0) - (frames.before?.[2] ?? 0),
-    ),
-  ).toBeLessThan(0.5);
+  // 새로고침하면 시험 시계가 처음으로 돌아가 앱 안에서 옮겨 다닌다
+  await page.getByRole("button", { name: "← 돌아가기" }).click();
+  const kept = page.locator("[data-kept]");
+  await expect(kept).toContainText("보관한 용지(1회)", { timeout: 30_000 });
+  await expect(kept.getByRole("button", { name: "새로 고르기" })).toBeVisible();
+  await kept.getByRole("button", { name: "보관한 용지로 응모하기" }).click();
+  await expect(
+    page.getByRole("group", { name: "2회 응모 용지" }).locator("[data-marked]"),
+  ).toHaveCount(6, { timeout: 30_000 });
   await page
     .locator("[aria-label='용지 제출'][aria-disabled='false']")
     .press("Enter", { timeout: 10_000 });
   await card.press("Enter", { timeout: 10_000 });
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
-  // 반송된 1회 용지는 내 응모에 남지 않고 다시 낸 2회 하나만
-  await page.goto("/stardraw/mine");
+  // 반송된 1회 용지는 내 응모에 남지 않고 다시 낸 2회 하나만, 보관한 용지는 사라진다
+  await page.getByRole("button", { name: "내 응모", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "내 응모" }).getByRole("listitem"),
   ).toHaveCount(1);
+  await page.getByRole("button", { name: "홈", exact: true }).click();
+  await expect(page.locator("[data-round-note]")).toHaveAttribute(
+    "data-round-note",
+    "open-entered",
+  );
+  await expect(page.locator("[data-kept]")).toHaveCount(0);
+});
+
+/** 보관한 용지가 있어도 「새로 고르기」로 평소처럼 응모할 수 있고, 응모를 마치면 보관한 용지는 저절로 버려진다 */
+test("반송된 용지 보관: 새로 고르기로 응모하면 보관한 용지가 사라진다", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
+  await bounceAndKeep(page);
+  await page.getByRole("button", { name: "첫 화면으로" }).click();
+  await page.clock.setSystemTime(new Date("2026-11-02T04:00:30Z"));
+  const kept = page.locator("[data-kept]");
+  await expect(kept).toBeVisible({ timeout: 30_000 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await kept.getByRole("button", { name: "새로 고르기" }).click();
+  await page.getByRole("button", { name: "자동", exact: true }).click();
+  await page.getByRole("button", ENTER).click();
+  await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "홈", exact: true }).click();
+  await expect(page.locator("[data-round-note]")).toHaveAttribute(
+    "data-round-note",
+    "open-entered",
+  );
+  await expect(page.locator("[data-kept]")).toHaveCount(0);
 });
 
 test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제자리, 세로는 기울기만, 단추는 그대로", async ({

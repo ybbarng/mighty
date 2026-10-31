@@ -184,7 +184,7 @@ export const QUICK_SPARE_MS = 20_000;
  * 누름 → 용지가 위(우주국)로 올라가 사라지면 `onSubmitted`.
  * 용지는 아래(내 앞)에 두고 위로 제출한다(2026-10-31 사용자). 시간은 fx-timing의 FX.
  *
- * 옮겨 쓰기(`transfer`, 접수 반송 뒤 「같은 별로 다음 회차 응모」): 돌려받은 용지가 가운데 남아 있고, 다음 회차가
+ * 옮겨 쓰기(`transfer`, 회차 카드의 「보관한 용지로 응모하기」): 돌려받은 용지가 위에 놓이고, 다음 회차가
  * 아직 안 열렸으면 "다음 회차 응모가 열리면 이어서 접수하겠습니다."로 기다린다. 열리면 새 회차 용지가 아래에서
  * 올라와 칠한 칸이 한 번에 옮겨지고, 돌려받은 용지는 아래로 접혀 사라진 뒤 밀어 올리기를 기다린다.
  * 서명은 회차에 묶이므로 같은 종이를 다시 내지 않고 새 용지로 옮겨 쓴다
@@ -207,7 +207,7 @@ export function SubmitView({
   const rowEl = useRef<HTMLElement>(null);
   const paper = useRef<HTMLFieldSetElement>(null);
   const [text, setText] = useState(
-    transfer ? "응모가 마감되었습니다." : "응모 용지를 작성해 주세요.",
+    transfer ? "다음 회차 용지에 옮겨 적습니다." : "응모 용지를 작성해 주세요.",
   );
   /** 옮겨 쓰기에서 돌려받은 용지 */
   const [old, setOld] = useState<"shown" | "folding" | "gone">(
@@ -365,16 +365,12 @@ export function SubmitView({
       <p
         key={text}
         role="status"
-        className={cn(
-          "sd-submit-status min-h-14 break-keep text-center font-bold text-amber-100 text-lg",
-          // 옮겨 쓰기 첫 말은 반송 화면 말 그대로라 다시 나타나지 않는다
-          !(transfer && text === "응모가 마감되었습니다.") && "sd-text-in",
-        )}
+        className="sd-text-in sd-submit-status min-h-14 break-keep text-center font-bold text-amber-100 text-lg"
       >
         {text}
       </p>
       {/*
-        돌려받은 용지: 반송 화면(BounceSlip)과 같은 자리·같은 너비에서 시작해 누르는 순간 크기가 바뀌지 않는다
+        돌려받은 용지: 반송 화면(BounceSlip)과 같은 자리·같은 너비(같은 용지로 보이게)
         (출력구 위 여백 10px까지 같게). 새 용지가 올라올 때 함께 작아지며 물러나고, 아래로 접혀 사라진다.
         자리를 차지하지 않아(absolute) 새 용지가 밀리지 않는다
       */}

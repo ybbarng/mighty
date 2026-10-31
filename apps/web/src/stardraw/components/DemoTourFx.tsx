@@ -68,7 +68,10 @@ function stubSetup(
 
 const BOUNCE_PICKS = [3, 11, 19, 24, 33, 41];
 
-/** 접수 반송 장면: 돌려받은 용지 → 「같은 별로 다음 회차 응모」 → 다음 회차 용지로 옮겨 쓰고 밀어 올려 제출 */
+/**
+ * 접수 반송 장면: 돌려받은 용지 → 「이 용지 보관하기」 → 추첨 보러 갈지 묻기 → (다음 회차가 열려 회차 카드의
+ * 「보관한 용지로 응모하기」를 누른 셈으로) 다음 회차 용지로 옮겨 쓰고 밀어 올려 제출
+ */
 function BounceTour({ onDone }: { onDone: () => void }) {
   const [moving, setMoving] = useState(false);
   if (!moving)
@@ -78,12 +81,14 @@ function BounceTour({ onDone }: { onDone: () => void }) {
         picked={BOUNCE_PICKS}
         deadline="18:54:55"
         received="18:55:03"
-        onRetry={() => setMoving(true)}
+        onKeep={() => {}}
+        onDraw={() => setMoving(true)}
+        onHome={() => setMoving(true)}
         onClose={onDone}
       />
     );
   return (
-    <StageOverlay label="응모" appear={false}>
+    <StageOverlay label="응모">
       <SubmitView
         title="8회 응모권"
         picked={BOUNCE_PICKS}

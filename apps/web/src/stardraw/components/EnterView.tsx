@@ -17,6 +17,7 @@ import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { closedAt, errorText } from "../errors";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
+import { clearKept, type KeptPaper, saveKept } from "../kept-paper";
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -100,6 +101,8 @@ export function EnterView({
   onBack,
   initialPicked = [],
   extra,
+  kept,
+  onWatchDraw,
 }: {
   services: Services;
   status: LedgerStatus;
@@ -109,8 +112,14 @@ export function EnterView({
   initialPicked?: readonly number[];
   /** 데모: 번호 칸 위에 더 둘 도구 */
   extra?: ReactNode;
+  /** 「보관한 용지로 응모하기」: 들어오자마자 돌려받은 용지를 새 회차 용지에 옮겨 적어 낸다 */
+  kept?: KeptPaper | null | undefined;
+  /** 반송 뒤 「추첨 보러 가기」: 반송된 회차의 추첨 화면으로 */
+  onWatchDraw?: ((round: number) => void) | undefined;
 }) {
-  const [picked, setPicked] = useState<number[]>([...initialPicked]);
+  const [picked, setPicked] = useState<number[]>(
+    kept ? [...kept.numbers] : [...initialPicked],
+  );
   const [focus, setFocus] = useState<number | null>(null);
   /** 6개를 다 고른 뒤 또 누른 횟수: 응모권 칸이 짧게 흔들린다(글 없이) */
   const [nudges, setNudges] = useState(0);
@@ -321,7 +330,7 @@ export function EnterView({
         const ticket = await signTicket(p.signer, p.unsigned, p.nonce);
         const { receivedAt } = await ledger.submit(ticket, p.registration);
         play("starBall");
-        onDone(ticket, receivedAt);
+        finish(ticket, receivedAt);
         return;
       }
       if (paperDone) await paperDone;
@@ -360,7 +369,7 @@ export function EnterView({
       setStage("print");
       const { receivedAt } = await (sent as ReturnType<typeof ledger.submit>);
       play("starBall");
-      onDone(ticket, receivedAt);
+      finish(ticket, receivedAt);
     } catch (err) {
       // 마감 뒤에 도착했으면 영수증 대신 출력구에서 냈던 용지가 반송 도장과 함께 돌아온다(내 응모에는 남기지 않는다)
       const at = closedAt(err);
@@ -390,6 +399,21 @@ export function EnterView({
   const start = async () => {
     if (key) await submit(key);
   };
+
+  /** 응모가 접수되면 보관한 용지는 버린다(어느 쪽으로 냈든 한 회차 한 장) */
+  const finish = (ticket: Ticket, receivedAt: number) => {
+    clearKept(services.ns);
+    onDone(ticket, receivedAt);
+  };
+
+  // 「보관한 용지로 응모하기」로 들어왔으면 바로 옮겨 적기부터
+  const keptStarted = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 들어올 때 한 번
+  useEffect(() => {
+    if (!kept || !key || keptStarted.current) return;
+    keptStarted.current = true;
+    void submit(key, { ...kept, deadline: "", received: "" });
+  }, []);
 
   // 발급한 등록증: 움직임 줄이기면 이 화면 대신, 아니면 화면 전체 오버레이로 위에 뜬다
   if (setup.issued && reduce)
@@ -438,7 +462,7 @@ export function EnterView({
       <WelcomeFlyer services={services} setup={setup} />
       {/* 제출 연출은 화면 전체 오버레이 한 층에서(뒤의 고르는 화면은 흐려지고 조작되지 않는다). 옮겨 쓰기는 반송 화면에서 그대로 이어져 다시 나타나지 않는다 */}
       {submitting && (
-        <StageOverlay label="응모" appear={!transfer}>
+        <StageOverlay label="응모">
           {stage === "paper" && (
             <SubmitView
               title={title}
@@ -468,9 +492,16 @@ export function EnterView({
           picked={bounce.numbers}
           deadline={bounce.deadline}
           received={bounce.received}
-          onRetry={() => {
-            if (key) void submit(key, bounce);
-          }}
+          onKeep={() =>
+            saveKept(services.ns, {
+              ledger: services.ledger.id(),
+              round: bounce.round,
+              numbers: [...bounce.numbers],
+              qual: bounce.qual,
+            })
+          }
+          onDraw={() => (onWatchDraw ?? onBack)(bounce.round)}
+          onHome={onBack}
           onClose={onBack}
         />
       )}

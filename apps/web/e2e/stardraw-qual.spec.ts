@@ -139,10 +139,15 @@ test("소속 응모가 반송되면 옮겨 쓴 다음 회차 응모권에도 소
     timeout: 30_000,
   });
 
-  // 옮겨 쓰기: 다음 회차가 열리면(앞 회차 추첨, 마감 5분 뒤) 새 용지로 옮겨 다시 서명해 낸다
-  await page.getByRole("button", { name: "같은 별로 다음 회차 응모" }).click();
+  // 보관했다가 다음 회차가 열리면(앞 회차 추첨, 마감 5분 뒤) 보관한 용지로 새 용지에 옮겨 다시 서명해 낸다
+  await page.getByRole("button", { name: "이 용지 보관하기" }).click();
+  await page.getByRole("button", { name: "첫 화면으로" }).click();
   const after = await page.evaluate(() => Date.now());
   await page.clock.setSystemTime(after + 6 * 60_000);
+  await page
+    .locator("[data-kept]")
+    .getByRole("button", { name: "보관한 용지로 응모하기" })
+    .click({ timeout: 30_000 });
   await paper.press("Enter", { timeout: 30_000 });
   await card.press("Enter", { timeout: 10_000 });
   await demoUnlock(page, "sign");
