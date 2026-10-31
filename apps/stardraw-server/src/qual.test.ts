@@ -25,10 +25,11 @@ import {
 } from "@mighty/stardraw-core";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { parseQualAffiliations } from "./config";
-import type { QualificationOptions } from "./engine";
+import { QUAL_WIN_WINDOW, type QualificationOptions } from "./engine";
 import { GoogleTokenError } from "./google";
 import { createHttpServer } from "./http";
 import {
+  drawOf,
   EPOCH,
   enter,
   makeRig,
@@ -346,4 +347,27 @@ describe("소속 확인 방법 설정(STARDRAW_QUAL_AFFILIATIONS)", () => {
     expect(() => parseQualAffiliations("벌집 성단=invite:abc")).toThrow();
     expect(() => parseQualAffiliations("google:example.com")).toThrow();
   });
+});
+
+describe("소속 1·2등 알림(서버 감시가 국장에게)", () => {
+  it("소속 표시가 유효한 1등만 상태의 qualWins에 회차·일련번호로 오르고, 창이 지나면 빠진다", async () => {
+    const { r, periodId } = await qualRig();
+    const own = await receive(
+      r,
+      periodId,
+      "google:gina@example.com:example.com",
+    );
+    const winning = drawOf(13).numbers;
+    const q = await enter(r, await player(), winning, "203.0.113.7", own);
+    // 증서 없는 같은 번호 1등은 알리지 않는다
+    await enter(r, await player(), winning, "203.0.113.7");
+    expect(r.engine.state().qualWins).toEqual([]);
+    await r.finish(13);
+    expect(r.engine.state().qualWins).toEqual([
+      { round: 13, rank: 1, ticket: toHex(q.receipt.ticketId).slice(0, 12) },
+    ]);
+    expect(r.engine.qualWins(r.engine.now() + QUAL_WIN_WINDOW + 3600)).toEqual(
+      [],
+    );
+  }, 60_000);
 });

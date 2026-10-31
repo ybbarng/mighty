@@ -25,6 +25,7 @@ import {
   everDirector,
   genesisHash,
   isVoidRound,
+  judgeRound,
   type KeyRegistration,
   ledgerId,
   ledgerMirrorPath,
@@ -192,7 +193,15 @@ export interface ServerState {
   mode: "trial" | "live";
   /** 정식 단계 첫 회차(사슬 회차 번호). 아직 예고되지 않았으면 null */
   liveFrom: number | null;
+  /**
+   * 마감이 QUAL_WIN_WINDOW 안인 회차의 소속 표시가 유효한 1·2등(규칙 패키지 judgeRound 판정). 비어 있지 않으면
+   * 서버 감시가 국장에게 알린다(회차와 일련번호 앞부분만, 누구인지는 모른다). 창이 지나면 저절로 빠진다
+   */
+  qualWins: { round: number; rank: 1 | 2; ticket: string }[];
 }
+
+/** 소속 1·2등 알림을 상태에 남겨 두는 시간(초). 감시는 비어 있다가 생기면 한 번 알리고, 빠지면 풀렸다고 알린다 */
+export const QUAL_WIN_WINDOW = 72 * 3600;
 
 export class StardrawServer {
   readonly genesis: Schedule;
@@ -325,7 +334,47 @@ export class StardrawServer {
       serverKey: toBase64Url(this.o.serverKey.publicKey),
       mode: this.mode,
       liveFrom: liveStart(this.schedule()),
+      qualWins: this.qualWins(now),
     };
+  }
+
+  /** 닫힌 회차마다 한 번만 계산해 둔 소속 1·2등(회차 → 목록) */
+  private readonly qualWinMemo = new Map<
+    number,
+    { closesAt: number; wins: { rank: 1 | 2; ticket: string }[] }
+  >();
+  /** 시각 now(초) 기준의 소속 1·2등(state가 부른다, 시험은 창이 지난 시각으로 직접 부른다) */
+  qualWins(now: number): ServerState["qualWins"] {
+    const out: ServerState["qualWins"] = [];
+    for (let r = this.o.store.recordCount(); r >= 1; r--) {
+      let memo = this.qualWinMemo.get(r);
+      if (!memo) {
+        const closesAt = roundTimes(this.schedule(), r).closesAt;
+        if (now - closesAt > QUAL_WIN_WINDOW) break;
+        const record = this.o.store.record(r);
+        const tickets = record ? this.o.store.entries(r) : [];
+        const wins: { rank: 1 | 2; ticket: string }[] = [];
+        if (record && !record.void && tickets.some((t) => t.qual)) {
+          const { results } = judgeRound(
+            this.opsAt(r),
+            r,
+            closesAt,
+            tickets,
+            tickets.map((t) => ticketId(t)),
+            record.winners,
+          );
+          for (const res of results)
+            for (const rank of [1, 2] as const)
+              for (const id of res.winners[rank])
+                wins.push({ rank, ticket: toHex(id).slice(0, 12) });
+        }
+        memo = { closesAt, wins };
+        this.qualWinMemo.set(r, memo);
+      }
+      if (now - memo.closesAt > QUAL_WIN_WINDOW) break;
+      for (const w of memo.wins) out.push({ round: r, ...w });
+    }
+    return out;
   }
 
   /** 회차 round가 열릴 때의 운영 상태(효력이 생긴 기간·소속까지). 닫힌 기록이 바뀔 때만 새로 만든다 */
