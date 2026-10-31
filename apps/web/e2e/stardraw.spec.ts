@@ -844,7 +844,6 @@ test("데모 화면 둘러보기: 목록의 화면이 모두 가로 넘침 없�
     ["sheet-check", () => page.locator("[data-demo-unlock='check']")],
     ["in-app", (s) => s.getByText(/카카오톡 안에서는 패스키를 쓸 수 없어요/)],
     ["no-passkey", (s) => s.getByText(/패스키를 지원하지 않아요/)],
-    ["trial", (s) => s.locator("[data-trial-banner]")],
   ];
   for (const [id, find] of expectations) {
     await page.evaluate((h) => {

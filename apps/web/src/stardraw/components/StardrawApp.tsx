@@ -251,7 +251,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       className="sd-night min-h-dvh px-4 pt-6 pb-12 text-white"
     >
       <div className="mx-auto flex max-w-xl flex-col gap-5">
-        {services?.ledger.mode === "trial" && <TrialBanner />}
         {/* 서버 없이 이 기기 안에서만 도는 연습판(데모는 따로 자기 띠가 있다) */}
         {services?.practice && services.ns === GAME_NS && <PracticeBanner />}
         {services && (
@@ -404,19 +403,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
         </footer>
       </div>
     </main>
-  );
-}
-
-/** 서버 시험 운영 띠 */
-export function TrialBanner() {
-  return (
-    <p
-      role="note"
-      data-trial-banner
-      className="rounded-xl border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-center text-amber-50 text-sm"
-    >
-      시험 운영 중
-    </p>
   );
 }
 

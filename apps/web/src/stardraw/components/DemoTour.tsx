@@ -16,7 +16,7 @@ import { DrawView } from "./DrawView";
 import { EnterView, KeySetup } from "./EnterView";
 import { Inbox } from "./Inbox";
 import { Receipt } from "./Receipt";
-import { Home, MineView, RoundsView, TrialBanner } from "./StardrawApp";
+import { Home, MineView, RoundsView } from "./StardrawApp";
 import { WinNotice } from "./WinNotice";
 
 /** 데모 "화면 둘러보기" 목록. 주소는 #tour-<id>라 뒤로가기로 목록에 돌아온다 */
@@ -51,7 +51,6 @@ export const TOUR_ITEMS = [
   { id: "sheet-check", label: "본인 확인 시트" },
   { id: "in-app", label: "앱 안 브라우저" },
   { id: "no-passkey", label: "패스키 미지원" },
-  { id: "trial", label: "시험 운영 띠" },
 ] as const;
 
 export type TourId = (typeof TOUR_ITEMS)[number]["id"];
@@ -316,24 +315,6 @@ function Screen({
           onCreate={noop}
           onRecover={noop}
         />
-      );
-    case "trial":
-      return (
-        <div className="flex flex-col gap-5">
-          <TrialBanner />
-          <Home
-            services={services}
-            status={status}
-            mine={mine}
-            opened={new Set([1])}
-            onEnter={noop}
-            onReceipt={noop}
-            onDraw={noop}
-            onMine={noop}
-            onRounds={noop}
-            onSkip={null}
-          />
-        </div>
       );
   }
 }
