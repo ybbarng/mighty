@@ -21,6 +21,7 @@ import {
 import { isPowWorker, runPowWorker, WorkerPowChecker } from "./pow-pool";
 import { Publisher } from "./publish";
 import { DEFAULT_RELAY_LIMITS, Relay } from "./relay";
+import { RoomHub } from "./room";
 import { parseScheduleLiveArgs, scheduleLive } from "./schedule-live";
 import { loadServerKey } from "./server-key";
 import { Store } from "./store";
@@ -113,11 +114,22 @@ async function main(): Promise<void> {
     },
     (pub) => engine.isActiveDirector(pub),
   );
+  const rooms = new RoomHub({
+    clock,
+    policy: config.policy,
+    schedule: () => engine.schedule(),
+    isRegistered: (pub) => engine.isRegistered(pub),
+    isDirector: (pub) => engine.isActiveDirector(pub),
+    sealed: (round) => store.seal(round) !== null,
+    tickets: (round) => store.entries(round),
+    drawn: (round) => store.record(round) !== null,
+  });
   const http = createHttpServer(engine, relay, {
     basePath: config.basePath,
     ledgerDir: config.ledgerDir,
     devOrigins: config.devOrigins,
     trustProxy: config.trustProxy,
+    rooms,
   });
 
   let stopTick = () => {};
@@ -135,6 +147,7 @@ async function main(): Promise<void> {
 
   const stop = () => {
     stopTick();
+    rooms.stop();
     http.close(() => {
       store.close();
       process.exit(0);

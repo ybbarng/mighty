@@ -1832,3 +1832,131 @@ button {
     opacity: 0;
   }
 }
+
+/* 회차 방(docs/36 11-23): 언덕, 얼굴, 풍등 말풍선, 카운트다운, 별똥별 */
+.sd-room-hill {
+  background:
+    radial-gradient(120% 70% at 50% 100%, #0d1426 60%, transparent 61%),
+    linear-gradient(to bottom, transparent, #070b16 85%);
+}
+.sd-room-face {
+  animation: sd-room-face-in 0.9s cubic-bezier(0.32, 0.72, 0, 1) both;
+  background: #0f1d3a;
+  transition:
+    box-shadow 0.6s ease,
+    transform 0.6s ease;
+}
+@keyframes sd-room-face-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+}
+.sd-room-face-glow {
+  box-shadow:
+    0 0 0 2px rgba(255, 224, 160, 0.9),
+    0 0 22px 6px rgba(255, 214, 140, 0.55);
+  transform: translateY(-4px);
+}
+.sd-room-face-twinkle {
+  animation: sd-room-twinkle 1.2s ease-out;
+}
+@keyframes sd-room-twinkle {
+  30% {
+    box-shadow: 0 0 26px 8px rgba(200, 225, 255, 0.8);
+  }
+}
+/* 같은 빠르기로 곧게 떠오른다(빠르기가 같아야 먼저 뜬 풍등을 따라잡아 겹치지 않는다, RoomView LANTERN_CLEAR_MS) */
+.sd-lantern {
+  animation: sd-lantern 7s linear forwards;
+  transform-origin: 50% 100%;
+}
+@keyframes sd-lantern {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  6% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-260px);
+  }
+}
+.sd-room-count {
+  animation: sd-room-count 1s cubic-bezier(0.32, 0.72, 0, 1) both;
+  text-shadow: 0 0 40px rgba(255, 220, 150, 0.6);
+}
+@keyframes sd-room-count {
+  from {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+}
+.sd-room-meteor {
+  animation: sd-room-meteor 1.6s ease-in forwards;
+  transform: rotate(18deg);
+}
+@keyframes sd-room-meteor {
+  from {
+    opacity: 0;
+    translate: 0 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 220px 80px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-room-face,
+  .sd-room-face-twinkle,
+  .sd-room-count,
+  .sd-room-meteor {
+    animation: none;
+  }
+  .sd-lantern {
+    animation: sd-lantern-still 7s linear forwards;
+  }
+  @keyframes sd-lantern-still {
+    0%,
+    85% {
+      opacity: 1;
+      transform: translateY(-40px);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+  }
+}
+/* 방에서 등록: 빈 등록증이 은은하게 떠올라 누르기를 기다린다 */
+.sd-room-blank-card {
+  animation: sd-room-blank 2.6s ease-in-out infinite;
+}
+@keyframes sd-room-blank {
+  50% {
+    transform: translateY(-6px);
+    box-shadow: 0 10px 30px rgba(255, 220, 160, 0.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-room-blank-card {
+    animation: none;
+  }
+}

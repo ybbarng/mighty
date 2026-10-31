@@ -14,7 +14,7 @@ import {
   toHex,
   type VerifyReport,
 } from "@mighty/stardraw-core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BackToGames } from "@/components/BackToGames";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
 import { play } from "@/game/sound";
@@ -31,6 +31,7 @@ import { passkeyProblem } from "../passkey-env";
 import { qualMarks } from "../qual-judge";
 import { ensureRegistered } from "../registrar";
 import { myRank, prizeEligible, RANK_RULE, winnerCounts } from "../results";
+import { savedPass } from "../room-client";
 import { roundShort, roundTitle } from "../round-label";
 import { DEMO_NS, GAME_NS, type Services, useLedger } from "../services";
 import { NOTHING_SEALED, type Sealed, sealedFor } from "../spoiler";
@@ -55,6 +56,7 @@ import {
 } from "./parts";
 import { Receipt } from "./Receipt";
 import { ReceiptPrint } from "./ReceiptPrint";
+import { liveDrawRound, liveOver, RoomView, roomOpen } from "./RoomView";
 import { SkyBoard } from "./SkyBoard";
 import { useReducedMotion } from "./StageOverlay";
 import { type NavTarget, TabBar, useWideScreen } from "./StardrawNav";
@@ -631,6 +633,7 @@ export function Home({
           env={env}
           setup={setup}
           onSkip={onSkip}
+          onDraw={onDraw}
         />
       </>
     );
@@ -748,15 +751,19 @@ export function Gate({
   env,
   setup,
   onSkip,
+  onDraw,
 }: {
   services: Services;
   status: LedgerStatus;
   env: ReturnType<typeof usePasskeyEnv>;
   setup: ReturnType<typeof useAstronautSetup>;
   onSkip: (() => Promise<void>) | null;
+  /** 실시간 추첨 중이면 그 추첨으로(누구나 볼 수 있다) */
+  onDraw?: (round: number) => void;
 }) {
   const name = roundShort(services.ledger.schedule, s.round);
   const open = s.phase === "open";
+  const live = liveDrawRound(services, s);
   return (
     <>
       <header className="flex flex-col gap-4">
@@ -784,12 +791,24 @@ export function Gate({
         <span
           aria-hidden="true"
           className="sd-live-dot"
-          data-live={open ? "open" : "drawing"}
+          data-live={live !== null ? "entered" : open ? "open" : "drawing"}
         />
-        {open
-          ? `지금 ${name} 응모를 받고 있어요 · 마감까지 ${formatLeft(s.times.entryDeadline - s.now)}`
-          : `${name} 응모를 마감했어요.`}
+        {live !== null
+          ? `지금 ${roundShort(services.ledger.schedule, live)} 추첨 중이에요.`
+          : open
+            ? `지금 ${name} 응모를 받고 있어요 · 마감까지 ${formatLeft(s.times.entryDeadline - s.now)}`
+            : `${name} 응모를 마감했어요.`}
       </p>
+      {live !== null && onDraw && (
+        <button
+          type="button"
+          onClick={() => onDraw(live)}
+          data-gate-live={live}
+          className="self-center rounded-2xl border border-amber-200/50 px-5 py-2.5 font-semibold text-amber-100 text-sm hover:bg-amber-200/10"
+        >
+          추첨 보러 가기
+        </button>
+      )}
       <KeySetup
         gate
         demo={services.ns === DEMO_NS}
@@ -877,6 +896,34 @@ export function RoundCard({
   const drawAt = drawWaiting ? s.nextDrawAt : s.times.closesAt + DRAND_DELAY;
   const closed = s.phase !== "open";
   const ticket = mine.find((m) => m.ticket.round === round);
+
+  // 실시간 추첨 중(안내 15초 전부터 연출이 끝날 때까지, 서버가 있을 때)에는 그 추첨이 주인공. 다음 회차 응모 안내는
+  // 연출이 끝난 뒤에 띄운다(2026-10-31 사용자: 추첨에 집중하는 쪽, 작은 "다음 회차 응모하기"도 두지 않는다)
+  const live = liveDrawRound(services, s);
+  if (live !== null)
+    return (
+      <section
+        aria-label="실시간 추첨"
+        data-card="live"
+        className="sd-glass sd-live-card flex flex-col items-center gap-4 rounded-3xl px-5 py-6 text-center"
+      >
+        <span className="flex items-center gap-2.5 break-keep font-bold text-lg tabular-nums">
+          <span
+            aria-hidden="true"
+            className="sd-live-dot"
+            data-live="entered"
+          />
+          지금 {roundShort(schedule, live)} 추첨 중이에요.
+        </span>
+        <button
+          type="button"
+          onClick={() => onDraw(live)}
+          className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
+        >
+          추첨 보러 가기
+        </button>
+      </section>
+    );
 
   if (envelope) {
     const r = envelope.ticket.round;
@@ -1274,6 +1321,28 @@ function DrawFor({
   useEffect(() => {
     if (!record) setLive(true);
   }, [record]);
+  // 서버가 있고 방이 열려 있으면 회차 방(실시간 추첨, docs/36 11-23). 실시간 추첨이 끝난 뒤에는 그때 방에 있던
+  // 사람(이 화면에서 방을 보던 사람, 대화 표가 있는 사람)만 방에 남고, 나중에 온 사람은 다시 보기 규칙을 따른다
+  const wasInRoom = useRef(false);
+  const showRoom =
+    roomOpen(services, round, status.now) &&
+    (wasInRoom.current ||
+      !liveOver(services, round, record, status.now * 1000) ||
+      savedPass(round) !== null);
+  wasInRoom.current = showRoom;
+  if (showRoom)
+    return (
+      <RoomView
+        key={round}
+        services={services}
+        status={status}
+        round={round}
+        record={record}
+        ticket={mine.find((m) => m.ticket.round === round)?.ticket}
+        onClose={onClose}
+        onEnter={onEnter}
+      />
+    );
   // 아직 결과가 없는 회차: 남은 시간을 보이며 기다리다가 결과가 들어오는 순간 추첨 연출을 시작한다
   if (!record)
     return (

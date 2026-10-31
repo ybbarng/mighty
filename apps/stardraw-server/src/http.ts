@@ -16,6 +16,7 @@ import {
 
 import { EntryError, type StardrawServer } from "./engine";
 import type { Relay } from "./relay";
+import type { ModAction, RoomHub } from "./room";
 
 /**
  * HTTP 주소(모두 `basePath` 아래, 운영은 /stardraw-api).
@@ -46,6 +47,8 @@ export interface HttpOptions {
   ledgerDir: string;
   devOrigins: readonly string[];
   trustProxy: boolean;
+  /** 회차 방(docs/36 11-23). 없으면 방 주소는 404 */
+  rooms?: RoomHub;
 }
 
 const MAX_BODY = 16 * 1024;
@@ -100,6 +103,54 @@ const str = (v: unknown, name: string): string => {
   return v;
 };
 
+/** 회차 방 주소(모두 POST, 본문 JSON). 대화 표는 주소에 넣지 않는다 */
+async function handleRoom(
+  rooms: RoomHub,
+  round: number,
+  action: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const body = await readJson(req);
+  if (action === "challenge") return send(res, 200, rooms.challenge(round));
+  if (action === "events") return rooms.connect(round, res, body.pass);
+  if (action === "say")
+    return send(res, 200, rooms.say(round, body.pass, body.text));
+  if (action === "cheer") {
+    rooms.cheer(round, body.pass, body.kind, body.to);
+    return send(res, 200, {});
+  }
+  if (action === "report")
+    return send(res, 200, rooms.report(round, body.pass, body.id));
+  let pub: Uint8Array;
+  let signature: SignatureData;
+  try {
+    pub = fromBase64Url(str(body.pub, "공개 열쇠"));
+    signature = decodeSignatureData(str(body.signature, "서명"));
+  } catch (err) {
+    if (err instanceof EntryError) throw err;
+    throw new EntryError("서명 형식이 맞지 않습니다");
+  }
+  const nonce = str(body.nonce, "확인 값");
+  if (action === "pass")
+    return send(
+      res,
+      200,
+      await rooms.issuePass(round, { pub, signature, nonce }),
+    );
+  const act = body.action;
+  if (act !== "hide" && act !== "kick")
+    throw new EntryError("조치가 맞지 않습니다");
+  await rooms.moderate(round, {
+    pub,
+    signature,
+    nonce,
+    action: act as ModAction,
+    target: str(body.target, "대상"),
+  });
+  return send(res, 200, {});
+}
+
 /**
  * 상한을 셀 클라이언트 주소. `trustProxy`(운영: Traefik 뒤)면 `X-Real-Ip`를 쓴다.
  * 위조할 수 없는 이유(2026-10-30 Traefik v3.7.16 소스 pkg/middlewares/forwardedheaders/forwarded_header.go로 확인):
@@ -148,6 +199,21 @@ async function handle(
 
   if (method === "GET" && path === "/api/state")
     return send(res, 200, engine.state());
+
+  if (method === "GET" && path === "/api/time")
+    return send(res, 200, { serverTime: Date.now() });
+
+  const roomMatch = path.match(
+    /^\/api\/room\/(\d+)\/(challenge|pass|events|say|cheer|report|moderate)$/,
+  );
+  if (method === "POST" && roomMatch && o.rooms)
+    return handleRoom(
+      o.rooms,
+      Number(roomMatch[1]),
+      roomMatch[2] as string,
+      req,
+      res,
+    );
 
   const keyMatch = path.match(/^\/api\/keys\/([A-Za-z0-9_-]+)$/);
   if (method === "GET" && keyMatch) {

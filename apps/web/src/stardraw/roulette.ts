@@ -37,6 +37,25 @@ export const ROULETTE_TIMING: RouletteTiming = {
   minSteps: 15,
 };
 
+/**
+ * 실시간 추첨(회차 방)의 룰렛: 별 하나마다 약 6.7초(켜지는 순간 방에서 반응할 틈), 공 7개면 약 46초,
+ * 앞의 15초 안내·10초 카운트다운과 합쳐 1분 안팎(2026-10-31 사용자). 혼자 보는 다시 보기는 ROULETTE_TIMING(약 33초)을 쓴다:
+ * 함께 반응할 사람이 없고, 결과를 다시 확인하려는 것이라 짧은 편이 낫다
+ */
+export const LIVE_ROULETTE_TIMING: RouletteTiming = {
+  leadMs: 1500,
+  spinMs: 4500,
+  holdMs: 2200,
+  laps: 0,
+  minSteps: 15,
+};
+
+/**
+ * 실시간 추첨이 시작되는 시각 = 추첨 시각(drand 회차 시각) + 이만큼. drand 값과 서버의 회차 기록이 몇 초 뒤에 오므로
+ * 모두가 같은 기준으로 조금 늦게 시작한다(결과가 확실히 와 있게). 카운트다운의 0초가 이 시각이다
+ */
+export const LIVE_LEAD_MS = 6000;
+
 export interface RouletteStop {
   /** 멈출 별 */
   target: number;

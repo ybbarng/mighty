@@ -52,6 +52,9 @@ export const DEMO_NS = "stardraw-demo";
 /** 서버 주소(빌드할 때 들어간다). 비어 있으면 연습 장부 */
 const SERVER_API = process.env.NEXT_PUBLIC_STARDRAW_API ?? "";
 
+/** 서버 주소(회차 방이 쓴다). 연습 장부만 있으면 null */
+export const serverApi = (): string | null => SERVER_API || null;
+
 export function getServices(ns: string = GAME_NS): Services {
   const found = cache.get(ns);
   if (found) return found;

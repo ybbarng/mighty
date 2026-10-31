@@ -10,7 +10,12 @@ import { cn } from "@/lib/cn";
 import { celebrationPlan } from "../celebrate";
 import { drawGlows } from "../hdr-glow";
 import { drawOrder, myRank } from "../results";
-import { planRoulette, type RouletteFrame, rouletteAt } from "../roulette";
+import {
+  planRoulette,
+  type RouletteFrame,
+  type RouletteTiming,
+  rouletteAt,
+} from "../roulette";
 import { starOf } from "../sky";
 import { SkyCelebration, WinSeal } from "./Celebration";
 import { LottoBall, RANK_LABEL } from "./parts";
@@ -38,6 +43,9 @@ export function DrawView({
   onNext,
   canSkip = false,
   onWatched,
+  startedAt,
+  timing,
+  embedded = false,
 }: {
   /**
    * 연출 중 아래에 작은 「추첨 건너뛰기」(누르면 바로 결과). 이 기기에서 추첨을 끝까지 한 번 본 뒤, 이미 결과가 나온
@@ -46,6 +54,15 @@ export function DrawView({
   canSkip?: boolean | undefined;
   /** 연출을 건너뛰지 않고 끝까지 본 순간 */
   onWatched?: (() => void) | undefined;
+  /**
+   * 실시간 추첨(회차 방): 연출이 시작된 시각(`clock` 기준 ms). 모든 화면이 "지금 − 시작"으로 같은 장면을 보인다(방송처럼).
+   * 늦게 들어오면 이미 나온 별은 켜진 채 나머지부터. 없으면 지금부터 처음부터
+   */
+  startedAt?: number | undefined;
+  /** 룰렛 빠르기(실시간은 LIVE_ROULETTE_TIMING) */
+  timing?: RouletteTiming | undefined;
+  /** 회차 방 안에 넣을 때: 위쪽 제목·돌아가기를 숨긴다(방이 따로 둔다) */
+  embedded?: boolean | undefined;
   record: RoundRecord;
   ticket?: Ticket | undefined;
   onClose: () => void;
@@ -62,7 +79,7 @@ export function DrawView({
   const order = drawOrder(record);
   // 회차가 바뀔 때만 다시 계산한다(order는 record에서 정해진다)
   // biome-ignore lint/correctness/useExhaustiveDependencies: record.round로 충분하다
-  const plan = useMemo(() => planRoulette(order), [record.round]);
+  const plan = useMemo(() => planRoulette(order, timing), [record.round]);
   const finished: RouletteFrame = {
     fixed: order,
     cursor: null,
@@ -89,10 +106,11 @@ export function DrawView({
       return;
     }
     setAnimated(true);
-    const started = clock.now();
+    const started = startedAt ?? clock.now();
     let raf = 0;
     let alive = true;
-    let last = rouletteAt(plan, 0);
+    let last = rouletteAt(plan, Math.max(0, clock.now() - started));
+    setFrame(last);
     let lastTick = -Infinity;
     const tick = () => {
       if (!alive || skipped.current) return;
@@ -174,7 +192,12 @@ export function DrawView({
       className="flex flex-col gap-4"
       aria-label={`${label ?? `${record.round}회`} 추첨`}
     >
-      <div className="flex items-center justify-between">
+      <div
+        className={cn(
+          "flex items-center justify-between",
+          embedded && "hidden",
+        )}
+      >
         <button
           type="button"
           onClick={onClose}
