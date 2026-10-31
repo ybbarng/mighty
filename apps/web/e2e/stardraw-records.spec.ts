@@ -48,7 +48,8 @@ test("내 기록: 처음 받은 서류는 띠로 알리고 건네받은 뒤 내 
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await notice.getByRole("button", { name: "보러 가기" }).click();
   const handover = page.locator("[data-record-handover]");
-  await expect(handover).toContainText("기념 서류가 도착했습니다.");
+  // 「자동」 번호가 우연히 번호 모양 서류(연속 등)도 받으면 "기념 서류 2개가"가 된다
+  await expect(handover).toContainText(/기념 서류( \d+개)?가 도착했습니다\./);
   await page.getByRole("button", { name: "받기" }).click();
   await expect(handover).toHaveCount(0, { timeout: 10_000 });
   await expect(page).toHaveURL(/\/stardraw\/mine#records$/);

@@ -206,11 +206,14 @@ export function IssuedView({
   setup,
   header,
   overlay = false,
+  goLabel = "별을 고르러 가 볼까요?",
 }: {
   services: Services;
   setup: ReturnType<typeof useAstronautSetup>;
   header?: ReactNode;
   overlay?: boolean;
+  /** 계속 단추 문구(회차 방에서는 방으로 돌아간다) */
+  goLabel?: string;
 }) {
   const key = setup.issued;
   // 출신 인사는 발급할 때 한 번 고른다(다시 그려도 바뀌지 않게)
@@ -251,7 +254,7 @@ export function IssuedView({
       onClick={setup.pocket}
       className="sd-cta rounded-2xl py-3.5 font-bold text-lg text-slate-950"
     >
-      별을 고르러 가 볼까요?
+      {goLabel}
     </button>
   );
   if (overlay)

@@ -1945,18 +1945,3 @@ button {
     }
   }
 }
-/* 방에서 등록: 빈 등록증이 은은하게 떠올라 누르기를 기다린다 */
-.sd-room-blank-card {
-  animation: sd-room-blank 2.6s ease-in-out infinite;
-}
-@keyframes sd-room-blank {
-  50% {
-    transform: translateY(-6px);
-    box-shadow: 0 10px 30px rgba(255, 220, 160, 0.12);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sd-room-blank-card {
-    animation: none;
-  }
-}

@@ -5,7 +5,9 @@ import {
   encodeSignatureData,
   fromBase64Url,
   ROOM_TEXT_MAX,
+  type RoomModAction,
   roomCharCount,
+  roomModMessage,
   roomPassMessage,
   toBase64Url,
 } from "@mighty/stardraw-core";
@@ -155,6 +157,25 @@ export class RoomClient {
 
   report(pass: string, id: string) {
     return this.post<{ count: number }>("report", { pass, id });
+  }
+
+  /** 국장 조치(말 가리기·내보내기): 조치마다 국장 패스키로 서명한다(미리 받은 값으로, 누름 처리 안에서 곧바로) */
+  async moderate(
+    signer: EntrantSigner,
+    nonce: string,
+    action: RoomModAction,
+    target: string,
+  ): Promise<void> {
+    const signature = await signer.sign(
+      roomModMessage(this.round, action, target, fromBase64Url(nonce)),
+    );
+    await this.post("moderate", {
+      pub: toBase64Url(signer.publicKey),
+      signature: encodeSignatureData(signature),
+      nonce,
+      action,
+      target,
+    });
   }
 
   /** 스트림을 연다. 끊기면 `onEnd`(다시 연결은 바깥에서) */

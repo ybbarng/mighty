@@ -1335,7 +1335,6 @@ function DrawFor({
       <RoomView
         key={round}
         services={services}
-        status={status}
         round={round}
         record={record}
         ticket={mine.find((m) => m.ticket.round === round)?.ticket}

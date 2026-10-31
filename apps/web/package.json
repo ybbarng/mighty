@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3456",
-    "build": "next build && node scripts/build-hashes.mjs",
+    "build": "next build && node scripts/drop-demo-pages.mjs && node scripts/build-hashes.mjs",
     "start": "npx serve out",
     "typecheck": "tsc -p tsconfig.json",
     "e2e": "playwright test"

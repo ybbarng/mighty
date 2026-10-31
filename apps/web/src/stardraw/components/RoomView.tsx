@@ -7,6 +7,7 @@ import {
   type EntrantSigner,
   fromBase64Url,
   type RoundRecord,
+  registrationProofMessage,
   roundTimes,
   type Ticket,
 } from "@mighty/stardraw-core";
@@ -14,28 +15,29 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "../astronaut/Avatar";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
-import type { LedgerStatus } from "../local-ledger";
+import { errorText } from "../errors";
+import { ensureRegistered, registering } from "../registrar";
 import { drawOrder } from "../results";
 import {
   ROOM_TEXT_MAX,
   RoomClient,
-  RoomError,
   type RoomEvent,
   type RoomPerson,
   type RoomPicks,
   roomCharCount,
   savedPass,
 } from "../room-client";
+import { roomPhase } from "../room-phase";
 import { LIVE_LEAD_MS, LIVE_ROULETTE_TIMING, planRoulette } from "../roulette";
 import { roundTitle } from "../round-label";
 import { type Services, serverApi } from "../services";
 import { starOf } from "../sky";
-import { IssuedView, useAstronautSetup } from "./AstronautSetup";
+import type { KeyInfo } from "../wallet";
+import { IssuedView, useAstronautSetup, WelcomeFlyer } from "./AstronautSetup";
 import { DrawView } from "./DrawView";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { formatLeft } from "./parts";
 import { SkyBoard } from "./SkyBoard";
-import { StageOverlay } from "./StageOverlay";
 
 /**
  * 회차 방(docs/36 11-23, docs/06): 밤하늘을 보러 모인 사람들. 위쪽은 밤하늘(추첨도 여기)과 진행 상태 한 줄,
@@ -68,12 +70,38 @@ const LANTERN_CLEAR_MS = 1700;
 const LANTERN_GAP = 220;
 /** 하늘 판 가장자리 여백(px) */
 const LANTERN_EDGE = 6;
+/** 풍등을 길게 누르는 시간(ms) */
+const HOLD_MS = 500;
 
 /**
  * 풍등 하나: 그 얼굴 위에서 떠오른다. 폭을 재서 하늘 판 안쪽으로 밀어 넣고(가장자리 얼굴이면 안쪽으로), 꼬리는 얼굴 쪽을 가리킨다
  */
-function LanternBubble({ lantern }: { lantern: Lantern }) {
+function LanternBubble({
+  lantern,
+  onHold,
+}: {
+  lantern: Lantern;
+  /** 길게 누름(신고·국장 조치). 없으면 누를 수 없다 */
+  onHold?: ((l: Lantern) => void) | undefined;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
+  const hold = useRef(0);
+  const press = onHold
+    ? {
+        onPointerDown: () => {
+          window.clearTimeout(hold.current);
+          hold.current = window.setTimeout(() => onHold(lantern), HOLD_MS);
+        },
+        onPointerUp: () => window.clearTimeout(hold.current),
+        onPointerLeave: () => window.clearTimeout(hold.current),
+        onPointerCancel: () => window.clearTimeout(hold.current),
+        onContextMenu: (e: React.MouseEvent) => {
+          e.preventDefault();
+          window.clearTimeout(hold.current);
+          onHold(lantern);
+        },
+      }
+    : {};
   const [place, setPlace] = useState<{ left: number; tail: number } | null>(
     null,
   );
@@ -93,7 +121,11 @@ function LanternBubble({ lantern }: { lantern: Lantern }) {
     <span
       ref={ref}
       data-lantern={lantern.from}
-      className="sd-lantern absolute w-max max-w-[calc(100%-12px)] break-keep rounded-2xl bg-amber-100/90 px-3 py-1.5 text-center text-slate-900 text-sm shadow-[0_0_24px_rgba(255,214,140,0.45)]"
+      {...press}
+      className={cn(
+        "sd-lantern absolute w-max max-w-[calc(100%-12px)] select-none break-keep rounded-2xl bg-amber-100/90 px-3 py-1.5 text-center text-slate-900 text-sm shadow-[0_0_24px_rgba(255,214,140,0.45)]",
+        onHold && "pointer-events-auto [-webkit-touch-callout:none]",
+      )}
       style={{
         left: place ? place.left : lantern.x,
         bottom: `${0.75 + lantern.lane * 2.75}rem`,
@@ -125,7 +157,6 @@ function roomClock(client: RoomClient): Clock {
 
 export function RoomView({
   services,
-  status,
   round,
   record,
   ticket,
@@ -133,7 +164,6 @@ export function RoomView({
   onEnter,
 }: {
   services: Services;
-  status: LedgerStatus;
   round: number;
   record: RoundRecord | null | undefined;
   ticket: Ticket | undefined;
@@ -306,7 +336,7 @@ export function RoomView({
   const key = services.wallet.loadKey();
   const id = useIdPresent(services);
   const [nonce, setNonce] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
+  const [registeringNow, setRegisteringNow] = useState(false);
   const [draft, setDraft] = useState("");
   const [sendNote, setSendNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -314,10 +344,7 @@ export function RoomView({
   const signerRef = useRef<EntrantSigner | null>(null);
   /** 방에서 막 등록·제시를 마쳤으면 이어서 방 입장 신분증 제시로 */
   const [continueAfterSetup, setContinueAfterSetup] = useState(false);
-  const setup = useAstronautSetup(services, () => {
-    setAsking(false);
-    setContinueAfterSetup(true);
-  });
+  const setup = useAstronautSetup(services, () => setContinueAfterSetup(true));
 
   // 등록증이 있고 표가 없으면 한 번 쓰는 값을 미리 받아 둔다(누른 그 순간 바로 패스키를 열게, 1분 30초마다 새로)
   const hasKey = key !== null;
@@ -350,16 +377,70 @@ export function RoomView({
     };
   }, [hasKey, services]);
 
-  /** 입력 칸을 누름: 표가 없으면 신분증 제시(등록증 없으면 등록 안내) */
+  /**
+   * 장부에 아직 등록이 없는 등록증(방에서 막 발급했고 아직 응모하지 않음)이면, 신분증 제시 누름 안에서 등록 증명에 서명하고
+   * 장부 등록을 올린다(docs/36 11-21: 우주인 등록은 패스키 하나, 장부 등록은 첫 응모나 방에서). 방은 등록한 우주인만
+   * 말할 수 있어서다. 패스키 창은 누름 하나에 하나만 열 수 있어 방 입장 제시는 등록이 끝난 뒤 한 번 더 누른다
+   */
+  const registerFirst = async (k: KeyInfo): Promise<"ready" | "new" | null> => {
+    const { ledger, wallet } = services;
+    if (await ledger.isRegistered(k.pub)) return "ready";
+    await registering(services, k)?.catch(() => null);
+    if (await ledger.isRegistered(k.pub)) return "ready";
+    if (!wallet.loadProof(k.pub)) {
+      const signer = signerRef.current ?? (await wallet.signerFor(k));
+      const proof = await id
+        .run(
+          () =>
+            signer.sign(
+              registrationProofMessage({
+                v: 1,
+                credentialId: k.credentialId,
+                pub: k.pub,
+              }),
+            ),
+          {
+            verb: "제시",
+            pub: k.pub,
+            tap: true,
+            done: `${residentPhrase(astronautOf(k.pub))} 님, 장부에 등록하겠습니다.`,
+          },
+        )
+        .catch((err) => {
+          setSendNote(errorText(err, "신분증을 확인"));
+          return null;
+        });
+      if (!proof) return null;
+      wallet.saveProof(k.pub, proof);
+    }
+    setRegisteringNow(true);
+    try {
+      const at = await ensureRegistered(services, k);
+      if (at === null) setSendNote("장부에 등록하지 못했습니다.");
+      return at === null ? null : "new";
+    } catch (err) {
+      setSendNote(errorText(err, "등록"));
+      return null;
+    } finally {
+      setRegisteringNow(false);
+    }
+  };
+
+  /** 입력 칸을 누름: 표가 없으면 신분증 제시(등록증 없으면 우주인 등록 신청서) */
   const ensurePass = async (): Promise<string | null> => {
     if (pass) return pass;
     if (!key) {
-      setAsking(true);
+      void setup.create();
       return null;
     }
-    // 한 번 쓰는 값과 서명자는 미리 준비해 둔다: 등록증을 누른 그 순간 사이에 기다림 없이 패스키를 연다(아이폰 사파리 누름 규칙)
+    setSendNote(null);
+    const registered = await registerFirst(key);
+    if (!registered) return null;
+    // 한 번 쓰는 값과 서명자는 미리 준비해 둔다: 등록증을 누른 그 순간 사이에 기다림 없이 패스키를 연다(아이폰 사파리 누름 규칙).
+    // 방금 장부 등록을 올렸으면 그사이 미리 받은 값이 낡았을 수 있어 새로 받는다
     const used: string =
-      nonce ?? (await client.challenge().then((c) => c.nonce));
+      (registered === "ready" ? nonce : null) ??
+      (await client.challenge().then((c) => c.nonce));
     setNonce(null);
     const signer = signerRef.current ?? (await services.wallet.signerFor(key));
     // 신분증 제시 틀(입구·응모와 같은 부품): 오버레이 → "패스키로 신분증을 제시해 주세요." → 등록증이 올라와 기다림 →
@@ -372,11 +453,7 @@ export function RoomView({
         done: `${residentPhrase(astronautOf(key.pub))} 님, 어서 오세요.`,
       })
       .catch((err) => {
-        setSendNote(
-          err instanceof RoomError
-            ? err.message
-            : "신분증을 확인하지 못했어요.",
-        );
+        setSendNote(errorText(err, "방에 들어가", "방에 들어가지 않았어요"));
         return null;
       });
     if (!got) return null;
@@ -403,9 +480,7 @@ export function RoomView({
       setDraft("");
       setSendNote(null);
     } catch (err) {
-      setSendNote(
-        err instanceof RoomError ? `${err.message}.` : "말을 보내지 못했어요.",
-      );
+      setSendNote(errorText(err, "말을 보내"));
     }
   };
 
@@ -414,23 +489,64 @@ export function RoomView({
     void client.cheer(pass, kind, to).catch(() => {});
   };
 
+  // ---------------------------------------------------------------- 신고·국장 조치
+
+  /** 길게 누른 풍등(그 말과 말한 사람). 국장이면 조치 서명에 쓸 한 번 쓰는 값을 미리 받아 둔다 */
+  const [menu, setMenu] = useState<{
+    lantern: Lantern;
+    nonce: string | null;
+  } | null>(null);
+  const director = me !== null && people.get(me)?.director === true;
+  const openMenu = (l: Lantern) => {
+    navigator.vibrate?.(15);
+    setMenu({ lantern: l, nonce: null });
+    if (director)
+      void client
+        .challenge()
+        .then((c) =>
+          setMenu((m) =>
+            m?.lantern.key === l.key ? { ...m, nonce: c.nonce } : m,
+          ),
+        )
+        .catch(() => {});
+  };
+  const report = async (l: Lantern) => {
+    setMenu(null);
+    if (!pass) return;
+    try {
+      await client.report(pass, l.id);
+      setSendNote("신고했습니다.");
+    } catch (err) {
+      setSendNote(errorText(err, "신고"));
+    }
+  };
+  const moderate = async (action: "hide" | "kick") => {
+    const m = menu;
+    const signer = signerRef.current;
+    setMenu(null);
+    if (!m?.nonce || !signer) return;
+    try {
+      await client.moderate(
+        signer,
+        m.nonce,
+        action,
+        action === "hide" ? m.lantern.id : m.lantern.from,
+      );
+    } catch (err) {
+      setSendNote(
+        errorText(
+          err,
+          action === "hide" ? "가리" : "내보내",
+          "조치하지 않았어요",
+        ),
+      );
+    }
+  };
+
   // ---------------------------------------------------------------- 진행 상태
 
-  const sec = Math.floor(now / 1000);
   const toShow = showStart - now;
-  const showEnd = showStart + showLength;
-  const phase: "open" | "closed" | "announce" | "count" | "live" | "after" =
-    sec < times.entryDeadline
-      ? "open"
-      : toShow > 15_000
-        ? "closed"
-        : toShow > 10_000
-          ? "announce"
-          : toShow > 0
-            ? "count"
-            : now < showEnd
-              ? "live"
-              : "after";
+  const phase = roomPhase(now, times.entryDeadline, showStart, showLength);
   const title = roundTitle(schedule, round);
   const statusLine =
     phase === "open"
@@ -569,7 +685,11 @@ export function RoomView({
           {lanterns
             .filter((l) => !l.hidden)
             .map((l) => (
-              <LanternBubble key={l.key} lantern={l} />
+              <LanternBubble
+                key={l.key}
+                lantern={l}
+                onHold={pass && l.from !== me ? openMenu : undefined}
+              />
             ))}
           {sparks
             .filter((s) => s.kind === "meteor")
@@ -701,8 +821,28 @@ export function RoomView({
           )}
         </form>
       )}
-      {sendNote && (
-        <p className="text-center text-rose-200 text-xs">{sendNote}</p>
+      {!closed && !hasKey && (
+        <button
+          type="button"
+          onClick={() => void setup.recover()}
+          disabled={setup.working !== null}
+          className="self-center text-sm text-white/70 underline underline-offset-2"
+        >
+          이미 등록했어요 · 신분증 제시
+        </button>
+      )}
+      {registeringNow && (
+        <p className="text-center text-white/60 text-xs">
+          {/* 장부는 응모를 받는 동안만 등록을 받는다(마감부터 추첨 몇 초 뒤 다음 회차가 열릴 때까지는 기다린다) */}
+          {services.ledger.status().phase === "open"
+            ? "장부에 우주인 등록을 올리고 있습니다."
+            : "다음 회차 응모가 열리면 장부에 우주인 등록을 올립니다."}
+        </p>
+      )}
+      {(sendNote ?? setup.error?.text) && (
+        <p className="text-center text-rose-200 text-xs">
+          {sendNote ?? setup.error?.text}
+        </p>
       )}
       {problem && (
         <p className="text-center text-white/60 text-sm">{problem}</p>
@@ -723,55 +863,73 @@ export function RoomView({
         </div>
       )}
 
-      <IdPresentView services={services} id={id} verb="제시" />
-      {asking && !setup.issued && (
-        // 등록하지 않은 사람: 우주국 말은 위, 내가 할 일(빈 등록증 누르기)은 아래. 누르면 그 자리에서 패스키로 발급.
-        // 합칠 때 main의 「우주인 등록 신청서」 부품(신청서를 밀어 올리거나 누르면 패스키 → 서명 → 위로 제출 → 등록증 발급)으로 바꾼다
-        <StageOverlay label="우주인 등록" align="center">
-          <div className="mx-auto flex min-h-dvh max-w-sm flex-col items-center justify-between px-6 pt-16 pb-12 text-center">
-            <div className="flex flex-col gap-2">
-              <p className="break-keep font-semibold text-amber-100 text-lg">
-                대화는 등록한 우주인만 할 수 있습니다.
-              </p>
-              <p className="break-keep text-amber-50/90">
-                패스키로 우주인 등록증을 발급합니다.
-              </p>
-            </div>
-            <div className="flex w-full flex-col items-center gap-4">
+      {menu && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center p-4">
+          <button
+            type="button"
+            aria-label="닫기"
+            tabIndex={-1}
+            onClick={() => setMenu(null)}
+            className="absolute inset-0 bg-slate-950/50"
+          />
+          <div
+            role="dialog"
+            aria-label="말 다루기"
+            className="relative flex w-full max-w-sm flex-col gap-2 rounded-3xl bg-slate-900 p-4 text-center"
+            data-room-menu
+          >
+            <p className="break-keep px-2 py-1 text-sm text-white/80">
+              “{menu.lantern.text}”
+            </p>
+            {director ? (
+              <>
+                <button
+                  type="button"
+                  disabled={!menu.nonce}
+                  onClick={() => void moderate("hide")}
+                  className="rounded-2xl bg-white/10 py-3 font-semibold disabled:opacity-40"
+                >
+                  가리기
+                </button>
+                <button
+                  type="button"
+                  disabled={!menu.nonce}
+                  onClick={() => void moderate("kick")}
+                  className="rounded-2xl bg-rose-500/80 py-3 font-semibold disabled:opacity-40"
+                >
+                  내보내기
+                </button>
+              </>
+            ) : (
               <button
                 type="button"
-                data-room-blank-card
-                aria-label="우주인 등록증 발급"
-                onClick={() => void setup.create()}
-                disabled={setup.working !== null}
-                className="sd-room-blank-card grid aspect-[1.6] w-full max-w-xs place-items-center rounded-2xl border border-white/25 border-dashed bg-white/5 text-white/70"
+                onClick={() => void report(menu.lantern)}
+                className="rounded-2xl bg-white/10 py-3 font-semibold"
               >
-                <span className="font-semibold">우주인 등록증</span>
+                신고
               </button>
-              <button
-                type="button"
-                onClick={() => void setup.recover()}
-                disabled={setup.working !== null}
-                className="text-sm text-white/75 underline underline-offset-2"
-              >
-                이미 등록했어요 · 신분증 제시
-              </button>
-              <button
-                type="button"
-                onClick={() => setAsking(false)}
-                className="text-white/50 text-xs"
-              >
-                돌아가기
-              </button>
-              {setup.error && (
-                <p className="text-rose-200 text-xs">{setup.error.text}</p>
-              )}
-            </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setMenu(null)}
+              className="py-2 text-sm text-white/60"
+            >
+              닫기
+            </button>
           </div>
-        </StageOverlay>
+        </div>
       )}
-      <IssuedView services={services} setup={setup} overlay />
-      <IdPresentView services={services} id={setup.id} verb="제시" />
+      <IdPresentView services={services} id={id} />
+      {/* 등록하지 않은 사람: 입력 칸을 누르면 첫 화면 입구와 같은 「우주인 등록 신청서」, 다른 기기에서 등록했으면 신분증 제시 */}
+      <WelcomeFlyer services={services} setup={setup} />
+      {setup.issued && (
+        <IssuedView
+          services={services}
+          setup={setup}
+          overlay
+          goLabel="방으로 돌아가기"
+        />
+      )}
     </section>
   );
 }
