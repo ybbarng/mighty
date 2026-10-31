@@ -16,24 +16,28 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { BackToGames } from "@/components/BackToGames";
 import { useNoPullRefresh } from "@/game/no-pull-refresh";
+import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
 import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 import { track } from "@/stats/track";
 import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
+import { FX } from "../fx-timing";
 import type { LedgerStatus } from "../local-ledger";
 import { passkeyProblem } from "../passkey-env";
 import { ensureRegistered } from "../registrar";
 import { myRank, prizeEligible, RANK_RULE, winnerCounts } from "../results";
 import { roundShort, roundTitle } from "../round-label";
-import { GAME_NS, type Services, useLedger } from "../services";
+import { DEMO_NS, GAME_NS, type Services, useLedger } from "../services";
 import { NOTHING_SEALED, type Sealed, sealedFor } from "../spoiler";
 import type { KeyInfo, MyTicket } from "../wallet";
+import { IssuedView, useAstronautSetup, WelcomeFlyer } from "./AstronautSetup";
 import { CheckLink } from "./CheckLink";
 import { DrawnNotice } from "./DrawnNotice";
 import { DrawView } from "./DrawView";
-import { EnterView } from "./EnterView";
+import { EnterView, KeySetup, usePasskeyEnv } from "./EnterView";
 import { GameIntro } from "./GameIntro";
+import { IdPresentView, useIdPresent } from "./IdPresent";
 import { Inbox } from "./Inbox";
 import {
   DrawFirst,
@@ -45,6 +49,10 @@ import {
   shortId,
 } from "./parts";
 import { Receipt } from "./Receipt";
+import { ReceiptPrint } from "./ReceiptPrint";
+import { SkyBoard } from "./SkyBoard";
+import { useReducedMotion } from "./StageOverlay";
+import { type NavTarget, TabBar, useWideScreen } from "./StardrawNav";
 import { StatsView } from "./StatsView";
 import { ticketUrl } from "./TicketView";
 import { WinNotice } from "./WinNotice";
@@ -138,8 +146,6 @@ function viewOf(page: StardrawPage, hash: string): View {
   return { name: "home" };
 }
 
-/** 막 응모해 영수증이 인쇄되어 나오는 중인 응모권(한 번만 연출한다) */
-let printingId: string | null = null;
 /** 이번 방문에서 별 따기 화면 사이를 옮겨 다녔는지(아니면 "돌아가기"가 사이트 밖으로 나가지 않게 정한 화면으로) */
 let navigated = false;
 
@@ -160,12 +166,16 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
   const [opened, setOpened] = useState<Set<number>>(new Set());
   /** 추첨이 끝났다는 알림 띠를 닫은 회차 */
   const [noticeClosed, setNoticeClosed] = useState<Set<number>>(new Set());
-  // 응모 화면에서 영수증 주소로 옮겨 오며 넘긴 "인쇄 중" 표시는 이 페이지가 열릴 때 한 번만 받는다
-  const [printing] = useState(() => {
-    const id = printingId;
-    printingId = null;
-    return id;
-  });
+  /** 메뉴의 내 등록증 칸에 쓸 이 기기 등록증 */
+  const [navKey, setNavKey] = useState<KeyInfo | null>(null);
+  useEffect(() => {
+    if (view.name !== "receipt") setPrinting(null);
+  }, [view.name]);
+  /**
+   * 막 응모해 영수증이 인쇄되어 나오는 중인 응모권(한 번만 연출한다). 화면을 옮겨도 이 부품은 그대로라(go)
+   * 처음 만들 때 한 번 읽던 값으로는 연출이 나오지 않았다. 응모가 끝날 때 정하고, 영수증을 떠나면 지운다
+   */
+  const [printing, setPrinting] = useState<string | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 장부가 바뀔 때 다시 읽는다
   useEffect(() => {
@@ -174,6 +184,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
     setLoaded(true);
     setOpened(services.wallet.openedRounds());
     setNoticeClosed(services.wallet.noticeClosedRounds());
+    setNavKey(services.wallet.loadKey());
   }, [version, services]);
 
   // 뒤로가기·앞으로가기로 # 조각이 바뀌면 그 화면으로
@@ -245,12 +256,41 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
       go({ name: "receipt", id: toHex(ticketId(enteredNow.ticket)) }, true);
   }, [enteredNow]);
 
+  // 응모·추첨은 하던 일에 집중하게 탭바를 숨긴다
+  // 마우스로 쓰는 넓은 화면은 위쪽 메뉴 줄(탭바 대신)이라 위에 자리를 둔다
+  const wide = useWideScreen();
+  const showNav =
+    !!services && !!status && view.name !== "enter" && view.name !== "draw";
+  const navActive: NavTarget | null =
+    view.name === "home"
+      ? "home"
+      : view.name === "mine" || view.name === "receipt"
+        ? "mine"
+        : view.name === "rounds" || view.name === "round"
+          ? "rounds"
+          : view.name === "stats"
+            ? "stats"
+            : null;
+  const onNav = (t: NavTarget) => {
+    if (t !== navActive || view.name !== t) go({ name: t });
+  };
   return (
     <main
       data-game="stardraw"
-      className="sd-night min-h-dvh px-4 pt-6 pb-12 text-white"
+      className={cn(
+        "sd-night min-h-dvh px-4 pt-6 text-white",
+        !showNav ? "pb-12" : wide ? "pt-20 pb-12" : "pb-28",
+      )}
     >
-      <div className="mx-auto flex max-w-xl flex-col gap-5">
+      {showNav && services && (
+        <TabBar
+          services={services}
+          keyInfo={navKey}
+          active={navActive}
+          onGo={onNav}
+        />
+      )}
+      <div className="sd-wide mx-auto flex max-w-xl flex-col gap-5">
         {services && (
           <DrawnNotice
             rounds={noticeRounds}
@@ -279,7 +319,7 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
               void refresh();
               // 응모 화면 기록을 영수증으로 바꾼다: 뒤로가기는 응모 전 화면으로
               const id = toHex(ticketId(ticket));
-              printingId = id;
+              setPrinting(id);
               go({ name: "receipt", id }, true);
             }}
           />
@@ -314,6 +354,14 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
               round={view.round}
               mine={mine}
               seen={opened.has(view.round)}
+              onSkip={
+                services.practice
+                  ? async () => {
+                      await services.practice?.skipToNextDraw();
+                      await refresh();
+                    }
+                  : null
+              }
               onEnter={() => {
                 // 결과를 봤으니 첫 화면 봉투에서 빠진다
                 services.wallet.markOpened(view.round);
@@ -321,8 +369,11 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
                 go({ name: "enter" });
               }}
               onClose={() => {
-                services.wallet.markOpened(view.round);
-                setOpened(services.wallet.openedRounds());
+                // 결과가 나오기 전에 나가면 "열어 봄"을 남기지 않는다(정답 가리기가 풀리지 않게)
+                if (services.ledger.record(view.round)) {
+                  services.wallet.markOpened(view.round);
+                  setOpened(services.wallet.openedRounds());
+                }
                 back({ name: "home" });
               }}
             />
@@ -429,7 +480,6 @@ export function Home({
   /** 연습 장부일 때만(서버 장부는 시간을 건너뛸 수 없다) */
   onSkip: (() => Promise<void>) | null;
 }) {
-  const [skipping, setSkipping] = useState(false);
   // 이 기기의 등록증(첫 그리기 뒤에 읽는다: 서버에서 그린 화면과 어긋나지 않게)
   const [key, setKey] = useState<KeyInfo | null | undefined>(undefined);
   useEffect(() => {
@@ -439,14 +489,43 @@ export function Home({
     if (found && services.ns === GAME_NS)
       void ensureRegistered(services, found).catch(() => {});
   }, [services]);
+  // 처음 온 사람(이 기기에 등록증이 없음)의 입구: 우주인 등록이나 신분증 제시. 등록하면 바로 별 고르기로
+  const setup = useAstronautSetup(services, (k, how) => {
+    setKey(k);
+    if (how === "created") onEnter();
+  });
+  const env = usePasskeyEnv();
+  const reduce = useReducedMotion();
   // 결과 봉투: 추첨이 끝났는데 아직 열어 보지 않은 내 응모권(가장 최근 것)
   const sealed = sealedFor(mine, opened, services.ledger);
+
+  // 발급한 등록증: 움직임 줄이기면 입구 대신, 아니면 입구 위 화면 전체 오버레이로
+  if (setup.issued && reduce)
+    return (
+      <IssuedView services={services} setup={setup} header={<BackToGames />} />
+    );
+  if (key === null)
+    return (
+      <>
+        {setup.issued && (
+          <IssuedView services={services} setup={setup} overlay />
+        )}
+        <Gate
+          services={services}
+          status={status}
+          env={env}
+          setup={setup}
+          onSkip={onSkip}
+        />
+      </>
+    );
   const envelope = mine
     .filter((m) => sealed(m.ticket.round))
     .sort((a, b) => b.ticket.round - a.ticket.round)[0];
 
   return (
     <>
+      <WelcomeFlyer services={services} setup={setup} />
       <header className="flex flex-col gap-4">
         <BackToGames />
         <StardrawTitle />
@@ -490,57 +569,97 @@ export function Home({
         sealed={sealed}
       />
 
-      {mine.length > 0 && (
-        <button
-          type="button"
-          onClick={onMine}
-          className="sd-glass flex items-center justify-between rounded-2xl px-4 py-3 text-left"
-        >
-          <span className="font-semibold">내 응모</span>
-          <span className="text-sm text-white/60 tabular-nums">
-            {mine.length}장 →
-          </span>
-        </button>
-      )}
+      {onSkip && <PracticeSkip onSkip={onSkip} />}
+    </>
+  );
+}
 
-      {onSkip && (
-        <button
-          type="button"
-          disabled={skipping}
-          onClick={async () => {
-            setSkipping(true);
-            try {
-              await onSkip();
-            } finally {
-              setSkipping(false);
-            }
-          }}
-          className="self-center rounded-lg border border-white/15 border-dashed px-3 py-1.5 text-sm text-white/60 hover:bg-white/10 disabled:opacity-50"
-        >
-          {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
-        </button>
-      )}
+/** 연습 장부에서 다음 추첨까지 건너뛰기(서버 장부는 시간을 건너뛸 수 없다) */
+function PracticeSkip({ onSkip }: { onSkip: () => Promise<void> }) {
+  const [skipping, setSkipping] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={skipping}
+      onClick={async () => {
+        setSkipping(true);
+        try {
+          await onSkip();
+        } finally {
+          setSkipping(false);
+        }
+      }}
+      className="self-center rounded-lg border border-white/15 border-dashed px-3 py-1.5 text-sm text-white/60 hover:bg-white/10 disabled:opacity-50"
+    >
+      {skipping ? "건너뛰고 있습니다" : "연습: 다음 추첨까지 건너뛰기"}
+    </button>
+  );
+}
 
-      <nav
-        aria-label="더 보기"
-        className="flex justify-center gap-5 pt-2 text-sm text-white/60"
+/**
+ * 처음 온 사람의 입구(2026-10-31 사용자): 카노푸스 우주국 인사 → 제목 → 정답 예시 하늘 → 지금 회차 한 줄 → 등록·제시.
+ * 단추는 둘이다. 브라우저는 묻기 전에는 이 사람에게 패스키가 있는지 알 수 없어, 한 단추로 "제시"부터 하면
+ * 처음 온 사람에게 다른 기기 QR 같은 엉뚱한 창이 뜬다. 그래서 큰 「우주인 등록」과 작은 「신분증 제시」
+ */
+export function Gate({
+  services,
+  status: s,
+  env,
+  setup,
+  onSkip,
+}: {
+  services: Services;
+  status: LedgerStatus;
+  env: ReturnType<typeof usePasskeyEnv>;
+  setup: ReturnType<typeof useAstronautSetup>;
+  onSkip: (() => Promise<void>) | null;
+}) {
+  const name = roundShort(services.ledger.schedule, s.round);
+  const open = s.phase === "open";
+  return (
+    <>
+      <header className="flex flex-col gap-4">
+        <BackToGames />
+      </header>
+      <section
+        aria-label="카노푸스 우주국 안내"
+        data-gate
+        className="sd-glass flex flex-col gap-2 rounded-3xl px-5 py-5 break-keep text-[15px] leading-relaxed"
       >
-        {[
-          ["설명", "/stardraw/about"],
-          ["배우기", "/stardraw/learn"],
-          ["검증", "/stardraw/verify"],
-          ["소속", "/stardraw/qualify"],
-          ["데모", "/stardraw/demo"],
-        ].map(([label, href]) => (
-          <a
-            key={href}
-            href={href}
-            className="underline-offset-4 hover:text-white hover:underline"
-          >
-            {label}
-          </a>
-        ))}
-      </nav>
+        <p className="font-semibold text-amber-100">
+          안녕하세요, 카노푸스 우주국입니다.
+        </p>
+        <p className="text-white/85">
+          하늘의 별 따기는 등록한 우주인만 참여할 수 있습니다. 새로
+          등록하시거나, 이미 등록하셨다면 신분증을 제시해 주세요.
+        </p>
+      </section>
+      <StardrawTitle />
+      <GameIntro />
+      <p
+        className="flex items-center justify-center gap-2.5 text-sm tabular-nums"
+        data-gate-round={s.round}
+      >
+        <span
+          aria-hidden="true"
+          className="sd-live-dot"
+          data-live={open ? "open" : "drawing"}
+        />
+        {open
+          ? `지금 ${name} 응모를 받고 있어요 · 마감까지 ${formatLeft(s.times.entryDeadline - s.now)}`
+          : `${name} 응모를 마감했어요.`}
+      </p>
+      <KeySetup
+        gate
+        demo={services.ns === DEMO_NS}
+        env={env}
+        working={setup.working}
+        note={setup.note}
+        error={setup.error}
+        onCreate={() => void setup.create()}
+        onRecover={() => void setup.recover()}
+      />
+      {onSkip && <PracticeSkip onSkip={onSkip} />}
     </>
   );
 }
@@ -593,7 +712,7 @@ const CLOCK = new Intl.DateTimeFormat("ko-KR", {
  * 열지 않은 결과 → 「추첨 보기」, 응모 전 → 마감까지 + 「별 6개 고르기」, 응모함 → 추첨까지 + 고른 별 + 「영수증」,
  * 마감 뒤 추첨 전 → 추첨까지. 지금 아닌 시계는 작게
  */
-function RoundCard({
+export function RoundCard({
   services,
   status: s,
   mine,
@@ -659,15 +778,56 @@ function RoundCard({
 
   const bigLabel = closed || ticket ? "추첨까지" : "마감까지";
   const big = closed || ticket ? drawAt - s.now : s.times.entryDeadline - s.now;
+  const state = closed ? "drawing" : ticket ? "entered" : "open";
+  const name = roundShort(schedule, round);
   return (
     <section
       aria-label="이번 회차"
-      data-card={closed ? "drawing" : ticket ? "entered" : "open"}
-      className="sd-glass flex flex-col items-center gap-4 rounded-3xl px-5 py-6 text-center"
+      data-card={state}
+      className={cn(
+        "sd-glass sd-live-card flex flex-col items-center gap-4 rounded-3xl px-5 py-6 text-center",
+      )}
+      data-live={state}
     >
-      <span className="font-bold text-lg tabular-nums" data-round-state>
-        {roundShort(schedule, round)} {closed ? "마감" : "응모 중"}
+      {/* 지금 이 회차가 살아 있다는 표시: 맥박 점과 한 문장(2026-10-31 사용자: "응모 중"이 눈에 띄지 않았다) */}
+      <span
+        className="flex items-center gap-2.5 break-keep font-bold text-lg tabular-nums"
+        data-round-state
+      >
+        <span aria-hidden="true" className="sd-live-dot" data-live={state} />
+        {state === "open"
+          ? `지금 ${name} 응모를 받고 있어요.`
+          : state === "entered"
+            ? `${name}에 응모했어요.`
+            : `${name} 응모를 마감했어요.`}
       </span>
+      {/*
+        창구 말 한 줄(상태 × 내 응모 여부, 2026-10-31 사용자):
+        응모 중·안 함 "아직 이번 회차에 응모하지 않으셨어요." / 응모 중·함 "추첨이 끝나면 이 자리에서 알려 드릴게요."
+        응모함·마감 카드는 모두 「추첨 보러 가기」로 이끈다(2026-10-31 사용자):
+        응모 중·함 "(추첨 시각) 추첨을 함께 지켜봐 주세요." / 마감·함 "곧 추첨이 시작됩니다. 추첨을 보러 갈까요?" /
+        마감·안 함 "추첨은 누구나 볼 수 있어요. 추첨을 보러 갈까요?" + 아래 작은 줄에 다음 회차 응모 시각
+      */}
+      <p
+        className="-mt-2 break-keep text-sm text-white/70"
+        data-round-note={
+          closed
+            ? ticket
+              ? "closed-entered"
+              : "closed-none"
+            : ticket
+              ? "open-entered"
+              : "open-none"
+        }
+      >
+        {!closed
+          ? ticket
+            ? `${clockOf(drawAt)} 추첨을 함께 지켜봐 주세요.`
+            : "아직 이번 회차에 응모하지 않으셨어요."
+          : ticket
+            ? "곧 추첨이 시작됩니다. 추첨을 보러 갈까요?"
+            : "추첨은 누구나 볼 수 있어요. 추첨을 보러 갈까요?"}
+      </p>
       <div className="flex flex-col items-center gap-0.5">
         <span className="text-sm text-white/60">{bigLabel}</span>
         <span
@@ -682,12 +842,22 @@ function RoundCard({
       </div>
       {ticket ? (
         <div className="flex w-full flex-col items-center gap-3">
-          <span className="font-semibold text-amber-100">응모 완료</span>
-          <span className="flex flex-wrap justify-center gap-1">
-            {ticket.ticket.numbers.map((n) => (
-              <LottoBall key={n} n={n} size="sm" />
-            ))}
-          </span>
+          <div className="flex flex-col items-center gap-1.5" data-my-stars>
+            <span className="text-white/60 text-xs">내 별</span>
+            <span className="flex flex-wrap justify-center gap-1">
+              {ticket.ticket.numbers.map((n) => (
+                <LottoBall key={n} n={n} size="sm" />
+              ))}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDraw(round)}
+            data-go-draw={round}
+            className="sd-cta w-full max-w-xs rounded-2xl py-3.5 font-black text-lg text-slate-950"
+          >
+            추첨 보러 가기
+          </button>
           <button
             type="button"
             onClick={() => onReceipt(ticket)}
@@ -696,20 +866,29 @@ function RoundCard({
             영수증
           </button>
         </div>
+      ) : !closed ? (
+        <button
+          type="button"
+          onClick={onEnter}
+          className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
+        >
+          별 6개 고르기
+        </button>
       ) : (
-        !closed && (
-          <button
-            type="button"
-            onClick={onEnter}
-            className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
-          >
-            별 6개 고르기
-          </button>
-        )
+        <button
+          type="button"
+          onClick={() => onDraw(round)}
+          data-go-draw={round}
+          className="sd-cta w-full max-w-xs rounded-2xl py-3.5 font-black text-lg text-slate-950"
+        >
+          추첨 보러 가기
+        </button>
       )}
       <span className="text-white/50 text-xs tabular-nums">
         {closed
-          ? `추첨 ${clockOf(drawAt)}`
+          ? ticket
+            ? `추첨 ${clockOf(drawAt)}`
+            : `다음 회차는 ${clockOf(drawAt)}부터 응모할 수 있어요.`
           : ticket
             ? `마감 ${clockOf(s.times.closesAt)} · 응모 ${s.entries}장`
             : `추첨 ${clockOf(drawAt)} · 응모 ${s.entries}장`}
@@ -826,6 +1005,9 @@ function ReceiptView({
   onMine: () => void;
 }) {
   const record = services.ledger.record(mine.ticket.round);
+  // 막 응모했으면 영수증 발급 연출(오버레이)이 끝난 뒤 이 영수증 화면이 드러난다
+  const reduce = useReducedMotion();
+  const [printed, setPrinted] = useState(false);
   return (
     <section className="flex flex-col gap-4" aria-label="응모권">
       <button
@@ -840,6 +1022,17 @@ function ReceiptView({
           응모했습니다
         </p>
       )}
+      {printing && !reduce && !printed && (
+        <ReceiptPrint
+          ticket={mine.ticket}
+          receivedAt={mine.receivedAt}
+          schedule={services.ledger.schedule}
+          record={record}
+          sealed={sealed}
+          continued
+          onDone={() => setPrinted(true)}
+        />
+      )}
       <Receipt
         ticket={mine.ticket}
         receivedAt={mine.receivedAt}
@@ -847,16 +1040,8 @@ function ReceiptView({
         record={record}
         sealed={sealed}
         onDraw={() => onDraw(mine.ticket.round)}
-        printing={printing}
       />
       <ShareTicket services={services} ticket={mine.ticket} />
-      <button
-        type="button"
-        onClick={onMine}
-        className="rounded-2xl border border-white/20 py-2.5 font-semibold text-sm hover:bg-white/10"
-      >
-        내 응모
-      </button>
       {record && !sealed && (
         <button
           type="button"
@@ -928,6 +1113,7 @@ function DrawFor({
   seen,
   onClose,
   onEnter,
+  onSkip,
 }: {
   services: Services;
   status: LedgerStatus;
@@ -937,10 +1123,23 @@ function DrawFor({
   seen: boolean;
   onClose: () => void;
   onEnter: () => void;
+  /** 연습 장부일 때만: 다음 추첨까지 건너뛰기 */
+  onSkip: (() => Promise<void>) | null;
 }) {
   const record = services.ledger.record(round);
   const [replays, setReplays] = useState(0);
-  if (!record) return null;
+  // 아직 결과가 없는 회차: 남은 시간을 보이며 기다리다가 결과가 들어오는 순간 추첨 연출을 시작한다
+  if (!record)
+    return (
+      <DrawWait
+        services={services}
+        status={status}
+        round={round}
+        ticket={mine.find((m) => m.ticket.round === round)?.ticket}
+        onClose={onClose}
+        onSkip={onSkip}
+      />
+    );
   const canEnter =
     status.phase === "open" &&
     status.round > round &&
@@ -957,6 +1156,79 @@ function DrawFor({
       clock={services.clock}
       label={roundTitle(services.ledger.schedule, round)}
     />
+  );
+}
+
+/**
+ * 추첨을 기다리는 화면(「추첨 보러 가기」로 결과 전에 들어왔을 때, 실시간 추첨의 첫걸음). 그 회차 하늘(내 별이 있으면
+ * 표시)과 추첨까지 남은 시간. 장부를 매초 다시 읽으므로 결과가 들어오는 순간 DrawFor가 추첨 연출로 바꾼다.
+ * 추첨 시각이 지났는데 아직 결과가 없으면(드랜드 값을 받는 중) 그렇게 알린다
+ */
+function DrawWait({
+  services,
+  status,
+  round,
+  ticket,
+  onClose,
+  onSkip,
+}: {
+  services: Services;
+  status: LedgerStatus;
+  round: number;
+  ticket: Ticket | undefined;
+  onClose: () => void;
+  onSkip: (() => Promise<void>) | null;
+}) {
+  const schedule = services.ledger.schedule;
+  const drawAt = drandTime(
+    drandRoundForClose(roundTimes(schedule, round).closesAt),
+  );
+  const left = drawAt - status.now;
+  return (
+    <section
+      aria-label={`${roundTitle(schedule, round)} 추첨`}
+      data-draw-wait={round}
+      className="flex flex-col gap-4"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="self-start text-sm text-white/70 hover:text-white"
+      >
+        ← 돌아가기
+      </button>
+      <h2 className="text-center font-bold text-xl">
+        {roundTitle(schedule, round)} 추첨
+      </h2>
+      <SkyBoard
+        state={{
+          mode: "draw",
+          picked: ticket ? ticket.numbers : [],
+          focus: null,
+          lit: [],
+          bonus: null,
+        }}
+        label={`${roundTitle(schedule, round)} 추첨을 기다리는 하늘`}
+      />
+      <div className="flex flex-col items-center gap-0.5" role="status">
+        {left > 0 ? (
+          <>
+            <span className="text-sm text-white/60">추첨까지</span>
+            <span className="font-bold font-mono text-5xl text-amber-100 tabular-nums tracking-tight">
+              {formatLeft(left)}
+            </span>
+            <span className="mt-1 text-white/50 text-xs tabular-nums">
+              추첨 {clockOf(drawAt)}
+            </span>
+          </>
+        ) : (
+          <span className="break-keep text-white/75">
+            하늘에서 추첨 결과를 받고 있습니다.
+          </span>
+        )}
+      </div>
+      {onSkip && <PracticeSkip onSkip={onSkip} />}
+    </section>
   );
 }
 
@@ -992,23 +1264,6 @@ export function MineView({
         <h2 className="font-bold text-lg">내 응모</h2>
         <span className="w-16" />
       </div>
-      {key && (
-        <a
-          href={services.ns === GAME_NS ? "/stardraw/id" : undefined}
-          data-my-name
-          className="sd-glass flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
-        >
-          <span className="flex flex-col">
-            <span className="font-semibold">
-              {astronautOf(key.pub).name} 우주인
-            </span>
-            <span className="font-mono text-white/55 text-xs tabular-nums">
-              {astronautOf(key.pub).number}
-            </span>
-          </span>
-          {services.ns === GAME_NS && <span className="text-white/60">→</span>}
-        </a>
-      )}
       <WinNotice
         services={services}
         tickets={mine.map((m) => m.ticket)}
@@ -1115,11 +1370,17 @@ function RecoverKey({
     "idle" | "working" | "missing" | "cancelled" | "error"
   >("idle");
   const [message, setMessage] = useState<string | null>(null);
+  /** 내 응모 되찾기도 신분증 제시 틀(단추를 누르자마자 패스키) */
+  const idp = useIdPresent(services);
   const find = async () => {
     setState("working");
     try {
-      const key = await services.wallet.recoverPasskey((id) =>
-        services.ledger.passkeyPub(id),
+      const key = await idp.run(
+        () =>
+          services.wallet.recoverPasskey((id) =>
+            services.ledger.passkeyPub(id),
+          ),
+        { verb: "제시", pub: (k) => k.pub, hold: FX.idHoldSubmit },
       );
       if (!key) {
         setState("missing");
@@ -1145,6 +1406,7 @@ function RecoverKey({
   };
   return (
     <div className="flex flex-col items-center gap-2 text-sm">
+      <IdPresentView services={services} id={idp} verb="제시" />
       <button
         type="button"
         disabled={state === "working"}
