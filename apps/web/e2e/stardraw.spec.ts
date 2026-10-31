@@ -1146,34 +1146,29 @@ async function bounceAndKeep(page: Page) {
 }
 
 /**
- * 마감을 넘겨 반송된 용지를 보관하면 추첨을 보러 갈지 묻고, 다음 회차가 열리면 회차 카드에 「보관한 용지로 응모하기」와
- * 「새로 고르기」가 함께 있다. 보관한 용지로 내면 새 회차 용지에 칸이 옮겨 적히고 다시 서명해 접수된다.
- * 반송은 내 응모에 남지 않고, 낸 뒤에는 보관한 용지가 사라진다
+ * 마감을 넘겨 반송된 용지를 보관하면 추첨을 보러 갈지 묻는다. 다음 회차가 열리면 어느 입구(추첨 화면의 「다음 회차
+ * 응모」, 회차 카드의 「별 6개 고르기」)로 들어와도 응모 페이지 하늘 위에 보관한 용지 칸이 있고, 「이 용지로 응모」면
+ * 새 회차로 다시 서명해 접수된다. 반송은 내 응모에 남지 않고, 낸 뒤에는 보관한 용지가 사라진다
  */
-test("반송된 용지 보관: 추첨 보러 가기, 다음 회차 카드에서 보관한 용지로 응모", async ({
+test("반송된 용지 보관: 추첨 화면에서 다음 회차 응모로 들어와 이 용지로 응모", async ({
   page,
 }, info) => {
   test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
-  const card = await bounceAndKeep(page);
+  await bounceAndKeep(page);
   await page.getByRole("button", { name: "추첨 보러 가기" }).click();
   await expect(page).toHaveURL(/\/stardraw\/rounds#draw-1$/);
-  // 1회 추첨(마감 5분 뒤 13:00)이 끝나 2회가 열리면 첫 화면 회차 카드에 두 단추
+  // 1회 추첨(마감 5분 뒤 13:00)이 끝나 2회가 열리면 추첨 결과 아래 「다음 회차 응모」
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.clock.setSystemTime(new Date("2026-11-02T04:00:30Z"));
-  // 새로고침하면 시험 시계가 처음으로 돌아가 앱 안에서 옮겨 다닌다
-  await page.getByRole("button", { name: "← 돌아가기" }).click();
-  const kept = page.locator("[data-kept]");
-  await expect(kept).toContainText("보관한 용지(1회)", { timeout: 30_000 });
-  await expect(kept.getByRole("button", { name: "새로 고르기" })).toBeVisible();
-  await kept.getByRole("button", { name: "보관한 용지로 응모하기" }).click();
-  await expect(
-    page.getByRole("group", { name: "2회 응모 용지" }).locator("[data-marked]"),
-  ).toHaveCount(6, { timeout: 30_000 });
   await page
-    .locator("[aria-label='용지 제출'][aria-disabled='false']")
-    .press("Enter", { timeout: 10_000 });
-  await card.press("Enter", { timeout: 10_000 });
+    .getByRole("button", { name: "다음 회차 응모" })
+    .click({ timeout: 30_000 });
+  const kept = page.getByRole("region", { name: "보관한 용지" });
+  await expect(kept).toContainText("보관한 용지(1회)");
+  await kept.getByRole("button", { name: "이 용지로 응모" }).click();
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
   // 반송된 1회 용지는 내 응모에 남지 않고 다시 낸 2회 하나만, 보관한 용지는 사라진다
+  // (새로고침하면 시험 시계가 처음으로 돌아가 앱 안에서 옮겨 다닌다)
   await page.getByRole("button", { name: "내 응모", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "내 응모" }).getByRole("listitem"),
@@ -1183,21 +1178,27 @@ test("반송된 용지 보관: 추첨 보러 가기, 다음 회차 카드에서 
     "data-round-note",
     "open-entered",
   );
-  await expect(page.locator("[data-kept]")).toHaveCount(0);
+  await expect(page.locator("[data-kept-note]")).toHaveCount(0);
 });
 
-/** 보관한 용지가 있어도 「새로 고르기」로 평소처럼 응모할 수 있고, 응모를 마치면 보관한 용지는 저절로 버려진다 */
-test("반송된 용지 보관: 새로 고르기로 응모하면 보관한 용지가 사라진다", async ({
+/**
+ * 회차 카드는 「별 6개 고르기」 하나에 "보관한 용지가 있어요."만 알린다. 응모 페이지에서 보관한 용지를 두고 하늘에서
+ * 새로 골라 내면, 응모가 접수된 뒤 보관한 용지는 저절로 버려진다
+ */
+test("반송된 용지 보관: 회차 카드로 들어와 새로 고르면 보관한 용지가 사라진다", async ({
   page,
 }, info) => {
   test.skip(info.project.name !== "phone-portrait", "휴대폰 세로 한 크기로");
   await bounceAndKeep(page);
   await page.getByRole("button", { name: "첫 화면으로" }).click();
   await page.clock.setSystemTime(new Date("2026-11-02T04:00:30Z"));
-  const kept = page.locator("[data-kept]");
-  await expect(kept).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("[data-kept-note]")).toHaveText(
+    "보관한 용지가 있어요.",
+    { timeout: 30_000 },
+  );
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await kept.getByRole("button", { name: "새로 고르기" }).click();
+  await page.getByRole("button", { name: "별 6개 고르기" }).click();
+  await expect(page.getByRole("region", { name: "보관한 용지" })).toBeVisible();
   await page.getByRole("button", { name: "자동", exact: true }).click();
   await page.getByRole("button", ENTER).click();
   await expect(page.locator("[data-receipt]")).toBeVisible({ timeout: 30_000 });
@@ -1206,7 +1207,7 @@ test("반송된 용지 보관: 새로 고르기로 응모하면 보관한 용지
     "data-round-note",
     "open-entered",
   );
-  await expect(page.locator("[data-kept]")).toHaveCount(0);
+  await expect(page.locator("[data-kept-note]")).toHaveCount(0);
 });
 
 test("등록증 끌기: 가로는 민 방향으로 뒤집고 못 넘기면 제자리, 세로는 기울기만, 단추는 그대로", async ({

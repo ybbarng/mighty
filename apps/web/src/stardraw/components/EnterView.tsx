@@ -17,7 +17,7 @@ import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { closedAt, errorText } from "../errors";
 import { FX } from "../fx-timing";
 import { greetNow } from "../greeting";
-import { clearKept, type KeptPaper, saveKept } from "../kept-paper";
+import { clearKept, type KeptPaper, loadKept, saveKept } from "../kept-paper";
 import type { LedgerStatus } from "../local-ledger";
 import {
   inAppBrowser,
@@ -48,7 +48,7 @@ import {
 import { BounceSlip, ErrorStage, HurryNotice, kstClock } from "./EntryDeadline";
 import { IdPresentView, useIdPresent } from "./IdPresent";
 import { KeyIcon } from "./PasskeyHelp";
-import { StardrawTitle, StarInfo } from "./parts";
+import { LottoBall, StardrawTitle, StarInfo } from "./parts";
 import { SkyBoard } from "./SkyBoard";
 import { StageOverlay, useReducedMotion } from "./StageOverlay";
 
@@ -101,7 +101,6 @@ export function EnterView({
   onBack,
   initialPicked = [],
   extra,
-  kept,
   onWatchDraw,
 }: {
   services: Services;
@@ -112,14 +111,18 @@ export function EnterView({
   initialPicked?: readonly number[];
   /** 데모: 번호 칸 위에 더 둘 도구 */
   extra?: ReactNode;
-  /** 「보관한 용지로 응모하기」: 들어오자마자 돌려받은 용지를 새 회차 용지에 옮겨 적어 낸다 */
-  kept?: KeptPaper | null | undefined;
   /** 반송 뒤 「추첨 보러 가기」: 반송된 회차의 추첨 화면으로 */
   onWatchDraw?: ((round: number) => void) | undefined;
 }) {
-  const [picked, setPicked] = useState<number[]>(
-    kept ? [...kept.numbers] : [...initialPicked],
-  );
+  const [picked, setPicked] = useState<number[]>([...initialPicked]);
+  /**
+   * 보관한 용지(반송된 용지). 응모의 입구는 하나라 이 페이지에서 고른다(2026-11-01 사용자): 하늘 위 칸의
+   * 「이 용지로 응모」면 새 회차 용지로 옮겨 적어 내고, 하늘에서 새로 고르면 새로 고르기. 첫 그리기 뒤에 읽는다
+   */
+  const [kept, setKept] = useState<KeptPaper | null>(null);
+  useEffect(() => {
+    setKept(loadKept(services.ns, services.ledger.id()));
+  }, [services]);
   const [focus, setFocus] = useState<number | null>(null);
   /** 6개를 다 고른 뒤 또 누른 횟수: 응모권 칸이 짧게 흔들린다(글 없이) */
   const [nudges, setNudges] = useState(0);
@@ -403,17 +406,9 @@ export function EnterView({
   /** 응모가 접수되면 보관한 용지는 버린다(어느 쪽으로 냈든 한 회차 한 장) */
   const finish = (ticket: Ticket, receivedAt: number) => {
     clearKept(services.ns);
+    setKept(null);
     onDone(ticket, receivedAt);
   };
-
-  // 「보관한 용지로 응모하기」로 들어왔으면 바로 옮겨 적기부터
-  const keptStarted = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 들어올 때 한 번
-  useEffect(() => {
-    if (!kept || !key || keptStarted.current) return;
-    keptStarted.current = true;
-    void submit(key, { ...kept, deadline: "", received: "" });
-  }, []);
 
   // 발급한 등록증: 움직임 줄이기면 이 화면 대신, 아니면 화면 전체 오버레이로 위에 뜬다
   if (setup.issued && reduce)
@@ -516,6 +511,51 @@ export function EnterView({
         />
       )}
       <EnterHeader onBack={onBack} />
+
+      {kept && kept.round < status.round && open && (
+        <section
+          aria-label="보관한 용지"
+          data-kept
+          className="flex items-center gap-3 rounded-2xl border border-rose-300/25 bg-[#1b1622] px-3.5 py-3"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="text-rose-100/70 text-xs">
+              보관한 용지({roundShort(services.ledger.schedule, kept.round)})
+            </span>
+            <span className="flex flex-wrap gap-1">
+              {[...kept.numbers]
+                .sort((a, b) => a - b)
+                .map((n) => (
+                  <LottoBall key={n} n={n} size="sm" />
+                ))}
+            </span>
+          </div>
+          <div className="flex shrink-0 flex-col items-stretch gap-1">
+            <button
+              type="button"
+              disabled={!picking}
+              onClick={() => {
+                if (key)
+                  void submit(key, { ...kept, deadline: "", received: "" });
+              }}
+              className="sd-cta rounded-xl px-3 py-2 font-bold text-slate-950 text-sm disabled:opacity-40"
+            >
+              이 용지로 응모
+            </button>
+            <button
+              type="button"
+              disabled={!picking}
+              onClick={() => {
+                clearKept(services.ns);
+                setKept(null);
+              }}
+              className="rounded-lg px-2 py-1 text-white/55 text-xs hover:text-white disabled:opacity-40"
+            >
+              버리기
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 마감 안내는 하늘판 위쪽 가장자리에 겹쳐 뜬다(들어올 때 화면이 밀리지 않게) */}
       <div className="relative" data-sky-wrap>

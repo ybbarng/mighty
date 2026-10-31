@@ -20,7 +20,6 @@ import { demoPick } from "../demo-pick";
 import { DirectorConsole } from "../director/DirectorConsole";
 import { demoKeyring, practiceDirectorBackend } from "../director/director";
 import { invitesOf } from "../invites";
-import { type KeptPaper, loadKept } from "../kept-paper";
 import type { LocalLedger } from "../local-ledger";
 import { myRank } from "../results";
 import { DEMO_NS, type Services, useLedger } from "../services";
@@ -59,19 +58,11 @@ export function StardrawDemo() {
     picks: number[];
     rank?: Rank | null;
     round?: number;
-    /** 「보관한 용지로 응모하기」로 연 응모 화면 */
-    kept?: boolean;
   }>({
     key: 0,
     picks: [],
   });
   const [drawing, setDrawing] = useState<number | null>(null);
-  /** 보관한 용지(반송된 용지, 실제 게임의 회차 카드 대신 응모 칸 위에 단추로) */
-  const [kept, setKept] = useState<KeptPaper | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 응모 화면이 바뀌거나 회차가 넘어가면 다시 읽는다
-  useEffect(() => {
-    if (services) setKept(loadKept(services.ns, services.ledger.id()));
-  }, [services, entering.key, status?.round]);
   const [pane, setPane] = useState<"winner" | "checker">("winner");
   /** 당첨자 폰에서 만든 확인 링크(확인하는 사람 화면이 연다) */
   const [link, setLink] = useState<string | null>(null);
@@ -267,39 +258,12 @@ export function StardrawDemo() {
                   />
                 </div>
               ) : (
-                <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
-                  {kept &&
-                    !entering.kept &&
-                    kept.round < status.round &&
-                    status.phase === "open" && (
-                      <div
-                        data-kept
-                        className="sd-glass flex flex-wrap items-center gap-3 rounded-2xl p-4"
-                      >
-                        <span className="text-sm text-white/70">
-                          보관한 용지({kept.round}회)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEntering({
-                              key: Date.now(),
-                              picks: kept.numbers,
-                              kept: true,
-                            })
-                          }
-                          className="sd-cta ml-auto rounded-lg px-3 py-1.5 font-bold text-slate-950 text-sm"
-                        >
-                          보관한 용지로 응모하기
-                        </button>
-                      </div>
-                    )}
+                <div className="mx-auto w-full max-w-xl">
                   <EnterView
                     key={entering.key}
                     services={services}
                     status={status}
                     initialPicked={entering.picks}
-                    kept={entering.kept ? kept : undefined}
                     onBack={() => setEntering({ key: Date.now(), picks: [] })}
                     onDone={(ticket, receivedAt) => {
                       services.wallet.addTicket({ ticket, receivedAt });

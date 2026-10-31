@@ -145,8 +145,8 @@ test("소속 응모가 반송되면 옮겨 쓴 다음 회차 응모권에도 소
   const after = await page.evaluate(() => Date.now());
   await page.clock.setSystemTime(after + 6 * 60_000);
   await page
-    .locator("[data-kept]")
-    .getByRole("button", { name: "보관한 용지로 응모하기" })
+    .getByRole("region", { name: "보관한 용지" })
+    .getByRole("button", { name: "이 용지로 응모" })
     .click({ timeout: 30_000 });
   await paper.press("Enter", { timeout: 30_000 });
   await card.press("Enter", { timeout: 10_000 });

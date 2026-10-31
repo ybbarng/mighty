@@ -25,7 +25,7 @@ import { astronautOf, residentPhrase } from "../astronaut/identity";
 import { type CheckSession, isActive } from "../checks";
 import { errorText } from "../errors";
 import { FX } from "../fx-timing";
-import { clearKept, type KeptPaper, loadKept } from "../kept-paper";
+import { type KeptPaper, loadKept } from "../kept-paper";
 import type { LedgerStatus } from "../local-ledger";
 import { myRecords, newestRecord, recordKeys } from "../my-records";
 import { passkeyProblem } from "../passkey-env";
@@ -67,8 +67,7 @@ import { WinNotice } from "./WinNotice";
 
 type View =
   | { name: "home" }
-  /** kept: 회차 카드의 「보관한 용지로 응모하기」로 들어옴 */
-  | { name: "enter"; kept?: boolean }
+  | { name: "enter" }
   | { name: "receipt"; id: string }
   | { name: "draw"; round: number }
   | { name: "mine" }
@@ -408,11 +407,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
           <EnterView
             services={services}
             status={status}
-            kept={
-              view.kept
-                ? loadKept(services.ns, services.ledger.id())
-                : undefined
-            }
             onWatchDraw={(round) => go({ name: "draw", round }, true)}
             onBack={() => back({ name: "home" })}
             onDone={(ticket, receivedAt) => {
@@ -554,7 +548,6 @@ export function StardrawApp({ page = "home" }: { page?: StardrawPage }) {
             mine={mine}
             opened={opened}
             onEnter={() => go({ name: "enter" })}
-            onEnterKept={() => go({ name: "enter", kept: true })}
             onReceipt={(m) =>
               go({ name: "receipt", id: toHex(ticketId(m.ticket)) })
             }
@@ -585,7 +578,6 @@ export function Home({
   mine,
   opened,
   onEnter,
-  onEnterKept,
   onReceipt,
   onDraw,
   onMine,
@@ -598,8 +590,6 @@ export function Home({
   opened: Set<number>;
   /** 응모 화면(등록증이 없으면 우주인 등록부터) */
   onEnter: () => void;
-  /** 보관한 용지로 응모(돌려받은 용지를 새 회차 용지에 옮겨 적어 낸다) */
-  onEnterKept?: (() => void) | undefined;
   onReceipt: (m: MyTicket) => void;
   onDraw: (round: number) => void;
   onMine: () => void;
@@ -671,7 +661,6 @@ export function Home({
         mine={mine}
         envelope={envelope}
         onEnter={onEnter}
-        onEnterKept={onEnterKept}
         onReceipt={onReceipt}
         onDraw={onDraw}
       />
@@ -891,7 +880,6 @@ export function RoundCard({
   mine,
   envelope,
   onEnter,
-  onEnterKept,
   onReceipt,
   onDraw,
 }: {
@@ -900,13 +888,11 @@ export function RoundCard({
   mine: MyTicket[];
   envelope: MyTicket | undefined;
   onEnter: () => void;
-  /** 보관한 용지로 응모(없으면 보관한 용지 단추를 두지 않는다) */
-  onEnterKept?: (() => void) | undefined;
   onReceipt: (m: MyTicket) => void;
   onDraw: (round: number) => void;
 }) {
   const schedule = services.ledger.schedule;
-  // 보관한 용지(반송된 회차보다 뒤 회차에서만 쓸 수 있다). 첫 그리기 뒤에 읽는다(서버에서 그린 화면과 어긋나지 않게)
+  // 보관한 용지(반송된 회차보다 뒤 회차에서 쓸 수 있다). 첫 그리기 뒤에 읽는다(서버에서 그린 화면과 어긋나지 않게)
   const [kept, setKept] = useState<KeptPaper | null>(null);
   useEffect(() => {
     setKept(loadKept(services.ns, services.ledger.id()));
@@ -917,6 +903,7 @@ export function RoundCard({
   const drawAt = drawWaiting ? s.nextDrawAt : s.times.closesAt + DRAND_DELAY;
   const closed = s.phase !== "open";
   const ticket = mine.find((m) => m.ticket.round === round);
+  const keptHere = kept !== null && kept.round < round;
 
   // 실시간 추첨 중(안내 15초 전부터 연출이 끝날 때까지, 서버가 있을 때)에는 그 추첨이 주인공. 다음 회차 응모 안내는
   // 연출이 끝난 뒤에 띄운다(2026-10-31 사용자: 추첨에 집중하는 쪽, 작은 "다음 회차 응모하기"도 두지 않는다)
@@ -1075,54 +1062,22 @@ export function RoundCard({
             영수증
           </button>
         </div>
-      ) : !closed && kept && onEnterKept && kept.round < round ? (
-        // 보관한 용지(반송된 용지): 그 별로 응모하거나 새로 고른다. 작은 단추로 버린다
-        <div className="flex w-full flex-col items-center gap-3" data-kept>
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="text-white/60 text-xs">
-              보관한 용지({roundShort(schedule, kept.round)})
-            </span>
-            <span className="flex flex-wrap justify-center gap-1">
-              {[...kept.numbers]
-                .sort((a, b) => a - b)
-                .map((n) => (
-                  <LottoBall key={n} n={n} size="sm" />
-                ))}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onEnterKept}
-            className="sd-cta w-full max-w-xs rounded-2xl py-3.5 font-black text-lg text-slate-950"
-          >
-            보관한 용지로 응모하기
-          </button>
+      ) : !closed ? (
+        <div className="flex w-full flex-col items-center gap-2">
           <button
             type="button"
             onClick={onEnter}
-            className="w-full max-w-xs rounded-2xl border border-white/25 py-3 font-semibold hover:bg-white/10"
+            className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
           >
-            새로 고르기
+            별 6개 고르기
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              clearKept(services.ns);
-              setKept(null);
-            }}
-            className="rounded-xl px-3 py-1 text-white/50 text-xs hover:text-white"
-          >
-            보관한 용지 버리기
-          </button>
+          {/* 보관한 용지는 응모 페이지에서 고른다(입구는 하나, 2026-11-01 사용자). 카드에는 있다는 것만 */}
+          {keptHere && (
+            <span className="text-amber-100/80 text-xs" data-kept-note>
+              보관한 용지가 있어요.
+            </span>
+          )}
         </div>
-      ) : !closed ? (
-        <button
-          type="button"
-          onClick={onEnter}
-          className="sd-cta w-full max-w-xs rounded-2xl py-4 font-black text-slate-950 text-xl"
-        >
-          별 6개 고르기
-        </button>
       ) : (
         <button
           type="button"
