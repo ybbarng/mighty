@@ -191,6 +191,13 @@ interface AwardDef {
 const sameBytes = (a: Uint8Array, b: Uint8Array) =>
   a.length === b.length && a.every((v, i) => v === b[i]);
 const key = (nums: readonly number[]) => nums.join(",");
+/** 끝 글자에 받침이 있나(을/를, 은/는을 고른다) */
+function hasBatchim(word: string): boolean {
+  const code = (word.at(-1) ?? "").charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0;
+}
+const obj = (word: string) => `${word}${hasBatchim(word) ? "을" : "를"}`;
+const topic = (word: string) => `${word}${hasBatchim(word) ? "은" : "는"}`;
 const hitsOf = (record: RoundRecord, nums: readonly number[]) =>
   nums.filter((n) => record.numbers.includes(n)).length;
 
@@ -825,7 +832,7 @@ export const AWARDS: readonly AwardDef[] = [
       return [];
     },
     text: (f) =>
-      `귀하는 ${f.star}을(를) 100번 골라 그 별을 누구보다 오래 지켜보았습니다. 이에 귀하를 ${f.star} 전담 관측관으로 임명합니다.`,
+      `귀하는 ${obj(String(f.star))} 100번 골라 그 별을 누구보다 오래 지켜보았습니다. 이에 귀하를 ${f.star} 전담 관측관으로 임명합니다.`,
   },
 
   // 결과(당첨 번호를 쓴다)
@@ -980,7 +987,7 @@ export const AWARDS: readonly AwardDef[] = [
     },
     text: (f, k) =>
       doc(
-        `귀하가 고른 ${f.star}은(는) ${ASLEEP_DRAWS}번의 추첨 동안 한 번도 뽑히지 않다가 귀하의 응모와 함께 당첨 번호로 떠올랐습니다. 잠든 별을 깨운 공로를 기립니다.`,
+        `귀하가 고른 ${topic(String(f.star))} ${ASLEEP_DRAWS}번의 추첨 동안 한 번도 뽑히지 않다가 귀하의 응모와 함께 당첨 번호로 떠올랐습니다. 잠든 별을 깨운 공로를 기립니다.`,
         k,
       ),
   },

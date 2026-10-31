@@ -290,6 +290,9 @@ describe("기념 서류", () => {
         const text = def.text(fill, kind);
         expect(text.endsWith("."), `${def.id}: ${text}`).toBe(true);
         expect(text).not.toMatch(/\s{2}|undefined/);
+        expect(text, `${def.id}: 받침에 맞춰 조사를 고른다`).not.toMatch(
+          /\((을|를|은|는|이|가)\)/,
+        );
       }
     }
     expect(AWARDS.length).toBeGreaterThanOrEqual(40);
