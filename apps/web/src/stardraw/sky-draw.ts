@@ -282,7 +282,7 @@ function paintBase(g: Ctx, sc: Scene) {
 
   // 별자리 선: 평소엔 아주 흐리게, 고른(영수증은 내) 별의 별자리는 조금 밝게, 누른 별의 별자리는 환하게
   const lineColors = dark
-    ? ["rgba(150,172,240,0.06)", "rgba(150,172,240,0.06)", ""]
+    ? ["rgba(150,172,240,0.12)", "rgba(150,172,240,0.12)", ""]
     : receipt
       ? ["rgba(150,172,240,0.08)", "rgba(160,182,245,0.28)", ""]
       : [
@@ -306,7 +306,7 @@ function paintBase(g: Ctx, sc: Scene) {
   for (const p of FAINT_STARS) {
     const level = levelOf(p.con);
     const base = dark
-      ? 0.1
+      ? 0.22
       : receipt
         ? [0.18, 0.4, 0.4][level]
         : [0.32, 0.5, 0.85][level];
