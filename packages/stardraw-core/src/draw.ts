@@ -11,7 +11,7 @@ import { MAX_NUMBER, PICK_COUNT } from "./ticket";
  * 이미 나온 번호는 건너뛰고 7개가 될 때까지 읽는다. 앞 6개가 당첨 번호, 7번째가 보너스.
  */
 
-const ACCEPT_BELOW = Math.floor(256 / MAX_NUMBER) * MAX_NUMBER;
+export const ACCEPT_BELOW = Math.floor(256 / MAX_NUMBER) * MAX_NUMBER;
 
 export function drawSeed(round: number, randomness: Uint8Array): Uint8Array {
   return taggedHash(

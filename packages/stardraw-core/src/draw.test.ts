@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fromHex, toHex } from "./bytes";
-import { drawNumbers, drawSeed, rankOf } from "./draw";
+import { ACCEPT_BELOW, drawNumbers, drawSeed, rankOf } from "./draw";
 
 // drand quicknet 1000000회차 난수(drand.test.ts의 실제 값)
 const RANDOMNESS = fromHex(
@@ -37,6 +37,38 @@ describe("당첨 번호", () => {
       );
       expect(draw.bonus).toBe(draw.order[6]);
     }
+  });
+});
+
+describe("고르게 뽑힌다(docs/36 4절 「왜 고른가」)", () => {
+  it("받아들이는 바이트 0~224는 45로 나눈 나머지마다 정확히 5개씩", () => {
+    expect(ACCEPT_BELOW).toBe(225);
+    const count = new Array(45).fill(0);
+    for (let b = 0; b < ACCEPT_BELOW; b++) count[b % 45]++;
+    expect(new Set(count)).toEqual(new Set([5]));
+  });
+
+  // seed를 회차 1~20000으로 정해 결과가 늘 같다(무작위 시험이 아니라 한 번 확인한 값을 지키는 시험).
+  // 카이제곱 임계값은 자유도 44에서 꼬리 0.1%(78.75)
+  it("2만 회차에서 번호별 당첨·첫째 공·보너스 횟수가 고르다", () => {
+    const N = 20_000;
+    const won = new Array(46).fill(0);
+    const first = new Array(46).fill(0);
+    const bonus = new Array(46).fill(0);
+    for (let round = 1; round <= N; round++) {
+      const d = drawNumbers(drawSeed(round, RANDOMNESS));
+      for (const n of d.numbers) won[n]++;
+      first[d.order[0] as number]++;
+      bonus[d.bonus]++;
+    }
+    // 한 회차에 6개를 겹치지 않게 뽑으므로 당첨 횟수의 분산은 기대값 × (1 − 6/45)
+    const chi = (obs: number[], expected: number, shrink = 1) =>
+      obs
+        .slice(1)
+        .reduce((s, o) => s + (o - expected) ** 2 / (expected * shrink), 0);
+    expect(chi(won, (N * 6) / 45, 1 - 6 / 45)).toBeLessThan(78.75);
+    expect(chi(first, N / 45)).toBeLessThan(78.75);
+    expect(chi(bonus, N / 45)).toBeLessThan(78.75);
   });
 });
 
