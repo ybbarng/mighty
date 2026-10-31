@@ -198,8 +198,8 @@ const TRIM_DB: Partial<Record<Cue, number>> = {
   yutLand: 5,
   yutBonus: 2,
   yutPiece: 12,
-  // 아주 짧은 소리라 같은 세기로는 작게 들린다(룰렛이 도는 동안 칸마다 난다)
-  starTick: 16,
+  // 룰렛이 도는 동안 칸마다 나는 작은 유리 "띵". 다른 소리보다 한참 작게(몰리면 play가 더 줄인다)
+  starTick: 10,
   yutCapture: 3,
   yutHome: 0,
 };
@@ -334,6 +334,7 @@ interface Voice {
   noise: AudioBuffer;
   /** 소리가 시작하는 시각(AudioContext 시간) */
   t0: number;
+  star?: StarSound | undefined;
 }
 
 interface ToneOptions {
@@ -576,6 +577,177 @@ function riffle(v: Voice, at: number): void {
   tap(v, at + length + 0.04, 0.5, 0.8);
 }
 
+// ---------------------------------------------------------------- 하늘의 별 따기
+
+/**
+ * 별 따기 소리는 밤하늘·유리 천구에 맞춰 맑고 부드럽게 짠다. 음은 모두 다장조 5음(도·레·미·솔·라) 안에서만
+ * 골라 몇 개가 겹쳐도 부딪치지 않는다. 짧은 메아리(지연)로 넓은 하늘에 울리는 느낌을 더한다
+ */
+const PENTATONIC = [0, 2, 4, 7, 9];
+/** 도(523Hz)에서 5음 음계로 step칸 위의 음 */
+function pentatonic(step: number): number {
+  const octave = Math.floor(step / 5);
+  const degree = PENTATONIC[((step % 5) + 5) % 5] as number;
+  return 523.25 * 2 ** (octave + degree / 12);
+}
+
+/** 온도 → 0(붉고 따뜻함) ~ 1(파랗고 맑음) */
+function hue(temp: number | undefined): number {
+  const k = temp ?? 6500;
+  return Math.min(1, Math.max(0, (k - 3200) / (11000 - 3200)));
+}
+
+/** 이 소리만 짧은 메아리를 거쳐 나가게 한다(넓은 하늘). 메아리는 seconds 뒤 꺼진다 */
+function withEcho(v: Voice, seconds: number, wet = 0.28): Voice {
+  const { ctx } = v;
+  const mix = ctx.createGain();
+  mix.connect(v.bus);
+  const delay = ctx.createDelay(1);
+  delay.delayTime.value = 0.27;
+  const tone = ctx.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = 3200;
+  const feedback = ctx.createGain();
+  feedback.gain.setValueAtTime(0.32, v.t0);
+  feedback.gain.setValueAtTime(0, v.t0 + seconds);
+  const send = ctx.createGain();
+  send.gain.value = wet;
+  mix.connect(send).connect(delay).connect(tone).connect(feedback);
+  feedback.connect(delay);
+  tone.connect(v.bus);
+  return { ...v, bus: mix };
+}
+
+/** 유리 종: 맑은 기음에 비정수 배음을 조금, 밝기(0~1)만큼 높은 배음을 더한다 */
+function glass(
+  v: Voice,
+  freq: number,
+  at: number,
+  duration: number,
+  gain: number,
+  bright = 0.5,
+): void {
+  tone(v, freq, at, duration, { gain, attack: 0.003 });
+  tone(v, freq * 2.0, at, duration * 0.55, {
+    gain: gain * (0.12 + 0.2 * bright),
+    attack: 0.003,
+  });
+  tone(v, freq * 2.76, at, duration * 0.25, {
+    gain: gain * (0.04 + 0.12 * bright),
+    attack: 0.002,
+  });
+}
+
+/** 부드럽게 부풀었다 오래 사라지는 바탕음(살짝 어긋난 두 음이 일렁인다) */
+function pad(
+  v: Voice,
+  freq: number,
+  at: number,
+  duration: number,
+  gain: number,
+): void {
+  tone(v, freq, at, duration, { gain, attack: 0.25, lowpass: 2400 });
+  tone(v, freq * 1.004, at, duration, {
+    gain: gain * 0.8,
+    attack: 0.3,
+    lowpass: 2400,
+  });
+}
+
+/** 높은 곳에서 흩어지는 반짝임 몇 개 */
+function sparkles(
+  v: Voice,
+  count: number,
+  from: number,
+  spread: number,
+  gain = 0.018,
+): void {
+  for (let i = 0; i < count; i++) {
+    const at = from + (spread * i) / Math.max(1, count) + random() * 0.05;
+    const f = pentatonic(10 + Math.floor(random() * 6));
+    tone(v, f, at, 0.22, {
+      gain: gain * (0.6 + random() * 0.6),
+      attack: 0.002,
+    });
+  }
+}
+
+/** 룰렛 불빛이 별 하나를 지날 때: 아주 작은 유리 "띵", 별마다 음이 조금씩 다르다 */
+function starTick(v: Voice): void {
+  const n = v.star?.n ?? Math.floor(random() * 45);
+  const f = pentatonic(5 + ((n * 7) % 9));
+  glass(v, f, 0, 0.16, 0.045, 0.3);
+}
+
+/** 켜지는 당첨 번호 차례대로 쌓이는 화음(도·미·솔·라·도·미), 보너스는 따로 */
+const STAR_CHORD = [0, 2, 3, 4, 5, 7];
+
+/**
+ * 별이 켜질 때: 그 별빛 색에 맞는 맑은 종과 부드러운 바탕음. 차례가 갈수록 높은 음이 더해져
+ * 일곱 개가 켜지면 화음이 쌓인다. 보너스는 한 옥타브 위 반짝임으로 구별한다
+ */
+function starBall(v: Voice): void {
+  const s = v.star ?? {};
+  const index = s.index ?? 0;
+  const bright = hue(s.temp);
+  const e = withEcho(v, 2.5);
+  if (index >= 6) {
+    // 보너스: 높은 두 음이 엇갈려 반짝인다
+    glass(e, pentatonic(8), 0, 1.4, 0.07, 0.9);
+    glass(e, pentatonic(11), 0.09, 1.2, 0.05, 0.9);
+    sparkles(e, 4, 0.12, 0.5);
+    return;
+  }
+  const f = pentatonic(STAR_CHORD[index] ?? 0);
+  // 붉은 별은 한 옥타브 아래 따뜻한 음을 받치고, 파란 별은 한 옥타브 위 맑은 음을 얹는다
+  glass(e, f, 0, 1.6, 0.085, bright);
+  if (bright > 0.55)
+    tone(e, f * 2, 0.02, 0.9, { gain: 0.025 * bright, attack: 0.004 });
+  else
+    tone(e, f / 2, 0, 1.4, {
+      gain: 0.04 * (1 - bright),
+      attack: 0.02,
+      lowpass: 1200,
+    });
+  pad(e, f, 0, 2.6, 0.022);
+}
+
+/** 당첨: 등수가 높을수록 길고 화려하게(5등 짧은 반짝 하나 ~ 1등 길게 펼쳐지는 화음) */
+function starWin(v: Voice): void {
+  const rank = v.star?.rank ?? 3;
+  const e = withEcho(v, rank <= 2 ? 4 : 2.5);
+  if (rank >= 5) {
+    glass(e, pentatonic(4), 0, 0.7, 0.06, 0.6);
+    glass(e, pentatonic(5), 0.1, 0.9, 0.06, 0.6);
+    sparkles(e, 2, 0.18, 0.3);
+    return;
+  }
+  if (rank === 4) {
+    [0, 2, 3].forEach((step, i) => {
+      glass(e, pentatonic(step), i * 0.1, 0.9, 0.065, 0.6);
+    });
+    sparkles(e, 3, 0.3, 0.4);
+    return;
+  }
+  if (rank === 3) {
+    [0, 2, 3, 5].forEach((step, i) => {
+      glass(e, pentatonic(step), i * 0.1, 1.1, 0.065, 0.6);
+    });
+    pad(e, pentatonic(0), 0.3, 1.8, 0.02);
+    sparkles(e, 5, 0.4, 0.7);
+    return;
+  }
+  // 1·2등: 위로 펼쳐지는 아르페지오, 이어 화음이 부풀고 반짝임이 오래 흩어진다
+  const steps = rank === 1 ? [0, 2, 3, 4, 5, 7, 8, 10] : [0, 2, 3, 4, 5, 7];
+  steps.forEach((step, i) => {
+    glass(e, pentatonic(step), i * 0.09, 1.3, 0.06, 0.65);
+  });
+  const bloom = steps.length * 0.09;
+  for (const step of rank === 1 ? [-5, 0, 2, 3, 5, 6] : [0, 2, 3, 5])
+    pad(e, pentatonic(step), bloom, rank === 1 ? 3.6 : 2.4, 0.02);
+  sparkles(e, rank === 1 ? 14 : 8, bloom, rank === 1 ? 2.6 : 1.4);
+}
+
 const C4 = 261.63;
 const E4 = 329.63;
 const G4 = 392;
@@ -586,16 +758,33 @@ const G5 = 783.99;
 const A5 = 880;
 const C6 = 1046.5;
 
+/** 하늘의 별 따기 소리의 갈래. 없으면 기본 소리 */
+export interface StarSound {
+  /** 별 번호(룰렛이 지나는 별·켜진 별). 별마다 음이 조금씩 달라 단조롭지 않다 */
+  n?: number;
+  /** 켜진 차례(0~5는 당첨 번호, 6은 보너스). 차례대로 화음이 쌓인다 */
+  index?: number;
+  /** 별 표면 온도(K). 파란 별은 맑고 높게, 붉은 별은 낮고 따뜻하게 */
+  temp?: number;
+  /** 등수(1~5). 1등일수록 길고 화려하다 */
+  rank?: number;
+}
+
 export interface PlayOptions {
   /** 몇 초 뒤에 낼지 */
   delay?: number;
   /** 몇 번 이어서 낼지(득점 카드 장수, 키티 장수) */
   times?: number;
+  star?: StarSound | undefined;
 }
+
+/** 룰렛 "띵"이 몰릴수록 작게: 최근에 낸 횟수(0.35초마다 절반쯤 잊는다) */
+let tickEnergy = 0;
+let tickAt = 0;
 
 export function play(
   cue: Cue,
-  { delay = 0, times = 1 }: PlayOptions = {},
+  { delay = 0, times = 1, star }: PlayOptions = {},
 ): void {
   const a = audio();
   if (!a) return;
@@ -603,13 +792,18 @@ export function play(
   const t0 = ctx.currentTime + delay;
   const bus = ctx.createGain();
   bus.gain.value = trim(cue);
+  if (cue === "starTick") {
+    tickEnergy = tickEnergy * Math.exp(-(t0 - tickAt) / 0.5) + 1;
+    tickAt = t0;
+    bus.gain.value /= Math.sqrt(tickEnergy);
+  }
   bus.connect(a.out);
   if (BIG.has(cue)) {
     // 앞 큰 소리를 이 소리가 시작할 때 재빨리 줄인다.
     bigVoice?.gain.setTargetAtTime(0, t0, 0.04);
     bigVoice = bus;
   }
-  const v: Voice = { ctx, bus, noise: a.noise, t0 };
+  const v: Voice = { ctx, bus, noise: a.noise, t0, star };
   for (let i = 0; i < times; i++) render(cue, { ...v, t0: t0 + i * gap(cue) });
 }
 
@@ -630,6 +824,7 @@ export function renderCue(
   cue: Cue,
   seconds = 3,
   seed = 1,
+  star?: StarSound,
 ): Promise<AudioBuffer> {
   const rate = 44100;
   const ctx = new OfflineAudioContext(2, rate * seconds, rate);
@@ -641,7 +836,7 @@ export function renderCue(
     const bus = ctx.createGain();
     bus.gain.value = trim(cue);
     bus.connect(g.out);
-    render(cue, { ctx, bus, noise: g.noise, t0: 0 });
+    render(cue, { ctx, bus, noise: g.noise, t0: 0, star });
   } finally {
     random = Math.random;
   }
@@ -1058,32 +1253,13 @@ function render(cue: Cue, v: Voice): void {
       });
       break;
     case "starTick":
-      // 룰렛 불빛이 별 하나를 지나는 짧고 높은 나무 "똑"(빨리 돌 때 수십 번 이어져도 거슬리지 않게)
-      woodClack(v, 0, 0.7, 1.7);
+      starTick(v);
       break;
     case "starBall":
-      // 룰렛이 멈추는 "똑"과, 별이 켜지는 맑은 "딩"
-      noise(v, 0, 0.03, {
-        filter: "bandpass",
-        freq: 2200,
-        q: 1.4,
-        gain: 0.6,
-        attack: 0.001,
-      });
-      thump(v, 0, 240, 150, 0.06, 0.18);
-      bell(v, E5 * 2, 0.08, 0.7, 0.06);
+      starBall(v);
       break;
     case "starWin":
-      // 당첨: 맑은 종이 넷 올라가고 높은 반짝임이 흩어진다
-      bell(v, C5, 0, 0.6, 0.07);
-      bell(v, E5, 0.1, 0.6, 0.07);
-      bell(v, G5, 0.2, 0.6, 0.07);
-      bell(v, C6, 0.3, 1.1, 0.08);
-      for (let i = 0; i < 6; i++)
-        tone(v, 2600 + random() * 1800, 0.45 + i * 0.07, 0.25, {
-          gain: 0.025,
-          attack: 0.003,
-        });
+      starWin(v);
       break;
     case "yutThrow":
       // 손을 떠난 윷가락 넷이 공중에서 서로 스치며 부딪는 가벼운 "따르륵"

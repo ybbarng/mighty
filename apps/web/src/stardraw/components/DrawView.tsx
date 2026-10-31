@@ -99,13 +99,17 @@ export function DrawView({
       const now = clock.now();
       const next = rouletteAt(plan, now - started);
       // 칸이 바뀌면 "틱", 멈춰 별이 켜지면 "딩"
-      if (next.fixed.length > last.fixed.length) play("starBall");
-      else if (
+      if (next.fixed.length > last.fixed.length) {
+        // 켜진 별의 차례·별빛으로 음을 고른다(차례대로 화음이 쌓이고, 보너스는 따로)
+        const index = next.fixed.length - 1;
+        const n = next.fixed[index] as number;
+        play("starBall", { star: { n, index, temp: starOf(n).k } });
+      } else if (
         next.cursor !== null &&
         next.cursor !== last.cursor &&
         now - lastTick >= TICK_GAP_MS
       ) {
-        play("starTick");
+        play("starTick", { star: { n: next.cursor } });
         lastTick = now;
       }
       if (
@@ -125,7 +129,8 @@ export function DrawView({
   }, [record.round, clock]);
 
   useEffect(() => {
-    if (done && rank && order.length > 0 && !instant) play("starWin");
+    if (done && rank && order.length > 0 && !instant)
+      play("starWin", { star: { rank } });
   }, [done, rank, order.length, instant]);
 
   const main = frame.fixed.slice(0, 6);

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { dealCues } from "@/game/cues";
 import { CUE_LABELS, type Cue, play, renderCue } from "@/game/sound";
 import { SHUFFLE_MS } from "@/game/timing";
+import { starOf } from "@/stardraw/sky";
 
 /** 원작에서 그 소리가 나던 때. 소리를 들어 보며 다듬을 때 참고한다(docs/16) */
 const GROUPS: { title: string; cues: { cue: Cue; when: string }[] }[] = [
@@ -192,6 +193,23 @@ function measure(buffer: AudioBuffer): Level {
   };
 }
 
+/** 추첨 한 회차를 짧게 흉내 낸다: 별마다 룰렛이 몇 칸 돌다 멈추고 별이 켜진다, 끝에 1등 */
+function playDrawDemo(): void {
+  const order = [7, 23, 1, 38, 15, 42, 9];
+  let at = 0;
+  order.forEach((n, index) => {
+    // 빨리 돌다 느려지는 룰렛 불빛
+    for (let k = 0; k < 14; k++) {
+      at += 0.05 + k * k * 0.0016;
+      play("starTick", { delay: at, star: { n: (n * 3 + k * 5) % 45 } });
+    }
+    at += 0.25;
+    play("starBall", { delay: at, star: { n, index, temp: starOf(n).k } });
+    at += 1.1;
+  });
+  play("starWin", { delay: at + 0.4, star: { rank: 1 } });
+}
+
 /** 효과음 미리 듣기(/sounds). 모든 소리를 하나씩 들어 보고 크기를 비교한다 */
 export function SoundBoard() {
   const [levels, setLevels] = useState<Partial<Record<Cue, Level>>>({});
@@ -234,6 +252,33 @@ export function SoundBoard() {
       >
         섞고 나눠 주기 전체 듣기
       </button>
+      <section
+        data-star-sounds
+        className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200/30 bg-sky-200/5 p-3"
+      >
+        <span className="w-full font-semibold text-sky-100 text-sm">
+          하늘의 별 따기
+        </span>
+        <button
+          type="button"
+          data-play-draw
+          onClick={playDrawDemo}
+          className="rounded-lg border border-sky-200/50 bg-sky-200/10 px-3 py-1.5 text-sm hover:bg-sky-200/20"
+        >
+          추첨 흉내(별 7개 → 1등)
+        </button>
+        {[1, 2, 3, 4, 5].map((rank) => (
+          <button
+            key={rank}
+            type="button"
+            data-play-win={rank}
+            onClick={() => play("starWin", { star: { rank } })}
+            className="rounded-lg border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10"
+          >
+            {rank}등 당첨
+          </button>
+        ))}
+      </section>
       <div className="grid gap-6 sm:grid-cols-2">
         {GROUPS.map((group) => (
           <section key={group.title}>
