@@ -227,3 +227,32 @@ test("보안 배우기: 랑데부 해싱은 주소를 더해도 몇 명만 이�
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("보안 배우기: 고르게 뽑히나 — 실제 규칙으로 돌려 번호별 횟수·묶음·연속 회차를 본다", async ({
+  page,
+}, info) => {
+  test.skip(
+    info.project.name !== "phone-portrait",
+    "휴대폰 세로 한 크기로 본다",
+  );
+  await page.goto("/stardraw/learn#fair");
+  const toy = page.locator("[data-toy='fair']");
+  // 작은 회차 수(1천)와 묶음 100으로 돌린다(실제 drand 값 씨앗이라 결과가 늘 같다)
+  await toy.getByRole("button", { name: "1,000", exact: true }).first().click();
+  await toy.getByRole("button", { name: "100", exact: true }).click();
+  await toy.getByRole("button", { name: "돌리기" }).click();
+  await expect(toy.locator("[data-fair-state='done']")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(toy.locator("[data-fair-draws='1000']")).toBeVisible();
+  await expect(toy.locator("[data-fair-chart='counts'] rect")).not.toHaveCount(
+    0,
+  );
+  await expect(
+    toy.locator("[data-fair-chart='windows'] circle.fill-rose-400\\/80"),
+  ).toHaveCount(10);
+  await expect(verdict(page, "fair-total")).toHaveAttribute("data-ok", "pass");
+  await expect(verdict(page, "fair-windows")).toContainText("묶음 10개 중");
+  await expect(verdict(page, "fair-repeat")).toContainText("13.3%");
+  await toy.screenshot({ path: info.outputPath("fair-toy.png") });
+});

@@ -1,11 +1,13 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
+import { REPO_URL } from "@/components/brand/MadeWith";
 import { Quiz, type QuizItem } from "@/components/learn/Quiz";
 import { cn } from "@/lib/cn";
 import { AgencyFooter } from "@/stardraw/components/AgencyFooter";
 
 import { AttackToy } from "./AttackToy";
+import { FairnessToy } from "./FairnessToy";
 import { RendezvousToys } from "./RendezvousToy";
 import { ChainToy, DrandToy, SasToy, TsaToy } from "./toys-draw";
 import { MerkleToy, PasskeyToy, PowToy, SignToy } from "./toys-entry";
@@ -256,6 +258,75 @@ const LESSONS: Lesson[] = [
         ],
         answer: 1,
         why: "운영자가 바꿀 수 있는 값이 seed에 들어가면 결과를 고를 여지가 생긴다.",
+      },
+    ],
+  },
+  {
+    id: "fair",
+    title: "고르게 뽑히나: 직접 몇만 회차 돌려 보기",
+    hook: "회차마다 독립이라 묶음마다 숨은 치우침이 생길 수 없다. 실제 규칙으로 세어 본다",
+    body: (
+      <>
+        <P>
+          뽑기는 그 회차의 seed 하나만 받는 함수라서, 앞 회차에서 넘어오는
+          상태가 없습니다. seed는 회차마다 drand가 새로 서명한 값에서 나오므로
+          회차끼리 서로 독립입니다. 그래서 몇천 회차씩 묶음마다 치우쳤다가
+          합치면 고르게 보이는 일은 생길 구조가 없습니다.
+        </P>
+        <P>
+          225 이상의 바이트를 버리는 것은 0~224를 45로 나눈 나머지가 정확히
+          5개씩이기 때문입니다. 버리지 않고 256을 그대로 45로 나누면 작은 번호가
+          약 20% 더 자주 나옵니다. 아래에서 실제 규칙 코드와 그 치우친 뽑기를
+          나란히 돌려 볼 수 있습니다. 회차 수와 묶음 크기는 마음대로 바꿔
+          보세요.
+        </P>
+        <P>
+          통계는 구현 실수를 잡을 뿐이고, 고르다는 보증은 위 구조에서 옵니다. 그
+          까닭은{" "}
+          <a
+            href={`${REPO_URL}/blob/main/docs/36-hourly-lotto-design.md`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            설계 문서 4절 「왜 고른가」
+          </a>
+          에, 같은 검사는{" "}
+          <a
+            href={`${REPO_URL}/blob/main/packages/stardraw-core/src/draw.test.ts`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            규칙 패키지의 시험
+          </a>
+          에 있습니다.
+        </P>
+      </>
+    ),
+    demo: <FairnessToy />,
+    points: [
+      "뽑기는 회차의 seed 하나만 받는다. 앞 회차 상태가 넘어오지 않는다",
+      "거절 표본: 225 = 45 × 5 미만만 받아 나머지가 정확히 고르다",
+      "고르게 뽑아도 묶음의 약 5%는 '우연 범위 밖'으로 나온다. 그 비율이 맞는 것도 고르다는 표시다",
+      "앞 회차 번호가 다음 회차에 다시 나올 비율은 6/45(약 13%)",
+    ],
+    quiz: [
+      {
+        q: "고르게 뽑는다면, 묶음 100개 중 '우연 범위 밖'(꼬리 확률 5% 밑) 묶음은 대략 몇 개?",
+        options: ["0개여야 한다", "5개 안팎", "50개 안팎"],
+        answer: 1,
+        why: "5% 기준이면 고르게 뽑아도 묶음 20개 중 하나꼴로 범위를 벗어난다. 0개만 나오면 오히려 이상하다.",
+      },
+      {
+        q: "225 이상 바이트를 버리지 않고 256을 45로 나누면?",
+        options: [
+          "아무 차이 없다",
+          "1~31번이 32~45번보다 약 20% 더 자주 나온다",
+          "큰 번호가 더 자주 나온다",
+        ],
+        answer: 1,
+        why: "0~255를 45로 나누면 나머지 0~30은 6번, 31~44는 5번 나온다.",
       },
     ],
   },
@@ -538,9 +609,9 @@ export function StardrawLearn() {
           </h1>
           <P>
             운영자도 결과를 고를 수 없고, 누가 속이면 드러나는 로또는 어떻게
-            만들까요? 하늘의 별 따기에 쓰인 기술을 아홉 단계로 나누고, 끝에
-            우주인 등록증이 정해지는 방법을 덧붙였습니다. 상자 안의 계산은 모두
-            실제 게임과 같은 코드가 이 브라우저에서 합니다.
+            만들까요? 하늘의 별 따기에 쓰인 기술을 열 단계로 나누고, 끝에 우주인
+            등록증이 정해지는 방법을 덧붙였습니다. 상자 안의 계산은 모두 실제
+            게임과 같은 코드가 이 브라우저에서 합니다.
           </P>
           <div className="flex items-center gap-3">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">

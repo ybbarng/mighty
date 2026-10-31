@@ -199,11 +199,12 @@ export function computeStats(rounds: readonly ClosedRound[]): Stats {
 
 /**
  * 별 45개가 고르게 뽑히는지: 카이제곱 적합도(자유도 44)와 그 p값(윌슨-힐퍼티 근사).
- * 한 회차에 6개를 겹치지 않게 뽑으므로 별마다 분산은 기대값 × (1 − 6/45)로 고친다.
+ * 한 회차에 6개를 겹치지 않게 뽑으므로 나누는 값은 기대값 × (45 − 6)/(45 − 1)이다(별 하나의 분산에 별끼리의 음의 공분산을 더한 값,
+ * learn/fairness.ts의 chiSquare와 같다).
  */
 export function fairness(stars: readonly StarStat[], draws: number): Fairness {
   const e = (draws * PER_DRAW) / STARS;
-  const variance = e * (1 - PER_DRAW / STARS);
+  const variance = (e * (STARS - PER_DRAW)) / (STARS - 1);
   const chi2 = stars.reduce((t, s) => t + (s.drawn - e) ** 2 / variance, 0);
   const p = chiSquareTail(chi2, STARS - 1);
   return {
