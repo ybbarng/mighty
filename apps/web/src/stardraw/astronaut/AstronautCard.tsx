@@ -135,6 +135,7 @@ export function AstronautCard({
   pub,
   onReveal,
   affiliation,
+  office,
 }: {
   astronaut: Astronaut;
   /** 발급일 "2026. 10. 30."(읽는 중이면 null) */
@@ -152,6 +153,11 @@ export function AstronautCard({
    * 내 기기의 내 등록증에만 그린다. 꾸밈이고 남에게 보이는 증명이 아니다
    */
   affiliation?: { name: string; method: string } | null | undefined;
+  /**
+   * 기관 직책 배지(우주국 소개의 국장 열쇠 등록증). 소속 배지 자리에 누를 수 없는 표로 그린다.
+   * 국장 열쇠는 공개 기관장 신분이라 남의 등록증을 그리지 않는다는 규칙(docs/36 11-9)의 예외다
+   */
+  office?: string | undefined;
 }) {
   /** 돌림판(앞뒷면과 옆면 층을 함께 돌린다) */
   const turn = useRef<HTMLDivElement>(null);
@@ -431,7 +437,15 @@ export function AstronautCard({
               <span className="font-black text-[6cqw] leading-none tracking-[0.06em]">
                 우주인 등록증
               </span>
-              {affiliation && (
+              {office ? (
+                <span
+                  data-office-badge
+                  className="ml-auto mr-[1.6cqw] rounded-full border border-rose-200/45 bg-rose-300/15 px-[2cqw] py-[0.8cqw] text-[2.4cqw] text-rose-50"
+                >
+                  {office}
+                </span>
+              ) : null}
+              {!office && affiliation && (
                 <button
                   type="button"
                   aria-label={`${affiliation.name} 소속: 무엇인가요?`}
