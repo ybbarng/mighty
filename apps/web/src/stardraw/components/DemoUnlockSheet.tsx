@@ -75,7 +75,7 @@ export function DemoUnlockPrompt({ ask }: { ask: UnlockAsk }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 backdrop-blur-[2px] sm:items-center">
       <div
         role="dialog"
         aria-modal="true"

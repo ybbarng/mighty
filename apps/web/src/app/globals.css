@@ -556,6 +556,9 @@ button {
     radial-gradient(1200px 520px at 75% -8%, #1d3156 0%, transparent 62%),
     radial-gradient(900px 600px at -10% 110%, #1a1636 0%, transparent 60%),
     #070d19;
+  /* 한국어 문장은 띄어쓰기에서만 줄을 바꾼다("빛/날"처럼 낱말 중간에서 끊기지 않게). 넘치는 긴 낱말만 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .sd-title h1 {
   background: linear-gradient(180deg, #ffffff 0%, #fde7a7 140%);
@@ -648,29 +651,253 @@ button {
     no-repeat;
 }
 
-/* 응모 직후: 하늘이 영수증 쪽으로 접혀 들어가고, 영수증이 인쇄되어 내려온다 */
-.sd-fold {
-  animation: sd-fold 0.9s cubic-bezier(0.55, 0, 0.75, 0.3) forwards;
-  transform-origin: 50% 100%;
+/*
+ * 첫 화면 회차 카드: 지금 살아 있는 회차라는 표시. 맥박 점(응모 받는 중은 초록, 응모함은 금빛, 마감 뒤는 하늘빛)과
+ * 응모 받는 중에만 카드 테두리에 은은한 빛이 천천히 돈다
+ */
+.sd-live-dot {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--live, #6ee7b7);
+  box-shadow: 0 0 10px var(--live, #6ee7b7);
 }
-@keyframes sd-fold {
-  to {
-    transform: perspective(900px) rotateX(70deg) scale(0.35) translateY(40%);
+.sd-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--live, #6ee7b7);
+  animation: sd-live-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.sd-live-dot[data-live="entered"] {
+  --live: #fde68a;
+}
+.sd-live-dot[data-live="drawing"] {
+  --live: #7dd3fc;
+}
+.sd-live-dot[data-live="drawing"]::after {
+  animation-duration: 3s;
+}
+@keyframes sd-live-ping {
+  75%,
+  100% {
+    transform: scale(2.6);
     opacity: 0;
-    filter: blur(1px);
   }
 }
+.sd-live-card[data-live="open"] {
+  border-color: rgba(110, 231, 183, 0.35);
+  animation: sd-live-glow 3.2s ease-in-out infinite;
+}
+@keyframes sd-live-glow {
+  50% {
+    border-color: rgba(110, 231, 183, 0.6);
+    box-shadow:
+      0 0 28px rgba(110, 231, 183, 0.14),
+      inset 0 0 18px rgba(110, 231, 183, 0.05);
+  }
+}
+
+/*
+ * 연출의 결(2026-10-31 사용자, Apple 식): 한 번에 하나씩, 단계마다 숨 쉴 틈, 들어올 때는 스프링처럼 감속하고
+ * 나타남은 투명도 + 살짝 커짐 + 아래에서 조금. 시간과 곡선은 fx-timing.ts의 FX·EASE가 정하고 여기는 모양만 둔다
+ * (시간이 필요한 규칙은 부품이 --fx-ms 같은 변수나 인라인 style로 넘긴다)
+ */
+.sd-id-drop {
+  animation: sd-id-drop var(--fx-ms, 700ms) cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes sd-id-drop {
+  from {
+    transform: translateY(-70vh) scale(0.96);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+.sd-id-pocket {
+  animation: sd-id-pocket var(--fx-ms, 700ms) cubic-bezier(0.32, 0, 0.67, 0)
+    forwards;
+}
+@keyframes sd-id-pocket {
+  to {
+    transform: translateY(90vh) scale(0.96);
+  }
+}
+/* 아래 고정 자리의 문구·단추: 등록증이 자리 잡은 뒤 조용히 나타난다 */
+.sd-after {
+  animation: sd-text-in 500ms cubic-bezier(0.32, 0.72, 0, 1)
+    var(--fx-delay, 0ms) both;
+}
+
+/*
+ * 마우스로 쓰는 넓은 화면(StardrawNav WIDE_QUERY와 같은 조건): 본문을 조금 넓혀 하늘을 크게 본다.
+ * 글줄이 너무 길어지지 않게 42rem까지만(휴대폰 가로는 높이가 낮아 넓히지 않는다)
+ */
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .sd-wide {
+    max-width: 42rem;
+  }
+}
+
+/* 연출 오버레이(StageOverlay·IdFlyer): 뒤는 어둡고 흐리게 부드럽게 덮고, 끝나면 걷힌다 */
+.sd-stage,
+.sd-stage-in {
+  animation: sd-stage-in 260ms ease-out both;
+}
+@keyframes sd-stage-in {
+  from {
+    opacity: 0;
+  }
+}
+.sd-stage-out,
+.sd-stage.sd-stage-out {
+  animation: sd-stage-out 320ms ease-in forwards;
+}
+@keyframes sd-stage-out {
+  to {
+    opacity: 0;
+  }
+}
+/* 오버레이 안쪽 여백(안전 여백 반영, 높이가 낮은 화면은 위를 줄인다) */
+.sd-stage-pad {
+  padding-top: max(48px, calc(env(safe-area-inset-top, 0px) + 32px));
+  padding-bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+/* 위쪽 고정 자리 문구: 바뀔 때 투명도와 살짝 아래에서 */
+.sd-text-in {
+  animation: sd-text-in 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes sd-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* 신분증 확인 표시: 원이 그려지고 체크가 그어진다 */
+.sd-check {
+  opacity: 0;
+}
+.sd-check-on {
+  opacity: 1;
+  transition: opacity 200ms ease-out;
+}
+.sd-check-circle,
+.sd-check-tick {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.sd-check-on .sd-check-circle {
+  animation: sd-draw calc(var(--check-ms, 800ms) * 0.6)
+    cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.sd-check-on .sd-check-tick {
+  animation: sd-draw calc(var(--check-ms, 800ms) * 0.4)
+    cubic-bezier(0.32, 0.72, 0, 1) calc(var(--check-ms, 800ms) * 0.6) forwards;
+}
+@keyframes sd-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 응모 용지 칸: 별이 닿으면 펜으로 칠하듯 왼쪽부터 채워진다 */
+.sd-cell-ink {
+  background: linear-gradient(#fde68a, #fde68a) no-repeat left / 0% 100%;
+  animation: sd-ink var(--ink-ms, 260ms) ease-out forwards;
+  box-shadow: 0 0 14px rgba(253, 230, 138, 0.45);
+}
+@keyframes sd-ink {
+  to {
+    background-size: 100% 100%;
+  }
+}
+/* 밀어 올리기를 기다리는 용지: 아주 은은하게 떠올랐다 내려앉기를 되풀이 */
+.sd-sheet-hint {
+  animation: sd-sheet-hint 2.6s ease-in-out infinite;
+}
+@keyframes sd-sheet-hint {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+/* 높이가 낮은 화면(휴대폰 가로): 용지와 별 줄을 작게 */
+@media (max-height: 520px) {
+  .sd-cell {
+    height: 1.45rem;
+    font-size: 0.75rem;
+  }
+  .sd-submit-row {
+    max-width: 17rem;
+  }
+  .sd-submit-status {
+    min-height: 1.5rem;
+    font-size: 1rem;
+  }
+}
+/* 영수증을 기다리는 출력구: 숨 쉬듯 아주 조금 밝아졌다 어두워진다 */
+.sd-printer-slot.sd-printer-idle {
+  animation: sd-printer-idle 1.2s ease-in-out infinite alternate;
+}
+@keyframes sd-printer-idle {
+  to {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.9),
+      0 0 12px rgba(253, 230, 138, 0.25);
+  }
+}
+
+/*
+ * 영수증 발급: 위쪽 출력구에서 일정한 속도로 부드럽게 내려와 끝에서만 감속한다(끊기는 걸음은 읽기 어려웠다,
+ * 2026-10-31 사용자). 출력구 아래는 가려 지난 만큼만 보이고, 종이 그림자와 슬롯으로 나오는 느낌을 준다.
+ * 시간은 Receipt가 --print-feed·--print-delay로 넘긴다(FX.printFeed)
+ */
+.sd-printer {
+  position: relative;
+  padding-top: 10px;
+}
+.sd-printer-slot {
+  position: absolute;
+  inset: 0 -6px auto;
+  z-index: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #05080f, #141b29 70%, #273246);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.9),
+    0 6px 10px -4px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: sd-slot-out 0.6s ease
+    calc(var(--print-delay, 150ms) + var(--print-feed, 4000ms)) forwards;
+}
+.sd-printer-feed {
+  overflow: hidden;
+  /* 톱니 그림자가 잘리지 않게 아래로는 넉넉히 */
+  padding-bottom: 40px;
+  margin-bottom: -40px;
+}
 .sd-print {
-  animation: sd-print 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: sd-print var(--print-feed, 4000ms) cubic-bezier(0.3, 0.3, 0.2, 1)
+    var(--print-delay, 150ms) both;
 }
 @keyframes sd-print {
   from {
-    clip-path: inset(0 0 100% 0);
-    transform: translateY(-24px);
+    transform: translateY(-100%);
   }
   to {
-    clip-path: inset(0 0 0 0);
     transform: translateY(0);
+  }
+}
+@keyframes sd-slot-out {
+  to {
+    opacity: 0;
   }
 }
 
@@ -1527,8 +1754,18 @@ button {
   .sd-idcard,
   .sd-idcard[data-owner="ok"] .sd-holo-glitter > div,
   .sd-idcard[data-owner="ok"] .sd-twinkle,
-  .sd-fold,
   .sd-print,
+  .sd-printer-slot,
+  .sd-id-drop,
+  .sd-id-pocket,
+  .sd-stage,
+  .sd-stage-in,
+  .sd-text-in,
+  .sd-after,
+  .sd-sheet-hint,
+  .sd-printer-idle,
+  .sd-live-dot::after,
+  .sd-live-card,
   .sd-unlock-in,
   .sd-unlock-scan,
   .sd-unlock-check,
@@ -1540,7 +1777,7 @@ button {
   .sd-green {
     animation: none;
   }
-  .sd-fold {
+  .sd-printer-slot {
     opacity: 0;
   }
 }
