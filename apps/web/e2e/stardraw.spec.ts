@@ -21,18 +21,15 @@ async function virtualAuthenticator(page: Page, verified = true) {
 }
 
 /**
- * 추첨 화면에서 결과까지 간다. 연출이 있으면 「결과 바로 보기」로 건너뛰고,
- * 움직임 줄이기(화면 시험 기본)면 연출 없이 결과가 바로 나온다
+ * 추첨 화면에서 결과까지 간다. 움직임 줄이기(화면 시험 기본)면 연출 없이 결과가 바로 나온다.
+ * 연출을 켠 시험은 먼저 page.clock.install()을 부르고 이 함수가 시계를 연출 길이만큼 앞당긴다
+ * (처음 보는 추첨은 건너뛸 수 없다)
  */
-async function showDrawResult(page: Page) {
-  const skip = page.getByRole("button", { name: "결과 바로 보기" });
-  const result = page.locator("[data-draw-result]");
-  await expect(async () => {
-    if (await result.isVisible()) return;
-    // 누르려는 사이에 연출이 끝나 단추가 숨으면(결과가 나온다) 누르기가 실패해도 된다
-    await skip.click({ timeout: 1_000 }).catch(() => {});
-    await expect(result).toBeVisible({ timeout: 1_000 });
-  }).toPass({ intervals: [50], timeout: 30_000 });
+async function showDrawResult(page: Page, fastForward = false) {
+  if (fastForward) await page.clock.runFor(60_000);
+  await expect(page.locator("[data-draw-result]")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /** 응모 단추(패스키로 서명, 확인 한 번) */
@@ -155,7 +152,7 @@ async function watchCredentials(page: Page) {
 test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모에 남는다", async ({
   page,
 }, info) => {
-  // 데스크톱은 연출을 켜 추첨 연출과 「결과 바로 보기」를 지난다. 나머지는 결과가 바로 나오는 길
+  // 데스크톱은 연출을 켜 추첨 연출을 끝까지 지난다(시계를 앞당긴다). 나머지는 결과가 바로 나오는 길
   const motion = info.project.name === "desktop";
   if (motion) await page.emulateMedia({ reducedMotion: "no-preference" });
   await virtualAuthenticator(page);
@@ -355,12 +352,16 @@ test("게임 목록에서 들어가 응모하고, 추첨을 보고, 내 응모�
     path: info.outputPath("home-result.png"),
     fullPage: true,
   });
+  if (motion) await page.clock.install();
   await envelope.click();
-  if (motion)
+  if (motion) {
+    // 처음 보는 추첨은 건너뛰는 단추 없이 연출이 돈다
+    await expect(page.locator("[data-draw-result]")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "결과 바로 보기" }),
-    ).toBeVisible();
-  await showDrawResult(page);
+    ).toHaveCount(0);
+  }
+  await showDrawResult(page, motion);
   await expect(page.getByRole("status").first()).toHaveAttribute(
     "aria-label",
     /당첨 번호 .+보너스/,

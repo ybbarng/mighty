@@ -2,7 +2,7 @@
 
 import { type Clock, realClock } from "@mighty/fair-play";
 import type { RoundRecord, Ticket } from "@mighty/stardraw-core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { play } from "@/game/sound";
 import { cn } from "@/lib/cn";
@@ -24,7 +24,7 @@ const TICK_GAP_MS = 45;
  * 정확히 당첨 별에서 멈춘다(그 별은 켜진 채). 이미 뽑힌 별은 건너뛰고 6번 멈춘 뒤 7번째는 보너스(하늘빛).
  * 멈추는 차례는 실제 로또처럼 나온 차례다. 결과는 기록의 drand 값으로 이미 정해져 있고 연출은 보여 줄 뿐이다.
  * 칸 위치는 지난 시간으로 계산해(`rouletteAt`) 화면이 늦게 그려져도 늘 목표 별에서 멈춘다.
- * 「결과 바로 보기」와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
+ * 처음 보는 추첨은 끝까지 본다(2026-10-31 사용자: 건너뛰기 없음). 이미 본 회차(바깥이 instant로 연다)와 움직임 줄이기 설정은 곧바로 마지막 모습이다.
  * HDR 화면이면 켜지는 별이 흰색보다 밝게 한 번 번쩍이고, 결과에서 맞은 내 별이 은은하게 빛난다(hdr-glow.ts).
  */
 export function DrawView({
@@ -64,9 +64,7 @@ export function DrawView({
   const [frame, setFrame] = useState<RouletteFrame>(() =>
     instant || order.length === 0 ? finished : rouletteAt(plan, 0),
   );
-  /** 진행을 멈추는 함수(「결과 바로 보기」로 부른다) */
-  const stopRef = useRef<() => void>(() => {});
-  /** 룰렛 연출을 실제로 보는 중인지(켜지는 별이 HDR로 번쩍인다). 바로 보기·움직임 줄이기면 false */
+  /** 룰렛 연출을 실제로 보는 중인지(켜지는 별이 HDR로 번쩍인다). 움직임 줄이기면 false */
   const [animated, setAnimated] = useState(false);
   const done = frame.done;
   const rank = ticket ? myRank(record, ticket) : null;
@@ -108,12 +106,6 @@ export function DrawView({
       if (!next.done) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    stopRef.current = () => {
-      alive = false;
-      cancelAnimationFrame(raf);
-      setAnimated(false);
-      setFrame(finished);
-    };
     return () => {
       alive = false;
       cancelAnimationFrame(raf);
@@ -181,20 +173,10 @@ export function DrawView({
             카노푸스 우주국 정시 추첨
           </span>
         </div>
-        {done ? (
-          // 결과가 나오면 단추를 없애고 자리만 둔다(숨긴 단추가 이름 없는 단추로 남지 않게)
-          <span aria-hidden="true" className="invisible text-sm">
-            결과 바로 보기
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => stopRef.current()}
-            className="text-sm text-white/60 hover:text-white"
-          >
-            결과 바로 보기
-          </button>
-        )}
+        {/* 제목이 가운데 오게 「돌아가기」만큼 자리를 둔다 */}
+        <span aria-hidden="true" className="invisible text-sm">
+          ← 돌아가기
+        </span>
       </div>
 
       {record.void ? (
